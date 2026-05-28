@@ -39,6 +39,36 @@ class WorkflowService:
     def __init__(self, session: Session):
         self.session = session
 
+    def queue_literature_to_ideas(
+        self,
+        paper_id: str,
+        max_gaps: int = 4,
+        max_ideas_per_gap: int = 2,
+        run_review: bool = True,
+        run_novelty_check: bool = True,
+        run_experiment_plan: bool = True,
+        include_markdown_export: bool = True,
+    ) -> Job:
+        job = Job(
+            job_type="literature_to_ideas_workflow",
+            status="pending",
+            input_json=self._input_payload(
+                paper_id=paper_id,
+                max_gaps=max_gaps,
+                max_ideas_per_gap=max_ideas_per_gap,
+                run_novelty_check=run_novelty_check,
+                run_review=run_review,
+                run_experiment_plan=run_experiment_plan,
+                include_markdown_export=include_markdown_export,
+            ),
+            output_json={},
+            progress=0.0,
+        )
+        self.session.add(job)
+        self.session.commit()
+        self.session.refresh(job)
+        return job
+
     def run_literature_to_ideas(
         self,
         paper_id: str,
@@ -49,27 +79,36 @@ class WorkflowService:
         run_experiment_plan: bool = True,
         include_markdown_export: bool = True,
     ) -> LiteratureToIdeasResult:
-        job = self._start_job(
-            {
-                "paper_id": paper_id,
-                "max_gaps": max_gaps,
-                "max_ideas_per_gap": max_ideas_per_gap,
-                "run_novelty_check": run_novelty_check,
-                "run_review": run_review,
-                "run_experiment_plan": run_experiment_plan,
-                "include_markdown_export": include_markdown_export,
-            }
+        job = self.queue_literature_to_ideas(
+            paper_id=paper_id,
+            max_gaps=max_gaps,
+            max_ideas_per_gap=max_ideas_per_gap,
+            run_review=run_review,
+            run_novelty_check=run_novelty_check,
+            run_experiment_plan=run_experiment_plan,
+            include_markdown_export=include_markdown_export,
         )
+        return self.run_literature_to_ideas_job(job.id)
+
+    def run_literature_to_ideas_job(self, job_id: str) -> LiteratureToIdeasResult:
+        job = self.session.get(Job, job_id)
+        if job is None:
+            raise ValueError("Job not found")
+        if job.job_type != "literature_to_ideas_workflow":
+            raise ValueError("Job is not a literature-to-ideas workflow")
+        payload = job.input_json or {}
+        self._mark_job_running(job.id)
+        self.session.refresh(job)
         try:
             return self._run_literature_to_ideas(
                 job=job,
-                paper_id=paper_id,
-                max_gaps=max_gaps,
-                max_ideas_per_gap=max_ideas_per_gap,
-                run_review=run_review,
-                run_novelty_check=run_novelty_check,
-                run_experiment_plan=run_experiment_plan,
-                include_markdown_export=include_markdown_export,
+                paper_id=payload.get("paper_id", ""),
+                max_gaps=payload.get("max_gaps", 4),
+                max_ideas_per_gap=payload.get("max_ideas_per_gap", 2),
+                run_review=payload.get("run_review", True),
+                run_novelty_check=payload.get("run_novelty_check", True),
+                run_experiment_plan=payload.get("run_experiment_plan", True),
+                include_markdown_export=payload.get("include_markdown_export", True),
             )
         except Exception as exc:
             self._fail_job(job.id, str(exc))
@@ -159,19 +198,35 @@ class WorkflowService:
             job=job,
         )
 
-    def _start_job(self, input_payload: dict) -> Job:
-        job = Job(
-            job_type="literature_to_ideas_workflow",
-            status="running",
-            input_json=input_payload,
-            output_json={},
-            progress=0.05,
-            started_at=utc_now(),
-        )
-        self.session.add(job)
+    def _input_payload(
+        self,
+        *,
+        paper_id: str,
+        max_gaps: int,
+        max_ideas_per_gap: int,
+        run_novelty_check: bool,
+        run_review: bool,
+        run_experiment_plan: bool,
+        include_markdown_export: bool,
+    ) -> dict:
+        return {
+            "paper_id": paper_id,
+            "max_gaps": max_gaps,
+            "max_ideas_per_gap": max_ideas_per_gap,
+            "run_novelty_check": run_novelty_check,
+            "run_review": run_review,
+            "run_experiment_plan": run_experiment_plan,
+            "include_markdown_export": include_markdown_export,
+        }
+
+    def _mark_job_running(self, job_id: str) -> None:
+        job = self.session.get(Job, job_id)
+        if job is None:
+            return
+        job.status = "running"
+        job.progress = 0.05
+        job.started_at = utc_now()
         self.session.commit()
-        self.session.refresh(job)
-        return job
 
     def _update_job(self, job_id: str, *, progress: float, output: dict) -> None:
         job = self.session.get(Job, job_id)
@@ -211,3 +266,13 @@ class WorkflowService:
             for idea in ideas
         ]
         return "\n---\n\n".join(section.strip() for section in sections) + "\n"
+
+
+def run_literature_to_ideas_job_background(job_id: str) -> None:
+    from backend.research.db import SessionLocal
+
+    session = SessionLocal()
+    try:
+        WorkflowService(session).run_literature_to_ideas_job(job_id)
+    finally:
+        session.close()

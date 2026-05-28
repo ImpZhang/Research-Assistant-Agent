@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -135,6 +136,29 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workflow returned no novelty checks")
     first_novelty_check = workflow["novelty_checks"][0]
     job = require_ok(client.get(f"/research/jobs/{workflow['job_id']}"), "workflow job trace")
+    async_job = require_ok(
+        client.post(
+            "/research/workflows/literature-to-ideas/async",
+            json_body={
+                "paper_id": paper_id,
+                "max_gaps": 1,
+                "max_ideas_per_gap": 1,
+                "include_markdown_export": False,
+            },
+        ),
+        "async literature-to-ideas workflow",
+    )
+    async_job_status = async_job
+    for _ in range(30):
+        async_job_status = require_ok(
+            client.get(f"/research/jobs/{async_job['id']}"),
+            "async workflow job trace",
+        )
+        if async_job_status["status"] in {"completed", "failed"}:
+            break
+        time.sleep(0.2)
+    if async_job_status["status"] != "completed":
+        raise RuntimeError(f"async workflow did not complete: {async_job_status}")
     embeddings = require_ok(
         client.post(
             "/research/embeddings/rebuild",
@@ -169,6 +193,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "literature_external_status": literature["external_status"],
         "workflow_job_id": workflow["job_id"],
         "workflow_job_status": job["status"],
+        "async_workflow_job_id": async_job["id"],
+        "async_workflow_job_status": async_job_status["status"],
         "card_id": workflow["card"]["id"],
         "gap_count": len(workflow["gaps"]),
         "idea_count": len(workflow["ideas"]),

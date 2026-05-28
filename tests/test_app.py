@@ -1,3 +1,5 @@
+import time
+
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
@@ -398,6 +400,60 @@ Future work should connect the workflow to front-end actions and MCP tools.
     jobs = client.get("/research/jobs?limit=5")
     assert jobs.status_code == 200
     assert any(item["id"] == body["job_id"] for item in jobs.json())
+
+
+def test_async_literature_to_ideas_workflow_completes_job_trace() -> None:
+    client = TestClient(create_app())
+    content = b"""Async Workflow Test Paper
+
+Abstract
+This paper checks whether long research workflows can be queued as jobs.
+
+Introduction
+Research workbench users need a fast response with a trackable workflow job id.
+
+Method
+The async endpoint should queue a job and run the literature-to-ideas pipeline in the background.
+
+Conclusion
+Future work should connect async jobs to a frontend progress view and MCP tools.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("async_workflow_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    queued = client.post(
+        "/research/workflows/literature-to-ideas/async",
+        json={
+            "paper_id": paper_id,
+            "max_gaps": 1,
+            "max_ideas_per_gap": 1,
+            "include_markdown_export": False,
+        },
+    )
+    assert queued.status_code == 200
+    queued_body = queued.json()
+    assert queued_body["job_type"] == "literature_to_ideas_workflow"
+    assert queued_body["status"] in {"pending", "running", "completed"}
+    assert queued_body["input"]["paper_id"] == paper_id
+
+    job_body = queued_body
+    for _ in range(30):
+        job = client.get(f"/research/jobs/{queued_body['id']}")
+        assert job.status_code == 200
+        job_body = job.json()
+        if job_body["status"] in {"completed", "failed"}:
+            break
+        time.sleep(0.05)
+
+    assert job_body["status"] == "completed"
+    assert job_body["progress"] == 1.0
+    assert job_body["output"]["paper_id"] == paper_id
+    assert job_body["output"]["card_id"]
+    assert len(job_body["output"]["idea_ids"]) >= 1
 
 
 def test_context_search_returns_evidence_and_graph_context() -> None:

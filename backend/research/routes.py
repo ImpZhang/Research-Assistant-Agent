@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
@@ -54,7 +54,10 @@ from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
 from backend.research.services.structured_idea_service import StructuredIdeaService
-from backend.research.services.workflow_service import WorkflowService
+from backend.research.services.workflow_service import (
+    WorkflowService,
+    run_literature_to_ideas_job_background,
+)
 
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -83,6 +86,7 @@ def status() -> ProjectStatus:
             "reviewer_simulation",
             "experiment_planning",
             "literature_to_ideas_workflow",
+            "async_literature_to_ideas_workflow",
             "workflow_job_trace",
             "literature_search_adapter",
             "local_embedding_index",
@@ -673,6 +677,28 @@ def run_literature_to_ideas_workflow(
             f"{len(result.experiment_plans)} experiment plans."
         ),
     )
+
+
+@router.post("/workflows/literature-to-ideas/async", response_model=JobRead)
+def queue_literature_to_ideas_workflow(
+    payload: LiteratureToIdeasWorkflowRequest,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+) -> JobRead:
+    if session.get(Paper, payload.paper_id) is None:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    job = WorkflowService(session).queue_literature_to_ideas(
+        paper_id=payload.paper_id,
+        max_gaps=payload.max_gaps,
+        max_ideas_per_gap=payload.max_ideas_per_gap,
+        run_review=payload.run_review,
+        run_novelty_check=payload.run_novelty_check,
+        run_experiment_plan=payload.run_experiment_plan,
+        include_markdown_export=payload.include_markdown_export,
+    )
+    background_tasks.add_task(run_literature_to_ideas_job_background, job.id)
+    return _serialize_job(job)
 
 
 @router.post("/search/context", response_model=ContextSearchResponse)

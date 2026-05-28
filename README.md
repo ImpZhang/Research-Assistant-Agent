@@ -30,6 +30,14 @@ GET /research/jobs/{job_id}
 GET /research/jobs
 ```
 
+For long-running clients, use the async workflow entrypoint:
+
+```http
+POST /research/workflows/literature-to-ideas/async
+```
+
+It returns a `pending` job immediately and executes the workflow in the background.
+
 ## Implemented Capabilities
 
 - FastAPI API layer with OpenAPI docs.
@@ -49,6 +57,7 @@ GET /research/jobs
 - GraphRAG-lite node and edge persistence.
 - Query-time lexical/vector context retrieval over evidence, gaps, ideas, and graph neighborhoods.
 - Synchronous workflow job trace with input, output, status, progress, and errors.
+- Async literature-to-ideas workflow launch for frontend and MCP clients.
 - End-to-end smoke test covering the current research workflow.
 
 ## Repository Layout
@@ -156,6 +165,7 @@ POST /research/search/context
 GET  /research/graph/nodes
 GET  /research/graph/edges
 POST /research/workflows/literature-to-ideas
+POST /research/workflows/literature-to-ideas/async
 GET  /research/jobs/{job_id}
 ```
 
