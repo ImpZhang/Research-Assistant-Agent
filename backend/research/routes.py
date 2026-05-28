@@ -6,6 +6,7 @@ from backend.research.db import get_session
 from backend.research.models import Chunk, Evidence, Paper, PaperSection
 from backend.research.schemas import (
     EvidenceRead,
+    ExperimentPlanRead,
     GapMiningRequest,
     GapMiningResponse,
     IdeaGenerationRequest,
@@ -20,12 +21,15 @@ from backend.research.schemas import (
     PaperUploadResponse,
     ProjectStatus,
     ResearchGapRead,
+    ReviewRead,
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
+from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.gap_service import GapService
 from backend.research.services.idea_service import IdeaService
 from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
+from backend.research.services.review_service import ReviewService
 
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -321,3 +325,82 @@ def get_idea(idea_id: str, session: Session = Depends(get_session)) -> IdeaRead:
     if idea is None:
         raise HTTPException(status_code=404, detail="Idea not found")
     return _serialize_idea(idea)
+
+
+def _serialize_review(review) -> ReviewRead:
+    return ReviewRead(
+        id=review.id,
+        idea_id=review.idea_id,
+        reviewer_type=review.reviewer_type,
+        summary=review.summary,
+        major_concerns=review.major_concerns_json or [],
+        minor_concerns=review.minor_concerns_json or [],
+        required_experiments=review.required_experiments_json or [],
+        decision=review.decision,
+        action_items=review.action_items_json or [],
+        created_at=review.created_at,
+        updated_at=review.updated_at,
+    )
+
+
+@router.post("/ideas/{idea_id}/review", response_model=ReviewRead)
+def review_idea(idea_id: str, session: Session = Depends(get_session)) -> ReviewRead:
+    try:
+        review = ReviewService(session).create_review(idea_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_review(review)
+
+
+@router.get("/ideas/{idea_id}/reviews", response_model=list[ReviewRead])
+def list_idea_reviews(idea_id: str, session: Session = Depends(get_session)) -> list[ReviewRead]:
+    if IdeaService(session).get_idea(idea_id) is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+    return [_serialize_review(review) for review in ReviewService(session).list_reviews_for_idea(idea_id)]
+
+
+def _serialize_experiment_plan(plan) -> ExperimentPlanRead:
+    return ExperimentPlanRead(
+        id=plan.id,
+        idea_id=plan.idea_id,
+        objective=plan.objective,
+        hypothesis=plan.hypothesis,
+        datasets=plan.datasets_json or [],
+        baselines=plan.baselines_json or [],
+        metrics=plan.metrics_json or [],
+        main_experiment=plan.main_experiment_json or {},
+        ablation_studies=plan.ablation_studies_json or [],
+        robustness_tests=plan.robustness_tests_json or [],
+        expected_tables=plan.expected_tables_json or [],
+        failure_modes=plan.failure_modes_json or [],
+        fallback_plan=plan.fallback_plan,
+        compute_requirements=plan.compute_requirements,
+        timeline=plan.timeline_json or {},
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
+    )
+
+
+@router.post("/ideas/{idea_id}/experiment-plan", response_model=ExperimentPlanRead)
+def create_experiment_plan(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> ExperimentPlanRead:
+    try:
+        plan = ExperimentService(session).create_plan(idea_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_experiment_plan(plan)
+
+
+@router.get("/ideas/{idea_id}/experiment-plans", response_model=list[ExperimentPlanRead])
+def list_experiment_plans(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> list[ExperimentPlanRead]:
+    if IdeaService(session).get_idea(idea_id) is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+    return [
+        _serialize_experiment_plan(plan)
+        for plan in ExperimentService(session).list_plans_for_idea(idea_id)
+    ]

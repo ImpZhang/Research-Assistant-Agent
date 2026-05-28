@@ -160,3 +160,43 @@ Future work should connect idea generation to reviewer criticism.
     fetched = client.get(f"/research/ideas/{idea_id}")
     assert fetched.status_code == 200
     assert fetched.json()["id"] == idea_id
+
+
+def test_review_and_experiment_plan_for_idea() -> None:
+    client = TestClient(create_app())
+    content = b"""Review Experiment Test Paper
+
+Introduction
+Research idea systems need evidence-backed review and experiment planning.
+
+Limitations
+The current assistant has not yet validated whether generated ideas are experimentally testable.
+
+Conclusion
+Future work should produce reviewer critiques and experiment plans.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("review_experiment_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+    gaps = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 2})
+    gap_id = gaps.json()["gaps"][0]["id"]
+    ideas = client.post(f"/research/gaps/{gap_id}/ideas")
+    idea_id = ideas.json()["ideas"][0]["id"]
+
+    review = client.post(f"/research/ideas/{idea_id}/review")
+    assert review.status_code == 200
+    review_body = review.json()
+    assert review_body["decision"] == "revise"
+    assert review_body["major_concerns"]
+    assert review_body["required_experiments"]
+
+    plan = client.post(f"/research/ideas/{idea_id}/experiment-plan")
+    assert plan.status_code == 200
+    plan_body = plan.json()
+    assert plan_body["idea_id"] == idea_id
+    assert plan_body["main_experiment"]
+    assert plan_body["ablation_studies"]
+    assert plan_body["expected_tables"]

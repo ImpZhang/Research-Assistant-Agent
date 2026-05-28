@@ -202,6 +202,44 @@ class IdeaGenerationResponse(BaseModel):
     message: str
 
 
+class ReviewRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    idea_id: str
+    reviewer_type: str
+    summary: str
+    major_concerns: list[str] = Field(default_factory=list)
+    minor_concerns: list[str] = Field(default_factory=list)
+    required_experiments: list[str] = Field(default_factory=list)
+    decision: str
+    action_items: list[str] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ExperimentPlanRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    idea_id: str
+    objective: str
+    hypothesis: str
+    datasets: list[str] = Field(default_factory=list)
+    baselines: list[str] = Field(default_factory=list)
+    metrics: list[str] = Field(default_factory=list)
+    main_experiment: dict[str, Any] = Field(default_factory=dict)
+    ablation_studies: list[dict[str, Any]] = Field(default_factory=list)
+    robustness_tests: list[dict[str, Any]] = Field(default_factory=list)
+    expected_tables: list[dict[str, Any]] = Field(default_factory=list)
+    failure_modes: list[str] = Field(default_factory=list)
+    fallback_plan: str = ""
+    compute_requirements: str = ""
+    timeline: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
 class JobRead(BaseModel):
     id: str
     job_type: str
