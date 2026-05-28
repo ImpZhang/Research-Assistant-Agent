@@ -16,6 +16,7 @@ from backend.research.models import (
     Paper,
     PaperCard,
     PaperSection,
+    ProposalDraft,
     RelatedWorkMatrix,
     ResearchGap,
     Review,
@@ -58,6 +59,8 @@ from backend.research.schemas import (
     PaperDetail,
     PaperRead,
     PaperUploadResponse,
+    ProposalDraftCreate,
+    ProposalDraftRead,
     ProjectStatus,
     RankedIdeaRead,
     RelatedWorkMatrixCreate,
@@ -90,6 +93,7 @@ from backend.research.services.portfolio_service import (
     render_idea_portfolio_markdown,
     render_snapshot_markdown,
 )
+from backend.research.services.proposal_service import ProposalDraftService
 from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
@@ -130,6 +134,7 @@ def status() -> ProjectStatus:
             "portfolio_snapshot_comparison",
             "portfolio_execution_agenda",
             "persisted_related_work_matrix",
+            "proposal_draft_generation",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -584,6 +589,30 @@ def _serialize_related_work_matrix(matrix: RelatedWorkMatrix) -> RelatedWorkMatr
     )
 
 
+def _serialize_proposal_draft(draft: ProposalDraft) -> ProposalDraftRead:
+    return ProposalDraftRead(
+        id=draft.id,
+        idea_id=draft.idea_id,
+        status=draft.status,
+        title=draft.title,
+        abstract=draft.abstract,
+        problem_statement=draft.problem_statement,
+        novelty_statement=draft.novelty_statement,
+        related_work_summary=draft.related_work_summary,
+        method_summary=draft.method_summary,
+        experiment_summary=draft.experiment_summary,
+        risk_mitigation=draft.risk_mitigation,
+        milestone_plan=draft.milestone_plan_json or [],
+        evidence_ids=draft.evidence_ids_json or [],
+        related_work_matrix_id=draft.related_work_matrix_id,
+        experiment_plan_id=draft.experiment_plan_id,
+        markdown_export=draft.markdown_export or "",
+        created_by=draft.created_by,
+        created_at=draft.created_at,
+        updated_at=draft.updated_at,
+    )
+
+
 @router.post("/ideas/generate", response_model=IdeaGenerationResponse)
 def generate_ideas(
     payload: IdeaGenerationRequest,
@@ -837,6 +866,67 @@ def export_related_work_matrix_markdown(
     if matrix is None:
         raise HTTPException(status_code=404, detail="Related work matrix not found")
     return PlainTextResponse(matrix.markdown_export or "", media_type="text/markdown")
+
+
+@router.post("/ideas/{idea_id}/proposal-draft", response_model=ProposalDraftRead)
+def create_proposal_draft(
+    idea_id: str,
+    payload: ProposalDraftCreate,
+    session: Session = Depends(get_session),
+) -> ProposalDraftRead:
+    try:
+        draft = ProposalDraftService(session).create_draft(
+            idea_id,
+            related_work_matrix_id=payload.related_work_matrix_id,
+            experiment_plan_id=payload.experiment_plan_id,
+            include_latest_related_work=payload.include_latest_related_work,
+            include_latest_experiment_plan=payload.include_latest_experiment_plan,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return _serialize_proposal_draft(draft)
+
+
+@router.get("/ideas/{idea_id}/proposal-drafts", response_model=list[ProposalDraftRead])
+def list_proposal_drafts(
+    idea_id: str,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+) -> list[ProposalDraftRead]:
+    try:
+        drafts = ProposalDraftService(session).list_for_idea(idea_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_proposal_draft(draft) for draft in drafts]
+
+
+@router.get("/ideas/{idea_id}/proposal-drafts/{draft_id}", response_model=ProposalDraftRead)
+def get_proposal_draft(
+    idea_id: str,
+    draft_id: str,
+    session: Session = Depends(get_session),
+) -> ProposalDraftRead:
+    draft = ProposalDraftService(session).get_draft(idea_id, draft_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    return _serialize_proposal_draft(draft)
+
+
+@router.get(
+    "/ideas/{idea_id}/proposal-drafts/{draft_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_proposal_draft_markdown(
+    idea_id: str,
+    draft_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    draft = ProposalDraftService(session).get_draft(idea_id, draft_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    return PlainTextResponse(draft.markdown_export or "", media_type="text/markdown")
 
 
 @router.post("/ideas/{idea_id}/feedback", response_model=IdeaFeedbackRead)

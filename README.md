@@ -1,6 +1,6 @@
 # Research Assistant Agent
 
-Research Assistant Agent is a backend-first research workflow system rebuilt from the lessons of SuperMew. It is not a plain RAG chatbot: the goal is to turn literature evidence into research gaps, testable ideas, novelty checks, related-work matrices, reviewer critiques, experiment plans, graph context, and exportable proposal dossiers.
+Research Assistant Agent is a backend-first research workflow system rebuilt from the lessons of SuperMew. It is not a plain RAG chatbot: the goal is to turn literature evidence into research gaps, testable ideas, novelty checks, related-work matrices, proposal drafts, reviewer critiques, experiment plans, graph context, and exportable proposal dossiers.
 
 ## Current Workflow
 
@@ -51,6 +51,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - OpenAI-compatible structured idea generation with deterministic fallback.
 - Novelty/collision checks against existing evidence, gaps, ideas, and literature search results.
 - Persisted related-work matrices that compare an idea with local evidence, gaps, nearby ideas, and literature search rows.
+- Persisted proposal drafts that bundle an idea, related-work positioning, experiment plan, risks, milestones, and evidence IDs.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
@@ -156,7 +157,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix and proposal draft, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -182,6 +183,10 @@ POST /research/ideas/{idea_id}/related-work-matrix
 GET  /research/ideas/{idea_id}/related-work-matrices
 GET  /research/ideas/{idea_id}/related-work-matrices/{matrix_id}
 GET  /research/ideas/{idea_id}/related-work-matrices/{matrix_id}/export/markdown
+POST /research/ideas/{idea_id}/proposal-draft
+GET  /research/ideas/{idea_id}/proposal-drafts
+GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}
+GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/export/markdown
 POST /research/ideas/rank
 POST /research/ideas/rank/export/markdown
 POST /research/ideas/portfolios

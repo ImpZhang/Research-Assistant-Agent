@@ -189,6 +189,31 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("related work matrix markdown did not include the report title")
     if not related_work_matrix["items"]:
         raise RuntimeError("related work matrix did not include overlap rows")
+    refined_plan = require_ok(
+        client.post(f"/research/ideas/{refined_idea['id']}/experiment-plan"),
+        "refined idea experiment plan",
+    )
+    proposal_draft = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/proposal-draft",
+            json_body={
+                "related_work_matrix_id": related_work_matrix["id"],
+                "experiment_plan_id": refined_plan["id"],
+                "created_by": "smoke_api",
+            },
+        ),
+        "proposal draft",
+    )
+    proposal_markdown = require_ok(
+        client.get(
+            "/research/ideas/"
+            f"{refined_idea['id']}/proposal-drafts/"
+            f"{proposal_draft['id']}/export/markdown"
+        ),
+        "proposal draft markdown",
+    )
+    if "## Related Work Positioning" not in proposal_markdown:
+        raise RuntimeError("proposal draft markdown did not include related work positioning")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -373,6 +398,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "related_work_matrix_id": related_work_matrix["id"],
         "related_work_item_count": len(related_work_matrix["items"]),
         "related_work_markdown_chars": len(related_work_markdown),
+        "proposal_draft_id": proposal_draft["id"],
+        "proposal_draft_markdown_chars": len(proposal_markdown),
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),

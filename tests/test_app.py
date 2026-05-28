@@ -35,6 +35,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/refine" in script.text
     assert "/research/ideas/${state.latestIdeaId}/feedback" in script.text
     assert "/research/ideas/${state.latestIdeaId}/related-work-matrix" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/proposal-draft" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
     assert "/research/ideas/portfolios" in script.text
@@ -363,6 +364,79 @@ Future research should export a traceable related work table for proposal writin
     assert export.status_code == 200
     assert f"- Idea ID: `{idea_id}`" in export.text
     assert "## Missing Searches" in export.text
+
+
+def test_proposal_draft_bundles_idea_related_work_and_experiment_plan() -> None:
+    client = TestClient(create_app())
+    content = b"""Proposal Draft Test Paper
+
+Abstract
+Research assistants should turn promising ideas into proposal drafts.
+
+Introduction
+Proposal writing needs a clear novelty claim, related work positioning, and executable experiments.
+
+Method
+The assistant should combine related work matrices with experiment plans and evidence ids.
+
+Conclusion
+Future work should preserve proposal drafts as reviewable artifacts.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("proposal_draft_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+    workflow = client.post(
+        "/research/workflows/literature-to-ideas",
+        json={
+            "paper_id": paper_id,
+            "max_gaps": 1,
+            "max_ideas_per_gap": 1,
+            "include_markdown_export": False,
+        },
+    )
+    assert workflow.status_code == 200
+    idea_id = workflow.json()["ideas"][0]["id"]
+    plan_id = workflow.json()["experiment_plans"][0]["id"]
+    matrix = client.post(
+        f"/research/ideas/{idea_id}/related-work-matrix",
+        json={"include_external": True, "limit": 5, "created_by": "pytest"},
+    )
+    assert matrix.status_code == 200
+    matrix_id = matrix.json()["id"]
+
+    draft = client.post(
+        f"/research/ideas/{idea_id}/proposal-draft",
+        json={
+            "related_work_matrix_id": matrix_id,
+            "experiment_plan_id": plan_id,
+            "created_by": "pytest",
+        },
+    )
+    assert draft.status_code == 200
+    body = draft.json()
+    assert body["idea_id"] == idea_id
+    assert body["related_work_matrix_id"] == matrix_id
+    assert body["experiment_plan_id"] == plan_id
+    assert body["milestone_plan"]
+    assert "# Proposal Draft:" in body["markdown_export"]
+    assert "## Related Work Positioning" in body["markdown_export"]
+    assert "## Milestones" in body["markdown_export"]
+
+    drafts = client.get(f"/research/ideas/{idea_id}/proposal-drafts")
+    assert drafts.status_code == 200
+    assert drafts.json()[0]["id"] == body["id"]
+
+    fetched = client.get(f"/research/ideas/{idea_id}/proposal-drafts/{body['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["title"] == body["title"]
+
+    export = client.get(f"/research/ideas/{idea_id}/proposal-drafts/{body['id']}/export/markdown")
+    assert export.status_code == 200
+    assert f"- Idea ID: `{idea_id}`" in export.text
+    assert "## Risks And Mitigation" in export.text
 
 
 def test_refine_idea_creates_traceable_revision() -> None:

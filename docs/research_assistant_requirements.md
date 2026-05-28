@@ -661,6 +661,13 @@ updated_at
 - 记录 checked sources 和 missing searches，避免把未检索当作 novelty。
 - 支持 Markdown 导出，用于 proposal、组会和导师 review。
 
+进入 proposal 阶段的 idea 需要生成 proposal draft：
+
+- 自动汇总 abstract、problem statement、novelty claim、method 和 experiment plan。
+- 引用最新或指定的 related-work matrix，说明 related-work positioning。
+- 输出 risk mitigation 与 30/60/90 天 milestone。
+- 保存为可复查 artifact，而不是一次性聊天回答。
+
 ### 6.5.4 Idea 输出模板
 
 ```text

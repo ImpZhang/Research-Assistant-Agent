@@ -232,6 +232,34 @@ class RelatedWorkMatrix(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="system")
 
 
+class ProposalDraft(Base, TimestampMixin):
+    __tablename__ = "proposal_drafts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    status: Mapped[str] = mapped_column(String(64), default="draft", index=True)
+    title: Mapped[str] = mapped_column(String(512), default="")
+    abstract: Mapped[str] = mapped_column(Text, default="")
+    problem_statement: Mapped[str] = mapped_column(Text, default="")
+    novelty_statement: Mapped[str] = mapped_column(Text, default="")
+    related_work_summary: Mapped[str] = mapped_column(Text, default="")
+    method_summary: Mapped[str] = mapped_column(Text, default="")
+    experiment_summary: Mapped[str] = mapped_column(Text, default="")
+    risk_mitigation: Mapped[str] = mapped_column(Text, default="")
+    milestone_plan_json: Mapped[list] = mapped_column(JSON, default=list)
+    evidence_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    related_work_matrix_id: Mapped[str | None] = mapped_column(
+        ForeignKey("related_work_matrices.id"),
+        nullable=True,
+    )
+    experiment_plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("experiment_plans.id"),
+        nullable=True,
+    )
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="system")
+
+
 class IdeaPortfolioSnapshot(Base, TimestampMixin):
     __tablename__ = "idea_portfolio_snapshots"
 

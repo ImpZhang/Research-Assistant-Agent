@@ -316,6 +316,36 @@ class RelatedWorkMatrixRead(BaseModel):
     updated_at: datetime
 
 
+class ProposalDraftCreate(BaseModel):
+    related_work_matrix_id: str | None = None
+    experiment_plan_id: str | None = None
+    include_latest_related_work: bool = True
+    include_latest_experiment_plan: bool = True
+    created_by: str = "system"
+
+
+class ProposalDraftRead(BaseModel):
+    id: str
+    idea_id: str
+    status: str
+    title: str
+    abstract: str = ""
+    problem_statement: str = ""
+    novelty_statement: str = ""
+    related_work_summary: str = ""
+    method_summary: str = ""
+    experiment_summary: str = ""
+    risk_mitigation: str = ""
+    milestone_plan: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+    related_work_matrix_id: str | None = None
+    experiment_plan_id: str | None = None
+    markdown_export: str = ""
+    created_by: str = "system"
+    created_at: datetime
+    updated_at: datetime
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None
