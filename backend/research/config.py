@@ -18,6 +18,10 @@ class Settings:
     paper_upload_dir: str = os.getenv("PAPER_UPLOAD_DIR", "./data/papers")
     graph_rag_lite_enabled: bool = os.getenv("GRAPH_RAG_LITE_ENABLED", "true").lower() != "false"
     mcp_enabled: bool = os.getenv("MCP_ENABLED", "false").lower() == "true"
+    external_literature_search_enabled: bool = (
+        os.getenv("EXTERNAL_LITERATURE_SEARCH_ENABLED", "false").lower() == "true"
+    )
+    openalex_base_url: str = os.getenv("OPENALEX_BASE_URL", "https://api.openalex.org")
 
     main_model: str = os.getenv("MAIN_MODEL") or os.getenv("MODEL", "")
     main_base_url: str = os.getenv("MAIN_BASE_URL") or os.getenv("BASE_URL", "")

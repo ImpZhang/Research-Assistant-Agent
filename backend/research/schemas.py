@@ -343,6 +343,33 @@ class ContextSearchResponse(BaseModel):
     graph_edges: list[ResearchEdgeRead] = Field(default_factory=list)
 
 
+class LiteratureSearchRequest(BaseModel):
+    query: str
+    limit: int = 8
+    include_external: bool = False
+
+
+class LiteratureSearchItem(BaseModel):
+    provider: str
+    source_id: str = ""
+    title: str
+    authors: list[str] = Field(default_factory=list)
+    year: int | None = None
+    venue: str = ""
+    url: str = ""
+    abstract: str = ""
+    score: float = 0.0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class LiteratureSearchResponse(BaseModel):
+    query: str
+    local_status: str
+    external_status: str
+    items: list[LiteratureSearchItem]
+    message: str
+
+
 class JobRead(BaseModel):
     id: str
     job_type: str

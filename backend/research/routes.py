@@ -17,6 +17,8 @@ from backend.research.schemas import (
     IdeaRead,
     IdeaScore,
     JobRead,
+    LiteratureSearchRequest,
+    LiteratureSearchResponse,
     LiteratureToIdeasWorkflowRequest,
     LiteratureToIdeasWorkflowResponse,
     NoveltyCheckRead,
@@ -41,6 +43,7 @@ from backend.research.services.export_service import ExportService
 from backend.research.services.gap_service import GapService
 from backend.research.services.graph_service import GraphService
 from backend.research.services.idea_service import IdeaService
+from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
@@ -77,6 +80,7 @@ def status() -> ProjectStatus:
             "experiment_planning",
             "literature_to_ideas_workflow",
             "workflow_job_trace",
+            "literature_search_adapter",
             "lexical_context_retrieval",
             "graph_rag_lite_schema",
             "graph_rag_lite_workflow_links",
@@ -119,6 +123,21 @@ def get_job(job_id: str, session: Session = Depends(get_session)) -> JobRead:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return _serialize_job(job)
+
+
+@router.post("/literature/search", response_model=LiteratureSearchResponse)
+def search_literature(
+    payload: LiteratureSearchRequest,
+    session: Session = Depends(get_session),
+) -> LiteratureSearchResponse:
+    try:
+        return LiteratureSearchService(session).search(
+            query=payload.query,
+            limit=payload.limit,
+            include_external=payload.include_external,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/papers", response_model=list[PaperRead])

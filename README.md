@@ -41,6 +41,7 @@ GET /research/jobs
 - Research gap mining from evidence records.
 - OpenAI-compatible structured idea generation with deterministic fallback.
 - Local novelty/collision checks against existing evidence, gaps, and ideas.
+- Local literature search with an optional OpenAlex external-search adapter.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.
 - Markdown export for paper cards and idea dossiers.
@@ -101,6 +102,9 @@ MAIN_API_KEY=
 EXTRACTION_MODEL=
 EXTRACTION_BASE_URL=
 EXTRACTION_API_KEY=
+
+EXTERNAL_LITERATURE_SEARCH_ENABLED=false
+OPENALEX_BASE_URL=https://api.openalex.org
 ```
 
 If `EXTRACTION_*` is empty, paper card extraction falls back to the heuristic extractor. If `MAIN_*` is empty, idea generation falls back to the deterministic idea generator.
@@ -134,6 +138,7 @@ POST /research/papers/upload
 GET  /research/papers
 GET  /research/papers/{paper_id}
 GET  /research/papers/{paper_id}/evidence
+POST /research/literature/search
 
 POST /research/papers/{paper_id}/card/extract-structured
 GET  /research/papers/{paper_id}/card/export/markdown

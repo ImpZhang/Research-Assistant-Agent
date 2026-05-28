@@ -103,6 +103,17 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "paper upload",
     )
     paper_id = upload["paper"]["id"]
+    literature = require_ok(
+        client.post(
+            "/research/literature/search",
+            json_body={
+                "query": "evidence grounded research assistant workflow",
+                "limit": 5,
+                "include_external": True,
+            },
+        ),
+        "literature search",
+    )
 
     workflow = require_ok(
         client.post(
@@ -140,6 +151,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "health": health,
         "phase": status["phase"],
         "paper_id": paper_id,
+        "literature_result_count": len(literature["items"]),
+        "literature_external_status": literature["external_status"],
         "workflow_job_id": workflow["job_id"],
         "workflow_job_status": job["status"],
         "card_id": workflow["card"]["id"],

@@ -51,6 +51,42 @@ Future work should add structured paper-card extraction.
     assert len(evidence_response.json()) == body["evidence_count"]
 
 
+def test_literature_search_returns_local_results_with_external_disabled() -> None:
+    client = TestClient(create_app())
+    content = b"""Literature Search Test Paper
+
+Abstract
+This paper validates local literature search for research assistant projects.
+
+Introduction
+Literature search should find local papers before optional external search is enabled.
+
+Conclusion
+Future work should connect OpenAlex and arXiv providers.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("literature_search_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    response = client.post(
+        "/research/literature/search",
+        json={
+            "query": "local literature search research assistant",
+            "limit": 5,
+            "include_external": True,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["external_status"] == "disabled"
+    assert body["items"]
+    assert body["items"][0]["provider"] == "local"
+    assert any(item["source_id"] == paper_id for item in body["items"])
+
+
 def test_extract_paper_card_from_evidence() -> None:
     client = TestClient(create_app())
     content = b"""Paper Card Extraction Test
