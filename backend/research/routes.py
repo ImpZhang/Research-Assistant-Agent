@@ -7,12 +7,15 @@ from backend.research.models import Chunk, Evidence, Paper, PaperSection
 from backend.research.schemas import (
     EvidenceRead,
     PaperCreate,
+    PaperCardPayload,
+    PaperCardRead,
     PaperDetail,
     PaperRead,
     PaperUploadResponse,
     ProjectStatus,
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
+from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
 
 
@@ -151,3 +154,50 @@ def list_paper_evidence(
         .order_by(Evidence.created_at.asc())
         .all()
     )
+
+
+def _serialize_card(card) -> PaperCardRead:
+    return PaperCardRead(
+        id=card.id,
+        paper_id=card.paper_id,
+        payload=PaperCardPayload(
+            problem=card.problem_json.get("items", []) if card.problem_json else [],
+            motivation=card.motivation_json.get("items", []) if card.motivation_json else [],
+            contributions=card.contributions_json.get("items", []) if card.contributions_json else [],
+            method=card.method_json.get("items", []) if card.method_json else [],
+            datasets=card.datasets_json.get("items", []) if card.datasets_json else [],
+            metrics=card.metrics_json.get("items", []) if card.metrics_json else [],
+            baselines=card.baselines_json.get("items", []) if card.baselines_json else [],
+            results=card.results_json.get("items", []) if card.results_json else [],
+            limitations=card.limitations_json.get("items", []) if card.limitations_json else [],
+            future_work=card.future_work_json.get("items", []) if card.future_work_json else [],
+            keywords=card.keywords_json.get("items", []) if card.keywords_json else [],
+            open_questions=card.open_questions_json.get("items", [])
+            if card.open_questions_json
+            else [],
+        ),
+        extraction_model=card.extraction_model,
+        extraction_status=card.extraction_status,
+        created_at=card.created_at,
+        updated_at=card.updated_at,
+    )
+
+
+@router.get("/papers/{paper_id}/card", response_model=PaperCardRead)
+def get_paper_card(paper_id: str, session: Session = Depends(get_session)) -> PaperCardRead:
+    if session.get(Paper, paper_id) is None:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    card = PaperCardService(session).get_card(paper_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="Paper card not found")
+    return _serialize_card(card)
+
+
+@router.post("/papers/{paper_id}/card/extract", response_model=PaperCardRead)
+def extract_paper_card(paper_id: str, session: Session = Depends(get_session)) -> PaperCardRead:
+    try:
+        card = PaperCardService(session).extract_heuristic_card(paper_id)
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return _serialize_card(card)

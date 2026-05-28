@@ -84,6 +84,18 @@ class PaperCardPayload(BaseModel):
     open_questions: list[PaperCardFieldItem] = Field(default_factory=list)
 
 
+class PaperCardRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    paper_id: str
+    payload: PaperCardPayload
+    extraction_model: str = ""
+    extraction_status: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class ResearchGapCreate(BaseModel):
     title: str
     description: str
