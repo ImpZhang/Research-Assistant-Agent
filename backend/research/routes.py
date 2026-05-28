@@ -31,6 +31,7 @@ from backend.research.schemas import (
     IdeaFeedbackRead,
     IdeaGenerationRequest,
     IdeaGenerationResponse,
+    IdeaPortfolioExportRequest,
     IdeaRankingRequest,
     IdeaRankingResponse,
     IdeaRefinementRequest,
@@ -108,6 +109,7 @@ def status() -> ProjectStatus:
             "idea_refinement_loop",
             "idea_ranking_portfolio",
             "human_idea_feedback",
+            "portfolio_markdown_export",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -580,6 +582,91 @@ def rank_ideas(
         ],
         message=f"Ranked {len(ranked)} ideas for research portfolio review.",
     )
+
+
+@router.post(
+    "/ideas/rank/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_ranked_ideas_markdown(
+    payload: IdeaPortfolioExportRequest,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    ranked = IdeaRankingService(session).rank_ideas(
+        idea_ids=payload.idea_ids,
+        gap_ids=payload.gap_ids,
+        paper_ids=payload.paper_ids,
+        limit=payload.limit,
+        weights=payload.weights,
+        include_refined=payload.include_refined,
+        deduplicate_lineage=payload.deduplicate_lineage,
+    )
+    markdown = _render_idea_portfolio_markdown(payload.title, ranked)
+    return PlainTextResponse(markdown, media_type="text/markdown")
+
+
+def _render_idea_portfolio_markdown(title: str, ranked_items: list) -> str:
+    clean_title = _clean_markdown_text(title) or "Research Idea Portfolio"
+    lines = [
+        f"# {clean_title}",
+        "",
+        f"- Ranked idea count: {len(ranked_items)}",
+        "- Ranking method: weighted heuristic with novelty, feasibility, impact, evidence, experiment readiness, resource efficiency, and human feedback adjustments.",
+    ]
+
+    if not ranked_items:
+        lines.extend(["", "No ranked ideas matched the request."])
+        return "\n".join(lines).strip() + "\n"
+
+    for item in ranked_items:
+        idea = item.idea
+        lines.extend(
+            [
+                "",
+                f"## {item.rank}. {_clean_markdown_text(idea.title)}",
+                "",
+                f"- Idea ID: `{idea.id}`",
+                f"- Parent Idea ID: `{idea.parent_idea_id or 'none'}`",
+                f"- Status: `{idea.status}`",
+                f"- Weighted score: {item.weighted_score}",
+                f"- Related Gap IDs: {_inline_ids(idea.related_gap_ids_json or [])}",
+                f"- Related Paper IDs: {_inline_ids(idea.related_paper_ids_json or [])}",
+                "",
+                "### Score Breakdown",
+                "",
+            ]
+        )
+        for key, value in item.score_breakdown.items():
+            lines.append(f"- {key}: {value}")
+        lines.extend(["", "### Ranking Rationale", ""])
+        lines.extend(f"- {_clean_markdown_text(reason)}" for reason in item.rationale)
+        lines.extend(
+            [
+                "",
+                "### Research Question",
+                "",
+                _clean_markdown_text(idea.research_question),
+                "",
+                "### Core Hypothesis",
+                "",
+                _clean_markdown_text(idea.core_hypothesis),
+                "",
+                "### First Method Sketch",
+                "",
+                _clean_markdown_text(idea.method_sketch),
+            ]
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _inline_ids(ids: list[str]) -> str:
+    if not ids:
+        return "`none`"
+    return ", ".join(f"`{_clean_markdown_text(item_id)}`" for item_id in ids)
+
+
+def _clean_markdown_text(text: str) -> str:
+    return " ".join(str(text or "").split())
 
 
 @router.get("/ideas/{idea_id}", response_model=IdeaRead)

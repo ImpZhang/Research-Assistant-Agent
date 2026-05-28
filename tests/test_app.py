@@ -35,6 +35,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/refine" in script.text
     assert "/research/ideas/${state.latestIdeaId}/feedback" in script.text
     assert "/research/ideas/rank" in script.text
+    assert "/research/ideas/rank/export/markdown" in script.text
 
 
 def test_upload_text_paper() -> None:
@@ -71,17 +72,18 @@ Future work should add structured paper-card extraction.
 
 def test_literature_search_returns_local_results_with_external_disabled() -> None:
     client = TestClient(create_app())
-    content = b"""Literature Search Test Paper
+    marker = f"literaturesearchmarker{time.time_ns()}"
+    content = f"""Literature Search Test Paper {marker}
 
 Abstract
-This paper validates local literature search for research assistant projects.
+This paper validates local literature search for research assistant projects with marker {marker}.
 
 Introduction
 Literature search should find local papers before optional external search is enabled.
 
 Conclusion
 Future work should connect OpenAlex and arXiv providers.
-"""
+""".encode()
     upload = client.post(
         "/research/papers/upload",
         files={"file": ("literature_search_test.txt", content, "text/plain")},
@@ -92,8 +94,8 @@ Future work should connect OpenAlex and arXiv providers.
     response = client.post(
         "/research/literature/search",
         json={
-            "query": "local literature search research assistant",
-            "limit": 5,
+            "query": marker,
+            "limit": 10,
             "include_external": True,
         },
     )
@@ -450,6 +452,22 @@ Future work should learn ranking weights from researcher feedback.
     top = reranked.json()["ranked_ideas"][0]
     assert top["idea"]["id"] == refined_idea_id
     assert any("Human feedback" in item for item in top["rationale"])
+
+    export = client.post(
+        "/research/ideas/rank/export/markdown",
+        json={
+            "idea_ids": [source_idea_id, refined_idea_id],
+            "deduplicate_lineage": True,
+            "title": "Ranking Test Portfolio",
+        },
+    )
+    assert export.status_code == 200
+    assert export.headers["content-type"].startswith("text/markdown")
+    assert "# Ranking Test Portfolio" in export.text
+    assert f"- Idea ID: `{refined_idea_id}`" in export.text
+    assert f"- Idea ID: `{source_idea_id}`" not in export.text
+    assert "### Score Breakdown" in export.text
+    assert "Human feedback decision is shortlist" in export.text
 
 
 def test_markdown_exports_for_card_and_idea_dossier() -> None:

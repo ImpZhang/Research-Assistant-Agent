@@ -200,6 +200,22 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea ranking did not include the refined idea")
     if source_idea_id in ranked_ids:
         raise RuntimeError("idea ranking did not deduplicate the source idea lineage")
+    portfolio_markdown = require_ok(
+        client.post(
+            "/research/ideas/rank/export/markdown",
+            json_body={
+                "paper_ids": [paper_id],
+                "limit": 5,
+                "deduplicate_lineage": True,
+                "title": "Smoke Research Idea Portfolio",
+            },
+        ),
+        "idea portfolio markdown export",
+    )
+    if "# Smoke Research Idea Portfolio" not in portfolio_markdown:
+        raise RuntimeError("portfolio markdown export did not include the requested title")
+    if refined_idea["id"] not in portfolio_markdown:
+        raise RuntimeError("portfolio markdown export did not include the refined idea")
     async_job = require_ok(
         client.post(
             "/research/workflows/literature-to-ideas/async",
@@ -267,6 +283,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "ranked_idea_count": len(ranking["ranked_ideas"]),
         "top_ranked_idea_id": ranking["ranked_ideas"][0]["idea"]["id"],
         "top_ranked_idea_score": ranking["ranked_ideas"][0]["weighted_score"],
+        "portfolio_markdown_chars": len(portfolio_markdown),
         "async_workflow_job_id": async_job["id"],
         "async_workflow_job_status": async_job_status["status"],
         "card_id": workflow["card"]["id"],

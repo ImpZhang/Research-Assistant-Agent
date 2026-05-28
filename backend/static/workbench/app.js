@@ -348,6 +348,17 @@ async function rankIdeas() {
       "workflowResult",
       `${escapeHtml(body.message)}<br />${renderList("Ranked ideas", body.ranked_ideas, (item) => `#${item.rank} ${item.weighted_score}: ${item.idea.title}`)}`,
     );
+    const markdown = await api("/research/ideas/rank/export/markdown", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        paper_ids: state.paperId ? [state.paperId] : [],
+        limit: 5,
+        deduplicate_lineage: true,
+        title: "Research Idea Portfolio",
+      }),
+    });
+    $("dossierPreview").textContent = markdown;
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
   }

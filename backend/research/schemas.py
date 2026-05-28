@@ -238,6 +238,10 @@ class IdeaRankingResponse(BaseModel):
     message: str
 
 
+class IdeaPortfolioExportRequest(IdeaRankingRequest):
+    title: str = "Research Idea Portfolio"
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

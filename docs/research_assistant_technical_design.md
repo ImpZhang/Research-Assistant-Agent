@@ -933,6 +933,7 @@ GET  /research/ideas
 GET  /research/ideas/{idea_id}
 POST /research/ideas/{idea_id}/score
 POST /research/ideas/rank
+POST /research/ideas/rank/export/markdown
 POST /research/ideas/{idea_id}/revise
 POST /research/ideas/{idea_id}/refine
 POST /research/ideas/{idea_id}/review
@@ -944,6 +945,8 @@ GET  /research/ideas/{idea_id}/feedback
 当前实现中 `/refine` 是第一版 idea revision loop：它读取 reviewer actions、novelty screening、experiment plan 和父 idea，创建带 `parent_idea_id` 的新 idea version，并在 GraphRAG-lite 中写入 `idea_refines_idea` 边。后续模型增强应替换 refinement 内容生成逻辑，而不是改变这个 lineage contract。
 
 `/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
+
+`/rank/export/markdown` 使用同一套 ranking 参数导出选题组合报告，包含 rank、score breakdown、rationale、parent lineage、research question、hypothesis 和 method sketch，用于组会讨论、导师 review 或手动归档。
 
 `/feedback` 记录人类研究者对 idea 的 shortlist/accept/revise/reject/archive 决策、rating、comment 和 tags。Ranking 会读取这些反馈作为 human preference adjustment；后续可把这张表扩展成偏好学习、选题日志和 active learning 数据源。
 
