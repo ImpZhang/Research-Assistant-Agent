@@ -306,6 +306,62 @@ Future work should connect the workflow to front-end actions and MCP tools.
     assert "Completed literature-to-ideas workflow" in body["message"]
 
 
+def test_context_search_returns_evidence_and_graph_context() -> None:
+    client = TestClient(create_app())
+    content = b"""Context Search Test Paper
+
+Abstract
+This paper studies diagnostic metrics for evidence-grounded research assistants.
+
+Introduction
+Research assistants need context retrieval that connects diagnostic metric evidence to research gaps.
+
+Method
+The system should retrieve evidence, gaps, ideas, and graph neighbors for a user query.
+
+Limitations
+The current retrieval is lexical and should later add embedding reranking.
+
+Conclusion
+Future work should make GraphRAG context retrieval stronger.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("context_search_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    workflow = client.post(
+        "/research/workflows/literature-to-ideas",
+        json={
+            "paper_id": paper_id,
+            "max_gaps": 2,
+            "max_ideas_per_gap": 1,
+            "include_markdown_export": False,
+        },
+    )
+    assert workflow.status_code == 200
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": "diagnostic metric graph retrieval",
+            "paper_ids": [paper_id],
+            "limit": 5,
+            "include_graph": True,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["retrieval_method"] == "lexical_graph_rag_lite_v0"
+    assert body["evidences"]
+    assert body["gaps"] or body["ideas"]
+    assert body["graph_nodes"]
+    assert body["graph_edges"]
+    assert "Matched" in body["answer_brief"]
+
+
 def test_graph_rag_lite_records_workflow_links() -> None:
     client = TestClient(create_app())
     content = b"""Graph Link Test Paper

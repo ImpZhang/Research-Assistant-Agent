@@ -286,6 +286,42 @@ class ResearchEdgeRead(BaseModel):
     updated_at: datetime
 
 
+class ContextSearchRequest(BaseModel):
+    query: str
+    paper_ids: list[str] = Field(default_factory=list)
+    limit: int = 8
+    include_graph: bool = True
+
+
+class ScoredEvidenceRead(BaseModel):
+    evidence: EvidenceRead
+    score: float
+    matched_terms: list[str] = Field(default_factory=list)
+
+
+class ScoredResearchGapRead(BaseModel):
+    gap: ResearchGapRead
+    score: float
+    matched_terms: list[str] = Field(default_factory=list)
+
+
+class ScoredIdeaRead(BaseModel):
+    idea: IdeaRead
+    score: float
+    matched_terms: list[str] = Field(default_factory=list)
+
+
+class ContextSearchResponse(BaseModel):
+    query: str
+    retrieval_method: str
+    answer_brief: str
+    evidences: list[ScoredEvidenceRead]
+    gaps: list[ScoredResearchGapRead]
+    ideas: list[ScoredIdeaRead]
+    graph_nodes: list[ResearchNodeRead] = Field(default_factory=list)
+    graph_edges: list[ResearchEdgeRead] = Field(default_factory=list)
+
+
 class JobRead(BaseModel):
     id: str
     job_type: str

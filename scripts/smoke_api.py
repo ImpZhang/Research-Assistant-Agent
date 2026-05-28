@@ -120,6 +120,18 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workflow returned no gaps")
     if not workflow["ideas"]:
         raise RuntimeError("workflow returned no ideas")
+    context = require_ok(
+        client.post(
+            "/research/search/context",
+            json_body={
+                "query": "evidence grounded diagnostic metric future work",
+                "paper_ids": [paper_id],
+                "limit": 5,
+                "include_graph": True,
+            },
+        ),
+        "context search",
+    )
     nodes = require_ok(client.get("/research/graph/nodes"), "graph nodes")
     edges = require_ok(client.get("/research/graph/edges"), "graph edges")
 
@@ -133,6 +145,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "review_count": len(workflow["reviews"]),
         "experiment_plan_count": len(workflow["experiment_plans"]),
         "markdown_export_chars": len(workflow["markdown_export"]),
+        "context_evidence_count": len(context["evidences"]),
+        "context_graph_node_count": len(context["graph_nodes"]),
         "graph_node_count": len(nodes),
         "graph_edge_count": len(edges),
     }

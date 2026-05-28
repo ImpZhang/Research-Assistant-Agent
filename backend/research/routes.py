@@ -6,6 +6,8 @@ from backend.research.config import settings
 from backend.research.db import get_session
 from backend.research.models import Chunk, Evidence, Paper, PaperSection
 from backend.research.schemas import (
+    ContextSearchRequest,
+    ContextSearchResponse,
     EvidenceRead,
     ExperimentPlanRead,
     GapMiningRequest,
@@ -27,6 +29,9 @@ from backend.research.schemas import (
     ResearchGapRead,
     ResearchNodeRead,
     ReviewRead,
+    ScoredEvidenceRead,
+    ScoredIdeaRead,
+    ScoredResearchGapRead,
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.experiment_service import ExperimentService
@@ -36,6 +41,7 @@ from backend.research.services.graph_service import GraphService
 from backend.research.services.idea_service import IdeaService
 from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
+from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
 from backend.research.services.workflow_service import WorkflowService
@@ -64,13 +70,16 @@ def status() -> ProjectStatus:
             "reviewer_simulation",
             "experiment_planning",
             "literature_to_ideas_workflow",
+            "lexical_context_retrieval",
             "graph_rag_lite_schema",
             "graph_rag_lite_workflow_links",
+            "graph_rag_lite_context_retrieval",
             "markdown_exports",
             "requirements_and_technical_docs",
         ],
         next_capabilities=[
             "evidence_vector_index",
+            "embedding_reranking",
             "external_novelty_search",
             "frontend_research_workbench",
             "mcp_tool_bridge",
@@ -186,6 +195,19 @@ def list_paper_evidence(
         .filter(Evidence.paper_id == paper_id)
         .order_by(Evidence.created_at.asc())
         .all()
+    )
+
+
+def _serialize_evidence(evidence: Evidence) -> EvidenceRead:
+    return EvidenceRead(
+        id=evidence.id,
+        paper_id=evidence.paper_id,
+        evidence_type=evidence.evidence_type,
+        text=evidence.text,
+        summary=evidence.summary,
+        supports=evidence.supports,
+        confidence=evidence.confidence,
+        page_number=evidence.page_number,
     )
 
 
@@ -516,6 +538,54 @@ def run_literature_to_ideas_workflow(
             f"{len(result.gaps)} gaps, {len(result.ideas)} ideas, "
             f"{len(result.reviews)} reviews, {len(result.experiment_plans)} experiment plans."
         ),
+    )
+
+
+@router.post("/search/context", response_model=ContextSearchResponse)
+def search_research_context(
+    payload: ContextSearchRequest,
+    session: Session = Depends(get_session),
+) -> ContextSearchResponse:
+    try:
+        result = RetrievalService(session).search_context(
+            query=payload.query,
+            paper_ids=payload.paper_ids,
+            limit=payload.limit,
+            include_graph=payload.include_graph,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return ContextSearchResponse(
+        query=payload.query,
+        retrieval_method="lexical_graph_rag_lite_v0",
+        answer_brief=result.answer_brief,
+        evidences=[
+            ScoredEvidenceRead(
+                evidence=_serialize_evidence(scored.item),
+                score=scored.score,
+                matched_terms=scored.matched_terms,
+            )
+            for scored in result.evidences
+        ],
+        gaps=[
+            ScoredResearchGapRead(
+                gap=_serialize_gap(scored.item),
+                score=scored.score,
+                matched_terms=scored.matched_terms,
+            )
+            for scored in result.gaps
+        ],
+        ideas=[
+            ScoredIdeaRead(
+                idea=_serialize_idea(scored.item),
+                score=scored.score,
+                matched_terms=scored.matched_terms,
+            )
+            for scored in result.ideas
+        ],
+        graph_nodes=[_serialize_node(node) for node in result.graph_nodes],
+        graph_edges=[_serialize_edge(edge) for edge in result.graph_edges],
     )
 
 
