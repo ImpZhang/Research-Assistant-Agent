@@ -1,0 +1,1792 @@
+# SuperMew 科研助手技术架构与技术选型文档
+
+版本：v0.1  
+日期：2026-05-28  
+状态：技术方案定稿草案  
+目标项目：`/home/zhangwz/SuperMew-main`
+
+## 1. 文档目标
+
+本文档用于确定 SuperMew 从「RAG 文档问答」升级为「科研 idea 工作流助手」的技术架构、模块拆分、数据模型、编排方式、存储方案、技术选型、实现路线和工程边界。
+
+配套需求文档：
+
+- `docs/research_assistant_requirements.md`
+
+本文档给出明确选择：
+
+- 保留 FastAPI。
+- 保留 LangChain/LangGraph。
+- 保留 Milvus，但明确 Lite 与 Standalone 的使用边界。
+- 新增结构化数据库层。
+- 新增 Paper Card / Evidence / Gap / Idea / Review / ExperimentPlan 数据模型。
+- 新增 GraphRAG-lite，而不是第一阶段接完整 GraphRAG。
+- 后续接 MCP，但第一阶段不让 MCP 成为核心依赖。
+- 不迁移 DeerFlow，只借鉴其长任务、多 agent、memory、tool harness 思想。
+
+## 2. 总体技术原则
+
+### 2.1 延续现有系统，不推倒重来
+
+当前项目已经有：
+
+- FastAPI。
+- LangGraph。
+- LangChain tools。
+- Milvus。
+- SSE streaming。
+- RAG trace。
+- 前端上传与聊天。
+- 离线评测脚本。
+
+这些都是可复用资产。升级应以新增模块和逐步替换为主，不进行大框架迁移。
+
+### 2.2 先结构化，再智能化
+
+如果没有结构化论文理解，idea 生成会变成普通聊天。
+
+所以架构顺序必须是：
+
+```text
+Paper -> Section -> Chunk -> Evidence -> PaperCard -> Gap -> Idea -> Review -> ExperimentPlan
+```
+
+而不是：
+
+```text
+Chunk -> Prompt -> Idea
+```
+
+### 2.3 RAG 是底座，不是产品终点
+
+RAG 负责找证据；科研助手负责组织科研推理流程。
+
+技术上要区分：
+
+- Retrieval pipeline。
+- Research workflow。
+- Knowledge graph。
+- User-facing product state。
+
+### 2.4 所有重要结论都要可追溯
+
+系统输出的以下对象必须绑定 evidence：
+
+- Paper Card 字段。
+- Research Gap。
+- Idea。
+- Reviewer critique。
+- Experiment recommendation。
+
+### 2.5 先做 GraphRAG-lite
+
+完整 GraphRAG 适合更大规模语料和全局知识推理。Microsoft GraphRAG 官方文档将 GraphRAG 定义为一种从原始文本中抽取知识图、构建社区层级并在查询时使用这些结构的分层 RAG 方法。这个思路很适合科研助手，但完整管线第一阶段成本偏高。
+
+因此本项目先做轻量版：
+
+- 显式定义科研实体。
+- 显式存储实体关系。
+- 在检索时做关系扩展。
+- 不第一阶段引入完整 GraphRAG indexing/community summary。
+
+参考：
+
+- Microsoft GraphRAG: https://microsoft.github.io/graphrag/
+
+### 2.6 MCP 后置
+
+MCP 是连接外部系统的标准协议。官方文档将 MCP 定义为连接 AI 应用与外部数据源、工具和工作流的开放标准。它适合后续接 arXiv、Semantic Scholar、Zotero、GitHub 等工具，但第一阶段核心能力必须先在本地文献库内跑通。
+
+参考：
+
+- Model Context Protocol: https://modelcontextprotocol.io/docs/getting-started/intro
+
+## 3. 现有系统架构
+
+当前主要结构：
+
+```text
+frontend/
+  index.html
+  script.js
+  style.css
+
+backend/
+  app.py
+  api.py
+  agent.py
+  tools.py
+  rag_pipeline.py
+  rag_utils.py
+  document_loader.py
+  embedding.py
+  milvus_client.py
+  milvus_writer.py
+  parent_chunk_store.py
+  schemas.py
+
+data/
+  documents/
+  parent_chunks.json
+  customer_service_history.json
+  milvus/
+  eval/
+```
+
+现有运行路径：
+
+```text
+前端 /chat/stream
+-> backend/api.py
+-> backend/agent.py
+-> LangChain Agent
+-> search_knowledge_base tool
+-> backend/rag_pipeline.py
+-> backend/rag_utils.py
+-> embedding + Milvus + rerank
+-> 返回 chunks + rag_trace
+```
+
+当前技术债：
+
+- `rag_utils.py` 过大，混合了检索、rerank、heuristics、query variants、hard-coded domain bonus。
+- parent chunks 用 JSON 文件保存，后续复杂关系不适合继续 JSON 堆叠。
+- 会话历史用 JSON 文件保存，长期也应迁移到数据库。
+- 文献结构化信息缺失。
+- idea/gap/review/experiment 没有数据模型。
+
+## 4. 目标总体架构
+
+```mermaid
+flowchart TD
+    UI["Frontend Research Workspace"] --> API["FastAPI API Layer"]
+
+    API --> ORCH["Research Orchestrator - LangGraph"]
+
+    ORCH --> INGEST["Document Ingestion Graph"]
+    ORCH --> QA["Evidence QA Graph"]
+    ORCH --> GAP["Gap Mining Graph"]
+    ORCH --> IDEA["Idea Generation Graph"]
+    ORCH --> REVIEW["Reviewer Graph"]
+    ORCH --> EXP["Experiment Design Graph"]
+
+    INGEST --> KNOW["Knowledge Layer"]
+    QA --> KNOW
+    GAP --> KNOW
+    IDEA --> KNOW
+    REVIEW --> KNOW
+    EXP --> KNOW
+
+    KNOW --> DB["SQLite/PostgreSQL via SQLAlchemy"]
+    KNOW --> VEC["Milvus Vector Index"]
+    KNOW --> FILES["Raw Paper Files"]
+    KNOW --> GRAPH["GraphRAG-lite Node/Edge Tables"]
+
+    ORCH --> MODEL["Model Layer"]
+    MODEL --> LLM["OpenAI-compatible Chat Models"]
+    MODEL --> EMB["Embedding API"]
+    MODEL --> RERANK["Rerank API or Local Rerank"]
+
+    ORCH --> TOOLS["Tool Layer"]
+    TOOLS --> MCP["MCP Adapters - later"]
+    MCP --> ARXIV["arXiv"]
+    MCP --> S2["Semantic Scholar"]
+    MCP --> ZOTERO["Zotero"]
+    MCP --> GITHUB["GitHub"]
+```
+
+## 5. 技术选型总表
+
+| 层级 | 选择 | 结论 | 原因 |
+|---|---|---|---|
+| Web 后端 | FastAPI | 保留 | 当前已使用；支持 OpenAPI、文件上传、SSE、BackgroundTasks；生态成熟。 |
+| Agent/Workflow 编排 | LangGraph | 保留并强化 | 当前已使用；适合长流程、状态流转、可观测工作流。 |
+| LLM 抽象 | LangChain + OpenAI-compatible API | 保留 | 当前模型配置已兼容 Ark/DashScope/OpenAI 风格接口。 |
+| 数据校验 | Pydantic v2 | 保留 | 当前 FastAPI schema 已使用 Pydantic；适合结构化输出。 |
+| 结构化数据库 | SQLite + SQLAlchemy 2.0 | 新增 | 本地部署简单，支持关系建模；未来可平滑迁移 PostgreSQL。 |
+| 数据迁移 | Alembic | Phase 2 引入 | schema 稳定前可先 create_all；进入长期维护后用迁移。 |
+| 向量库 | Milvus Lite dev / Milvus Standalone prod | 保留但分层 | 当前已用；Lite 适合本地小规模，但有单进程文件锁问题。 |
+| 图谱存储 | SQLite node/edge tables + optional NetworkX | 新增 | GraphRAG-lite 足够；避免第一阶段上 Neo4j。 |
+| 文档解析 | 现有 PyPDFLoader + 后续 PyMuPDF 增强 | 渐进 | 先复用；复杂版面再增强。 |
+| 任务队列 | FastAPI BackgroundTasks + jobs 表 | MVP | 简单可靠；后续可迁移 RQ/Celery。 |
+| 前端 | 当前 Vue CDN；工作台阶段迁移 Vue 3 + Vite + TypeScript | 渐进 | 不阻断后端升级；复杂 UI 时需要工程化前端。 |
+| 测试 | pytest + FastAPI TestClient + Playwright | 新增 | 后端工作流、API、前端回归都需要覆盖。 |
+| 外部工具协议 | MCP | 后置接入 | 适合 arXiv/Zotero/GitHub 等，但不是 MVP 核心依赖。 |
+| 大型 agent harness | DeerFlow | 不迁移 | 当前系统已有主线；DeerFlow 适合长任务 harness，但迁移成本高。 |
+
+参考：
+
+- FastAPI: https://fastapi.tiangolo.com/
+- LangGraph: https://docs.langchain.com/oss/python/langgraph/overview
+- Milvus Lite: https://milvus.io/docs/milvus_lite.md
+- SQLAlchemy 2.0: https://docs.sqlalchemy.org/20/
+- DeerFlow: https://github.com/bytedance/deer-flow
+
+## 6. 后端模块规划
+
+建议新增顶层模块：
+
+```text
+backend/research/
+  __init__.py
+  models.py
+  db.py
+  schemas.py
+  services/
+    paper_service.py
+    evidence_service.py
+    graph_service.py
+    retrieval_service.py
+    gap_service.py
+    idea_service.py
+    review_service.py
+    experiment_service.py
+    export_service.py
+  graphs/
+    ingestion_graph.py
+    qa_graph.py
+    gap_graph.py
+    idea_graph.py
+    review_graph.py
+    experiment_graph.py
+  prompts/
+    paper_card_prompts.py
+    evidence_prompts.py
+    gap_prompts.py
+    idea_prompts.py
+    review_prompts.py
+    experiment_prompts.py
+  adapters/
+    model_adapter.py
+    vector_adapter.py
+    mcp_adapter.py
+  evaluators/
+    paper_card_eval.py
+    gap_eval.py
+    idea_eval.py
+```
+
+保留并逐步瘦身：
+
+```text
+backend/rag_utils.py
+backend/rag_pipeline.py
+backend/tools.py
+```
+
+目标是让 `rag_utils.py` 只负责通用检索，不再承载科研工作流。
+
+## 7. 数据模型设计
+
+## 7.1 关系数据库选择
+
+### 选择
+
+MVP 使用 SQLite + SQLAlchemy 2.0。
+
+### 原因
+
+- 远端单机部署简单。
+- 当前项目已经本地文件化，SQLite 是自然升级。
+- SQLAlchemy 2.0 成熟，未来迁 PostgreSQL 成本低。
+- JSON 文件不适合管理多实体、多关系和查询条件。
+
+### 后续迁移
+
+当满足以下条件时迁移 PostgreSQL：
+
+- 文献数量超过 1000。
+- 多用户并发使用。
+- 后台任务和 API 并发写入明显增多。
+- 需要复杂检索/权限/事务管理。
+
+## 7.2 核心表
+
+### papers
+
+```text
+id
+title
+authors_json
+year
+venue
+doi
+arxiv_id
+source_type
+source_url
+filename
+file_path
+domain
+task
+status
+created_at
+updated_at
+```
+
+### paper_sections
+
+```text
+id
+paper_id
+title
+section_type
+level
+page_start
+page_end
+text
+order_index
+created_at
+```
+
+### chunks
+
+```text
+id
+paper_id
+section_id
+chunk_id
+parent_chunk_id
+root_chunk_id
+chunk_level
+chunk_idx
+page_number
+text
+token_count
+created_at
+```
+
+### evidences
+
+```text
+id
+paper_id
+section_id
+chunk_id
+evidence_type
+text
+summary
+supports
+confidence
+page_number
+metadata_json
+created_at
+```
+
+### paper_cards
+
+```text
+id
+paper_id
+problem_json
+motivation_json
+contributions_json
+method_json
+datasets_json
+metrics_json
+baselines_json
+results_json
+limitations_json
+future_work_json
+keywords_json
+open_questions_json
+extraction_model
+extraction_status
+created_at
+updated_at
+```
+
+每个 JSON 字段结构：
+
+```json
+{
+  "items": [
+    {
+      "text": "...",
+      "evidence_ids": ["ev_xxx"],
+      "confidence": 0.82
+    }
+  ]
+}
+```
+
+### research_gaps
+
+```text
+id
+title
+description
+gap_type
+source_paper_ids_json
+evidence_ids_json
+why_important
+why_unsolved
+possible_approaches_json
+feasibility_score
+novelty_score
+risk_level
+status
+created_at
+updated_at
+```
+
+### ideas
+
+```text
+id
+title
+research_question
+core_hypothesis
+motivation
+related_gap_ids_json
+related_paper_ids_json
+evidence_ids_json
+method_sketch
+expected_contribution
+novelty_argument
+datasets_json
+baselines_json
+metrics_json
+risks_json
+resource_requirements
+target_venues_json
+score_json
+status
+version
+parent_idea_id
+created_at
+updated_at
+```
+
+### reviews
+
+```text
+id
+idea_id
+reviewer_type
+summary
+major_concerns_json
+minor_concerns_json
+required_experiments_json
+decision
+action_items_json
+created_at
+```
+
+### experiment_plans
+
+```text
+id
+idea_id
+objective
+hypothesis
+datasets_json
+baselines_json
+metrics_json
+main_experiment_json
+ablation_studies_json
+robustness_tests_json
+expected_tables_json
+failure_modes_json
+fallback_plan
+compute_requirements
+timeline_json
+created_at
+updated_at
+```
+
+### research_nodes
+
+GraphRAG-lite 节点表：
+
+```text
+id
+node_type
+label
+canonical_key
+payload_json
+created_at
+updated_at
+```
+
+node_type：
+
+```text
+paper
+claim
+method
+dataset
+metric
+result
+limitation
+future_work
+gap
+idea
+evidence
+```
+
+### research_edges
+
+GraphRAG-lite 边表：
+
+```text
+id
+source_node_id
+target_node_id
+edge_type
+weight
+evidence_ids_json
+payload_json
+created_at
+```
+
+edge_type：
+
+```text
+paper_has_claim
+paper_proposes_method
+method_evaluated_on_dataset
+paper_reports_result
+paper_has_limitation
+paper_suggests_future_work
+gap_supported_by_limitation
+idea_addresses_gap
+idea_supported_by_evidence
+idea_differs_from_paper
+```
+
+### jobs
+
+用于长任务状态：
+
+```text
+id
+job_type
+status
+input_json
+output_json
+error
+progress
+created_at
+updated_at
+started_at
+finished_at
+```
+
+job_type：
+
+```text
+paper_ingestion
+paper_card_extraction
+gap_mining
+idea_generation
+idea_review
+experiment_design
+external_search
+```
+
+## 8. 向量索引设计
+
+当前 Milvus collection 存储 chunk。后续需要两类向量对象：
+
+1. chunks。
+2. evidences。
+
+### 8.1 短期方案
+
+保留现有 collection：
+
+```text
+embeddings_collection
+```
+
+新增字段：
+
+```text
+object_type: chunk/evidence
+paper_id
+section_id
+evidence_id
+evidence_type
+```
+
+如果 Milvus schema 变更成本高，则新建 collection：
+
+```text
+research_evidence_collection
+```
+
+推荐做法：
+
+- 不破坏现有 chunk collection。
+- 新建 `research_evidence_collection`。
+
+### 8.2 Milvus Lite 与 Standalone 边界
+
+Milvus Lite 适合：
+
+- 本地开发。
+- 小规模文献库。
+- 单进程调试。
+
+Milvus Standalone 适合：
+
+- 长期服务。
+- 并发 API。
+- hybrid search。
+- 避免 Lite 本地 DB 文件锁问题。
+
+当前日志中已出现过 Milvus Lite DB 文件被占用问题。因此：
+
+- 开发时可继续 Lite。
+- 远端长期服务建议切到 Docker Milvus Standalone。
+
+## 9. 文档解析与结构化抽取
+
+## 9.1 文档解析
+
+MVP：
+
+- 继续使用当前 `DocumentLoader`。
+- 继续支持 PDF/Word。
+- chunk 保留 page_number。
+
+增强：
+
+- 新增 section-aware splitter。
+- 后续引入 PyMuPDF 获取更稳定的页面文本块和标题线索。
+- 暂不引入 GROBID，除非需要高质量 citation/metadata 解析。
+
+## 9.2 Section-aware 分块
+
+现有三级分块保留，但在分块前增加章节识别：
+
+```text
+raw pages
+-> section detection
+-> section chunks
+-> level 1/2/3 recursive chunks
+```
+
+chunk metadata：
+
+```text
+paper_id
+section_id
+section_type
+page_number
+chunk_level
+chunk_idx
+parent_chunk_id
+root_chunk_id
+```
+
+## 9.3 Paper Card 抽取流程
+
+```mermaid
+flowchart TD
+    A["Parsed Paper"] --> B["Detect Sections"]
+    B --> C["Extract Candidate Evidence"]
+    C --> D["Extract Paper Card Fields"]
+    D --> E["Validate Evidence Links"]
+    E --> F["Persist Paper Card"]
+    E --> G["Persist Graph Nodes/Edges"]
+```
+
+### 抽取策略
+
+按字段分批抽取：
+
+- Abstract/Introduction -> problem, motivation, contributions。
+- Method -> method, assumptions, model components。
+- Experiments -> datasets, metrics, baselines, results。
+- Conclusion/Limitations -> limitations, future work。
+
+不要一次把整篇论文塞给模型。
+
+### 输出方式
+
+使用 Pydantic structured output。
+
+字段必须包含：
+
+```text
+text
+evidence_ids
+confidence
+```
+
+## 10. LangGraph 工作流设计
+
+LangGraph 官方文档强调它适合长时间、有状态、可持久化、可流式输出、可人工介入的 agent/workflow。科研助手正好是多阶段状态机，因此继续使用 LangGraph 是主线选择。
+
+参考：
+
+- LangGraph overview: https://docs.langchain.com/oss/python/langgraph/overview
+
+## 10.1 Document Ingestion Graph
+
+状态：
+
+```text
+paper_id
+file_path
+parse_result
+sections
+chunks
+evidences
+paper_card
+graph_updates
+errors
+```
+
+节点：
+
+```text
+parse_document
+detect_sections
+split_chunks
+extract_evidence
+extract_paper_card
+validate_extraction
+write_database
+write_vector_index
+write_graph
+```
+
+失败策略：
+
+- parse 失败：任务失败。
+- section detection 失败：降级为 page/chunk 分块。
+- evidence 抽取失败：保留 chunk，标记 partial。
+- paper card 部分字段失败：字段为空，记录 error。
+
+## 10.2 Evidence QA Graph
+
+节点：
+
+```text
+classify_question
+rewrite_query
+retrieve_evidence
+retrieve_chunks
+expand_graph_neighbors
+rerank
+synthesize_answer
+attach_citations
+```
+
+回答格式：
+
+```text
+answer
+citations
+uncertainties
+related_papers
+trace
+```
+
+## 10.3 Gap Mining Graph
+
+节点：
+
+```text
+select_corpus
+collect_limitations
+collect_future_work
+collect_method_dataset_metric
+cluster_gap_candidates
+score_gaps
+dedupe_gaps
+persist_gaps
+```
+
+输入：
+
+```text
+paper_ids
+topic
+gap_types
+```
+
+输出：
+
+```text
+research_gaps[]
+```
+
+## 10.4 Idea Generation Graph
+
+节点：
+
+```text
+select_gap
+retrieve_supporting_evidence
+generate_idea_candidates
+check_prior_overlap
+score_ideas
+rank_ideas
+persist_ideas
+```
+
+输出：
+
+```text
+ideas[]
+```
+
+## 10.5 Reviewer Graph
+
+节点：
+
+```text
+load_idea
+retrieve_related_work
+novelty_review
+method_review
+experiment_review
+feasibility_review
+aggregate_decision
+persist_review
+```
+
+## 10.6 Experiment Design Graph
+
+节点：
+
+```text
+load_idea
+derive_hypothesis
+select_datasets
+select_baselines
+select_metrics
+design_main_experiment
+design_ablation
+design_robustness_tests
+estimate_resources
+persist_plan
+```
+
+## 11. API 设计
+
+新增 router：
+
+```text
+backend/research_api.py
+```
+
+或：
+
+```text
+backend/research/routes.py
+```
+
+推荐后者，避免 `api.py` 继续变大。
+
+## 11.1 Papers
+
+```text
+POST   /research/papers/upload
+GET    /research/papers
+GET    /research/papers/{paper_id}
+GET    /research/papers/{paper_id}/card
+POST   /research/papers/{paper_id}/reextract
+DELETE /research/papers/{paper_id}
+```
+
+## 11.2 Evidence
+
+```text
+GET  /research/evidence
+GET  /research/evidence/{evidence_id}
+POST /research/evidence/search
+```
+
+## 11.3 Gaps
+
+```text
+POST /research/gaps/mine
+GET  /research/gaps
+GET  /research/gaps/{gap_id}
+POST /research/gaps/{gap_id}/ideas
+```
+
+## 11.4 Ideas
+
+```text
+POST /research/ideas/generate
+POST /research/ideas/from-draft
+GET  /research/ideas
+GET  /research/ideas/{idea_id}
+POST /research/ideas/{idea_id}/score
+POST /research/ideas/{idea_id}/revise
+POST /research/ideas/{idea_id}/review
+POST /research/ideas/{idea_id}/experiment-plan
+```
+
+## 11.5 Reviews
+
+```text
+GET  /research/reviews/{review_id}
+GET  /research/ideas/{idea_id}/reviews
+```
+
+## 11.6 Experiments
+
+```text
+GET  /research/experiment-plans
+GET  /research/experiment-plans/{plan_id}
+POST /research/experiment-plans/{plan_id}/export
+```
+
+## 11.7 Jobs
+
+```text
+GET /research/jobs/{job_id}
+GET /research/jobs
+```
+
+## 12. Model Layer 设计
+
+## 12.1 模型角色
+
+至少分三类模型配置：
+
+```text
+MAIN_MODEL
+EXTRACTION_MODEL
+JUDGE_MODEL
+```
+
+可默认都指向当前 `MODEL`。
+
+### MAIN_MODEL
+
+用途：
+
+- 用户对话。
+- answer synthesis。
+- idea generation。
+
+要求：
+
+- 推理能力强。
+- 输出质量好。
+
+### EXTRACTION_MODEL
+
+用途：
+
+- paper card extraction。
+- evidence extraction。
+- structured fields。
+
+要求：
+
+- 稳定遵守 JSON/schema。
+- 成本可控。
+
+### JUDGE_MODEL
+
+用途：
+
+- idea scorer。
+- reviewer。
+- evaluation。
+
+要求：
+
+- 稳定评分。
+- 温度低。
+
+## 12.2 模型配置
+
+`.env` 新增：
+
+```env
+MAIN_MODEL=
+MAIN_BASE_URL=
+MAIN_API_KEY=
+
+EXTRACTION_MODEL=
+EXTRACTION_BASE_URL=
+EXTRACTION_API_KEY=
+
+JUDGE_MODEL=
+JUDGE_BASE_URL=
+JUDGE_API_KEY=
+
+EMBEDDER=
+EMBEDDER_BASE_URL=
+EMBEDDER_API_KEY=
+
+RERANK_MODEL=
+RERANK_BINDING_HOST=
+RERANK_API_KEY=
+```
+
+兼容现有：
+
+```env
+MODEL=
+BASE_URL=
+ARK_API_KEY=
+```
+
+## 12.3 结构化输出
+
+所有抽取类任务必须使用 schema：
+
+- Pydantic model。
+- JSON repair 兜底。
+- 字段级 validation。
+- evidence id validation。
+
+失败不允许静默吞掉，要写入 job error。
+
+## 13. GraphRAG-lite 设计
+
+## 13.1 为什么需要图
+
+科研问题常常不是「哪段文本最相似」，而是：
+
+- A 方法解决了哪个 limitation？
+- 哪些论文使用同一 dataset？
+- 哪些 result 支持某个 claim？
+- 某个 idea 和已有工作差异在哪？
+- 哪些 future work 可以聚类成 gap？
+
+这需要实体关系。
+
+## 13.2 为什么不第一阶段上完整 GraphRAG
+
+完整 GraphRAG 有价值，但第一阶段不适合直接上，原因：
+
+- 当前语料规模小。
+- 现有系统还没有 Paper Card/Evidence。
+- 完整 indexing/community summary 成本高。
+- 一上来接完整框架会挤压核心产品工作流。
+
+## 13.3 GraphRAG-lite 节点与边
+
+节点：
+
+```text
+Paper
+Claim
+Method
+Dataset
+Metric
+Result
+Limitation
+FutureWork
+Gap
+Idea
+Evidence
+```
+
+边：
+
+```text
+Paper -> has_claim -> Claim
+Paper -> proposes -> Method
+Method -> evaluated_on -> Dataset
+Paper -> reports -> Result
+Paper -> has_limitation -> Limitation
+Paper -> suggests -> FutureWork
+Gap -> supported_by -> Evidence
+Gap -> derived_from -> Limitation
+Idea -> addresses -> Gap
+Idea -> supported_by -> Evidence
+Idea -> differs_from -> Paper
+```
+
+## 13.4 图查询能力
+
+MVP 需要支持：
+
+```text
+find_related_papers(paper_id)
+find_methods_by_dataset(dataset_name)
+find_gaps_by_paper(paper_id)
+find_ideas_by_gap(gap_id)
+expand_evidence_neighbors(evidence_ids)
+```
+
+## 14. RAG 改造方案
+
+## 14.1 当前 RAG 问题
+
+当前 `rag_utils.py` 中混合了：
+
+- query type 判断。
+- query variant。
+- document-specific bonus。
+- filename bonus。
+- section bonus。
+- neighbor expansion。
+- rerank。
+- auto-merge。
+- debug。
+
+后续应拆成：
+
+```text
+retrieval/query_classifier.py
+retrieval/query_rewriter.py
+retrieval/vector_retriever.py
+retrieval/graph_expander.py
+retrieval/reranker.py
+retrieval/scorer.py
+retrieval/trace.py
+```
+
+## 14.2 去 hard-code 路线
+
+不要一次删掉全部 hard-code，避免现有评测骤降。
+
+路线：
+
+1. 标记 hard-coded 规则。
+2. 新增通用 evidence retrieval。
+3. 用 paper card/evidence 替代 paper-specific bonus。
+4. 跑旧评测对比。
+5. 逐步删除具体论文规则。
+
+## 14.3 新检索流程
+
+```text
+query
+-> classify intent
+-> build retrieval plan
+-> retrieve evidence
+-> retrieve chunks if needed
+-> graph neighbor expansion
+-> rerank
+-> evidence pack
+-> answer/gap/idea workflow
+```
+
+## 15. 前端技术路线
+
+## 15.1 当前阶段
+
+保留当前：
+
+```text
+frontend/index.html
+frontend/script.js
+frontend/style.css
+```
+
+原因：
+
+- 先做后端能力。
+- 不让前端迁移阻塞核心科研流程。
+
+## 15.2 工作台阶段
+
+当新增页面超过 3 个时，迁移：
+
+```text
+Vue 3
+Vite
+TypeScript
+Vue Router
+Pinia
+```
+
+UI 组件策略：
+
+- 初期继续自定义 CSS。
+- 表格/筛选/弹窗较多时再引入 Naive UI 或 Element Plus。
+- 图谱可视化后续用 Cytoscape.js 或 AntV G6。
+
+## 15.3 前端页面模块
+
+```text
+ChatPage
+PapersPage
+PaperCardPage
+EvidenceSearchPage
+GapMapPage
+IdeaLabPage
+ReviewBoardPage
+ExperimentPlanPage
+SettingsPage
+```
+
+## 16. 外部工具与 MCP
+
+## 16.1 MCP 定位
+
+MCP 用于外部系统连接，不用于第一阶段内部工作流。
+
+后续 MCP server/client 可以接：
+
+- arXiv。
+- Semantic Scholar。
+- Zotero。
+- GitHub。
+- 本地文件。
+- 浏览器搜索。
+
+## 16.2 接入顺序
+
+```text
+1. Semantic Scholar / arXiv 搜索
+2. Zotero 文献导入
+3. GitHub 代码检索
+4. 浏览器搜索最新工作
+5. 把 SuperMew 自身能力包装成 MCP tools
+```
+
+## 16.3 安全原则
+
+- MCP 工具默认只读。
+- 写文件/执行命令必须显式确认。
+- 外部搜索结果必须标记来源和时间。
+- 不让外部工具直接覆盖本地知识库。
+
+## 17. DeerFlow 决策
+
+结论：不迁移 DeerFlow。
+
+理由：
+
+- 当前项目已有 FastAPI + LangGraph 主线。
+- DeerFlow 是长任务 super agent harness，适合分钟到小时级任务和复杂工具沙箱。
+- 直接迁移会改变项目重心，成本高。
+
+借鉴：
+
+- sub-agents。
+- long-term memory。
+- sandbox 思想。
+- skills/tools 分层。
+- 长任务 job 管理。
+
+后续如果要支持「自动调研一个方向并生成完整报告」这种长任务，可以再评估是否接 DeerFlow 或类似 harness。
+
+## 18. 后台任务与并发
+
+## 18.1 MVP
+
+使用：
+
+- FastAPI BackgroundTasks。
+- jobs 表记录状态。
+- 前端轮询 `/research/jobs/{job_id}`。
+
+适合任务：
+
+- paper card extraction。
+- gap mining。
+- idea generation。
+- review。
+
+## 18.2 后续
+
+当出现以下情况，迁移 RQ/Celery：
+
+- 多个用户并发。
+- 多个长任务同时运行。
+- 任务需要重试、优先级、定时调度。
+- 服务重启后必须恢复任务。
+
+推荐迁移顺序：
+
+```text
+FastAPI BackgroundTasks
+-> RQ + Redis
+-> Celery + Redis/RabbitMQ
+```
+
+## 19. 评测体系
+
+## 19.1 保留现有 RAG 评测
+
+继续评估：
+
+- hit@1。
+- hit@5。
+- recall@5。
+- precision@5。
+- MRR。
+- nDCG。
+
+## 19.2 新增科研助手评测
+
+### Paper Card
+
+```text
+field_coverage
+evidence_link_rate
+field_correctness
+```
+
+### Evidence
+
+```text
+evidence_precision
+evidence_recall
+evidence_type_accuracy
+```
+
+### Gap
+
+```text
+gap_evidence_rate
+gap_novelty_estimate
+gap_actionability
+gap_deduplication_rate
+```
+
+### Idea
+
+```text
+idea_completeness
+idea_evidence_support
+idea_novelty_score
+idea_feasibility_score
+idea_experimentability
+```
+
+### Review
+
+```text
+critique_specificity
+critique_actionability
+missing_baseline_detection
+claim_risk_detection
+```
+
+### Experiment Plan
+
+```text
+baseline_completeness
+metric_fit
+ablation_completeness
+fallback_quality
+```
+
+## 20. 可观测性
+
+## 20.1 Trace 扩展
+
+当前已有 RAG trace。后续扩展：
+
+```text
+paper_card_trace
+gap_mining_trace
+idea_generation_trace
+review_trace
+experiment_design_trace
+```
+
+每个 trace 包含：
+
+```text
+input
+used_models
+retrieved_evidence_ids
+graph_neighbors
+prompt_version
+output_schema
+errors
+latency
+cost_estimate
+```
+
+## 20.2 日志
+
+短期：
+
+- Python logging。
+- 文件日志。
+
+中期：
+
+- structured JSON logs。
+- request_id。
+- job_id。
+- user_id。
+
+## 21. 配置设计
+
+新增 `.env`：
+
+```env
+# Database
+RESEARCH_DB_URL=sqlite:///./data/research/supermew_research.db
+
+# Vector
+RESEARCH_EVIDENCE_COLLECTION=research_evidence_collection
+
+# Models
+MAIN_MODEL=
+MAIN_BASE_URL=
+MAIN_API_KEY=
+EXTRACTION_MODEL=
+EXTRACTION_BASE_URL=
+EXTRACTION_API_KEY=
+JUDGE_MODEL=
+JUDGE_BASE_URL=
+JUDGE_API_KEY=
+
+# Extraction
+PAPER_CARD_EXTRACTION_ENABLED=true
+EVIDENCE_EXTRACTION_ENABLED=true
+MAX_SECTION_CHARS=12000
+
+# Jobs
+JOB_POLL_INTERVAL_SECONDS=2
+BACKGROUND_TASKS_ENABLED=true
+
+# Graph
+GRAPH_RAG_LITE_ENABLED=true
+GRAPH_NEIGHBOR_DEPTH=1
+
+# MCP later
+MCP_ENABLED=false
+```
+
+## 22. 文件与目录规划
+
+```text
+data/
+  research/
+    supermew_research.db
+    exports/
+      ideas/
+      reviews/
+      experiment_plans/
+
+backend/
+  research/
+    db.py
+    models.py
+    schemas.py
+    routes.py
+    services/
+    graphs/
+    prompts/
+    adapters/
+    evaluators/
+
+frontend/
+  current static app
+
+docs/
+  research_assistant_requirements.md
+  research_assistant_technical_design.md
+```
+
+## 23. 实施路线
+
+## 23.1 Phase 0：文档与骨架
+
+产出：
+
+- docs。
+- `backend/research/` 空模块。
+- database setup。
+- basic models。
+
+验收：
+
+- 不影响现有 `/chat/stream`。
+- 新模块可 import。
+
+## 23.2 Phase 1：Paper Card 与 Evidence
+
+产出：
+
+- papers/chunks/evidences/paper_cards 表。
+- paper ingestion graph。
+- paper card extraction。
+- evidence extraction。
+- evidence vector collection。
+
+验收：
+
+- 现有 8 篇文献可生成 card。
+- card 关键字段有 evidence。
+
+## 23.3 Phase 2：Evidence QA
+
+产出：
+
+- evidence retrieval。
+- graph neighbor expansion。
+- 新 QA graph。
+- citations。
+
+验收：
+
+- 文献问答能基于 evidence 输出。
+- 旧 RAG 评测不显著回退。
+
+## 23.4 Phase 3：Gap Miner
+
+产出：
+
+- gap schema。
+- gap mining graph。
+- gap list API。
+- gap markdown export。
+
+验收：
+
+- 能对当前 geolocation 文献生成 5 个以上 gap。
+
+## 23.5 Phase 4：Idea Lab
+
+产出：
+
+- idea schema。
+- idea generation graph。
+- idea scorer。
+- idea list/detail API。
+
+验收：
+
+- 每个 gap 能生成 2-3 个 idea。
+- idea 有证据和评分。
+
+## 23.6 Phase 5：Reviewer 与 Experiment
+
+产出：
+
+- review schema。
+- reviewer graph。
+- experiment plan graph。
+- markdown export。
+
+验收：
+
+- 每个 idea 能生成 reviewer 报告和实验计划。
+
+## 23.7 Phase 6：前端工作台
+
+产出：
+
+- Paper Cards 页面。
+- Gap Map 页面。
+- Idea Lab 页面。
+- Review Board 页面。
+- Experiment Plan 页面。
+
+验收：
+
+- 用户不需要通过纯聊天完成全部工作流。
+
+## 23.8 Phase 7：MCP 外部工具
+
+产出：
+
+- arXiv/Semantic Scholar/Zotero/GitHub adapters。
+- external paper import。
+- idea novelty external check。
+
+验收：
+
+- 能为 idea 检索外部相似工作。
+
+## 24. 关键工程风险
+
+### 24.1 Milvus Lite 文件锁
+
+现象：
+
+- 日志中出现过 DB 文件被占用。
+
+处理：
+
+- 开发用 Lite。
+- 远端服务切 Standalone。
+
+### 24.2 API key/权限失效
+
+现象：
+
+- 评测日志中出现 DashScope 403。
+
+处理：
+
+- 模型层统一错误处理。
+- judge/extraction/main 分 key 配置。
+- 评测支持 skip judge。
+
+### 24.3 抽取不稳定
+
+处理：
+
+- structured output。
+- evidence validation。
+- field-level retry。
+- partial success。
+
+### 24.4 项目复杂度失控
+
+处理：
+
+- 先 Paper Card/Evidence。
+- 再 Gap/Idea。
+- MCP/DeerFlow/完整 GraphRAG 后置。
+
+## 25. 需要新增依赖
+
+MVP 建议新增：
+
+```toml
+sqlalchemy = ">=2.0"
+alembic = ">=1.13"
+pytest = ">=8.0"
+httpx = ">=0.27"
+```
+
+可选增强：
+
+```toml
+pymupdf = ">=1.24"
+networkx = ">=3.0"
+```
+
+前端工作台阶段：
+
+```text
+vue
+vite
+typescript
+pinia
+vue-router
+```
+
+不建议 MVP 新增：
+
+```text
+neo4j
+celery
+deerflow
+full graphrag pipeline
+large UI framework
+```
+
+## 26. 技术决策记录
+
+### ADR-001：继续使用 FastAPI
+
+决定：
+
+- 保留 FastAPI。
+
+原因：
+
+- 当前项目已经使用。
+- 支持 API docs、文件上传、SSE、BackgroundTasks。
+- 不需要换成 Flask/Django。
+
+### ADR-002：继续使用 LangGraph
+
+决定：
+
+- 所有科研流程用 LangGraph 编排。
+
+原因：
+
+- 当前已用。
+- 适合多步骤有状态流程。
+- 官方定位也适合 long-running/stateful agent orchestration。
+
+### ADR-003：新增 SQLite + SQLAlchemy
+
+决定：
+
+- 新增结构化数据库。
+
+原因：
+
+- JSON 文件无法支撑复杂科研对象。
+- SQLite 部署轻。
+- SQLAlchemy 方便未来迁移。
+
+### ADR-004：GraphRAG-lite 优先
+
+决定：
+
+- 不第一阶段上完整 GraphRAG。
+
+原因：
+
+- 当前缺少结构化实体。
+- 完整 GraphRAG 成本高。
+- 轻量 node/edge 表已能支撑科研关系推理。
+
+### ADR-005：MCP 后置
+
+决定：
+
+- MCP 放到外部工具阶段。
+
+原因：
+
+- 当前核心是本地文献理解和 idea 工作流。
+- 外部工具先接会分散主线。
+
+### ADR-006：不迁移 DeerFlow
+
+决定：
+
+- 不迁移 DeerFlow。
+
+原因：
+
+- 当前已有 LangGraph 编排。
+- DeerFlow 适合更大的 long-horizon super agent harness。
+- 直接迁移风险高。
+
+## 27. 最终架构总结
+
+SuperMew 的最终技术路线是：
+
+```text
+FastAPI API
++ LangGraph research workflows
++ SQLAlchemy structured research DB
++ Milvus evidence vector search
++ GraphRAG-lite node/edge graph
++ Pydantic structured extraction
++ optional MCP external tools
+```
+
+核心不是堆框架，而是把知识对象建对：
+
+```text
+Paper
+Evidence
+Claim
+Method
+Dataset
+Metric
+Result
+Limitation
+FutureWork
+Gap
+Idea
+Review
+ExperimentPlan
+```
+
+最终系统应该做到：
+
+```text
+用户给论文
+-> 系统理解论文
+-> 系统组织证据
+-> 系统发现 gap
+-> 系统生成 idea
+-> 系统批判 idea
+-> 系统设计实验
+```
+
+这条路线最稳，也最符合当前项目基础。

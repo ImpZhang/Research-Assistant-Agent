@@ -1,0 +1,220 @@
+from datetime import datetime
+from uuid import uuid4
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from backend.research.db import Base
+
+
+def new_id() -> str:
+    return uuid4().hex
+
+
+class TimestampMixin:
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+
+class Paper(Base, TimestampMixin):
+    __tablename__ = "papers"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    title: Mapped[str] = mapped_column(String(512), default="")
+    authors_json: Mapped[list] = mapped_column(JSON, default=list)
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    venue: Mapped[str] = mapped_column(String(255), default="")
+    doi: Mapped[str] = mapped_column(String(255), default="")
+    arxiv_id: Mapped[str] = mapped_column(String(128), default="")
+    source_type: Mapped[str] = mapped_column(String(64), default="upload")
+    source_url: Mapped[str] = mapped_column(String(1024), default="")
+    filename: Mapped[str] = mapped_column(String(512), default="")
+    file_path: Mapped[str] = mapped_column(String(1024), default="")
+    domain: Mapped[str] = mapped_column(String(255), default="")
+    task: Mapped[str] = mapped_column(String(255), default="")
+    status: Mapped[str] = mapped_column(String(64), default="uploaded")
+
+
+class PaperSection(Base, TimestampMixin):
+    __tablename__ = "paper_sections"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    paper_id: Mapped[str] = mapped_column(ForeignKey("papers.id"), index=True)
+    title: Mapped[str] = mapped_column(String(512), default="")
+    section_type: Mapped[str] = mapped_column(String(128), default="")
+    level: Mapped[int] = mapped_column(Integer, default=1)
+    page_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    page_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Chunk(Base, TimestampMixin):
+    __tablename__ = "chunks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    paper_id: Mapped[str] = mapped_column(ForeignKey("papers.id"), index=True)
+    section_id: Mapped[str | None] = mapped_column(ForeignKey("paper_sections.id"), nullable=True)
+    chunk_id: Mapped[str] = mapped_column(String(512), index=True)
+    parent_chunk_id: Mapped[str] = mapped_column(String(512), default="")
+    root_chunk_id: Mapped[str] = mapped_column(String(512), default="")
+    chunk_level: Mapped[int] = mapped_column(Integer, default=1)
+    chunk_idx: Mapped[int] = mapped_column(Integer, default=0)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class Evidence(Base, TimestampMixin):
+    __tablename__ = "evidences"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    paper_id: Mapped[str] = mapped_column(ForeignKey("papers.id"), index=True)
+    section_id: Mapped[str | None] = mapped_column(ForeignKey("paper_sections.id"), nullable=True)
+    chunk_id: Mapped[str] = mapped_column(String(512), default="", index=True)
+    evidence_type: Mapped[str] = mapped_column(String(128), index=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    supports: Mapped[str] = mapped_column(Text, default="")
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class PaperCard(Base, TimestampMixin):
+    __tablename__ = "paper_cards"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    paper_id: Mapped[str] = mapped_column(ForeignKey("papers.id"), index=True, unique=True)
+    problem_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    motivation_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    contributions_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    method_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    datasets_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    metrics_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    baselines_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    results_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    limitations_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    future_work_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    keywords_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    open_questions_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    extraction_model: Mapped[str] = mapped_column(String(255), default="")
+    extraction_status: Mapped[str] = mapped_column(String(64), default="pending")
+
+
+class ResearchGap(Base, TimestampMixin):
+    __tablename__ = "research_gaps"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    title: Mapped[str] = mapped_column(String(512), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    gap_type: Mapped[str] = mapped_column(String(128), index=True)
+    source_paper_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    evidence_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    why_important: Mapped[str] = mapped_column(Text, default="")
+    why_unsolved: Mapped[str] = mapped_column(Text, default="")
+    possible_approaches_json: Mapped[list] = mapped_column(JSON, default=list)
+    feasibility_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    novelty_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    risk_level: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(64), default="generated")
+
+
+class Idea(Base, TimestampMixin):
+    __tablename__ = "ideas"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    title: Mapped[str] = mapped_column(String(512), default="")
+    research_question: Mapped[str] = mapped_column(Text, default="")
+    core_hypothesis: Mapped[str] = mapped_column(Text, default="")
+    motivation: Mapped[str] = mapped_column(Text, default="")
+    related_gap_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    related_paper_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    evidence_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    method_sketch: Mapped[str] = mapped_column(Text, default="")
+    expected_contribution: Mapped[str] = mapped_column(Text, default="")
+    novelty_argument: Mapped[str] = mapped_column(Text, default="")
+    datasets_json: Mapped[list] = mapped_column(JSON, default=list)
+    baselines_json: Mapped[list] = mapped_column(JSON, default=list)
+    metrics_json: Mapped[list] = mapped_column(JSON, default=list)
+    risks_json: Mapped[list] = mapped_column(JSON, default=list)
+    resource_requirements: Mapped[str] = mapped_column(Text, default="")
+    target_venues_json: Mapped[list] = mapped_column(JSON, default=list)
+    score_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(64), default="draft")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    parent_idea_id: Mapped[str | None] = mapped_column(ForeignKey("ideas.id"), nullable=True)
+
+
+class Review(Base, TimestampMixin):
+    __tablename__ = "reviews"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    reviewer_type: Mapped[str] = mapped_column(String(128), default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    major_concerns_json: Mapped[list] = mapped_column(JSON, default=list)
+    minor_concerns_json: Mapped[list] = mapped_column(JSON, default=list)
+    required_experiments_json: Mapped[list] = mapped_column(JSON, default=list)
+    decision: Mapped[str] = mapped_column(String(64), default="")
+    action_items_json: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class ExperimentPlan(Base, TimestampMixin):
+    __tablename__ = "experiment_plans"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    objective: Mapped[str] = mapped_column(Text, default="")
+    hypothesis: Mapped[str] = mapped_column(Text, default="")
+    datasets_json: Mapped[list] = mapped_column(JSON, default=list)
+    baselines_json: Mapped[list] = mapped_column(JSON, default=list)
+    metrics_json: Mapped[list] = mapped_column(JSON, default=list)
+    main_experiment_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    ablation_studies_json: Mapped[list] = mapped_column(JSON, default=list)
+    robustness_tests_json: Mapped[list] = mapped_column(JSON, default=list)
+    expected_tables_json: Mapped[list] = mapped_column(JSON, default=list)
+    failure_modes_json: Mapped[list] = mapped_column(JSON, default=list)
+    fallback_plan: Mapped[str] = mapped_column(Text, default="")
+    compute_requirements: Mapped[str] = mapped_column(Text, default="")
+    timeline_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ResearchNode(Base, TimestampMixin):
+    __tablename__ = "research_nodes"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    node_type: Mapped[str] = mapped_column(String(128), index=True)
+    label: Mapped[str] = mapped_column(String(512), index=True)
+    canonical_key: Mapped[str] = mapped_column(String(512), index=True, default="")
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ResearchEdge(Base, TimestampMixin):
+    __tablename__ = "research_edges"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    source_node_id: Mapped[str] = mapped_column(ForeignKey("research_nodes.id"), index=True)
+    target_node_id: Mapped[str] = mapped_column(ForeignKey("research_nodes.id"), index=True)
+    edge_type: Mapped[str] = mapped_column(String(128), index=True)
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    evidence_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class Job(Base, TimestampMixin):
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    job_type: Mapped[str] = mapped_column(String(128), index=True)
+    status: Mapped[str] = mapped_column(String(64), default="pending", index=True)
+    input_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    output_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    progress: Mapped[float] = mapped_column(Float, default=0.0)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
