@@ -95,6 +95,7 @@ def require_ok(response: ResponseAdapter, label: str) -> Any:
 def run_smoke(client: InProcessClient | HttpClient) -> dict:
     health = require_ok(client.get("/health"), "health")
     status = require_ok(client.get("/research/status"), "research status")
+    workbench = require_ok(client.get("/workbench"), "workbench")
 
     upload = require_ok(
         client.post(
@@ -188,6 +189,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     return {
         "health": health,
         "phase": status["phase"],
+        "workbench_available": "Research Assistant Workbench" in workbench,
         "paper_id": paper_id,
         "literature_result_count": len(literature["items"]),
         "literature_external_status": literature["external_status"],

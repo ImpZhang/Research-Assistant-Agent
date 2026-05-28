@@ -58,6 +58,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Query-time lexical/vector context retrieval over evidence, gaps, ideas, and graph neighborhoods.
 - Synchronous workflow job trace with input, output, status, progress, and errors.
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
+- Browser workbench for upload, workflow launch, job tracking, search, and dossier preview.
 - End-to-end smoke test covering the current research workflow.
 
 ## Repository Layout
@@ -92,6 +93,12 @@ API docs:
 
 ```text
 http://127.0.0.1:8000/docs
+```
+
+Research workbench:
+
+```text
+http://127.0.0.1:8000/workbench
 ```
 
 Health check:
@@ -167,14 +174,15 @@ GET  /research/graph/edges
 POST /research/workflows/literature-to-ideas
 POST /research/workflows/literature-to-ideas/async
 GET  /research/jobs/{job_id}
+GET  /workbench
 ```
 
 ## Near-Term Roadmap
 
 - Add external embedding providers and learned reranking.
 - Add external novelty search through OpenAlex/Semantic Scholar/arXiv adapters.
-- Move long workflows to async/background execution.
-- Add a research workbench frontend.
+- Add richer job cancellation and retry controls.
+- Expand the research workbench into a full review/edit loop.
 - Add MCP tools for paper ingestion, workflow runs, and dossier export.
 - Introduce LangGraph/DeerFlow-style explicit workflow graphs once the service boundaries stabilize.
 

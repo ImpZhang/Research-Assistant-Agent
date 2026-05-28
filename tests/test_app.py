@@ -21,6 +21,18 @@ def test_research_status() -> None:
     assert "sqlalchemy_models" in body["implemented_capabilities"]
 
 
+def test_workbench_static_assets_are_served() -> None:
+    client = TestClient(create_app())
+    response = client.get("/workbench")
+    assert response.status_code == 200
+    assert "Research Assistant Workbench" in response.text
+    assert "/workbench-assets/app.js" in response.text
+
+    script = client.get("/workbench-assets/app.js")
+    assert script.status_code == 200
+    assert "/research/workflows/literature-to-ideas/async" in script.text
+
+
 def test_upload_text_paper() -> None:
     client = TestClient(create_app())
     content = b"""Research Assistant Agent Test Paper

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Research Assistant Workbench</title>
+    <link rel="stylesheet" href="/workbench-assets/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <div class="brand-mark">RA</div>
+          <div>
+            <h1>Research Assistant Workbench</h1>
+            <p>Evidence to ideas, reviews, experiments, and dossiers.</p>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="Workbench sections">
+          <a href="#ingest">Ingest</a>
+          <a href="#workflow">Workflow</a>
+          <a href="#search">Search</a>
+          <a href="#jobs">Jobs</a>
+          <a href="#dossier">Dossier</a>
+        </nav>
+
+        <div class="state-strip" aria-live="polite">
+          <span id="connectionState" class="state-dot pending"></span>
+          <span id="connectionText">Checking API</span>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <h2>Research Pipeline</h2>
+            <p id="activePaperLabel">No active paper selected.</p>
+          </div>
+          <div class="topbar-actions">
+            <button id="refreshJobsButton" type="button">Refresh Jobs</button>
+            <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API Docs</a>
+          </div>
+        </header>
+
+        <section id="ingest" class="band">
+          <div class="section-heading">
+            <h3>Paper Ingest</h3>
+            <p>Upload a `.txt`, `.md`, or `.pdf` paper and create evidence records.</p>
+          </div>
+          <form id="uploadForm" class="tool-row">
+            <input id="paperFile" name="file" type="file" accept=".txt,.md,.pdf,text/plain,application/pdf" />
+            <button type="submit">Upload Paper</button>
+          </form>
+          <div id="uploadResult" class="result-block muted">Waiting for a paper.</div>
+        </section>
+
+        <section id="workflow" class="band">
+          <div class="section-heading">
+            <h3>Async Workflow</h3>
+            <p>Run paper card extraction, gap mining, idea generation, novelty screening, review, experiment planning, and export.</p>
+          </div>
+          <div class="controls-grid">
+            <label>
+              Gaps
+              <input id="maxGaps" type="number" min="1" max="8" value="3" />
+            </label>
+            <label>
+              Ideas per gap
+              <input id="maxIdeas" type="number" min="1" max="3" value="1" />
+            </label>
+            <label class="check-line">
+              <input id="includeMarkdown" type="checkbox" checked />
+              Include Markdown
+            </label>
+            <button id="runWorkflowButton" type="button">Run Workflow</button>
+          </div>
+          <div class="job-meter">
+            <div id="jobProgressBar" class="job-meter-fill"></div>
+          </div>
+          <div id="workflowResult" class="result-block muted">No workflow job yet.</div>
+        </section>
+
+        <section id="search" class="band two-column">
+          <div>
+            <div class="section-heading">
+              <h3>Context Search</h3>
+              <p>Search evidence, gaps, ideas, and GraphRAG-lite neighbors.</p>
+            </div>
+            <form id="contextSearchForm" class="stacked-tool">
+              <textarea id="contextQuery" rows="4">evidence grounded diagnostic metric future work</textarea>
+              <button type="submit">Search Context</button>
+            </form>
+            <div id="contextResult" class="result-block muted">No context search yet.</div>
+          </div>
+
+          <div>
+            <div class="section-heading">
+              <h3>Literature Search</h3>
+              <p>Search the local literature index and optional external adapters.</p>
+            </div>
+            <form id="literatureSearchForm" class="stacked-tool">
+              <textarea id="literatureQuery" rows="4">research assistant evidence grounded workflow</textarea>
+              <label class="check-line">
+                <input id="includeExternal" type="checkbox" />
+                Include external search
+              </label>
+              <button type="submit">Search Literature</button>
+            </form>
+            <div id="literatureResult" class="result-block muted">No literature search yet.</div>
+          </div>
+        </section>
+
+        <section id="jobs" class="band">
+          <div class="section-heading">
+            <h3>Recent Jobs</h3>
+            <p>Track workflow status, progress, and generated artifact ids.</p>
+          </div>
+          <div id="jobsTable" class="table-region muted">No jobs loaded.</div>
+        </section>
+
+        <section id="dossier" class="band">
+          <div class="section-heading">
+            <h3>Dossier Preview</h3>
+            <p>Fetch the Markdown export for the first generated idea in the latest completed job.</p>
+          </div>
+          <button id="loadDossierButton" type="button">Load Latest Dossier</button>
+          <pre id="dossierPreview" class="markdown-preview">No dossier loaded.</pre>
+        </section>
+      </main>
+    </div>
+
+    <template id="emptyTemplate">
+      <div class="empty-state">No records yet.</div>
+    </template>
+
+    <script src="/workbench-assets/app.js" defer></script>
+  </body>
+</html>
