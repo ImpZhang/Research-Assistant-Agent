@@ -56,6 +56,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Markdown export for ranked idea portfolio reports.
 - Persisted idea portfolio snapshots for saved shortlist/ranking review states.
 - Portfolio snapshot comparison for tracking shortlist/ranking changes over time.
+- 30/60/90-day execution agenda export for saved idea portfolios.
 - Local literature search with an optional OpenAlex external-search adapter.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.
@@ -184,6 +185,7 @@ POST /research/ideas/portfolios/compare
 POST /research/ideas/portfolios/compare/export/markdown
 GET  /research/ideas/portfolios/{portfolio_id}
 GET  /research/ideas/portfolios/{portfolio_id}/export/markdown
+GET  /research/ideas/portfolios/{portfolio_id}/agenda/markdown
 POST /research/ideas/{idea_id}/feedback
 GET  /research/ideas/{idea_id}/feedback
 GET  /research/ideas/{idea_id}/export/markdown

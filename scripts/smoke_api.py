@@ -238,10 +238,16 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         client.get(f"/research/ideas/portfolios/{portfolio_snapshot['id']}/export/markdown"),
         "saved idea portfolio markdown export",
     )
+    portfolio_agenda_markdown = require_ok(
+        client.get(f"/research/ideas/portfolios/{portfolio_snapshot['id']}/agenda/markdown"),
+        "saved idea portfolio agenda markdown export",
+    )
     if saved_portfolio["id"] != portfolio_snapshot["id"]:
         raise RuntimeError("saved portfolio fetch returned the wrong snapshot")
     if "Smoke Saved Research Idea Portfolio" not in saved_portfolio_markdown:
         raise RuntimeError("saved portfolio markdown did not include the saved title")
+    if "Research Execution Agenda" not in portfolio_agenda_markdown:
+        raise RuntimeError("portfolio agenda markdown did not include the agenda title")
     baseline_snapshot = require_ok(
         client.post(
             "/research/ideas/portfolios",
@@ -349,6 +355,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "portfolio_markdown_chars": len(portfolio_markdown),
         "portfolio_snapshot_id": portfolio_snapshot["id"],
         "portfolio_snapshot_idea_count": len(portfolio_snapshot["idea_ids"]),
+        "portfolio_agenda_markdown_chars": len(portfolio_agenda_markdown),
         "portfolio_comparison_added_count": len(portfolio_comparison["added_idea_ids"]),
         "portfolio_comparison_markdown_chars": len(portfolio_comparison_markdown),
         "async_workflow_job_id": async_job["id"],

@@ -159,6 +159,57 @@ def render_snapshot_markdown(snapshot: IdeaPortfolioSnapshot) -> str:
     return snapshot.markdown_export
 
 
+def render_portfolio_agenda_markdown(snapshot: IdeaPortfolioSnapshot) -> str:
+    items = snapshot.ranked_items_json or []
+    lines = [
+        f"# Research Execution Agenda: {_clean_text(snapshot.title)}",
+        "",
+        f"- Portfolio Snapshot ID: `{snapshot.id}`",
+        f"- Ranked idea count: {len(items)}",
+        f"- Created by: {_clean_text(snapshot.created_by)}",
+        "",
+        "## Focus",
+        "",
+        _clean_text(snapshot.description)
+        or "Advance the highest-ranked ideas through quick novelty validation, MVP experiments, and decision checkpoints.",
+        "",
+        "## Priority Tracks",
+        "",
+    ]
+    if not items:
+        lines.append("No ideas are saved in this portfolio snapshot.")
+        return _finish(lines)
+
+    for item in items[:5]:
+        lines.extend(_agenda_track(item))
+
+    lines.extend(
+        [
+            "",
+            "## 30/60/90 Day Plan",
+            "",
+            "### First 30 Days",
+            "",
+            "- Re-run novelty checks for the top ranked ideas against newly added papers.",
+            "- Convert the top idea into one executable MVP experiment.",
+            "- Freeze datasets, baselines, metrics, and a failure criterion before running experiments.",
+            "",
+            "### Days 31-60",
+            "",
+            "- Run ablations and robustness checks for the strongest MVP result.",
+            "- Archive or revise ideas whose novelty or feasibility weakens after experiments.",
+            "- Save a new portfolio snapshot and compare it against this baseline.",
+            "",
+            "### Days 61-90",
+            "",
+            "- Turn the leading track into a paper outline or workshop submission plan.",
+            "- Use reviewer simulation to identify missing experiments before writing.",
+            "- Decide whether the portfolio supports one full paper, a benchmark paper, or multiple follow-up ideas.",
+        ]
+    )
+    return _finish(lines)
+
+
 def render_portfolio_comparison_markdown(comparison: dict) -> str:
     lines = [
         "# Research Idea Portfolio Comparison",
@@ -206,6 +257,37 @@ def _ranked_item_payload(item: RankedIdea) -> dict:
         "status": idea.status,
         "version": idea.version,
     }
+
+
+def _agenda_track(item: dict) -> list[str]:
+    title = _clean_text(item.get("title") or "Untitled idea")
+    idea_id = _clean_text(item.get("idea_id") or "unknown")
+    score = item.get("weighted_score", "unknown")
+    rationale = item.get("rationale") or []
+    lines = [
+        f"### {item.get('rank', '?')}. {title}",
+        "",
+        f"- Idea ID: `{idea_id}`",
+        f"- Portfolio score: {score}",
+        f"- Status: `{_clean_text(item.get('status') or 'unknown')}`",
+    ]
+    if item.get("parent_idea_id"):
+        lines.append(f"- Parent Idea ID: `{_clean_text(item['parent_idea_id'])}`")
+    if rationale:
+        lines.extend(["", "Rationale:"])
+        lines.extend(f"- {_clean_text(reason)}" for reason in rationale[:4])
+    lines.extend(
+        [
+            "",
+            "Execution steps:",
+            "- Validate nearest related-work collisions and update the novelty claim.",
+            "- Define one MVP experiment with a pass/fail criterion.",
+            "- Run the baseline, proposed variant, and one ablation before expanding scope.",
+            "- Record human feedback after the first result and save a new portfolio snapshot.",
+            "",
+        ]
+    )
+    return lines
 
 
 def _items_by_idea_id(items: list[dict]) -> dict[str, dict]:

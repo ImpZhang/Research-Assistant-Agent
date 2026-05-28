@@ -83,6 +83,7 @@ from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
 from backend.research.services.portfolio_service import (
     PortfolioService,
+    render_portfolio_agenda_markdown,
     render_idea_portfolio_markdown,
     render_snapshot_markdown,
 )
@@ -123,6 +124,7 @@ def status() -> ProjectStatus:
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",
             "portfolio_snapshot_comparison",
+            "portfolio_execution_agenda",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -728,6 +730,20 @@ def export_idea_portfolio_snapshot_markdown(
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Idea portfolio snapshot not found")
     return PlainTextResponse(render_snapshot_markdown(snapshot), media_type="text/markdown")
+
+
+@router.get(
+    "/ideas/portfolios/{snapshot_id}/agenda/markdown",
+    response_class=PlainTextResponse,
+)
+def export_idea_portfolio_agenda_markdown(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    snapshot = PortfolioService(session).get_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Idea portfolio snapshot not found")
+    return PlainTextResponse(render_portfolio_agenda_markdown(snapshot), media_type="text/markdown")
 
 
 @router.get("/ideas/{idea_id}", response_model=IdeaRead)

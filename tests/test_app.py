@@ -501,6 +501,13 @@ Future work should learn ranking weights from researcher feedback.
     assert snapshot_export.headers["content-type"].startswith("text/markdown")
     assert "# Saved Ranking Test Portfolio" in snapshot_export.text
 
+    agenda_export = client.get(f"/research/ideas/portfolios/{snapshot_body['id']}/agenda/markdown")
+    assert agenda_export.status_code == 200
+    assert agenda_export.headers["content-type"].startswith("text/markdown")
+    assert "# Research Execution Agenda: Saved Ranking Test Portfolio" in agenda_export.text
+    assert "## 30/60/90 Day Plan" in agenda_export.text
+    assert refined_idea_id in agenda_export.text
+
     snapshots = client.get("/research/ideas/portfolios?limit=5")
     assert snapshots.status_code == 200
     assert any(item["id"] == snapshot_body["id"] for item in snapshots.json())

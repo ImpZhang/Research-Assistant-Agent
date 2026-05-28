@@ -955,6 +955,7 @@ POST /research/ideas/portfolios/compare
 POST /research/ideas/portfolios/compare/export/markdown
 GET  /research/ideas/portfolios/{portfolio_id}
 GET  /research/ideas/portfolios/{portfolio_id}/export/markdown
+GET  /research/ideas/portfolios/{portfolio_id}/agenda/markdown
 POST /research/ideas/{idea_id}/revise
 POST /research/ideas/{idea_id}/refine
 POST /research/ideas/{idea_id}/review
@@ -972,6 +973,8 @@ GET  /research/ideas/{idea_id}/feedback
 `/ideas/portfolios` 会把某次 ranking 结果保存为 immutable snapshot，固化 ranking request、ranked items、idea ids 和 Markdown report。这样后续的反馈、重排或新论文 ingestion 不会改变当时用于讨论或决策的 shortlist 记录。
 
 `/ideas/portfolios/compare` 比较两个 saved snapshots，返回 added/removed/kept ideas、rank delta、score delta 和 Markdown comparison report，用于追踪选题组合在多轮反馈、refinement 或新增文献后的变化。
+
+`/ideas/portfolios/{portfolio_id}/agenda/markdown` 把 saved portfolio 转成 30/60/90 天执行计划，包含 top tracks、novelty validation、MVP experiment、ablation 和新 snapshot checkpoint，帮助从“选题列表”推进到“研究计划”。
 
 `/feedback` 记录人类研究者对 idea 的 shortlist/accept/revise/reject/archive 决策、rating、comment 和 tags。Ranking 会读取这些反馈作为 human preference adjustment；后续可把这张表扩展成偏好学习、选题日志和 active learning 数据源。
 
