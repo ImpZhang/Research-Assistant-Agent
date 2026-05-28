@@ -970,6 +970,10 @@ POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/review
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}/export/markdown
+POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revise
+GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions
+GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}
+GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}/export/markdown
 POST /research/ideas/{idea_id}/review
 POST /research/ideas/{idea_id}/experiment-plan
 POST /research/ideas/{idea_id}/feedback
@@ -983,6 +987,8 @@ GET  /research/ideas/{idea_id}/feedback
 `/proposal-draft` 是第一版 proposal packaging：它读取 idea、latest 或指定的 related-work matrix、experiment plan，生成并持久化 abstract、problem statement、novelty claim、related-work positioning、method、experiment summary、risk mitigation、milestones 和 Markdown draft。它把“一个可能不错的 idea”推进到“可以被导师/组会审阅的研究草案”。
 
 `/proposal-drafts/{draft_id}/review` 是 proposal-readiness screen：它从草案绑定的 related-work matrix、experiment plan、evidence ids 和 milestones 计算 readiness score，输出 strengths、concerns、required revisions、missing evidence 和 Markdown review。后续可以替换为多 reviewer/model 评审，但当前 contract 已经固定“草案必须可审阅、可追责、可迭代”。
+
+`/proposal-drafts/{draft_id}/revise` 是 proposal revision loop：它读取指定或 latest readiness review，把 required revisions 和 missing evidence 转成 revised sections、applied revisions、missing-evidence actions 和 Markdown revision artifact。它不覆盖原始 draft，而是保存新 revision checkpoint，方便比较草案在多轮 review 后如何变化。
 
 `/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
 

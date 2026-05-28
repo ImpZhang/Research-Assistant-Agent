@@ -369,6 +369,28 @@ class ProposalReviewRead(BaseModel):
     updated_at: datetime
 
 
+class ProposalRevisionCreate(BaseModel):
+    proposal_review_id: str | None = None
+    include_latest_review: bool = True
+    created_by: str = "system"
+
+
+class ProposalRevisionRead(BaseModel):
+    id: str
+    proposal_draft_id: str
+    proposal_review_id: str | None = None
+    idea_id: str
+    status: str
+    revision_summary: str = ""
+    applied_revisions: list[str] = Field(default_factory=list)
+    missing_evidence_actions: list[str] = Field(default_factory=list)
+    revised_sections: dict[str, Any] = Field(default_factory=dict)
+    markdown_export: str = ""
+    created_by: str = "system"
+    created_at: datetime
+    updated_at: datetime
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

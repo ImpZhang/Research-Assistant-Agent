@@ -53,6 +53,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Persisted related-work matrices that compare an idea with local evidence, gaps, nearby ideas, and literature search rows.
 - Persisted proposal drafts that bundle an idea, related-work positioning, experiment plan, risks, milestones, and evidence IDs.
 - Proposal readiness reviews with advisor-style scores, concerns, required revisions, and missing evidence.
+- Proposal revision artifacts that turn readiness-review actions into a revised proposal checkpoint.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
@@ -158,7 +159,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, and readiness review, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, and proposal revision, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -192,6 +193,10 @@ POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/review
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}/export/markdown
+POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revise
+GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions
+GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}
+GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}/export/markdown
 POST /research/ideas/rank
 POST /research/ideas/rank/export/markdown
 POST /research/ideas/portfolios

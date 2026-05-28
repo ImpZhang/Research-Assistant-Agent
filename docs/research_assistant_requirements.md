@@ -674,6 +674,12 @@ proposal draft 需要支持 readiness review：
 - 列出 strengths、concerns、required revisions 和 missing evidence。
 - 把 review 结果保存并导出 Markdown，形成下一轮 refinement 输入。
 
+readiness review 之后需要 proposal revision：
+
+- 读取指定或最新 review 的 required revisions。
+- 生成 revised abstract、novelty statement、related-work summary、experiment summary 和 risk mitigation。
+- 保留 applied revisions 与 missing-evidence actions，形成可比较的 revision checkpoint。
+
 ### 6.5.4 Idea 输出模板
 
 ```text

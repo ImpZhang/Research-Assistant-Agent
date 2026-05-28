@@ -3,6 +3,8 @@ const state = {
   jobId: "",
   latestIdeaId: "",
   latestProposalDraftId: "",
+  latestProposalReviewId: "",
+  latestProposalRevisionId: "",
   pollTimer: null,
 };
 
@@ -347,6 +349,8 @@ async function createRelatedWorkMatrix() {
       }),
     });
     state.latestProposalDraftId = body.id;
+    state.latestProposalReviewId = "";
+    state.latestProposalRevisionId = "";
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "workflowResult",
@@ -401,10 +405,41 @@ async function reviewProposalDraft() {
         }),
       },
     );
+    state.latestProposalReviewId = body.id;
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "workflowResult",
       `Reviewed proposal <code>${escapeHtml(body.proposal_draft_id)}</code>: ${escapeHtml(body.decision)} (${body.readiness_score}).`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function reviseProposalDraft() {
+  if (!state.latestIdeaId || !state.latestProposalDraftId) {
+    renderResult("workflowResult", "Create a proposal draft first.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Revising proposal from review actions...", "warn");
+  try {
+    const body = await api(
+      `/research/ideas/${state.latestIdeaId}/proposal-drafts/${state.latestProposalDraftId}/revise`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposal_review_id: state.latestProposalReviewId || null,
+          include_latest_review: true,
+          created_by: "workbench",
+        }),
+      },
+    );
+    state.latestProposalRevisionId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Saved proposal revision <code>${escapeHtml(body.id)}</code> with ${body.applied_revisions.length} applied actions.`,
     );
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
@@ -508,6 +543,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("relatedWorkButton").addEventListener("click", createRelatedWorkMatrix);
   $("proposalDraftButton").addEventListener("click", createProposalDraft);
   $("proposalReviewButton").addEventListener("click", reviewProposalDraft);
+  $("proposalRevisionButton").addEventListener("click", reviseProposalDraft);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);

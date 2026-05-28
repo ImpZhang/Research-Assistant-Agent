@@ -18,6 +18,7 @@ from backend.research.models import (
     PaperSection,
     ProposalDraft,
     ProposalReview,
+    ProposalRevision,
     RelatedWorkMatrix,
     ResearchGap,
     Review,
@@ -62,6 +63,8 @@ from backend.research.schemas import (
     PaperUploadResponse,
     ProposalDraftCreate,
     ProposalDraftRead,
+    ProposalRevisionCreate,
+    ProposalRevisionRead,
     ProposalReviewCreate,
     ProposalReviewRead,
     ProjectStatus,
@@ -98,6 +101,7 @@ from backend.research.services.portfolio_service import (
 )
 from backend.research.services.proposal_service import ProposalDraftService
 from backend.research.services.proposal_review_service import ProposalReviewService
+from backend.research.services.proposal_revision_service import ProposalRevisionService
 from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
@@ -140,6 +144,7 @@ def status() -> ProjectStatus:
             "persisted_related_work_matrix",
             "proposal_draft_generation",
             "proposal_readiness_review",
+            "proposal_revision_loop",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -638,6 +643,24 @@ def _serialize_proposal_review(review: ProposalReview) -> ProposalReviewRead:
     )
 
 
+def _serialize_proposal_revision(revision: ProposalRevision) -> ProposalRevisionRead:
+    return ProposalRevisionRead(
+        id=revision.id,
+        proposal_draft_id=revision.proposal_draft_id,
+        proposal_review_id=revision.proposal_review_id,
+        idea_id=revision.idea_id,
+        status=revision.status,
+        revision_summary=revision.revision_summary,
+        applied_revisions=revision.applied_revisions_json or [],
+        missing_evidence_actions=revision.missing_evidence_actions_json or [],
+        revised_sections=revision.revised_sections_json or {},
+        markdown_export=revision.markdown_export or "",
+        created_by=revision.created_by,
+        created_at=revision.created_at,
+        updated_at=revision.updated_at,
+    )
+
+
 @router.post("/ideas/generate", response_model=IdeaGenerationResponse)
 def generate_ideas(
     payload: IdeaGenerationRequest,
@@ -1031,6 +1054,87 @@ def export_proposal_review_markdown(
     if review is None:
         raise HTTPException(status_code=404, detail="Proposal review not found")
     return PlainTextResponse(review.markdown_export or "", media_type="text/markdown")
+
+
+@router.post(
+    "/ideas/{idea_id}/proposal-drafts/{draft_id}/revise",
+    response_model=ProposalRevisionRead,
+)
+def create_proposal_revision(
+    idea_id: str,
+    draft_id: str,
+    payload: ProposalRevisionCreate,
+    session: Session = Depends(get_session),
+) -> ProposalRevisionRead:
+    draft = ProposalDraftService(session).get_draft(idea_id, draft_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    try:
+        revision = ProposalRevisionService(session).create_revision(
+            draft.id,
+            proposal_review_id=payload.proposal_review_id,
+            include_latest_review=payload.include_latest_review,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return _serialize_proposal_revision(revision)
+
+
+@router.get(
+    "/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions",
+    response_model=list[ProposalRevisionRead],
+)
+def list_proposal_revisions(
+    idea_id: str,
+    draft_id: str,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+) -> list[ProposalRevisionRead]:
+    if ProposalDraftService(session).get_draft(idea_id, draft_id) is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    try:
+        revisions = ProposalRevisionService(session).list_for_draft(draft_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_proposal_revision(revision) for revision in revisions]
+
+
+@router.get(
+    "/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}",
+    response_model=ProposalRevisionRead,
+)
+def get_proposal_revision(
+    idea_id: str,
+    draft_id: str,
+    revision_id: str,
+    session: Session = Depends(get_session),
+) -> ProposalRevisionRead:
+    if ProposalDraftService(session).get_draft(idea_id, draft_id) is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    revision = ProposalRevisionService(session).get_revision(draft_id, revision_id)
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Proposal revision not found")
+    return _serialize_proposal_revision(revision)
+
+
+@router.get(
+    "/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_proposal_revision_markdown(
+    idea_id: str,
+    draft_id: str,
+    revision_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    if ProposalDraftService(session).get_draft(idea_id, draft_id) is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    revision = ProposalRevisionService(session).get_revision(draft_id, revision_id)
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Proposal revision not found")
+    return PlainTextResponse(revision.markdown_export or "", media_type="text/markdown")
 
 
 @router.post("/ideas/{idea_id}/feedback", response_model=IdeaFeedbackRead)
