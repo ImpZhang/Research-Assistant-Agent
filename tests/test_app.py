@@ -32,6 +32,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert script.status_code == 200
     assert "/research/workflows/literature-to-ideas/async" in script.text
     assert "/research/jobs/${jobId}/artifacts" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/refine" in script.text
 
 
 def test_upload_text_paper() -> None:
@@ -295,6 +296,65 @@ Future work should compare generated ideas against recent preprints.
     checks = client.get(f"/research/ideas/{idea_id}/novelty-checks")
     assert checks.status_code == 200
     assert checks.json()[0]["id"] == body["id"]
+
+
+def test_refine_idea_creates_traceable_revision() -> None:
+    client = TestClient(create_app())
+    content = b"""Idea Refinement Test Paper
+
+Introduction
+Research assistants need to revise generated ideas after reviewer criticism and novelty screening.
+
+Limitations
+Initial ideas often lack a sharp novelty claim and first executable experiment.
+
+Conclusion
+Future work should keep parent-child idea lineage for proposal iteration.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("idea_refinement_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+    gaps = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 1})
+    assert gaps.status_code == 200
+    gap_id = gaps.json()["gaps"][0]["id"]
+    ideas = client.post(f"/research/gaps/{gap_id}/ideas")
+    assert ideas.status_code == 200
+    source_idea = ideas.json()["ideas"][0]
+    idea_id = source_idea["id"]
+
+    assert client.post(f"/research/ideas/{idea_id}/novelty-check").status_code == 200
+    assert client.post(f"/research/ideas/{idea_id}/review").status_code == 200
+    assert client.post(f"/research/ideas/{idea_id}/experiment-plan").status_code == 200
+
+    refined = client.post(
+        f"/research/ideas/{idea_id}/refine",
+        json={"focus": "sharpen novelty and first executable experiment"},
+    )
+    assert refined.status_code == 200
+    body = refined.json()
+    refined_idea = body["refined_idea"]
+    assert body["source_idea"]["id"] == idea_id
+    assert refined_idea["parent_idea_id"] == idea_id
+    assert refined_idea["version"] == source_idea["version"] + 1
+    assert refined_idea["status"] == "refined"
+    assert refined_idea["evidence_ids"] == source_idea["evidence_ids"]
+    assert "sharpen novelty" in refined_idea["title"]
+    assert body["applied_actions"]
+
+    fetched = client.get(f"/research/ideas/{refined_idea['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["parent_idea_id"] == idea_id
+
+    dossier = client.get(f"/research/ideas/{refined_idea['id']}/export/markdown")
+    assert dossier.status_code == 200
+    assert f"- Parent Idea ID: `{idea_id}`" in dossier.text
+
+    edges = client.get("/research/graph/edges?edge_type=idea_refines_idea")
+    assert edges.status_code == 200
+    assert edges.json()
 
 
 def test_markdown_exports_for_card_and_idea_dossier() -> None:

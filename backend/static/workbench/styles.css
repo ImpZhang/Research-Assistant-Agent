@@ -216,6 +216,13 @@ button:disabled {
   gap: 10px;
 }
 
+.dossier-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
 input[type="file"],
 input[type="number"],
 textarea {
@@ -367,6 +374,7 @@ code {
 
   .topbar,
   .tool-row,
+  .dossier-actions,
   .controls-grid,
   .two-column {
     grid-template-columns: 1fr;

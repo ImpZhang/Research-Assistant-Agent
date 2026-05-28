@@ -149,6 +149,23 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("job artifact snapshot did not include all workflow ideas")
     if "# Research Idea Dossier:" not in artifacts["markdown_export"]:
         raise RuntimeError("job artifact snapshot did not render dossier markdown")
+    source_idea_id = workflow["ideas"][0]["id"]
+    refinement = require_ok(
+        client.post(
+            f"/research/ideas/{source_idea_id}/refine",
+            json_body={"focus": "sharpen novelty and first executable experiment"},
+        ),
+        "idea refinement",
+    )
+    refined_idea = refinement["refined_idea"]
+    if refined_idea["parent_idea_id"] != source_idea_id:
+        raise RuntimeError("refined idea did not preserve parent lineage")
+    refined_markdown = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/export/markdown"),
+        "refined idea markdown",
+    )
+    if f"- Parent Idea ID: `{source_idea_id}`" not in refined_markdown:
+        raise RuntimeError("refined idea markdown did not include parent lineage")
     async_job = require_ok(
         client.post(
             "/research/workflows/literature-to-ideas/async",
@@ -209,6 +226,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "workflow_job_status": job["status"],
         "artifact_idea_count": len(artifacts["ideas"]),
         "artifact_markdown_chars": len(artifacts["markdown_export"]),
+        "refined_idea_id": refined_idea["id"],
+        "refined_idea_parent_id": refined_idea["parent_idea_id"],
         "async_workflow_job_id": async_job["id"],
         "async_workflow_job_status": async_job_status["status"],
         "card_id": workflow["card"]["id"],

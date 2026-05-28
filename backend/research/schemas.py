@@ -193,12 +193,25 @@ class IdeaRead(BaseModel):
     score: IdeaScore = Field(default_factory=IdeaScore)
     status: str
     version: int
+    parent_idea_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class IdeaGenerationResponse(BaseModel):
     ideas: list[IdeaRead]
+    message: str
+
+
+class IdeaRefinementRequest(BaseModel):
+    focus: str = ""
+    preserve_evidence: bool = True
+
+
+class IdeaRefinementResponse(BaseModel):
+    source_idea: IdeaRead
+    refined_idea: IdeaRead
+    applied_actions: list[str] = Field(default_factory=list)
     message: str
 
 

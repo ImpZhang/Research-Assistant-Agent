@@ -282,16 +282,16 @@ async function refreshJobs() {
 }
 
 async function loadDossier() {
-  if (state.jobId) {
-    try {
-      await loadJobArtifacts(state.jobId);
-      return;
-    } catch (error) {
-      $("dossierPreview").textContent = error.message;
-      return;
-    }
-  }
   if (!state.latestIdeaId) {
+    if (state.jobId) {
+      try {
+        await loadJobArtifacts(state.jobId);
+        return;
+      } catch (error) {
+        $("dossierPreview").textContent = error.message;
+        return;
+      }
+    }
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
     return;
   }
@@ -303,6 +303,32 @@ async function loadDossier() {
   }
 }
 
+async function refineLatestIdea() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Refining latest idea...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/refine`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        focus: $("refineFocus").value.trim(),
+        preserve_evidence: true,
+      }),
+    });
+    state.latestIdeaId = body.refined_idea.id;
+    renderResult(
+      "workflowResult",
+      `Created refined idea <code>${escapeHtml(body.refined_idea.id)}</code> from <code>${escapeHtml(body.source_idea.id)}</code>.<br />${renderList("Applied actions", body.applied_actions, (item) => item)}`,
+    );
+    await loadDossier();
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   $("uploadForm").addEventListener("submit", uploadPaper);
   $("runWorkflowButton").addEventListener("click", runWorkflow);
@@ -310,6 +336,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("literatureSearchForm").addEventListener("submit", searchLiterature);
   $("refreshJobsButton").addEventListener("click", refreshJobs);
   $("loadDossierButton").addEventListener("click", loadDossier);
+  $("refineIdeaButton").addEventListener("click", refineLatestIdea);
   checkHealth();
   refreshJobs();
 });

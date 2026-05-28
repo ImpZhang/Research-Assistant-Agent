@@ -55,7 +55,9 @@ class ExportService:
             f"- Extraction: `{card.extraction_status}` via `{card.extraction_model or 'unknown'}`",
         ]
         if paper.authors_json:
-            lines.append(f"- Authors: {', '.join(self._clean(author) for author in paper.authors_json)}")
+            lines.append(
+                f"- Authors: {', '.join(self._clean(author) for author in paper.authors_json)}"
+            )
         if paper.year:
             lines.append(f"- Year: {paper.year}")
         if paper.venue:
@@ -63,7 +65,9 @@ class ExportService:
 
         keywords = self._items(card.keywords_json)
         if keywords:
-            lines.extend(["", "## Keywords", "", ", ".join(f"`{self._clean(item)}`" for item in keywords)])
+            lines.extend(
+                ["", "## Keywords", "", ", ".join(f"`{self._clean(item)}`" for item in keywords)]
+            )
 
         for title, attr in CARD_FIELDS:
             lines.extend(["", f"## {title}", ""])
@@ -86,6 +90,7 @@ class ExportService:
             f"# Research Idea Dossier: {self._clean(idea.title)}",
             "",
             f"- Idea ID: `{idea.id}`",
+            f"- Parent Idea ID: `{idea.parent_idea_id or 'none'}`",
             f"- Status: `{idea.status}`",
             f"- Version: {idea.version}",
             f"- Related Gap IDs: {self._inline_ids(idea.related_gap_ids_json or [])}",
@@ -245,7 +250,9 @@ class ExportService:
                     f"Why unsolved: {self._clean(gap.why_unsolved)}",
                 ]
             )
-            lines.extend(self._render_simple_list("Possible Approaches", gap.possible_approaches_json or []))
+            lines.extend(
+                self._render_simple_list("Possible Approaches", gap.possible_approaches_json or [])
+            )
         return lines
 
     def _render_evidence(self, evidence: list[Evidence]) -> list[str]:
@@ -282,7 +289,9 @@ class ExportService:
                 self._clean(latest.summary),
             ]
         )
-        lines.extend(self._render_simple_list("Recommended Actions", latest.recommended_actions_json or []))
+        lines.extend(
+            self._render_simple_list("Recommended Actions", latest.recommended_actions_json or [])
+        )
 
         signals = latest.collision_signals_json or []
         lines.extend(["", "### Collision Signals", ""])
@@ -295,7 +304,9 @@ class ExportService:
             score = signal.get("score")
             lines.append(f"- `{source_type}` `{source_id}` score={score}: {label}")
 
-        lines.extend(self._render_simple_list("Missing Searches", latest.missing_searches_json or []))
+        lines.extend(
+            self._render_simple_list("Missing Searches", latest.missing_searches_json or [])
+        )
         return lines
 
     def _render_reviews(self, reviews: list[Review]) -> list[str]:
@@ -314,7 +325,9 @@ class ExportService:
             ]
         )
         lines.extend(self._render_simple_list("Major Concerns", latest.major_concerns_json or []))
-        lines.extend(self._render_simple_list("Required Experiments", latest.required_experiments_json or []))
+        lines.extend(
+            self._render_simple_list("Required Experiments", latest.required_experiments_json or [])
+        )
         lines.extend(self._render_simple_list("Action Items", latest.action_items_json or []))
         return lines
 
@@ -349,8 +362,12 @@ class ExportService:
         else:
             lines.append("Not specified.")
 
-        lines.extend(self._render_named_dicts("Ablation Studies", latest.ablation_studies_json or []))
-        lines.extend(self._render_named_dicts("Robustness Tests", latest.robustness_tests_json or []))
+        lines.extend(
+            self._render_named_dicts("Ablation Studies", latest.ablation_studies_json or [])
+        )
+        lines.extend(
+            self._render_named_dicts("Robustness Tests", latest.robustness_tests_json or [])
+        )
         lines.extend(self._render_named_dicts("Expected Tables", latest.expected_tables_json or []))
         lines.extend(self._render_simple_list("Failure Modes", latest.failure_modes_json or []))
         lines.extend(["", "### Fallback Plan", "", self._clean(latest.fallback_plan)])

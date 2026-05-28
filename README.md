@@ -50,6 +50,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Research gap mining from evidence records.
 - OpenAI-compatible structured idea generation with deterministic fallback.
 - Novelty/collision checks against existing evidence, gaps, ideas, and literature search results.
+- Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Local literature search with an optional OpenAlex external-search adapter.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.
@@ -169,6 +170,7 @@ POST /research/gaps/{gap_id}/ideas
 POST /research/ideas/{idea_id}/novelty-check
 POST /research/ideas/{idea_id}/review
 POST /research/ideas/{idea_id}/experiment-plan
+POST /research/ideas/{idea_id}/refine
 GET  /research/ideas/{idea_id}/export/markdown
 
 POST /research/search/context

@@ -28,6 +28,8 @@ from backend.research.schemas import (
     GapMiningResponse,
     IdeaGenerationRequest,
     IdeaGenerationResponse,
+    IdeaRefinementRequest,
+    IdeaRefinementResponse,
     IdeaRead,
     IdeaScore,
     JobArtifactsResponse,
@@ -58,6 +60,7 @@ from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.export_service import ExportService
 from backend.research.services.gap_service import GapService
 from backend.research.services.graph_service import GraphService
+from backend.research.services.idea_refinement_service import IdeaRefinementService
 from backend.research.services.idea_service import IdeaService
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.novelty_service import NoveltyService
@@ -94,6 +97,7 @@ def status() -> ProjectStatus:
             "research_gap_mining",
             "idea_generation",
             "structured_idea_generation_adapter",
+            "idea_refinement_loop",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -485,6 +489,7 @@ def _serialize_idea(idea) -> IdeaRead:
         score=IdeaScore(**(idea.score_json or {})),
         status=idea.status,
         version=idea.version,
+        parent_idea_id=idea.parent_idea_id,
         created_at=idea.created_at,
         updated_at=idea.updated_at,
     )
@@ -530,6 +535,32 @@ def get_idea(idea_id: str, session: Session = Depends(get_session)) -> IdeaRead:
     if idea is None:
         raise HTTPException(status_code=404, detail="Idea not found")
     return _serialize_idea(idea)
+
+
+@router.post("/ideas/{idea_id}/refine", response_model=IdeaRefinementResponse)
+def refine_idea(
+    idea_id: str,
+    payload: IdeaRefinementRequest,
+    session: Session = Depends(get_session),
+) -> IdeaRefinementResponse:
+    try:
+        result = IdeaRefinementService(session).refine_idea(
+            idea_id,
+            focus=payload.focus,
+            preserve_evidence=payload.preserve_evidence,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return IdeaRefinementResponse(
+        source_idea=_serialize_idea(result.source_idea),
+        refined_idea=_serialize_idea(result.refined_idea),
+        applied_actions=result.applied_actions,
+        message=(
+            f"Created refined idea version {result.refined_idea.version} "
+            f"from source idea {result.source_idea.id}."
+        ),
+    )
 
 
 def _serialize_novelty_check(check) -> NoveltyCheckRead:
