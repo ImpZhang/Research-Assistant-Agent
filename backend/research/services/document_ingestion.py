@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.research.config import settings
 from backend.research.models import Chunk, Evidence, Paper, PaperSection
+from backend.research.services.graph_service import GraphService
 
 
 SECTION_PATTERNS = [
@@ -70,6 +71,13 @@ class DocumentIngestionService:
         )
         self.session.add(paper)
         self.session.flush()
+        graph = GraphService(self.session)
+        paper_node = graph.get_or_create_node(
+            node_type="paper",
+            label=paper.title,
+            canonical_key=paper.id,
+            payload={"filename": filename, "source_type": "upload"},
+        )
 
         sections = self._detect_sections(text)
         section_count = 0
@@ -127,6 +135,23 @@ class DocumentIngestionService:
                     metadata_json={"source": "heuristic_section_extraction"},
                 )
                 self.session.add(evidence)
+                self.session.flush()
+                evidence_node = graph.get_or_create_node(
+                    node_type="evidence",
+                    label=f"{evidence.evidence_type}: {section['title']}",
+                    canonical_key=evidence.id,
+                    payload={
+                        "paper_id": paper.id,
+                        "evidence_type": evidence.evidence_type,
+                        "section_type": section["section_type"],
+                    },
+                )
+                graph.create_edge(
+                    source_node=paper_node,
+                    target_node=evidence_node,
+                    edge_type="paper_has_evidence",
+                    evidence_ids=[evidence.id],
+                )
                 evidence_count += 1
 
         paper.status = "indexed"

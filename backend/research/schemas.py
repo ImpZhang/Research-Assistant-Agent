@@ -240,6 +240,32 @@ class ExperimentPlanRead(BaseModel):
     updated_at: datetime
 
 
+class ResearchNodeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    node_type: str
+    label: str
+    canonical_key: str = ""
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResearchEdgeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    source_node_id: str
+    target_node_id: str
+    edge_type: str
+    weight: float = 1.0
+    evidence_ids: list[str] = Field(default_factory=list)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
 class JobRead(BaseModel):
     id: str
     job_type: str

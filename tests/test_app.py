@@ -200,3 +200,40 @@ Future work should produce reviewer critiques and experiment plans.
     assert plan_body["main_experiment"]
     assert plan_body["ablation_studies"]
     assert plan_body["expected_tables"]
+
+
+def test_graph_rag_lite_records_workflow_links() -> None:
+    client = TestClient(create_app())
+    content = b"""Graph Link Test Paper
+
+Introduction
+The assistant needs graph links between papers, evidence, gaps, and ideas.
+
+Limitations
+Without graph links, later retrieval cannot expand from an idea back to its evidence.
+
+Conclusion
+Future work should expose graph nodes and edges through the API.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("graph_link_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+    gaps = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 2})
+    gap_id = gaps.json()["gaps"][0]["id"]
+    ideas = client.post(f"/research/gaps/{gap_id}/ideas")
+    assert ideas.status_code == 200
+
+    nodes = client.get("/research/graph/nodes")
+    assert nodes.status_code == 200
+    node_types = {node["node_type"] for node in nodes.json()}
+    assert {"paper", "evidence", "gap", "idea"}.issubset(node_types)
+
+    edges = client.get("/research/graph/edges")
+    assert edges.status_code == 200
+    edge_types = {edge["edge_type"] for edge in edges.json()}
+    assert "paper_has_evidence" in edge_types
+    assert "gap_supported_by_evidence" in edge_types
+    assert "idea_addresses_gap" in edge_types

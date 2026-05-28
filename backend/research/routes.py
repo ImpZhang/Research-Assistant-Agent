@@ -20,12 +20,15 @@ from backend.research.schemas import (
     PaperRead,
     PaperUploadResponse,
     ProjectStatus,
+    ResearchEdgeRead,
     ResearchGapRead,
+    ResearchNodeRead,
     ReviewRead,
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.gap_service import GapService
+from backend.research.services.graph_service import GraphService
 from backend.research.services.idea_service import IdeaService
 from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
@@ -404,3 +407,47 @@ def list_experiment_plans(
         _serialize_experiment_plan(plan)
         for plan in ExperimentService(session).list_plans_for_idea(idea_id)
     ]
+
+
+def _serialize_node(node) -> ResearchNodeRead:
+    return ResearchNodeRead(
+        id=node.id,
+        node_type=node.node_type,
+        label=node.label,
+        canonical_key=node.canonical_key,
+        payload=node.payload_json or {},
+        created_at=node.created_at,
+        updated_at=node.updated_at,
+    )
+
+
+def _serialize_edge(edge) -> ResearchEdgeRead:
+    return ResearchEdgeRead(
+        id=edge.id,
+        source_node_id=edge.source_node_id,
+        target_node_id=edge.target_node_id,
+        edge_type=edge.edge_type,
+        weight=edge.weight,
+        evidence_ids=edge.evidence_ids_json or [],
+        payload=edge.payload_json or {},
+        created_at=edge.created_at,
+        updated_at=edge.updated_at,
+    )
+
+
+@router.get("/graph/nodes", response_model=list[ResearchNodeRead])
+def list_graph_nodes(
+    node_type: str | None = None,
+    limit: int = 100,
+    session: Session = Depends(get_session),
+) -> list[ResearchNodeRead]:
+    return [_serialize_node(node) for node in GraphService(session).list_nodes(node_type, limit)]
+
+
+@router.get("/graph/edges", response_model=list[ResearchEdgeRead])
+def list_graph_edges(
+    edge_type: str | None = None,
+    limit: int = 100,
+    session: Session = Depends(get_session),
+) -> list[ResearchEdgeRead]:
+    return [_serialize_edge(edge) for edge in GraphService(session).list_edges(edge_type, limit)]

@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from backend.research.models import Evidence, Paper, ResearchGap
+from backend.research.services.graph_service import GraphService
 
 
 GAP_TYPE_BY_EVIDENCE = {
@@ -29,6 +30,7 @@ class GapService:
 
         evidences = query.order_by(Evidence.created_at.asc()).limit(max_gaps).all()
         gaps = []
+        graph = GraphService(self.session)
         for evidence in evidences:
             paper = self.session.get(Paper, evidence.paper_id)
             gap = ResearchGap(
@@ -46,6 +48,25 @@ class GapService:
                 status="generated",
             )
             self.session.add(gap)
+            self.session.flush()
+            gap_node = graph.get_or_create_node(
+                node_type="gap",
+                label=gap.title,
+                canonical_key=gap.id,
+                payload={"gap_type": gap.gap_type, "status": gap.status},
+            )
+            evidence_node = graph.get_or_create_node(
+                node_type="evidence",
+                label=f"{evidence.evidence_type}: {evidence.supports}",
+                canonical_key=evidence.id,
+                payload={"paper_id": evidence.paper_id, "evidence_type": evidence.evidence_type},
+            )
+            graph.create_edge(
+                source_node=gap_node,
+                target_node=evidence_node,
+                edge_type="gap_supported_by_evidence",
+                evidence_ids=[evidence.id],
+            )
             gaps.append(gap)
 
         self.session.commit()

@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from backend.research.models import Idea, ResearchGap
+from backend.research.services.graph_service import GraphService
 
 
 class IdeaService:
@@ -24,10 +25,30 @@ class IdeaService:
         gaps = query.all()
 
         ideas: list[Idea] = []
+        graph = GraphService(self.session)
         for gap in gaps:
             for variant in range(max(1, max_ideas_per_gap)):
                 idea = self._build_idea(gap, variant)
                 self.session.add(idea)
+                self.session.flush()
+                idea_node = graph.get_or_create_node(
+                    node_type="idea",
+                    label=idea.title,
+                    canonical_key=idea.id,
+                    payload={"status": idea.status, "version": idea.version},
+                )
+                gap_node = graph.get_or_create_node(
+                    node_type="gap",
+                    label=gap.title,
+                    canonical_key=gap.id,
+                    payload={"gap_type": gap.gap_type, "status": gap.status},
+                )
+                graph.create_edge(
+                    source_node=idea_node,
+                    target_node=gap_node,
+                    edge_type="idea_addresses_gap",
+                    evidence_ids=gap.evidence_ids_json or [],
+                )
                 ideas.append(idea)
 
         self.session.commit()
