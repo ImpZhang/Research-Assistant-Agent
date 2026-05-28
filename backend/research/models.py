@@ -260,6 +260,27 @@ class ProposalDraft(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="system")
 
 
+class ProposalReview(Base, TimestampMixin):
+    __tablename__ = "proposal_reviews"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    proposal_draft_id: Mapped[str] = mapped_column(
+        ForeignKey("proposal_drafts.id"),
+        index=True,
+    )
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    reviewer_type: Mapped[str] = mapped_column(String(128), default="advisor")
+    decision: Mapped[str] = mapped_column(String(64), default="revise", index=True)
+    readiness_score: Mapped[float] = mapped_column(Float, default=0.0)
+    strengths_json: Mapped[list] = mapped_column(JSON, default=list)
+    concerns_json: Mapped[list] = mapped_column(JSON, default=list)
+    required_revisions_json: Mapped[list] = mapped_column(JSON, default=list)
+    missing_evidence_json: Mapped[list] = mapped_column(JSON, default=list)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="system")
+
+
 class IdeaPortfolioSnapshot(Base, TimestampMixin):
     __tablename__ = "idea_portfolio_snapshots"
 

@@ -214,6 +214,24 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "## Related Work Positioning" not in proposal_markdown:
         raise RuntimeError("proposal draft markdown did not include related work positioning")
+    proposal_review = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/proposal-drafts/{proposal_draft['id']}/review",
+            json_body={"reviewer_type": "advisor", "created_by": "smoke_api"},
+        ),
+        "proposal readiness review",
+    )
+    proposal_review_markdown = require_ok(
+        client.get(
+            "/research/ideas/"
+            f"{refined_idea['id']}/proposal-drafts/"
+            f"{proposal_draft['id']}/reviews/"
+            f"{proposal_review['id']}/export/markdown"
+        ),
+        "proposal readiness review markdown",
+    )
+    if "## Required Revisions" not in proposal_review_markdown:
+        raise RuntimeError("proposal review markdown did not include required revisions")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -400,6 +418,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "related_work_markdown_chars": len(related_work_markdown),
         "proposal_draft_id": proposal_draft["id"],
         "proposal_draft_markdown_chars": len(proposal_markdown),
+        "proposal_review_id": proposal_review["id"],
+        "proposal_review_decision": proposal_review["decision"],
+        "proposal_review_score": proposal_review["readiness_score"],
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),

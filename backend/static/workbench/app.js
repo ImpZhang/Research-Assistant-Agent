@@ -2,6 +2,7 @@ const state = {
   paperId: "",
   jobId: "",
   latestIdeaId: "",
+  latestProposalDraftId: "",
   pollTimer: null,
 };
 
@@ -345,6 +346,7 @@ async function createRelatedWorkMatrix() {
         created_by: "workbench",
       }),
     });
+    state.latestProposalDraftId = body.id;
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "workflowResult",
@@ -375,6 +377,34 @@ async function createProposalDraft() {
     renderResult(
       "workflowResult",
       `Saved proposal draft <code>${escapeHtml(body.id)}</code> for idea <code>${escapeHtml(body.idea_id)}</code>.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function reviewProposalDraft() {
+  if (!state.latestIdeaId || !state.latestProposalDraftId) {
+    renderResult("workflowResult", "Create a proposal draft first.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Reviewing proposal readiness...", "warn");
+  try {
+    const body = await api(
+      `/research/ideas/${state.latestIdeaId}/proposal-drafts/${state.latestProposalDraftId}/review`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reviewer_type: "advisor",
+          created_by: "workbench",
+        }),
+      },
+    );
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Reviewed proposal <code>${escapeHtml(body.proposal_draft_id)}</code>: ${escapeHtml(body.decision)} (${body.readiness_score}).`,
     );
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
@@ -477,6 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
   $("relatedWorkButton").addEventListener("click", createRelatedWorkMatrix);
   $("proposalDraftButton").addEventListener("click", createProposalDraft);
+  $("proposalReviewButton").addEventListener("click", reviewProposalDraft);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);

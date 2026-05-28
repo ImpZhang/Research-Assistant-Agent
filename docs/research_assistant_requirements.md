@@ -668,6 +668,12 @@ updated_at
 - 输出 risk mitigation 与 30/60/90 天 milestone。
 - 保存为可复查 artifact，而不是一次性聊天回答。
 
+proposal draft 需要支持 readiness review：
+
+- 给出 advisor-style decision 和 readiness score。
+- 列出 strengths、concerns、required revisions 和 missing evidence。
+- 把 review 结果保存并导出 Markdown，形成下一轮 refinement 输入。
+
 ### 6.5.4 Idea 输出模板
 
 ```text

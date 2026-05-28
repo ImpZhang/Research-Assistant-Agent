@@ -17,6 +17,7 @@ from backend.research.models import (
     PaperCard,
     PaperSection,
     ProposalDraft,
+    ProposalReview,
     RelatedWorkMatrix,
     ResearchGap,
     Review,
@@ -61,6 +62,8 @@ from backend.research.schemas import (
     PaperUploadResponse,
     ProposalDraftCreate,
     ProposalDraftRead,
+    ProposalReviewCreate,
+    ProposalReviewRead,
     ProjectStatus,
     RankedIdeaRead,
     RelatedWorkMatrixCreate,
@@ -94,6 +97,7 @@ from backend.research.services.portfolio_service import (
     render_snapshot_markdown,
 )
 from backend.research.services.proposal_service import ProposalDraftService
+from backend.research.services.proposal_review_service import ProposalReviewService
 from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
@@ -135,6 +139,7 @@ def status() -> ProjectStatus:
             "portfolio_execution_agenda",
             "persisted_related_work_matrix",
             "proposal_draft_generation",
+            "proposal_readiness_review",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -613,6 +618,26 @@ def _serialize_proposal_draft(draft: ProposalDraft) -> ProposalDraftRead:
     )
 
 
+def _serialize_proposal_review(review: ProposalReview) -> ProposalReviewRead:
+    return ProposalReviewRead(
+        id=review.id,
+        proposal_draft_id=review.proposal_draft_id,
+        idea_id=review.idea_id,
+        reviewer_type=review.reviewer_type,
+        decision=review.decision,
+        readiness_score=review.readiness_score,
+        strengths=review.strengths_json or [],
+        concerns=review.concerns_json or [],
+        required_revisions=review.required_revisions_json or [],
+        missing_evidence=review.missing_evidence_json or [],
+        summary=review.summary,
+        markdown_export=review.markdown_export or "",
+        created_by=review.created_by,
+        created_at=review.created_at,
+        updated_at=review.updated_at,
+    )
+
+
 @router.post("/ideas/generate", response_model=IdeaGenerationResponse)
 def generate_ideas(
     payload: IdeaGenerationRequest,
@@ -927,6 +952,85 @@ def export_proposal_draft_markdown(
     if draft is None:
         raise HTTPException(status_code=404, detail="Proposal draft not found")
     return PlainTextResponse(draft.markdown_export or "", media_type="text/markdown")
+
+
+@router.post(
+    "/ideas/{idea_id}/proposal-drafts/{draft_id}/review",
+    response_model=ProposalReviewRead,
+)
+def create_proposal_review(
+    idea_id: str,
+    draft_id: str,
+    payload: ProposalReviewCreate,
+    session: Session = Depends(get_session),
+) -> ProposalReviewRead:
+    draft = ProposalDraftService(session).get_draft(idea_id, draft_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    try:
+        review = ProposalReviewService(session).create_review(
+            draft.id,
+            reviewer_type=payload.reviewer_type,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_proposal_review(review)
+
+
+@router.get(
+    "/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews",
+    response_model=list[ProposalReviewRead],
+)
+def list_proposal_reviews(
+    idea_id: str,
+    draft_id: str,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+) -> list[ProposalReviewRead]:
+    if ProposalDraftService(session).get_draft(idea_id, draft_id) is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    try:
+        reviews = ProposalReviewService(session).list_for_draft(draft_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_proposal_review(review) for review in reviews]
+
+
+@router.get(
+    "/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}",
+    response_model=ProposalReviewRead,
+)
+def get_proposal_review(
+    idea_id: str,
+    draft_id: str,
+    review_id: str,
+    session: Session = Depends(get_session),
+) -> ProposalReviewRead:
+    if ProposalDraftService(session).get_draft(idea_id, draft_id) is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    review = ProposalReviewService(session).get_review(draft_id, review_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail="Proposal review not found")
+    return _serialize_proposal_review(review)
+
+
+@router.get(
+    "/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_proposal_review_markdown(
+    idea_id: str,
+    draft_id: str,
+    review_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    if ProposalDraftService(session).get_draft(idea_id, draft_id) is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    review = ProposalReviewService(session).get_review(draft_id, review_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail="Proposal review not found")
+    return PlainTextResponse(review.markdown_export or "", media_type="text/markdown")
 
 
 @router.post("/ideas/{idea_id}/feedback", response_model=IdeaFeedbackRead)

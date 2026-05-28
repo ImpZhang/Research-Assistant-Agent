@@ -346,6 +346,29 @@ class ProposalDraftRead(BaseModel):
     updated_at: datetime
 
 
+class ProposalReviewCreate(BaseModel):
+    reviewer_type: str = "advisor"
+    created_by: str = "system"
+
+
+class ProposalReviewRead(BaseModel):
+    id: str
+    proposal_draft_id: str
+    idea_id: str
+    reviewer_type: str = "advisor"
+    decision: str
+    readiness_score: float = 0.0
+    strengths: list[str] = Field(default_factory=list)
+    concerns: list[str] = Field(default_factory=list)
+    required_revisions: list[str] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
+    summary: str = ""
+    markdown_export: str = ""
+    created_by: str = "system"
+    created_at: datetime
+    updated_at: datetime
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

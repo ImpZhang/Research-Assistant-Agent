@@ -36,6 +36,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/feedback" in script.text
     assert "/research/ideas/${state.latestIdeaId}/related-work-matrix" in script.text
     assert "/research/ideas/${state.latestIdeaId}/proposal-draft" in script.text
+    assert "/proposal-drafts/${state.latestProposalDraftId}/review" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
     assert "/research/ideas/portfolios" in script.text
@@ -437,6 +438,31 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert export.status_code == 200
     assert f"- Idea ID: `{idea_id}`" in export.text
     assert "## Risks And Mitigation" in export.text
+
+    review = client.post(
+        f"/research/ideas/{idea_id}/proposal-drafts/{body['id']}/review",
+        json={"reviewer_type": "advisor", "created_by": "pytest"},
+    )
+    assert review.status_code == 200
+    review_body = review.json()
+    assert review_body["proposal_draft_id"] == body["id"]
+    assert review_body["idea_id"] == idea_id
+    assert review_body["decision"] in {"ready_for_advisor_review", "revise", "not_ready"}
+    assert review_body["readiness_score"] > 0
+    assert review_body["strengths"]
+    assert review_body["required_revisions"]
+    assert "# Proposal Readiness Review:" in review_body["markdown_export"]
+
+    reviews = client.get(f"/research/ideas/{idea_id}/proposal-drafts/{body['id']}/reviews")
+    assert reviews.status_code == 200
+    assert reviews.json()[0]["id"] == review_body["id"]
+
+    review_export = client.get(
+        f"/research/ideas/{idea_id}/proposal-drafts/{body['id']}/reviews/"
+        f"{review_body['id']}/export/markdown"
+    )
+    assert review_export.status_code == 200
+    assert "## Required Revisions" in review_export.text
 
 
 def test_refine_idea_creates_traceable_revision() -> None:
