@@ -259,6 +259,53 @@ Future work should make generated ideas easy to share and revise.
     assert f"`{gap_id}`" in markdown
 
 
+def test_literature_to_ideas_workflow_runs_full_pipeline() -> None:
+    client = TestClient(create_app())
+    content = b"""Workflow Test Paper
+
+Abstract
+This paper checks whether the research assistant can run a full workflow.
+
+Introduction
+Researchers need a single operation that moves from literature evidence to idea dossiers.
+
+Method
+The workflow should extract a card, mine gaps, generate ideas, review them, plan experiments, and export markdown.
+
+Limitations
+The workflow is deterministic in the MVP and still needs external novelty checks.
+
+Conclusion
+Future work should connect the workflow to front-end actions and MCP tools.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("workflow_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    response = client.post(
+        "/research/workflows/literature-to-ideas",
+        json={
+            "paper_id": paper_id,
+            "max_gaps": 2,
+            "max_ideas_per_gap": 1,
+            "include_markdown_export": True,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["paper"]["id"] == paper_id
+    assert body["card"]["payload"]["method"]
+    assert len(body["gaps"]) >= 1
+    assert len(body["ideas"]) == len(body["gaps"])
+    assert len(body["reviews"]) == len(body["ideas"])
+    assert len(body["experiment_plans"]) == len(body["ideas"])
+    assert "# Research Idea Dossier:" in body["markdown_export"]
+    assert "Completed literature-to-ideas workflow" in body["message"]
+
+
 def test_graph_rag_lite_records_workflow_links() -> None:
     client = TestClient(create_app())
     content = b"""Graph Link Test Paper

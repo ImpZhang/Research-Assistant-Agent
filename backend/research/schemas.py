@@ -240,6 +240,26 @@ class ExperimentPlanRead(BaseModel):
     updated_at: datetime
 
 
+class LiteratureToIdeasWorkflowRequest(BaseModel):
+    paper_id: str
+    max_gaps: int = 4
+    max_ideas_per_gap: int = 2
+    run_review: bool = True
+    run_experiment_plan: bool = True
+    include_markdown_export: bool = True
+
+
+class LiteratureToIdeasWorkflowResponse(BaseModel):
+    paper: PaperRead
+    card: PaperCardRead
+    gaps: list[ResearchGapRead]
+    ideas: list[IdeaRead]
+    reviews: list[ReviewRead] = Field(default_factory=list)
+    experiment_plans: list[ExperimentPlanRead] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ResearchNodeRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

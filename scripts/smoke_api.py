@@ -104,26 +104,22 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     paper_id = upload["paper"]["id"]
 
-    card = require_ok(
-        client.post(f"/research/papers/{paper_id}/card/extract-structured"),
-        "structured paper card extraction",
+    workflow = require_ok(
+        client.post(
+            "/research/workflows/literature-to-ideas",
+            json_body={
+                "paper_id": paper_id,
+                "max_gaps": 4,
+                "max_ideas_per_gap": 2,
+                "include_markdown_export": True,
+            },
+        ),
+        "literature-to-ideas workflow",
     )
-    gaps = require_ok(
-        client.post("/research/gaps/mine", json_body={"paper_ids": [paper_id], "max_gaps": 4}),
-        "gap mining",
-    )
-    if not gaps["gaps"]:
-        raise RuntimeError("gap mining returned no gaps")
-    gap_id = gaps["gaps"][0]["id"]
-
-    ideas = require_ok(client.post(f"/research/gaps/{gap_id}/ideas"), "idea generation")
-    if not ideas["ideas"]:
-        raise RuntimeError("idea generation returned no ideas")
-    idea_id = ideas["ideas"][0]["id"]
-
-    review = require_ok(client.post(f"/research/ideas/{idea_id}/review"), "review generation")
-    plan = require_ok(client.post(f"/research/ideas/{idea_id}/experiment-plan"), "experiment plan generation")
-    idea_export = require_ok(client.get(f"/research/ideas/{idea_id}/export/markdown"), "idea markdown export")
+    if not workflow["gaps"]:
+        raise RuntimeError("workflow returned no gaps")
+    if not workflow["ideas"]:
+        raise RuntimeError("workflow returned no ideas")
     nodes = require_ok(client.get("/research/graph/nodes"), "graph nodes")
     edges = require_ok(client.get("/research/graph/edges"), "graph edges")
 
@@ -131,12 +127,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "health": health,
         "phase": status["phase"],
         "paper_id": paper_id,
-        "card_id": card["id"],
-        "gap_count": len(gaps["gaps"]),
-        "idea_count": len(ideas["ideas"]),
-        "review_decision": review["decision"],
-        "experiment_plan_id": plan["id"],
-        "idea_export_chars": len(idea_export),
+        "card_id": workflow["card"]["id"],
+        "gap_count": len(workflow["gaps"]),
+        "idea_count": len(workflow["ideas"]),
+        "review_count": len(workflow["reviews"]),
+        "experiment_plan_count": len(workflow["experiment_plans"]),
+        "markdown_export_chars": len(workflow["markdown_export"]),
         "graph_node_count": len(nodes),
         "graph_edge_count": len(edges),
     }

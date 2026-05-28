@@ -14,6 +14,8 @@ from backend.research.schemas import (
     IdeaGenerationResponse,
     IdeaRead,
     IdeaScore,
+    LiteratureToIdeasWorkflowRequest,
+    LiteratureToIdeasWorkflowResponse,
     PaperCreate,
     PaperCardPayload,
     PaperCardRead,
@@ -36,6 +38,7 @@ from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
+from backend.research.services.workflow_service import WorkflowService
 
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -60,6 +63,7 @@ def status() -> ProjectStatus:
             "idea_generation",
             "reviewer_simulation",
             "experiment_planning",
+            "literature_to_ideas_workflow",
             "graph_rag_lite_schema",
             "graph_rag_lite_workflow_links",
             "markdown_exports",
@@ -464,6 +468,55 @@ def list_experiment_plans(
         _serialize_experiment_plan(plan)
         for plan in ExperimentService(session).list_plans_for_idea(idea_id)
     ]
+
+
+@router.post(
+    "/workflows/literature-to-ideas",
+    response_model=LiteratureToIdeasWorkflowResponse,
+)
+def run_literature_to_ideas_workflow(
+    payload: LiteratureToIdeasWorkflowRequest,
+    session: Session = Depends(get_session),
+) -> LiteratureToIdeasWorkflowResponse:
+    try:
+        result = WorkflowService(session).run_literature_to_ideas(
+            paper_id=payload.paper_id,
+            max_gaps=payload.max_gaps,
+            max_ideas_per_gap=payload.max_ideas_per_gap,
+            run_review=payload.run_review,
+            run_experiment_plan=payload.run_experiment_plan,
+            include_markdown_export=payload.include_markdown_export,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    paper = result.paper
+    return LiteratureToIdeasWorkflowResponse(
+        paper=PaperRead(
+            id=paper.id,
+            title=paper.title,
+            authors=paper.authors_json or [],
+            year=paper.year,
+            venue=paper.venue,
+            filename=paper.filename,
+            domain=paper.domain,
+            task=paper.task,
+            status=paper.status,
+            created_at=paper.created_at,
+            updated_at=paper.updated_at,
+        ),
+        card=_serialize_card(result.card),
+        gaps=[_serialize_gap(gap) for gap in result.gaps],
+        ideas=[_serialize_idea(idea) for idea in result.ideas],
+        reviews=[_serialize_review(review) for review in result.reviews],
+        experiment_plans=[_serialize_experiment_plan(plan) for plan in result.experiment_plans],
+        markdown_export=result.markdown_export,
+        message=(
+            "Completed literature-to-ideas workflow: "
+            f"{len(result.gaps)} gaps, {len(result.ideas)} ideas, "
+            f"{len(result.reviews)} reviews, {len(result.experiment_plans)} experiment plans."
+        ),
+    )
 
 
 def _serialize_node(node) -> ResearchNodeRead:
