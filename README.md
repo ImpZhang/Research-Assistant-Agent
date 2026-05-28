@@ -54,6 +54,26 @@ API docs:
 http://127.0.0.1:8000/docs
 ```
 
+## Verification
+
+Run unit tests:
+
+```bash
+uv run pytest -q
+```
+
+Run the full in-process API smoke workflow:
+
+```bash
+uv run python scripts/smoke_api.py
+```
+
+Run the same smoke workflow against a live server:
+
+```bash
+uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
+```
+
 ## Current Status
 
 Phase 0 is being implemented: project foundation, database models, API skeleton, and technical documentation.
