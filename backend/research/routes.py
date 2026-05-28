@@ -9,6 +9,7 @@ from backend.research.models import (
     Evidence,
     ExperimentPlan,
     Idea,
+    IdeaFeedback,
     Job,
     NoveltyCheck,
     Paper,
@@ -26,6 +27,8 @@ from backend.research.schemas import (
     ExperimentPlanRead,
     GapMiningRequest,
     GapMiningResponse,
+    IdeaFeedbackCreate,
+    IdeaFeedbackRead,
     IdeaGenerationRequest,
     IdeaGenerationResponse,
     IdeaRankingRequest,
@@ -63,6 +66,7 @@ from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.export_service import ExportService
 from backend.research.services.gap_service import GapService
 from backend.research.services.graph_service import GraphService
+from backend.research.services.idea_feedback_service import IdeaFeedbackService
 from backend.research.services.idea_ranking_service import IdeaRankingService
 from backend.research.services.idea_refinement_service import IdeaRefinementService
 from backend.research.services.idea_service import IdeaService
@@ -103,6 +107,7 @@ def status() -> ProjectStatus:
             "structured_idea_generation_adapter",
             "idea_refinement_loop",
             "idea_ranking_portfolio",
+            "human_idea_feedback",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -500,6 +505,20 @@ def _serialize_idea(idea) -> IdeaRead:
     )
 
 
+def _serialize_feedback(feedback: IdeaFeedback) -> IdeaFeedbackRead:
+    return IdeaFeedbackRead(
+        id=feedback.id,
+        idea_id=feedback.idea_id,
+        decision=feedback.decision,
+        rating=feedback.rating,
+        comment=feedback.comment,
+        tags=feedback.tags_json or [],
+        created_by=feedback.created_by,
+        created_at=feedback.created_at,
+        updated_at=feedback.updated_at,
+    )
+
+
 @router.post("/ideas/generate", response_model=IdeaGenerationResponse)
 def generate_ideas(
     payload: IdeaGenerationRequest,
@@ -569,6 +588,38 @@ def get_idea(idea_id: str, session: Session = Depends(get_session)) -> IdeaRead:
     if idea is None:
         raise HTTPException(status_code=404, detail="Idea not found")
     return _serialize_idea(idea)
+
+
+@router.post("/ideas/{idea_id}/feedback", response_model=IdeaFeedbackRead)
+def create_idea_feedback(
+    idea_id: str,
+    payload: IdeaFeedbackCreate,
+    session: Session = Depends(get_session),
+) -> IdeaFeedbackRead:
+    try:
+        feedback = IdeaFeedbackService(session).create_feedback(
+            idea_id,
+            decision=payload.decision,
+            rating=payload.rating,
+            comment=payload.comment,
+            tags=payload.tags,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_feedback(feedback)
+
+
+@router.get("/ideas/{idea_id}/feedback", response_model=list[IdeaFeedbackRead])
+def list_idea_feedback(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> list[IdeaFeedbackRead]:
+    try:
+        feedback_items = IdeaFeedbackService(session).list_feedback_for_idea(idea_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_feedback(feedback) for feedback in feedback_items]
 
 
 @router.post("/ideas/{idea_id}/refine", response_model=IdeaRefinementResponse)

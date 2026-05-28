@@ -166,6 +166,24 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if f"- Parent Idea ID: `{source_idea_id}`" not in refined_markdown:
         raise RuntimeError("refined idea markdown did not include parent lineage")
+    feedback = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/feedback",
+            json_body={
+                "decision": "shortlist",
+                "rating": 4.7,
+                "comment": "Smoke test shortlist for the refined experiment-first idea.",
+                "tags": ["smoke", "shortlist"],
+            },
+        ),
+        "idea feedback",
+    )
+    feedback_items = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/feedback"),
+        "idea feedback list",
+    )
+    if not feedback_items or feedback_items[0]["id"] != feedback["id"]:
+        raise RuntimeError("idea feedback list did not include latest feedback")
     ranking = require_ok(
         client.post(
             "/research/ideas/rank",
@@ -244,6 +262,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "artifact_markdown_chars": len(artifacts["markdown_export"]),
         "refined_idea_id": refined_idea["id"],
         "refined_idea_parent_id": refined_idea["parent_idea_id"],
+        "feedback_decision": feedback["decision"],
+        "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),
         "top_ranked_idea_id": ranking["ranked_ideas"][0]["idea"]["id"],
         "top_ranked_idea_score": ranking["ranked_ideas"][0]["weighted_score"],

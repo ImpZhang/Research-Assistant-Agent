@@ -33,6 +33,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/workflows/literature-to-ideas/async" in script.text
     assert "/research/jobs/${jobId}/artifacts" in script.text
     assert "/research/ideas/${state.latestIdeaId}/refine" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/feedback" in script.text
     assert "/research/ideas/rank" in script.text
 
 
@@ -420,6 +421,35 @@ Future work should learn ranking weights from researcher feedback.
     assert body["ranked_ideas"][0]["rank"] == 1
     assert "resource_efficiency" in body["ranked_ideas"][0]["score_breakdown"]
     assert body["ranked_ideas"][0]["rationale"]
+
+    feedback = client.post(
+        f"/research/ideas/{refined_idea_id}/feedback",
+        json={
+            "decision": "shortlist",
+            "rating": 4.8,
+            "comment": "Promising because the first experiment is clear.",
+            "tags": ["publishable", "experiment-first"],
+        },
+    )
+    assert feedback.status_code == 200
+    feedback_body = feedback.json()
+    assert feedback_body["idea_id"] == refined_idea_id
+    assert feedback_body["decision"] == "shortlist"
+    assert feedback_body["rating"] == 4.8
+    assert feedback_body["tags"] == ["publishable", "experiment-first"]
+
+    listed_feedback = client.get(f"/research/ideas/{refined_idea_id}/feedback")
+    assert listed_feedback.status_code == 200
+    assert listed_feedback.json()[0]["id"] == feedback_body["id"]
+
+    reranked = client.post(
+        "/research/ideas/rank",
+        json={"idea_ids": [source_idea_id, refined_idea_id], "deduplicate_lineage": True},
+    )
+    assert reranked.status_code == 200
+    top = reranked.json()["ranked_ideas"][0]
+    assert top["idea"]["id"] == refined_idea_id
+    assert any("Human feedback" in item for item in top["rationale"])
 
 
 def test_markdown_exports_for_card_and_idea_dossier() -> None:

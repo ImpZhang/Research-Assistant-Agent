@@ -52,6 +52,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Novelty/collision checks against existing evidence, gaps, ideas, and literature search results.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
+- Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Local literature search with an optional OpenAlex external-search adapter.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.
@@ -173,6 +174,8 @@ POST /research/ideas/{idea_id}/review
 POST /research/ideas/{idea_id}/experiment-plan
 POST /research/ideas/{idea_id}/refine
 POST /research/ideas/rank
+POST /research/ideas/{idea_id}/feedback
+GET  /research/ideas/{idea_id}/feedback
 GET  /research/ideas/{idea_id}/export/markdown
 
 POST /research/search/context

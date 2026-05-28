@@ -353,6 +353,32 @@ async function rankIdeas() {
   }
 }
 
+async function shortlistLatestIdea() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decision: "shortlist",
+        rating: 4.5,
+        comment: $("refineFocus").value.trim(),
+        tags: ["shortlist", "workbench"],
+      }),
+    });
+    renderResult(
+      "workflowResult",
+      `Shortlisted idea <code>${escapeHtml(body.idea_id)}</code> with rating ${escapeHtml(body.rating)}.`,
+    );
+    await rankIdeas();
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   $("uploadForm").addEventListener("submit", uploadPaper);
   $("runWorkflowButton").addEventListener("click", runWorkflow);
@@ -361,6 +387,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("refreshJobsButton").addEventListener("click", refreshJobs);
   $("loadDossierButton").addEventListener("click", loadDossier);
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
+  $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   checkHealth();
   refreshJobs();

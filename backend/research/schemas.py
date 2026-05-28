@@ -238,6 +238,28 @@ class IdeaRankingResponse(BaseModel):
     message: str
 
 
+class IdeaFeedbackCreate(BaseModel):
+    decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
+    rating: float | None = None
+    comment: str = ""
+    tags: list[str] = Field(default_factory=list)
+    created_by: str = "researcher"
+
+
+class IdeaFeedbackRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    idea_id: str
+    decision: str
+    rating: float | None = None
+    comment: str = ""
+    tags: list[str] = Field(default_factory=list)
+    created_by: str = "researcher"
+    created_at: datetime
+    updated_at: datetime
+
+
 class ReviewRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

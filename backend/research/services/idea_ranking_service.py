@@ -3,7 +3,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.research.models import ExperimentPlan, Idea, NoveltyCheck, Review
+from backend.research.models import ExperimentPlan, Idea, IdeaFeedback, NoveltyCheck, Review
 
 
 DEFAULT_WEIGHTS = {
@@ -122,6 +122,7 @@ class IdeaRankingService:
         check = self._latest_for_idea_or_parent(NoveltyCheck, idea)
         review = self._latest_for_idea_or_parent(Review, idea)
         plan = self._latest_for_idea_or_parent(ExperimentPlan, idea)
+        feedback_items = self._feedback_for_idea_or_parent(idea)
 
         if idea.parent_idea_id:
             adjustment += 0.15
@@ -152,6 +153,10 @@ class IdeaRankingService:
             else:
                 adjustment -= 0.05
                 rationale.append("Unknown novelty risk needs more literature search.")
+        if feedback_items:
+            feedback_adjustment, feedback_rationale = self._feedback_adjustment(feedback_items)
+            adjustment += feedback_adjustment
+            rationale.extend(feedback_rationale)
         if not rationale:
             rationale.append(
                 "Ranked from intrinsic idea score only; add review and novelty checks."
@@ -168,6 +173,39 @@ class IdeaRankingService:
             .order_by(model.created_at.desc())
             .first()
         )
+
+    def _feedback_for_idea_or_parent(self, idea: Idea) -> list[IdeaFeedback]:
+        idea_ids = [idea.id]
+        if idea.parent_idea_id:
+            idea_ids.append(idea.parent_idea_id)
+        return (
+            self.session.query(IdeaFeedback)
+            .filter(IdeaFeedback.idea_id.in_(idea_ids))
+            .order_by(IdeaFeedback.created_at.desc())
+            .all()
+        )
+
+    def _feedback_adjustment(self, feedback_items: list[IdeaFeedback]) -> tuple[float, list[str]]:
+        latest = feedback_items[0]
+        decision_adjustments = {
+            "accept": 0.45,
+            "shortlist": 0.3,
+            "revise": 0.05,
+            "archive": -0.3,
+            "reject": -0.6,
+        }
+        adjustment = decision_adjustments.get(latest.decision, 0.0)
+        rationale = [f"Human feedback decision is {latest.decision}."]
+        ratings = [item.rating for item in feedback_items if item.rating is not None]
+        if ratings:
+            average = sum(ratings) / len(ratings)
+            adjustment += (average - 3.0) * 0.12
+            rationale.append(
+                f"Average human rating is {average:.2f}/5 across {len(ratings)} ratings."
+            )
+        if latest.tags_json:
+            rationale.append(f"Feedback tags: {', '.join(latest.tags_json[:4])}.")
+        return adjustment, rationale
 
     def _weights(self, weights: dict[str, float]) -> dict[str, float]:
         merged = dict(DEFAULT_WEIGHTS)

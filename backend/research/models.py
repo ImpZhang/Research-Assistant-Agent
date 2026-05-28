@@ -204,6 +204,18 @@ class ExperimentPlan(Base, TimestampMixin):
     timeline_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class IdeaFeedback(Base, TimestampMixin):
+    __tablename__ = "idea_feedback"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    decision: Mapped[str] = mapped_column(String(64), default="revise", index=True)
+    rating: Mapped[float | None] = mapped_column(Float, nullable=True)
+    comment: Mapped[str] = mapped_column(Text, default="")
+    tags_json: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[str] = mapped_column(String(128), default="researcher")
+
+
 class ResearchNode(Base, TimestampMixin):
     __tablename__ = "research_nodes"
 
