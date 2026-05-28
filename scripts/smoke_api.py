@@ -166,6 +166,22 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if f"- Parent Idea ID: `{source_idea_id}`" not in refined_markdown:
         raise RuntimeError("refined idea markdown did not include parent lineage")
+    ranking = require_ok(
+        client.post(
+            "/research/ideas/rank",
+            json_body={
+                "paper_ids": [paper_id],
+                "limit": 5,
+                "deduplicate_lineage": True,
+            },
+        ),
+        "idea ranking",
+    )
+    ranked_ids = [item["idea"]["id"] for item in ranking["ranked_ideas"]]
+    if refined_idea["id"] not in ranked_ids:
+        raise RuntimeError("idea ranking did not include the refined idea")
+    if source_idea_id in ranked_ids:
+        raise RuntimeError("idea ranking did not deduplicate the source idea lineage")
     async_job = require_ok(
         client.post(
             "/research/workflows/literature-to-ideas/async",
@@ -228,6 +244,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "artifact_markdown_chars": len(artifacts["markdown_export"]),
         "refined_idea_id": refined_idea["id"],
         "refined_idea_parent_id": refined_idea["parent_idea_id"],
+        "ranked_idea_count": len(ranking["ranked_ideas"]),
+        "top_ranked_idea_id": ranking["ranked_ideas"][0]["idea"]["id"],
+        "top_ranked_idea_score": ranking["ranked_ideas"][0]["weighted_score"],
         "async_workflow_job_id": async_job["id"],
         "async_workflow_job_status": async_job_status["status"],
         "card_id": workflow["card"]["id"],

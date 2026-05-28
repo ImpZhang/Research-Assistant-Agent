@@ -918,6 +918,7 @@ POST /research/ideas/from-draft
 GET  /research/ideas
 GET  /research/ideas/{idea_id}
 POST /research/ideas/{idea_id}/score
+POST /research/ideas/rank
 POST /research/ideas/{idea_id}/revise
 POST /research/ideas/{idea_id}/refine
 POST /research/ideas/{idea_id}/review
@@ -925,6 +926,8 @@ POST /research/ideas/{idea_id}/experiment-plan
 ```
 
 当前实现中 `/refine` 是第一版 idea revision loop：它读取 reviewer actions、novelty screening、experiment plan 和父 idea，创建带 `parent_idea_id` 的新 idea version，并在 GraphRAG-lite 中写入 `idea_refines_idea` 边。后续模型增强应替换 refinement 内容生成逻辑，而不是改变这个 lineage contract。
+
+`/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
 
 ## 11.5 Reviews
 

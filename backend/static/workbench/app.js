@@ -329,6 +329,30 @@ async function refineLatestIdea() {
   }
 }
 
+async function rankIdeas() {
+  renderResult("workflowResult", "Ranking idea portfolio...", "warn");
+  try {
+    const body = await api("/research/ideas/rank", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        paper_ids: state.paperId ? [state.paperId] : [],
+        limit: 5,
+        deduplicate_lineage: true,
+      }),
+    });
+    if (body.ranked_ideas.length) {
+      state.latestIdeaId = body.ranked_ideas[0].idea.id;
+    }
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Ranked ideas", body.ranked_ideas, (item) => `#${item.rank} ${item.weighted_score}: ${item.idea.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   $("uploadForm").addEventListener("submit", uploadPaper);
   $("runWorkflowButton").addEventListener("click", runWorkflow);
@@ -337,6 +361,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("refreshJobsButton").addEventListener("click", refreshJobs);
   $("loadDossierButton").addEventListener("click", loadDossier);
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
+  $("rankIdeasButton").addEventListener("click", rankIdeas);
   checkHealth();
   refreshJobs();
 });

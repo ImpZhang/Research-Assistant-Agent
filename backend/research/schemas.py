@@ -215,6 +215,29 @@ class IdeaRefinementResponse(BaseModel):
     message: str
 
 
+class IdeaRankingRequest(BaseModel):
+    idea_ids: list[str] = Field(default_factory=list)
+    gap_ids: list[str] = Field(default_factory=list)
+    paper_ids: list[str] = Field(default_factory=list)
+    limit: int = 10
+    weights: dict[str, float] = Field(default_factory=dict)
+    include_refined: bool = True
+    deduplicate_lineage: bool = True
+
+
+class RankedIdeaRead(BaseModel):
+    rank: int
+    idea: IdeaRead
+    weighted_score: float
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
+    rationale: list[str] = Field(default_factory=list)
+
+
+class IdeaRankingResponse(BaseModel):
+    ranked_ideas: list[RankedIdeaRead] = Field(default_factory=list)
+    message: str
+
+
 class ReviewRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

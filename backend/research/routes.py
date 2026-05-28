@@ -28,6 +28,8 @@ from backend.research.schemas import (
     GapMiningResponse,
     IdeaGenerationRequest,
     IdeaGenerationResponse,
+    IdeaRankingRequest,
+    IdeaRankingResponse,
     IdeaRefinementRequest,
     IdeaRefinementResponse,
     IdeaRead,
@@ -46,6 +48,7 @@ from backend.research.schemas import (
     PaperRead,
     PaperUploadResponse,
     ProjectStatus,
+    RankedIdeaRead,
     ResearchEdgeRead,
     ResearchGapRead,
     ResearchNodeRead,
@@ -60,6 +63,7 @@ from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.export_service import ExportService
 from backend.research.services.gap_service import GapService
 from backend.research.services.graph_service import GraphService
+from backend.research.services.idea_ranking_service import IdeaRankingService
 from backend.research.services.idea_refinement_service import IdeaRefinementService
 from backend.research.services.idea_service import IdeaService
 from backend.research.services.literature_search_service import LiteratureSearchService
@@ -98,6 +102,7 @@ def status() -> ProjectStatus:
             "idea_generation",
             "structured_idea_generation_adapter",
             "idea_refinement_loop",
+            "idea_ranking_portfolio",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -527,6 +532,35 @@ def generate_ideas_for_gap(
 @router.get("/ideas", response_model=list[IdeaRead])
 def list_ideas(session: Session = Depends(get_session)) -> list[IdeaRead]:
     return [_serialize_idea(idea) for idea in IdeaService(session).list_ideas()]
+
+
+@router.post("/ideas/rank", response_model=IdeaRankingResponse)
+def rank_ideas(
+    payload: IdeaRankingRequest,
+    session: Session = Depends(get_session),
+) -> IdeaRankingResponse:
+    ranked = IdeaRankingService(session).rank_ideas(
+        idea_ids=payload.idea_ids,
+        gap_ids=payload.gap_ids,
+        paper_ids=payload.paper_ids,
+        limit=payload.limit,
+        weights=payload.weights,
+        include_refined=payload.include_refined,
+        deduplicate_lineage=payload.deduplicate_lineage,
+    )
+    return IdeaRankingResponse(
+        ranked_ideas=[
+            RankedIdeaRead(
+                rank=item.rank,
+                idea=_serialize_idea(item.idea),
+                weighted_score=item.weighted_score,
+                score_breakdown=item.score_breakdown,
+                rationale=item.rationale,
+            )
+            for item in ranked
+        ],
+        message=f"Ranked {len(ranked)} ideas for research portfolio review.",
+    )
 
 
 @router.get("/ideas/{idea_id}", response_model=IdeaRead)

@@ -33,6 +33,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/workflows/literature-to-ideas/async" in script.text
     assert "/research/jobs/${jobId}/artifacts" in script.text
     assert "/research/ideas/${state.latestIdeaId}/refine" in script.text
+    assert "/research/ideas/rank" in script.text
 
 
 def test_upload_text_paper() -> None:
@@ -355,6 +356,70 @@ Future work should keep parent-child idea lineage for proposal iteration.
     edges = client.get("/research/graph/edges?edge_type=idea_refines_idea")
     assert edges.status_code == 200
     assert edges.json()
+
+
+def test_rank_ideas_deduplicates_lineage_and_returns_breakdown() -> None:
+    client = TestClient(create_app())
+    content = b"""Idea Ranking Test Paper
+
+Abstract
+This paper checks whether research ideas can be ranked for portfolio review.
+
+Introduction
+Researchers need to choose among several generated and revised ideas.
+
+Method
+The assistant should combine idea scores with novelty risk, evidence, and experiment readiness.
+
+Conclusion
+Future work should learn ranking weights from researcher feedback.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("idea_ranking_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    workflow = client.post(
+        "/research/workflows/literature-to-ideas",
+        json={
+            "paper_id": paper_id,
+            "max_gaps": 2,
+            "max_ideas_per_gap": 1,
+            "include_markdown_export": False,
+        },
+    )
+    assert workflow.status_code == 200
+    source_idea_id = workflow.json()["ideas"][0]["id"]
+
+    refined = client.post(
+        f"/research/ideas/{source_idea_id}/refine",
+        json={"focus": "rank the most publishable experiment-first variant"},
+    )
+    assert refined.status_code == 200
+    refined_idea_id = refined.json()["refined_idea"]["id"]
+
+    ranking = client.post(
+        "/research/ideas/rank",
+        json={
+            "paper_ids": [paper_id],
+            "limit": 5,
+            "deduplicate_lineage": True,
+        },
+    )
+    assert ranking.status_code == 200
+    body = ranking.json()
+    assert body["ranked_ideas"]
+    assert "Ranked" in body["message"]
+    scores = [item["weighted_score"] for item in body["ranked_ideas"]]
+    assert scores == sorted(scores, reverse=True)
+    ids = [item["idea"]["id"] for item in body["ranked_ideas"]]
+    assert refined_idea_id in ids
+    assert source_idea_id not in ids
+    assert body["ranked_ideas"][0]["rank"] == 1
+    assert "resource_efficiency" in body["ranked_ideas"][0]["score_breakdown"]
+    assert body["ranked_ideas"][0]["rationale"]
 
 
 def test_markdown_exports_for_card_and_idea_dossier() -> None:
