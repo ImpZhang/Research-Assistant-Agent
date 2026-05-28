@@ -654,6 +654,13 @@ updated_at
 - claim 太大但证据弱。
 - 完全依赖模型幻想。
 
+每个进入 shortlist 的 idea 应进一步生成 related-work matrix：
+
+- 列出最相似的本地 evidence、gap、idea 和 literature search 结果。
+- 说明 overlap score、shared terms、relevance 和 differentiator。
+- 记录 checked sources 和 missing searches，避免把未检索当作 novelty。
+- 支持 Markdown 导出，用于 proposal、组会和导师 review。
+
 ### 6.5.4 Idea 输出模板
 
 ```text

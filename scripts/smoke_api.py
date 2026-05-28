@@ -166,6 +166,29 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if f"- Parent Idea ID: `{source_idea_id}`" not in refined_markdown:
         raise RuntimeError("refined idea markdown did not include parent lineage")
+    related_work_matrix = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/related-work-matrix",
+            json_body={
+                "include_external": True,
+                "limit": 6,
+                "created_by": "smoke_api",
+            },
+        ),
+        "related work matrix",
+    )
+    related_work_markdown = require_ok(
+        client.get(
+            "/research/ideas/"
+            f"{refined_idea['id']}/related-work-matrices/"
+            f"{related_work_matrix['id']}/export/markdown"
+        ),
+        "related work matrix markdown",
+    )
+    if "# Related Work Matrix:" not in related_work_markdown:
+        raise RuntimeError("related work matrix markdown did not include the report title")
+    if not related_work_matrix["items"]:
+        raise RuntimeError("related work matrix did not include overlap rows")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -347,6 +370,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "artifact_markdown_chars": len(artifacts["markdown_export"]),
         "refined_idea_id": refined_idea["id"],
         "refined_idea_parent_id": refined_idea["parent_idea_id"],
+        "related_work_matrix_id": related_work_matrix["id"],
+        "related_work_item_count": len(related_work_matrix["items"]),
+        "related_work_markdown_chars": len(related_work_markdown),
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),

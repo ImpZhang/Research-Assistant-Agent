@@ -34,6 +34,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/jobs/${jobId}/artifacts" in script.text
     assert "/research/ideas/${state.latestIdeaId}/refine" in script.text
     assert "/research/ideas/${state.latestIdeaId}/feedback" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/related-work-matrix" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
     assert "/research/ideas/portfolios" in script.text
@@ -301,6 +302,67 @@ Future work should compare generated ideas against recent preprints.
     checks = client.get(f"/research/ideas/{idea_id}/novelty-checks")
     assert checks.status_code == 200
     assert checks.json()[0]["id"] == body["id"]
+
+
+def test_related_work_matrix_persists_overlap_rows_and_markdown() -> None:
+    client = TestClient(create_app())
+    content = b"""Related Work Matrix Test Paper
+
+Abstract
+Research assistants need a related work matrix that compares generated ideas with local evidence.
+
+Introduction
+The matrix should connect novelty claims, evidence grounded gaps, and literature search results.
+
+Limitations
+Current systems rarely preserve checked sources and missing search actions as durable artifacts.
+
+Conclusion
+Future research should export a traceable related work table for proposal writing.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("related_work_matrix_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+    gaps = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 1})
+    assert gaps.status_code == 200
+    gap_id = gaps.json()["gaps"][0]["id"]
+    ideas = client.post(f"/research/gaps/{gap_id}/ideas")
+    assert ideas.status_code == 200
+    idea_id = ideas.json()["ideas"][0]["id"]
+
+    matrix = client.post(
+        f"/research/ideas/{idea_id}/related-work-matrix",
+        json={"include_external": True, "limit": 5, "created_by": "pytest"},
+    )
+    assert matrix.status_code == 200
+    body = matrix.json()
+    assert body["idea_id"] == idea_id
+    assert body["status"] == "completed_related_work_screening"
+    assert body["items"]
+    assert body["differentiators"]
+    assert "local_literature_search" in body["checked_sources"]
+    assert "external_literature_search:disabled" in body["checked_sources"]
+    assert "external_literature_search_disabled" in body["missing_searches"]
+    assert "# Related Work Matrix:" in body["markdown_export"]
+    assert any(item["source_type"] == "literature" for item in body["items"])
+
+    matrices = client.get(f"/research/ideas/{idea_id}/related-work-matrices")
+    assert matrices.status_code == 200
+    assert matrices.json()[0]["id"] == body["id"]
+
+    fetched = client.get(f"/research/ideas/{idea_id}/related-work-matrices/{body['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["summary"] == body["summary"]
+
+    export = client.get(
+        f"/research/ideas/{idea_id}/related-work-matrices/{body['id']}/export/markdown"
+    )
+    assert export.status_code == 200
+    assert f"- Idea ID: `{idea_id}`" in export.text
+    assert "## Missing Searches" in export.text
 
 
 def test_refine_idea_creates_traceable_revision() -> None:

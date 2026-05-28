@@ -282,6 +282,40 @@ class IdeaPortfolioComparisonResponse(BaseModel):
     markdown_export: str = ""
 
 
+class RelatedWorkMatrixCreate(BaseModel):
+    include_external: bool = True
+    limit: int = 8
+    created_by: str = "system"
+
+
+class RelatedWorkMatrixItem(BaseModel):
+    source_type: str
+    source_id: str
+    title: str
+    overlap_score: float = 0.0
+    shared_terms: list[str] = Field(default_factory=list)
+    relevance: str = ""
+    differentiator: str = ""
+    url: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RelatedWorkMatrixRead(BaseModel):
+    id: str
+    idea_id: str
+    status: str
+    query: str
+    items: list[RelatedWorkMatrixItem] = Field(default_factory=list)
+    differentiators: list[str] = Field(default_factory=list)
+    missing_searches: list[str] = Field(default_factory=list)
+    checked_sources: list[str] = Field(default_factory=list)
+    summary: str = ""
+    markdown_export: str = ""
+    created_by: str = "system"
+    created_at: datetime
+    updated_at: datetime
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

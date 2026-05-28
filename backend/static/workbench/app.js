@@ -329,6 +329,32 @@ async function refineLatestIdea() {
   }
 }
 
+async function createRelatedWorkMatrix() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Building related work matrix...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/related-work-matrix`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        include_external: true,
+        limit: 8,
+        created_by: "workbench",
+      }),
+    });
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Saved related work matrix <code>${escapeHtml(body.id)}</code> with ${body.items.length} rows.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function rankIdeas() {
   renderResult("workflowResult", "Ranking idea portfolio...", "warn");
   try {
@@ -423,6 +449,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("refreshJobsButton").addEventListener("click", refreshJobs);
   $("loadDossierButton").addEventListener("click", loadDossier);
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
+  $("relatedWorkButton").addEventListener("click", createRelatedWorkMatrix);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);

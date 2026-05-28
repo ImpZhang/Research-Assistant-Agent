@@ -216,6 +216,22 @@ class IdeaFeedback(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="researcher")
 
 
+class RelatedWorkMatrix(Base, TimestampMixin):
+    __tablename__ = "related_work_matrices"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    status: Mapped[str] = mapped_column(String(64), default="completed", index=True)
+    query: Mapped[str] = mapped_column(Text, default="")
+    items_json: Mapped[list] = mapped_column(JSON, default=list)
+    differentiators_json: Mapped[list] = mapped_column(JSON, default=list)
+    missing_searches_json: Mapped[list] = mapped_column(JSON, default=list)
+    checked_sources_json: Mapped[list] = mapped_column(JSON, default=list)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="system")
+
+
 class IdeaPortfolioSnapshot(Base, TimestampMixin):
     __tablename__ = "idea_portfolio_snapshots"
 

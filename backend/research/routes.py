@@ -16,6 +16,7 @@ from backend.research.models import (
     Paper,
     PaperCard,
     PaperSection,
+    RelatedWorkMatrix,
     ResearchGap,
     Review,
 )
@@ -59,6 +60,8 @@ from backend.research.schemas import (
     PaperUploadResponse,
     ProjectStatus,
     RankedIdeaRead,
+    RelatedWorkMatrixCreate,
+    RelatedWorkMatrixRead,
     ResearchEdgeRead,
     ResearchGapRead,
     ResearchNodeRead,
@@ -87,6 +90,7 @@ from backend.research.services.portfolio_service import (
     render_idea_portfolio_markdown,
     render_snapshot_markdown,
 )
+from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
@@ -125,6 +129,7 @@ def status() -> ProjectStatus:
             "persisted_portfolio_snapshots",
             "portfolio_snapshot_comparison",
             "portfolio_execution_agenda",
+            "persisted_related_work_matrix",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -561,6 +566,24 @@ def _serialize_portfolio_snapshot(
     return IdeaPortfolioSnapshotRead(**payload)
 
 
+def _serialize_related_work_matrix(matrix: RelatedWorkMatrix) -> RelatedWorkMatrixRead:
+    return RelatedWorkMatrixRead(
+        id=matrix.id,
+        idea_id=matrix.idea_id,
+        status=matrix.status,
+        query=matrix.query,
+        items=matrix.items_json or [],
+        differentiators=matrix.differentiators_json or [],
+        missing_searches=matrix.missing_searches_json or [],
+        checked_sources=matrix.checked_sources_json or [],
+        summary=matrix.summary,
+        markdown_export=matrix.markdown_export or "",
+        created_by=matrix.created_by,
+        created_at=matrix.created_at,
+        updated_at=matrix.updated_at,
+    )
+
+
 @router.post("/ideas/generate", response_model=IdeaGenerationResponse)
 def generate_ideas(
     payload: IdeaGenerationRequest,
@@ -752,6 +775,68 @@ def get_idea(idea_id: str, session: Session = Depends(get_session)) -> IdeaRead:
     if idea is None:
         raise HTTPException(status_code=404, detail="Idea not found")
     return _serialize_idea(idea)
+
+
+@router.post("/ideas/{idea_id}/related-work-matrix", response_model=RelatedWorkMatrixRead)
+def create_related_work_matrix(
+    idea_id: str,
+    payload: RelatedWorkMatrixCreate,
+    session: Session = Depends(get_session),
+) -> RelatedWorkMatrixRead:
+    try:
+        matrix = RelatedWorkService(session).create_matrix(
+            idea_id,
+            include_external=payload.include_external,
+            limit=payload.limit,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return _serialize_related_work_matrix(matrix)
+
+
+@router.get("/ideas/{idea_id}/related-work-matrices", response_model=list[RelatedWorkMatrixRead])
+def list_related_work_matrices(
+    idea_id: str,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+) -> list[RelatedWorkMatrixRead]:
+    try:
+        matrices = RelatedWorkService(session).list_for_idea(idea_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_related_work_matrix(matrix) for matrix in matrices]
+
+
+@router.get(
+    "/ideas/{idea_id}/related-work-matrices/{matrix_id}",
+    response_model=RelatedWorkMatrixRead,
+)
+def get_related_work_matrix(
+    idea_id: str,
+    matrix_id: str,
+    session: Session = Depends(get_session),
+) -> RelatedWorkMatrixRead:
+    matrix = RelatedWorkService(session).get_matrix(idea_id, matrix_id)
+    if matrix is None:
+        raise HTTPException(status_code=404, detail="Related work matrix not found")
+    return _serialize_related_work_matrix(matrix)
+
+
+@router.get(
+    "/ideas/{idea_id}/related-work-matrices/{matrix_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_related_work_matrix_markdown(
+    idea_id: str,
+    matrix_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    matrix = RelatedWorkService(session).get_matrix(idea_id, matrix_id)
+    if matrix is None:
+        raise HTTPException(status_code=404, detail="Related work matrix not found")
+    return PlainTextResponse(matrix.markdown_export or "", media_type="text/markdown")
 
 
 @router.post("/ideas/{idea_id}/feedback", response_model=IdeaFeedbackRead)
