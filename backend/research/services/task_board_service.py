@@ -3,6 +3,8 @@ from collections import Counter
 from sqlalchemy.orm import Session
 
 from backend.research.models import ResearchTask, TaskBoardSnapshot
+from backend.research.services.artifact_graph_service import ArtifactGraphService
+from backend.research.services.graph_service import GraphService
 
 
 class TaskBoardService:
@@ -33,6 +35,8 @@ class TaskBoardService:
         self.session.add(snapshot)
         self.session.commit()
         self.session.refresh(snapshot)
+        ArtifactGraphService(GraphService(self.session)).link_task_board_snapshot(snapshot, tasks)
+        self.session.commit()
         return snapshot
 
     def list_snapshots(self, limit: int = 50) -> list[TaskBoardSnapshot]:

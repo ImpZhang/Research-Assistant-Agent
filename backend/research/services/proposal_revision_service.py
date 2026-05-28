@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 
 from backend.research.models import ProposalDraft, ProposalReview, ProposalRevision
+from backend.research.services.artifact_graph_service import ArtifactGraphService
+from backend.research.services.graph_service import GraphService
 
 
 class ProposalRevisionService:
@@ -40,6 +42,8 @@ class ProposalRevisionService:
         self.session.add(revision)
         self.session.commit()
         self.session.refresh(revision)
+        ArtifactGraphService(GraphService(self.session)).link_proposal_revision(revision)
+        self.session.commit()
         return revision
 
     def list_for_draft(self, proposal_draft_id: str, limit: int = 20) -> list[ProposalRevision]:

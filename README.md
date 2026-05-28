@@ -56,6 +56,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Proposal revision artifacts that turn readiness-review actions into a revised proposal checkpoint.
 - Research task backlog generation from proposal revisions, with task listing and status updates.
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.
+- GraphRAG-lite links for proposal drafts, reviews, revisions, research tasks, and task board snapshots.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.

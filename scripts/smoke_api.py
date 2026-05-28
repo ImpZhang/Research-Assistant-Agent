@@ -300,6 +300,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "## Next Actions" not in task_snapshot_markdown:
         raise RuntimeError("task board snapshot markdown did not include next actions")
+    proposal_graph_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=proposal_revision_creates_task"),
+        "proposal task graph edges",
+    )
+    if not proposal_graph_edges:
+        raise RuntimeError("proposal revision task graph edges were not created")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -497,6 +503,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "task_snapshot_id": task_snapshot["id"],
         "task_snapshot_task_count": task_snapshot["summary"]["task_count"],
         "task_snapshot_markdown_chars": len(task_snapshot_markdown),
+        "proposal_task_graph_edge_count": len(proposal_graph_edges),
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),

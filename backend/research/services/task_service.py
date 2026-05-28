@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 
 from backend.research.models import ProposalRevision, ResearchTask
+from backend.research.services.artifact_graph_service import ArtifactGraphService
+from backend.research.services.graph_service import GraphService
 
 
 class ResearchTaskService:
@@ -67,6 +69,8 @@ class ResearchTaskService:
         self.session.commit()
         for task in tasks:
             self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_research_tasks(revision, tasks)
+        self.session.commit()
         return tasks
 
     def list_tasks(

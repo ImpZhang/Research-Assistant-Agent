@@ -3,6 +3,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from backend.research.models import ExperimentPlan, Idea, ProposalDraft, RelatedWorkMatrix
+from backend.research.services.artifact_graph_service import ArtifactGraphService
+from backend.research.services.graph_service import GraphService
 
 
 class ProposalDraftService:
@@ -56,6 +58,8 @@ class ProposalDraftService:
         self.session.add(draft)
         self.session.commit()
         self.session.refresh(draft)
+        ArtifactGraphService(GraphService(self.session)).link_proposal_draft(draft)
+        self.session.commit()
         return draft
 
     def list_for_idea(self, idea_id: str, limit: int = 20) -> list[ProposalDraft]:

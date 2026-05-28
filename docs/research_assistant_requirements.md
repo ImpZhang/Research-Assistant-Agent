@@ -692,6 +692,13 @@ proposal revision 之后需要进入 task backlog：
 - 支持 Markdown 导出，用于组会汇报或个人周报。
 - 后续可接提醒、MCP task 工具或自动执行器。
 
+proposal、review、revision、task 和 task snapshot 都需要进入 GraphRAG-lite：
+
+- idea 可以追踪到 proposal draft。
+- proposal draft 可以追踪到 review 和 revision。
+- revision 可以追踪到 research tasks。
+- task snapshot 可以追踪到当时的任务集合。
+
 ### 6.5.4 Idea 输出模板
 
 ```text

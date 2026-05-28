@@ -543,6 +543,18 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert snapshot_export.status_code == 200
     assert "## Next Actions" in snapshot_export.text
 
+    graph_edge_types = [
+        "idea_has_proposal_draft",
+        "proposal_review_reviews_draft",
+        "proposal_revision_addresses_review",
+        "proposal_revision_creates_task",
+        "task_board_snapshot_tracks_task",
+    ]
+    for edge_type in graph_edge_types:
+        edges = client.get(f"/research/graph/edges?edge_type={edge_type}")
+        assert edges.status_code == 200
+        assert edges.json()
+
 
 def test_refine_idea_creates_traceable_revision() -> None:
     client = TestClient(create_app())
