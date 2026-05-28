@@ -322,6 +322,20 @@ class ResearchTask(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="system")
 
 
+class TaskBoardSnapshot(Base, TimestampMixin):
+    __tablename__ = "task_board_snapshots"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    title: Mapped[str] = mapped_column(String(512), default="Research Task Board")
+    idea_id: Mapped[str | None] = mapped_column(ForeignKey("ideas.id"), nullable=True, index=True)
+    owner_type: Mapped[str] = mapped_column(String(128), default="")
+    status_filter_json: Mapped[list] = mapped_column(JSON, default=list)
+    task_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    summary_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="system")
+
+
 class IdeaPortfolioSnapshot(Base, TimestampMixin):
     __tablename__ = "idea_portfolio_snapshots"
 

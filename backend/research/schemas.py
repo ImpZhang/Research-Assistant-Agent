@@ -424,6 +424,32 @@ class ResearchTaskGenerationResponse(BaseModel):
     message: str
 
 
+class TaskBoardSnapshotCreate(BaseModel):
+    title: str = "Research Task Board"
+    idea_id: str | None = None
+    owner_type: str = ""
+    statuses: list[str] = Field(default_factory=list)
+    created_by: str = "system"
+
+
+class TaskBoardSnapshotRead(BaseModel):
+    id: str
+    title: str
+    idea_id: str | None = None
+    owner_type: str = ""
+    status_filter: list[str] = Field(default_factory=list)
+    task_ids: list[str] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+    markdown_export_chars: int = 0
+    created_by: str = "system"
+    created_at: datetime
+    updated_at: datetime
+
+
+class TaskBoardSnapshotDetail(TaskBoardSnapshotRead):
+    markdown_export: str = ""
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

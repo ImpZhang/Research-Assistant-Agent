@@ -39,6 +39,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/proposal-drafts/${state.latestProposalDraftId}/review" in script.text
     assert "/proposal-drafts/${state.latestProposalDraftId}/revise" in script.text
     assert "/revisions/${state.latestProposalRevisionId}/tasks" in script.text
+    assert "/research/tasks/snapshots" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
     assert "/research/ideas/portfolios" in script.text
@@ -518,6 +519,29 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert updated_task.status_code == 200
     assert updated_task.json()["status"] == "doing"
     assert updated_task.json()["priority"] == "critical"
+
+    snapshot = client.post(
+        "/research/tasks/snapshots",
+        json={
+            "title": "Pytest Research Task Board",
+            "idea_id": idea_id,
+            "owner_type": "proposal_revision",
+            "created_by": "pytest",
+        },
+    )
+    assert snapshot.status_code == 200
+    snapshot_body = snapshot.json()
+    assert task_id in snapshot_body["task_ids"]
+    assert snapshot_body["summary"]["task_count"] >= len(task_body["tasks"])
+    assert "# Pytest Research Task Board" in snapshot_body["markdown_export"]
+
+    fetched_snapshot = client.get(f"/research/tasks/snapshots/{snapshot_body['id']}")
+    assert fetched_snapshot.status_code == 200
+    assert fetched_snapshot.json()["id"] == snapshot_body["id"]
+
+    snapshot_export = client.get(f"/research/tasks/snapshots/{snapshot_body['id']}/export/markdown")
+    assert snapshot_export.status_code == 200
+    assert "## Next Actions" in snapshot_export.text
 
 
 def test_refine_idea_creates_traceable_revision() -> None:

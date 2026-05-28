@@ -55,6 +55,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Proposal readiness reviews with advisor-style scores, concerns, required revisions, and missing evidence.
 - Proposal revision artifacts that turn readiness-review actions into a revised proposal checkpoint.
 - Research task backlog generation from proposal revisions, with task listing and status updates.
+- Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
@@ -160,7 +161,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, and task backlog, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -202,6 +203,10 @@ POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id
 GET  /research/tasks
 GET  /research/tasks/{task_id}
 PATCH /research/tasks/{task_id}
+POST /research/tasks/snapshots
+GET  /research/tasks/snapshots
+GET  /research/tasks/snapshots/{snapshot_id}
+GET  /research/tasks/snapshots/{snapshot_id}/export/markdown
 POST /research/ideas/rank
 POST /research/ideas/rank/export/markdown
 POST /research/ideas/portfolios

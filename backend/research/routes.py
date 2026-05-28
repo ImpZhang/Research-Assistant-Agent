@@ -23,6 +23,7 @@ from backend.research.models import (
     ResearchGap,
     Review,
     ResearchTask,
+    TaskBoardSnapshot,
 )
 from backend.research.schemas import (
     ContextSearchRequest,
@@ -83,6 +84,9 @@ from backend.research.schemas import (
     ScoredEvidenceRead,
     ScoredIdeaRead,
     ScoredResearchGapRead,
+    TaskBoardSnapshotCreate,
+    TaskBoardSnapshotDetail,
+    TaskBoardSnapshotRead,
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.embedding_service import EmbeddingService
@@ -113,6 +117,7 @@ from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
 from backend.research.services.structured_idea_service import StructuredIdeaService
 from backend.research.services.task_service import ResearchTaskService
+from backend.research.services.task_board_service import TaskBoardService
 from backend.research.services.workflow_service import (
     WorkflowService,
     run_literature_to_ideas_job_background,
@@ -152,6 +157,7 @@ def status() -> ProjectStatus:
             "proposal_readiness_review",
             "proposal_revision_loop",
             "research_task_backlog",
+            "task_board_snapshots",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -688,6 +694,32 @@ def _serialize_research_task(task: ResearchTask) -> ResearchTaskRead:
     )
 
 
+def _serialize_task_board_snapshot(
+    snapshot: TaskBoardSnapshot,
+    *,
+    include_markdown: bool = False,
+) -> TaskBoardSnapshotRead | TaskBoardSnapshotDetail:
+    payload = {
+        "id": snapshot.id,
+        "title": snapshot.title,
+        "idea_id": snapshot.idea_id,
+        "owner_type": snapshot.owner_type,
+        "status_filter": snapshot.status_filter_json or [],
+        "task_ids": snapshot.task_ids_json or [],
+        "summary": snapshot.summary_json or {},
+        "markdown_export_chars": len(snapshot.markdown_export or ""),
+        "created_by": snapshot.created_by,
+        "created_at": snapshot.created_at,
+        "updated_at": snapshot.updated_at,
+    }
+    if include_markdown:
+        return TaskBoardSnapshotDetail(
+            **payload,
+            markdown_export=snapshot.markdown_export or "",
+        )
+    return TaskBoardSnapshotRead(**payload)
+
+
 @router.post("/ideas/generate", response_model=IdeaGenerationResponse)
 def generate_ideas(
     payload: IdeaGenerationRequest,
@@ -1205,6 +1237,55 @@ def list_research_tasks(
         limit=limit,
     )
     return [_serialize_research_task(task) for task in tasks]
+
+
+@router.post("/tasks/snapshots", response_model=TaskBoardSnapshotDetail)
+def create_task_board_snapshot(
+    payload: TaskBoardSnapshotCreate,
+    session: Session = Depends(get_session),
+) -> TaskBoardSnapshotDetail:
+    snapshot = TaskBoardService(session).create_snapshot(
+        title=payload.title,
+        idea_id=payload.idea_id,
+        owner_type=payload.owner_type,
+        statuses=payload.statuses,
+        created_by=payload.created_by,
+    )
+    return _serialize_task_board_snapshot(snapshot, include_markdown=True)
+
+
+@router.get("/tasks/snapshots", response_model=list[TaskBoardSnapshotRead])
+def list_task_board_snapshots(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[TaskBoardSnapshotRead]:
+    snapshots = TaskBoardService(session).list_snapshots(limit)
+    return [_serialize_task_board_snapshot(snapshot) for snapshot in snapshots]
+
+
+@router.get("/tasks/snapshots/{snapshot_id}", response_model=TaskBoardSnapshotDetail)
+def get_task_board_snapshot(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> TaskBoardSnapshotDetail:
+    snapshot = TaskBoardService(session).get_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Task board snapshot not found")
+    return _serialize_task_board_snapshot(snapshot, include_markdown=True)
+
+
+@router.get(
+    "/tasks/snapshots/{snapshot_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_task_board_snapshot_markdown(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    snapshot = TaskBoardService(session).get_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Task board snapshot not found")
+    return PlainTextResponse(snapshot.markdown_export or "", media_type="text/markdown")
 
 
 @router.get("/tasks/{task_id}", response_model=ResearchTaskRead)

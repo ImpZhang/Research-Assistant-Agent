@@ -282,6 +282,24 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if updated_task["status"] != "doing":
         raise RuntimeError("research task update did not persist status")
+    task_snapshot = require_ok(
+        client.post(
+            "/research/tasks/snapshots",
+            json_body={
+                "title": "Smoke Research Task Board",
+                "idea_id": refined_idea["id"],
+                "owner_type": "proposal_revision",
+                "created_by": "smoke_api",
+            },
+        ),
+        "task board snapshot",
+    )
+    task_snapshot_markdown = require_ok(
+        client.get(f"/research/tasks/snapshots/{task_snapshot['id']}/export/markdown"),
+        "task board snapshot markdown",
+    )
+    if "## Next Actions" not in task_snapshot_markdown:
+        raise RuntimeError("task board snapshot markdown did not include next actions")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -476,6 +494,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "proposal_revision_markdown_chars": len(proposal_revision_markdown),
         "task_backlog_count": len(task_backlog["tasks"]),
         "updated_task_status": updated_task["status"],
+        "task_snapshot_id": task_snapshot["id"],
+        "task_snapshot_task_count": task_snapshot["summary"]["task_count"],
+        "task_snapshot_markdown_chars": len(task_snapshot_markdown),
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),

@@ -686,6 +686,12 @@ proposal revision 之后需要进入 task backlog：
 - 每个任务需要 status、priority、due phase、source id 和 owner id。
 - 支持查询、推进状态和后续看板扩展。
 
+任务需要支持 board snapshot：
+
+- 固化某一时刻的 task ids、status summary、priority summary 和 next actions。
+- 支持 Markdown 导出，用于组会汇报或个人周报。
+- 后续可接提醒、MCP task 工具或自动执行器。
+
 ### 6.5.4 Idea 输出模板
 
 ```text

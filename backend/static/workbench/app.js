@@ -6,6 +6,7 @@ const state = {
   latestProposalReviewId: "",
   latestProposalRevisionId: "",
   latestTaskIds: [],
+  latestTaskSnapshotId: "",
   pollTimer: null,
 };
 
@@ -353,6 +354,7 @@ async function createRelatedWorkMatrix() {
     state.latestProposalReviewId = "";
     state.latestProposalRevisionId = "";
     state.latestTaskIds = [];
+    state.latestTaskSnapshotId = "";
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "workflowResult",
@@ -473,6 +475,31 @@ async function createTaskBacklog() {
   }
 }
 
+async function saveTaskSnapshot() {
+  renderResult("workflowResult", "Saving task board snapshot...", "warn");
+  try {
+    const body = await api("/research/tasks/snapshots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Workbench Research Task Board",
+        idea_id: state.latestIdeaId || null,
+        owner_type: "proposal_revision",
+        statuses: [],
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskSnapshotId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Saved task snapshot <code>${escapeHtml(body.id)}</code> with ${body.task_ids.length} tasks.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function rankIdeas() {
   renderResult("workflowResult", "Ranking idea portfolio...", "warn");
   try {
@@ -572,6 +599,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("proposalReviewButton").addEventListener("click", reviewProposalDraft);
   $("proposalRevisionButton").addEventListener("click", reviseProposalDraft);
   $("taskBacklogButton").addEventListener("click", createTaskBacklog);
+  $("taskSnapshotButton").addEventListener("click", saveTaskSnapshot);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);
