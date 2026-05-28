@@ -4,7 +4,19 @@ from sqlalchemy.orm import Session
 
 from backend.research.config import settings
 from backend.research.db import get_session
-from backend.research.models import Chunk, Evidence, Job, Paper, PaperSection
+from backend.research.models import (
+    Chunk,
+    Evidence,
+    ExperimentPlan,
+    Idea,
+    Job,
+    NoveltyCheck,
+    Paper,
+    PaperCard,
+    PaperSection,
+    ResearchGap,
+    Review,
+)
 from backend.research.schemas import (
     ContextSearchRequest,
     ContextSearchResponse,
@@ -18,6 +30,7 @@ from backend.research.schemas import (
     IdeaGenerationResponse,
     IdeaRead,
     IdeaScore,
+    JobArtifactsResponse,
     JobRead,
     LiteratureSearchRequest,
     LiteratureSearchResponse,
@@ -88,6 +101,7 @@ def status() -> ProjectStatus:
             "literature_to_ideas_workflow",
             "async_literature_to_ideas_workflow",
             "workflow_job_trace",
+            "workflow_job_artifact_snapshot",
             "literature_search_adapter",
             "local_embedding_index",
             "embedding_backed_context_retrieval",
@@ -102,7 +116,6 @@ def status() -> ProjectStatus:
             "external_embedding_provider",
             "learned_reranking",
             "external_novelty_search",
-            "frontend_research_workbench",
             "mcp_tool_bridge",
         ],
     )
@@ -120,6 +133,39 @@ def _serialize_job(job: Job) -> JobRead:
     )
 
 
+def _serialize_paper(paper: Paper) -> PaperRead:
+    return PaperRead(
+        id=paper.id,
+        title=paper.title,
+        authors=paper.authors_json or [],
+        year=paper.year,
+        venue=paper.venue,
+        filename=paper.filename,
+        domain=paper.domain,
+        task=paper.task,
+        status=paper.status,
+        created_at=paper.created_at,
+        updated_at=paper.updated_at,
+    )
+
+
+def _load_ordered_by_ids(session: Session, model, ids: list[str]) -> list:
+    if not ids:
+        return []
+    records = session.query(model).filter(model.id.in_(ids)).all()
+    by_id = {record.id: record for record in records}
+    return [by_id[record_id] for record_id in ids if record_id in by_id]
+
+
+def _render_idea_bundle_markdown(session: Session, ideas: list[Idea]) -> str:
+    if not ideas:
+        return ""
+
+    export_service = ExportService(session)
+    sections = [export_service.render_idea_markdown(idea.id).strip() for idea in ideas]
+    return "\n---\n\n".join(section for section in sections if section) + "\n"
+
+
 @router.get("/jobs", response_model=list[JobRead])
 def list_jobs(limit: int = 50, session: Session = Depends(get_session)) -> list[JobRead]:
     limit = max(1, min(limit, 200))
@@ -133,6 +179,54 @@ def get_job(job_id: str, session: Session = Depends(get_session)) -> JobRead:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return _serialize_job(job)
+
+
+@router.get("/jobs/{job_id}/artifacts", response_model=JobArtifactsResponse)
+def get_job_artifacts(
+    job_id: str,
+    session: Session = Depends(get_session),
+) -> JobArtifactsResponse:
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    output = job.output_json or {}
+    input_payload = job.input_json or {}
+    paper_id = output.get("paper_id") or input_payload.get("paper_id") or ""
+    paper = session.get(Paper, paper_id) if paper_id else None
+    card = session.get(PaperCard, output.get("card_id")) if output.get("card_id") else None
+    gaps = _load_ordered_by_ids(session, ResearchGap, output.get("gap_ids") or [])
+    ideas = _load_ordered_by_ids(session, Idea, output.get("idea_ids") or [])
+    novelty_checks = _load_ordered_by_ids(
+        session,
+        NoveltyCheck,
+        output.get("novelty_check_ids") or [],
+    )
+    reviews = _load_ordered_by_ids(session, Review, output.get("review_ids") or [])
+    experiment_plans = _load_ordered_by_ids(
+        session,
+        ExperimentPlan,
+        output.get("experiment_plan_ids") or [],
+    )
+    markdown_export = _render_idea_bundle_markdown(session, ideas)
+
+    return JobArtifactsResponse(
+        job=_serialize_job(job),
+        paper=_serialize_paper(paper) if paper else None,
+        card=_serialize_card(card) if card else None,
+        gaps=[_serialize_gap(gap) for gap in gaps],
+        ideas=[_serialize_idea(idea) for idea in ideas],
+        novelty_checks=[_serialize_novelty_check(check) for check in novelty_checks],
+        reviews=[_serialize_review(review) for review in reviews],
+        experiment_plans=[_serialize_experiment_plan(plan) for plan in experiment_plans],
+        markdown_export=markdown_export,
+        message=(
+            f"Loaded artifact snapshot for job {job.id}: "
+            f"{len(gaps)} gaps, {len(ideas)} ideas, "
+            f"{len(novelty_checks)} novelty checks, {len(reviews)} reviews, "
+            f"{len(experiment_plans)} experiment plans."
+        ),
+    )
 
 
 @router.post("/literature/search", response_model=LiteratureSearchResponse)
@@ -174,22 +268,7 @@ def rebuild_embeddings(
 @router.get("/papers", response_model=list[PaperRead])
 def list_papers(session: Session = Depends(get_session)) -> list[PaperRead]:
     papers = PaperService(session).list_papers()
-    return [
-        PaperRead(
-            id=paper.id,
-            title=paper.title,
-            authors=paper.authors_json or [],
-            year=paper.year,
-            venue=paper.venue,
-            filename=paper.filename,
-            domain=paper.domain,
-            task=paper.task,
-            status=paper.status,
-            created_at=paper.created_at,
-            updated_at=paper.updated_at,
-        )
-        for paper in papers
-    ]
+    return [_serialize_paper(paper) for paper in papers]
 
 
 @router.get("/papers/{paper_id}", response_model=PaperDetail)
@@ -199,17 +278,7 @@ def get_paper(paper_id: str, session: Session = Depends(get_session)) -> PaperDe
         raise HTTPException(status_code=404, detail="Paper not found")
 
     return PaperDetail(
-        id=paper.id,
-        title=paper.title,
-        authors=paper.authors_json or [],
-        year=paper.year,
-        venue=paper.venue,
-        filename=paper.filename,
-        domain=paper.domain,
-        task=paper.task,
-        status=paper.status,
-        created_at=paper.created_at,
-        updated_at=paper.updated_at,
+        **_serialize_paper(paper).model_dump(),
         section_count=session.query(PaperSection).filter(PaperSection.paper_id == paper_id).count(),
         chunk_count=session.query(Chunk).filter(Chunk.paper_id == paper_id).count(),
         evidence_count=session.query(Evidence).filter(Evidence.paper_id == paper_id).count(),
@@ -219,19 +288,7 @@ def get_paper(paper_id: str, session: Session = Depends(get_session)) -> PaperDe
 @router.post("/papers", response_model=PaperRead)
 def create_paper(payload: PaperCreate, session: Session = Depends(get_session)) -> PaperRead:
     paper = PaperService(session).create_paper(payload)
-    return PaperRead(
-        id=paper.id,
-        title=paper.title,
-        authors=paper.authors_json or [],
-        year=paper.year,
-        venue=paper.venue,
-        filename=paper.filename,
-        domain=paper.domain,
-        task=paper.task,
-        status=paper.status,
-        created_at=paper.created_at,
-        updated_at=paper.updated_at,
-    )
+    return _serialize_paper(paper)
 
 
 @router.post("/papers/upload", response_model=PaperUploadResponse)
@@ -246,19 +303,7 @@ async def upload_paper(
 
     paper = result.paper
     return PaperUploadResponse(
-        paper=PaperRead(
-            id=paper.id,
-            title=paper.title,
-            authors=paper.authors_json or [],
-            year=paper.year,
-            venue=paper.venue,
-            filename=paper.filename,
-            domain=paper.domain,
-            task=paper.task,
-            status=paper.status,
-            created_at=paper.created_at,
-            updated_at=paper.updated_at,
-        ),
+        paper=_serialize_paper(paper),
         section_count=result.section_count,
         chunk_count=result.chunk_count,
         evidence_count=result.evidence_count,
@@ -302,7 +347,9 @@ def _serialize_card(card) -> PaperCardRead:
         payload=PaperCardPayload(
             problem=card.problem_json.get("items", []) if card.problem_json else [],
             motivation=card.motivation_json.get("items", []) if card.motivation_json else [],
-            contributions=card.contributions_json.get("items", []) if card.contributions_json else [],
+            contributions=card.contributions_json.get("items", [])
+            if card.contributions_json
+            else [],
             method=card.method_json.get("items", []) if card.method_json else [],
             datasets=card.datasets_json.get("items", []) if card.datasets_json else [],
             metrics=card.metrics_json.get("items", []) if card.metrics_json else [],
@@ -576,7 +623,10 @@ def review_idea(idea_id: str, session: Session = Depends(get_session)) -> Review
 def list_idea_reviews(idea_id: str, session: Session = Depends(get_session)) -> list[ReviewRead]:
     if IdeaService(session).get_idea(idea_id) is None:
         raise HTTPException(status_code=404, detail="Idea not found")
-    return [_serialize_review(review) for review in ReviewService(session).list_reviews_for_idea(idea_id)]
+    return [
+        _serialize_review(review)
+        for review in ReviewService(session).list_reviews_for_idea(idea_id)
+    ]
 
 
 def _serialize_experiment_plan(plan) -> ExperimentPlanRead:
@@ -650,19 +700,7 @@ def run_literature_to_ideas_workflow(
     paper = result.paper
     return LiteratureToIdeasWorkflowResponse(
         job_id=result.job.id,
-        paper=PaperRead(
-            id=paper.id,
-            title=paper.title,
-            authors=paper.authors_json or [],
-            year=paper.year,
-            venue=paper.venue,
-            filename=paper.filename,
-            domain=paper.domain,
-            task=paper.task,
-            status=paper.status,
-            created_at=paper.created_at,
-            updated_at=paper.updated_at,
-        ),
+        paper=_serialize_paper(paper),
         card=_serialize_card(result.card),
         gaps=[_serialize_gap(gap) for gap in result.gaps],
         ideas=[_serialize_idea(idea) for idea in result.ideas],

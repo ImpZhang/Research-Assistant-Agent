@@ -141,6 +141,9 @@ async function pollJob(jobId) {
     if (job.status === "completed" || job.status === "failed") {
       clearInterval(state.pollTimer);
       state.pollTimer = null;
+      if (job.status === "completed") {
+        await loadJobArtifacts(jobId);
+      }
       await refreshJobs();
     }
   } catch (error) {
@@ -159,6 +162,32 @@ function renderJobOutput(output) {
   if (output.novelty_check_ids) parts.push(`${output.novelty_check_ids.length} novelty checks`);
   if (output.experiment_plan_ids) parts.push(`${output.experiment_plan_ids.length} plans`);
   return parts.length ? parts.join(", ") : escapeHtml(JSON.stringify(output));
+}
+
+async function loadJobArtifacts(jobId) {
+  const artifacts = await api(`/research/jobs/${jobId}/artifacts`);
+  if (artifacts.ideas && artifacts.ideas.length) {
+    state.latestIdeaId = artifacts.ideas[0].id;
+  }
+  if (artifacts.markdown_export) {
+    $("dossierPreview").textContent = artifacts.markdown_export;
+  }
+  renderResult(
+    "workflowResult",
+    `Job <code>${escapeHtml(jobId)}</code> completed.<br />${renderArtifactsSummary(artifacts)}`,
+  );
+  return artifacts;
+}
+
+function renderArtifactsSummary(artifacts) {
+  const parts = [
+    `${artifacts.gaps.length} gaps`,
+    `${artifacts.ideas.length} ideas`,
+    `${artifacts.novelty_checks.length} novelty checks`,
+    `${artifacts.reviews.length} reviews`,
+    `${artifacts.experiment_plans.length} plans`,
+  ];
+  return `${escapeHtml(artifacts.message)}<br />${parts.join(", ")}`;
 }
 
 async function searchContext(event) {
@@ -253,6 +282,15 @@ async function refreshJobs() {
 }
 
 async function loadDossier() {
+  if (state.jobId) {
+    try {
+      await loadJobArtifacts(state.jobId);
+      return;
+    } catch (error) {
+      $("dossierPreview").textContent = error.message;
+      return;
+    }
+  }
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
     return;

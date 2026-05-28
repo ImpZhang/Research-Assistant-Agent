@@ -27,6 +27,7 @@ It runs the full synchronous workflow and writes a job trace that can be fetched
 
 ```http
 GET /research/jobs/{job_id}
+GET /research/jobs/{job_id}/artifacts
 GET /research/jobs
 ```
 
@@ -58,6 +59,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Query-time lexical/vector context retrieval over evidence, gaps, ideas, and graph neighborhoods.
 - Synchronous workflow job trace with input, output, status, progress, and errors.
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
+- Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.
 - Browser workbench for upload, workflow launch, job tracking, search, and dossier preview.
 - End-to-end smoke test covering the current research workflow.
 
@@ -147,6 +149,7 @@ uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
 The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, performs context search, and checks graph endpoints.
+It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
 
@@ -174,6 +177,7 @@ GET  /research/graph/edges
 POST /research/workflows/literature-to-ideas
 POST /research/workflows/literature-to-ideas/async
 GET  /research/jobs/{job_id}
+GET  /research/jobs/{job_id}/artifacts
 GET  /workbench
 ```
 

@@ -942,8 +942,11 @@ POST /research/experiment-plans/{plan_id}/export
 
 ```text
 GET /research/jobs/{job_id}
+GET /research/jobs/{job_id}/artifacts
 GET /research/jobs
 ```
+
+`/artifacts` 根据 job output 中保存的产物 id 重新水合完整结果，返回 paper、paper card、gaps、ideas、novelty checks、reviews、experiment plans 和按 idea 重新渲染的 Markdown dossier。它是前端工作台和后续 MCP tool 的主要读取入口，避免客户端逐个调用多个资源接口后再自己拼装状态。
 
 ## 12. Model Layer 设计
 
@@ -1276,6 +1279,7 @@ MCP 用于外部系统连接，不用于第一阶段内部工作流。
 - FastAPI BackgroundTasks。
 - jobs 表记录状态。
 - 前端轮询 `/research/jobs/{job_id}`。
+- job 完成后前端调用 `/research/jobs/{job_id}/artifacts` 获取完整产物快照和 Markdown dossier。
 
 适合任务：
 

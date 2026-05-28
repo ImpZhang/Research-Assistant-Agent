@@ -61,7 +61,9 @@ class InProcessClient:
         response = self.client.get(path)
         return ResponseAdapter(response.status_code, decode_response_body(response))
 
-    def post(self, path: str, *, json_body: dict | None = None, files: dict | None = None) -> ResponseAdapter:
+    def post(
+        self, path: str, *, json_body: dict | None = None, files: dict | None = None
+    ) -> ResponseAdapter:
         response = self.client.post(path, json=json_body, files=files)
         return ResponseAdapter(response.status_code, decode_response_body(response))
 
@@ -74,7 +76,9 @@ class HttpClient:
         response = requests.get(f"{self.base_url}{path}", timeout=20)
         return ResponseAdapter(response.status_code, decode_response_body(response))
 
-    def post(self, path: str, *, json_body: dict | None = None, files: dict | None = None) -> ResponseAdapter:
+    def post(
+        self, path: str, *, json_body: dict | None = None, files: dict | None = None
+    ) -> ResponseAdapter:
         response = requests.post(f"{self.base_url}{path}", json=json_body, files=files, timeout=30)
         return ResponseAdapter(response.status_code, decode_response_body(response))
 
@@ -137,6 +141,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workflow returned no novelty checks")
     first_novelty_check = workflow["novelty_checks"][0]
     job = require_ok(client.get(f"/research/jobs/{workflow['job_id']}"), "workflow job trace")
+    artifacts = require_ok(
+        client.get(f"/research/jobs/{workflow['job_id']}/artifacts"),
+        "workflow job artifacts",
+    )
+    if len(artifacts["ideas"]) != len(workflow["ideas"]):
+        raise RuntimeError("job artifact snapshot did not include all workflow ideas")
+    if "# Research Idea Dossier:" not in artifacts["markdown_export"]:
+        raise RuntimeError("job artifact snapshot did not render dossier markdown")
     async_job = require_ok(
         client.post(
             "/research/workflows/literature-to-ideas/async",
@@ -195,6 +207,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "literature_external_status": literature["external_status"],
         "workflow_job_id": workflow["job_id"],
         "workflow_job_status": job["status"],
+        "artifact_idea_count": len(artifacts["ideas"]),
+        "artifact_markdown_chars": len(artifacts["markdown_export"]),
         "async_workflow_job_id": async_job["id"],
         "async_workflow_job_status": async_job_status["status"],
         "card_id": workflow["card"]["id"],

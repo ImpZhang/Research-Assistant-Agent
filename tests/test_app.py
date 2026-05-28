@@ -31,6 +31,7 @@ def test_workbench_static_assets_are_served() -> None:
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
     assert "/research/workflows/literature-to-ideas/async" in script.text
+    assert "/research/jobs/${jobId}/artifacts" in script.text
 
 
 def test_upload_text_paper() -> None:
@@ -408,6 +409,20 @@ Future work should connect the workflow to front-end actions and MCP tools.
     assert job_body["progress"] == 1.0
     assert job_body["output"]["paper_id"] == paper_id
     assert len(job_body["output"]["idea_ids"]) == len(body["ideas"])
+
+    artifacts = client.get(f"/research/jobs/{body['job_id']}/artifacts")
+    assert artifacts.status_code == 200
+    artifact_body = artifacts.json()
+    assert artifact_body["job"]["id"] == body["job_id"]
+    assert artifact_body["paper"]["id"] == paper_id
+    assert artifact_body["card"]["id"] == body["card"]["id"]
+    assert len(artifact_body["gaps"]) == len(body["gaps"])
+    assert len(artifact_body["ideas"]) == len(body["ideas"])
+    assert len(artifact_body["novelty_checks"]) == len(body["novelty_checks"])
+    assert len(artifact_body["reviews"]) == len(body["reviews"])
+    assert len(artifact_body["experiment_plans"]) == len(body["experiment_plans"])
+    assert "# Research Idea Dossier:" in artifact_body["markdown_export"]
+    assert "Loaded artifact snapshot" in artifact_body["message"]
 
     jobs = client.get("/research/jobs?limit=5")
     assert jobs.status_code == 200

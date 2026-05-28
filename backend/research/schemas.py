@@ -396,6 +396,19 @@ class JobRead(BaseModel):
     error: str = ""
 
 
+class JobArtifactsResponse(BaseModel):
+    job: JobRead
+    paper: PaperRead | None = None
+    card: PaperCardRead | None = None
+    gaps: list[ResearchGapRead] = Field(default_factory=list)
+    ideas: list[IdeaRead] = Field(default_factory=list)
+    novelty_checks: list[NoveltyCheckRead] = Field(default_factory=list)
+    reviews: list[ReviewRead] = Field(default_factory=list)
+    experiment_plans: list[ExperimentPlanRead] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ProjectStatus(BaseModel):
     service: str
     phase: str
