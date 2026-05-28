@@ -22,6 +22,7 @@ from backend.research.models import (
     RelatedWorkMatrix,
     ResearchGap,
     Review,
+    ResearchTask,
 )
 from backend.research.schemas import (
     ContextSearchRequest,
@@ -74,6 +75,10 @@ from backend.research.schemas import (
     ResearchEdgeRead,
     ResearchGapRead,
     ResearchNodeRead,
+    ResearchTaskGenerateRequest,
+    ResearchTaskGenerationResponse,
+    ResearchTaskRead,
+    ResearchTaskUpdate,
     ReviewRead,
     ScoredEvidenceRead,
     ScoredIdeaRead,
@@ -107,6 +112,7 @@ from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
 from backend.research.services.structured_idea_service import StructuredIdeaService
+from backend.research.services.task_service import ResearchTaskService
 from backend.research.services.workflow_service import (
     WorkflowService,
     run_literature_to_ideas_job_background,
@@ -145,6 +151,7 @@ def status() -> ProjectStatus:
             "proposal_draft_generation",
             "proposal_readiness_review",
             "proposal_revision_loop",
+            "research_task_backlog",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -661,6 +668,26 @@ def _serialize_proposal_revision(revision: ProposalRevision) -> ProposalRevision
     )
 
 
+def _serialize_research_task(task: ResearchTask) -> ResearchTaskRead:
+    return ResearchTaskRead(
+        id=task.id,
+        idea_id=task.idea_id,
+        owner_type=task.owner_type,
+        owner_id=task.owner_id,
+        source_type=task.source_type,
+        source_id=task.source_id,
+        title=task.title,
+        description=task.description,
+        priority=task.priority,
+        status=task.status,
+        due_phase=task.due_phase,
+        metadata=task.metadata_json or {},
+        created_by=task.created_by,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+    )
+
+
 @router.post("/ideas/generate", response_model=IdeaGenerationResponse)
 def generate_ideas(
     payload: IdeaGenerationRequest,
@@ -1135,6 +1162,78 @@ def export_proposal_revision_markdown(
     if revision is None:
         raise HTTPException(status_code=404, detail="Proposal revision not found")
     return PlainTextResponse(revision.markdown_export or "", media_type="text/markdown")
+
+
+@router.post(
+    "/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_proposal_revision(
+    idea_id: str,
+    draft_id: str,
+    revision_id: str,
+    payload: ResearchTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    if ProposalDraftService(session).get_draft(idea_id, draft_id) is None:
+        raise HTTPException(status_code=404, detail="Proposal draft not found")
+    revision = ProposalRevisionService(session).get_revision(draft_id, revision_id)
+    if revision is None:
+        raise HTTPException(status_code=404, detail="Proposal revision not found")
+    tasks = ResearchTaskService(session).create_from_proposal_revision(
+        revision.id,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} research tasks from proposal revision {revision.id}.",
+    )
+
+
+@router.get("/tasks", response_model=list[ResearchTaskRead])
+def list_research_tasks(
+    idea_id: str | None = None,
+    owner_type: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+    session: Session = Depends(get_session),
+) -> list[ResearchTaskRead]:
+    tasks = ResearchTaskService(session).list_tasks(
+        idea_id=idea_id,
+        owner_type=owner_type,
+        status=status,
+        limit=limit,
+    )
+    return [_serialize_research_task(task) for task in tasks]
+
+
+@router.get("/tasks/{task_id}", response_model=ResearchTaskRead)
+def get_research_task(
+    task_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchTaskRead:
+    task = ResearchTaskService(session).get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Research task not found")
+    return _serialize_research_task(task)
+
+
+@router.patch("/tasks/{task_id}", response_model=ResearchTaskRead)
+def update_research_task(
+    task_id: str,
+    payload: ResearchTaskUpdate,
+    session: Session = Depends(get_session),
+) -> ResearchTaskRead:
+    try:
+        task = ResearchTaskService(session).update_task(
+            task_id,
+            status=payload.status,
+            priority=payload.priority,
+            description=payload.description,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_research_task(task)
 
 
 @router.post("/ideas/{idea_id}/feedback", response_model=IdeaFeedbackRead)

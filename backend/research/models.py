@@ -304,6 +304,24 @@ class ProposalRevision(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="system")
 
 
+class ResearchTask(Base, TimestampMixin):
+    __tablename__ = "research_tasks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    idea_id: Mapped[str | None] = mapped_column(ForeignKey("ideas.id"), nullable=True, index=True)
+    owner_type: Mapped[str] = mapped_column(String(128), default="proposal_revision", index=True)
+    owner_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    source_type: Mapped[str] = mapped_column(String(128), default="", index=True)
+    source_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    title: Mapped[str] = mapped_column(String(512), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    priority: Mapped[str] = mapped_column(String(64), default="medium", index=True)
+    status: Mapped[str] = mapped_column(String(64), default="todo", index=True)
+    due_phase: Mapped[str] = mapped_column(String(128), default="")
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[str] = mapped_column(String(128), default="system")
+
+
 class IdeaPortfolioSnapshot(Base, TimestampMixin):
     __tablename__ = "idea_portfolio_snapshots"
 

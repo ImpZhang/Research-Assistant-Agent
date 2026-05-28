@@ -974,6 +974,10 @@ POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revise
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}/export/markdown
+POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}/tasks
+GET  /research/tasks
+GET  /research/tasks/{task_id}
+PATCH /research/tasks/{task_id}
 POST /research/ideas/{idea_id}/review
 POST /research/ideas/{idea_id}/experiment-plan
 POST /research/ideas/{idea_id}/feedback
@@ -989,6 +993,8 @@ GET  /research/ideas/{idea_id}/feedback
 `/proposal-drafts/{draft_id}/review` 是 proposal-readiness screen：它从草案绑定的 related-work matrix、experiment plan、evidence ids 和 milestones 计算 readiness score，输出 strengths、concerns、required revisions、missing evidence 和 Markdown review。后续可以替换为多 reviewer/model 评审，但当前 contract 已经固定“草案必须可审阅、可追责、可迭代”。
 
 `/proposal-drafts/{draft_id}/revise` 是 proposal revision loop：它读取指定或 latest readiness review，把 required revisions 和 missing evidence 转成 revised sections、applied revisions、missing-evidence actions 和 Markdown revision artifact。它不覆盖原始 draft，而是保存新 revision checkpoint，方便比较草案在多轮 review 后如何变化。
+
+`/proposal-drafts/{draft_id}/revisions/{revision_id}/tasks` 把 revision 中的 applied revisions、missing-evidence actions 和 milestone plan 落成 `ResearchTask` backlog。`/tasks` 支持按 idea、owner type、status 查询，`PATCH /tasks/{task_id}` 支持更新 status/priority/description，让 proposal revision 进入可执行的科研任务队列。
 
 `/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
 

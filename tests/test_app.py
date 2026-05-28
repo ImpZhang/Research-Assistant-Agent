@@ -38,6 +38,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/proposal-draft" in script.text
     assert "/proposal-drafts/${state.latestProposalDraftId}/review" in script.text
     assert "/proposal-drafts/${state.latestProposalDraftId}/revise" in script.text
+    assert "/revisions/${state.latestProposalRevisionId}/tasks" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
     assert "/research/ideas/portfolios" in script.text
@@ -489,6 +490,34 @@ Future work should preserve proposal drafts as reviewable artifacts.
     )
     assert revision_export.status_code == 200
     assert "## Applied Revisions" in revision_export.text
+
+    task_generation = client.post(
+        f"/research/ideas/{idea_id}/proposal-drafts/{body['id']}/revisions/"
+        f"{revision_body['id']}/tasks",
+        json={"created_by": "pytest"},
+    )
+    assert task_generation.status_code == 200
+    task_body = task_generation.json()
+    assert task_body["tasks"]
+    assert task_body["tasks"][0]["owner_type"] == "proposal_revision"
+    assert task_body["tasks"][0]["owner_id"] == revision_body["id"]
+
+    task_id = task_body["tasks"][0]["id"]
+    listed_tasks = client.get(f"/research/tasks?idea_id={idea_id}&owner_type=proposal_revision")
+    assert listed_tasks.status_code == 200
+    assert any(task["id"] == task_id for task in listed_tasks.json())
+
+    fetched_task = client.get(f"/research/tasks/{task_id}")
+    assert fetched_task.status_code == 200
+    assert fetched_task.json()["status"] == "todo"
+
+    updated_task = client.patch(
+        f"/research/tasks/{task_id}",
+        json={"status": "doing", "priority": "critical"},
+    )
+    assert updated_task.status_code == 200
+    assert updated_task.json()["status"] == "doing"
+    assert updated_task.json()["priority"] == "critical"
 
 
 def test_refine_idea_creates_traceable_revision() -> None:

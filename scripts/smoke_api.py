@@ -67,6 +67,10 @@ class InProcessClient:
         response = self.client.post(path, json=json_body, files=files)
         return ResponseAdapter(response.status_code, decode_response_body(response))
 
+    def patch(self, path: str, *, json_body: dict | None = None) -> ResponseAdapter:
+        response = self.client.patch(path, json=json_body)
+        return ResponseAdapter(response.status_code, decode_response_body(response))
+
 
 class HttpClient:
     def __init__(self, base_url: str) -> None:
@@ -80,6 +84,10 @@ class HttpClient:
         self, path: str, *, json_body: dict | None = None, files: dict | None = None
     ) -> ResponseAdapter:
         response = requests.post(f"{self.base_url}{path}", json=json_body, files=files, timeout=30)
+        return ResponseAdapter(response.status_code, decode_response_body(response))
+
+    def patch(self, path: str, *, json_body: dict | None = None) -> ResponseAdapter:
+        response = requests.patch(f"{self.base_url}{path}", json=json_body, timeout=20)
         return ResponseAdapter(response.status_code, decode_response_body(response))
 
 
@@ -253,6 +261,27 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "## Applied Revisions" not in proposal_revision_markdown:
         raise RuntimeError("proposal revision markdown did not include applied revisions")
+    task_backlog = require_ok(
+        client.post(
+            "/research/ideas/"
+            f"{refined_idea['id']}/proposal-drafts/"
+            f"{proposal_draft['id']}/revisions/"
+            f"{proposal_revision['id']}/tasks",
+            json_body={"created_by": "smoke_api"},
+        ),
+        "proposal revision task backlog",
+    )
+    if not task_backlog["tasks"]:
+        raise RuntimeError("proposal revision task backlog returned no tasks")
+    updated_task = require_ok(
+        client.patch(
+            f"/research/tasks/{task_backlog['tasks'][0]['id']}",
+            json_body={"status": "doing", "priority": "critical"},
+        ),
+        "research task update",
+    )
+    if updated_task["status"] != "doing":
+        raise RuntimeError("research task update did not persist status")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -445,6 +474,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "proposal_revision_id": proposal_revision["id"],
         "proposal_revision_action_count": len(proposal_revision["applied_revisions"]),
         "proposal_revision_markdown_chars": len(proposal_revision_markdown),
+        "task_backlog_count": len(task_backlog["tasks"]),
+        "updated_task_status": updated_task["status"],
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),

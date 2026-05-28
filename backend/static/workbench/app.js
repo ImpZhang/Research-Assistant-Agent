@@ -5,6 +5,7 @@ const state = {
   latestProposalDraftId: "",
   latestProposalReviewId: "",
   latestProposalRevisionId: "",
+  latestTaskIds: [],
   pollTimer: null,
 };
 
@@ -351,6 +352,7 @@ async function createRelatedWorkMatrix() {
     state.latestProposalDraftId = body.id;
     state.latestProposalReviewId = "";
     state.latestProposalRevisionId = "";
+    state.latestTaskIds = [];
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "workflowResult",
@@ -440,6 +442,31 @@ async function reviseProposalDraft() {
     renderResult(
       "workflowResult",
       `Saved proposal revision <code>${escapeHtml(body.id)}</code> with ${body.applied_revisions.length} applied actions.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createTaskBacklog() {
+  if (!state.latestIdeaId || !state.latestProposalDraftId || !state.latestProposalRevisionId) {
+    renderResult("workflowResult", "Create a proposal revision first.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Creating task backlog...", "warn");
+  try {
+    const body = await api(
+      `/research/ideas/${state.latestIdeaId}/proposal-drafts/${state.latestProposalDraftId}/revisions/${state.latestProposalRevisionId}/tasks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ created_by: "workbench" }),
+      },
+    );
+    state.latestTaskIds = body.tasks.map((task) => task.id);
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Tasks", body.tasks.slice(0, 8), (task) => `${task.priority} ${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
@@ -544,6 +571,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("proposalDraftButton").addEventListener("click", createProposalDraft);
   $("proposalReviewButton").addEventListener("click", reviewProposalDraft);
   $("proposalRevisionButton").addEventListener("click", reviseProposalDraft);
+  $("taskBacklogButton").addEventListener("click", createTaskBacklog);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);

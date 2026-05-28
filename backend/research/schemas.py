@@ -391,6 +391,39 @@ class ProposalRevisionRead(BaseModel):
     updated_at: datetime
 
 
+class ResearchTaskGenerateRequest(BaseModel):
+    created_by: str = "system"
+
+
+class ResearchTaskUpdate(BaseModel):
+    status: Literal["todo", "doing", "blocked", "done", "archived"] | None = None
+    priority: Literal["low", "medium", "high", "critical"] | None = None
+    description: str | None = None
+
+
+class ResearchTaskRead(BaseModel):
+    id: str
+    idea_id: str | None = None
+    owner_type: str
+    owner_id: str
+    source_type: str = ""
+    source_id: str = ""
+    title: str
+    description: str = ""
+    priority: str = "medium"
+    status: str = "todo"
+    due_phase: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_by: str = "system"
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResearchTaskGenerationResponse(BaseModel):
+    tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    message: str
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

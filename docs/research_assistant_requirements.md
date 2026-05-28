@@ -680,6 +680,12 @@ readiness review 之后需要 proposal revision：
 - 生成 revised abstract、novelty statement、related-work summary、experiment summary 和 risk mitigation。
 - 保留 applied revisions 与 missing-evidence actions，形成可比较的 revision checkpoint。
 
+proposal revision 之后需要进入 task backlog：
+
+- 将 applied revisions、missing evidence 和 milestones 拆成研究任务。
+- 每个任务需要 status、priority、due phase、source id 和 owner id。
+- 支持查询、推进状态和后续看板扩展。
+
 ### 6.5.4 Idea 输出模板
 
 ```text
