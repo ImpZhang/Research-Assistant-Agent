@@ -36,6 +36,20 @@ class PaperRead(BaseModel):
     updated_at: datetime
 
 
+class PaperDetail(PaperRead):
+    section_count: int = 0
+    chunk_count: int = 0
+    evidence_count: int = 0
+
+
+class PaperUploadResponse(BaseModel):
+    paper: PaperRead
+    section_count: int
+    chunk_count: int
+    evidence_count: int
+    message: str
+
+
 class EvidenceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -15,6 +15,7 @@ class Settings:
         "RESEARCH_DB_URL",
         "sqlite:///./data/research/research_assistant.db",
     )
+    paper_upload_dir: str = os.getenv("PAPER_UPLOAD_DIR", "./data/papers")
     graph_rag_lite_enabled: bool = os.getenv("GRAPH_RAG_LITE_ENABLED", "true").lower() != "false"
     mcp_enabled: bool = os.getenv("MCP_ENABLED", "false").lower() == "true"
 
