@@ -120,6 +120,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workflow returned no gaps")
     if not workflow["ideas"]:
         raise RuntimeError("workflow returned no ideas")
+    job = require_ok(client.get(f"/research/jobs/{workflow['job_id']}"), "workflow job trace")
     context = require_ok(
         client.post(
             "/research/search/context",
@@ -139,6 +140,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "health": health,
         "phase": status["phase"],
         "paper_id": paper_id,
+        "workflow_job_id": workflow["job_id"],
+        "workflow_job_status": job["status"],
         "card_id": workflow["card"]["id"],
         "gap_count": len(workflow["gaps"]),
         "idea_count": len(workflow["ideas"]),

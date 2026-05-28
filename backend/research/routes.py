@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from backend.research.config import settings
 from backend.research.db import get_session
-from backend.research.models import Chunk, Evidence, Paper, PaperSection
+from backend.research.models import Chunk, Evidence, Job, Paper, PaperSection
 from backend.research.schemas import (
     ContextSearchRequest,
     ContextSearchResponse,
@@ -16,6 +16,7 @@ from backend.research.schemas import (
     IdeaGenerationResponse,
     IdeaRead,
     IdeaScore,
+    JobRead,
     LiteratureToIdeasWorkflowRequest,
     LiteratureToIdeasWorkflowResponse,
     NoveltyCheckRead,
@@ -73,6 +74,7 @@ def status() -> ProjectStatus:
             "reviewer_simulation",
             "experiment_planning",
             "literature_to_ideas_workflow",
+            "workflow_job_trace",
             "lexical_context_retrieval",
             "graph_rag_lite_schema",
             "graph_rag_lite_workflow_links",
@@ -88,6 +90,33 @@ def status() -> ProjectStatus:
             "mcp_tool_bridge",
         ],
     )
+
+
+def _serialize_job(job: Job) -> JobRead:
+    return JobRead(
+        id=job.id,
+        job_type=job.job_type,
+        status=job.status,
+        progress=job.progress,
+        input=job.input_json or {},
+        output=job.output_json or {},
+        error=job.error,
+    )
+
+
+@router.get("/jobs", response_model=list[JobRead])
+def list_jobs(limit: int = 50, session: Session = Depends(get_session)) -> list[JobRead]:
+    limit = max(1, min(limit, 200))
+    jobs = session.query(Job).order_by(Job.created_at.desc()).limit(limit).all()
+    return [_serialize_job(job) for job in jobs]
+
+
+@router.get("/jobs/{job_id}", response_model=JobRead)
+def get_job(job_id: str, session: Session = Depends(get_session)) -> JobRead:
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return _serialize_job(job)
 
 
 @router.get("/papers", response_model=list[PaperRead])
@@ -561,6 +590,7 @@ def run_literature_to_ideas_workflow(
 
     paper = result.paper
     return LiteratureToIdeasWorkflowResponse(
+        job_id=result.job.id,
         paper=PaperRead(
             id=paper.id,
             title=paper.title,

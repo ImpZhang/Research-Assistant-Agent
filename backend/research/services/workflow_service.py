@@ -5,11 +5,13 @@ from sqlalchemy.orm import Session
 from backend.research.models import (
     ExperimentPlan,
     Idea,
+    Job,
     NoveltyCheck,
     Paper,
     PaperCard,
     ResearchGap,
     Review,
+    utc_now,
 )
 from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.export_service import ExportService
@@ -30,6 +32,7 @@ class LiteratureToIdeasResult:
     reviews: list[Review]
     experiment_plans: list[ExperimentPlan]
     markdown_export: str
+    job: Job
 
 
 class WorkflowService:
@@ -46,6 +49,44 @@ class WorkflowService:
         run_experiment_plan: bool = True,
         include_markdown_export: bool = True,
     ) -> LiteratureToIdeasResult:
+        job = self._start_job(
+            {
+                "paper_id": paper_id,
+                "max_gaps": max_gaps,
+                "max_ideas_per_gap": max_ideas_per_gap,
+                "run_novelty_check": run_novelty_check,
+                "run_review": run_review,
+                "run_experiment_plan": run_experiment_plan,
+                "include_markdown_export": include_markdown_export,
+            }
+        )
+        try:
+            return self._run_literature_to_ideas(
+                job=job,
+                paper_id=paper_id,
+                max_gaps=max_gaps,
+                max_ideas_per_gap=max_ideas_per_gap,
+                run_review=run_review,
+                run_novelty_check=run_novelty_check,
+                run_experiment_plan=run_experiment_plan,
+                include_markdown_export=include_markdown_export,
+            )
+        except Exception as exc:
+            self._fail_job(job.id, str(exc))
+            raise
+
+    def _run_literature_to_ideas(
+        self,
+        *,
+        job: Job,
+        paper_id: str,
+        max_gaps: int,
+        max_ideas_per_gap: int,
+        run_review: bool,
+        run_novelty_check: bool,
+        run_experiment_plan: bool,
+        include_markdown_export: bool,
+    ) -> LiteratureToIdeasResult:
         paper = self.session.get(Paper, paper_id)
         if paper is None:
             raise ValueError("Paper not found")
@@ -54,11 +95,14 @@ class WorkflowService:
         max_ideas_per_gap = max(1, min(max_ideas_per_gap, 5))
 
         card = StructuredExtractionService(self.session).extract_paper_card(paper.id)
+        self._update_job(job.id, progress=0.2, output={"paper_id": paper.id, "card_id": card.id})
         gaps = GapService(self.session).mine_gaps([paper.id], max_gaps)
+        self._update_job(job.id, progress=0.4, output={"gap_ids": [gap.id for gap in gaps]})
         ideas = IdeaService(self.session).generate_from_gaps(
             [gap.id for gap in gaps],
             max_ideas_per_gap,
         )
+        self._update_job(job.id, progress=0.55, output={"idea_ids": [idea.id for idea in ideas]})
 
         novelty_checks: list[NoveltyCheck] = []
         reviews: list[Review] = []
@@ -73,11 +117,34 @@ class WorkflowService:
                 reviews.append(review_service.create_review(idea.id))
             if run_experiment_plan:
                 experiment_plans.append(experiment_service.create_plan(idea.id))
+        self._update_job(
+            job.id,
+            progress=0.85,
+            output={
+                "novelty_check_ids": [check.id for check in novelty_checks],
+                "review_ids": [review.id for review in reviews],
+                "experiment_plan_ids": [plan.id for plan in experiment_plans],
+            },
+        )
 
         markdown_export = ""
         if include_markdown_export:
             markdown_export = self._render_markdown_bundle(ideas)
 
+        self._complete_job(
+            job.id,
+            {
+                "paper_id": paper.id,
+                "card_id": card.id,
+                "gap_ids": [gap.id for gap in gaps],
+                "idea_ids": [idea.id for idea in ideas],
+                "novelty_check_ids": [check.id for check in novelty_checks],
+                "review_ids": [review.id for review in reviews],
+                "experiment_plan_ids": [plan.id for plan in experiment_plans],
+                "markdown_export_chars": len(markdown_export),
+            },
+        )
+        job = self.session.get(Job, job.id) or job
         self.session.refresh(paper)
         self.session.refresh(card)
         return LiteratureToIdeasResult(
@@ -89,7 +156,50 @@ class WorkflowService:
             reviews=reviews,
             experiment_plans=experiment_plans,
             markdown_export=markdown_export,
+            job=job,
         )
+
+    def _start_job(self, input_payload: dict) -> Job:
+        job = Job(
+            job_type="literature_to_ideas_workflow",
+            status="running",
+            input_json=input_payload,
+            output_json={},
+            progress=0.05,
+            started_at=utc_now(),
+        )
+        self.session.add(job)
+        self.session.commit()
+        self.session.refresh(job)
+        return job
+
+    def _update_job(self, job_id: str, *, progress: float, output: dict) -> None:
+        job = self.session.get(Job, job_id)
+        if job is None:
+            return
+        job.progress = progress
+        job.output_json = {**(job.output_json or {}), **output}
+        self.session.commit()
+
+    def _complete_job(self, job_id: str, output: dict) -> None:
+        job = self.session.get(Job, job_id)
+        if job is None:
+            return
+        job.status = "completed"
+        job.progress = 1.0
+        job.output_json = output
+        job.finished_at = utc_now()
+        self.session.commit()
+
+    def _fail_job(self, job_id: str, error: str) -> None:
+        self.session.rollback()
+        job = self.session.get(Job, job_id)
+        if job is None:
+            return
+        job.status = "failed"
+        job.error = error
+        job.finished_at = utc_now()
+        self.session.commit()
 
     def _render_markdown_bundle(self, ideas: list[Idea]) -> str:
         if not ideas:

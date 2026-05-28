@@ -269,6 +269,7 @@ class LiteratureToIdeasWorkflowRequest(BaseModel):
 
 
 class LiteratureToIdeasWorkflowResponse(BaseModel):
+    job_id: str = ""
     paper: PaperRead
     card: PaperCardRead
     gaps: list[ResearchGapRead]

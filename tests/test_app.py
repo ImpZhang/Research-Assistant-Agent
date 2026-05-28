@@ -336,6 +336,7 @@ Future work should connect the workflow to front-end actions and MCP tools.
     )
     assert response.status_code == 200
     body = response.json()
+    assert body["job_id"]
     assert body["paper"]["id"] == paper_id
     assert body["card"]["payload"]["method"]
     assert len(body["gaps"]) >= 1
@@ -345,6 +346,18 @@ Future work should connect the workflow to front-end actions and MCP tools.
     assert len(body["experiment_plans"]) == len(body["ideas"])
     assert "# Research Idea Dossier:" in body["markdown_export"]
     assert "Completed literature-to-ideas workflow" in body["message"]
+
+    job = client.get(f"/research/jobs/{body['job_id']}")
+    assert job.status_code == 200
+    job_body = job.json()
+    assert job_body["status"] == "completed"
+    assert job_body["progress"] == 1.0
+    assert job_body["output"]["paper_id"] == paper_id
+    assert len(job_body["output"]["idea_ids"]) == len(body["ideas"])
+
+    jobs = client.get("/research/jobs?limit=5")
+    assert jobs.status_code == 200
+    assert any(item["id"] == body["job_id"] for item in jobs.json())
 
 
 def test_context_search_returns_evidence_and_graph_context() -> None:
