@@ -36,6 +36,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/feedback" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
+    assert "/research/ideas/portfolios" in script.text
 
 
 def test_upload_text_paper() -> None:
@@ -468,6 +469,41 @@ Future work should learn ranking weights from researcher feedback.
     assert f"- Idea ID: `{source_idea_id}`" not in export.text
     assert "### Score Breakdown" in export.text
     assert "Human feedback decision is shortlist" in export.text
+
+    snapshot = client.post(
+        "/research/ideas/portfolios",
+        json={
+            "idea_ids": [source_idea_id, refined_idea_id],
+            "deduplicate_lineage": True,
+            "title": "Saved Ranking Test Portfolio",
+            "description": "Portfolio saved for regression testing.",
+            "created_by": "pytest",
+        },
+    )
+    assert snapshot.status_code == 200
+    snapshot_body = snapshot.json()
+    assert snapshot_body["title"] == "Saved Ranking Test Portfolio"
+    assert snapshot_body["description"] == "Portfolio saved for regression testing."
+    assert snapshot_body["created_by"] == "pytest"
+    assert refined_idea_id in snapshot_body["idea_ids"]
+    assert source_idea_id not in snapshot_body["idea_ids"]
+    assert "Saved Ranking Test Portfolio" in snapshot_body["markdown_export"]
+    assert snapshot_body["markdown_export_chars"] == len(snapshot_body["markdown_export"])
+
+    fetched_snapshot = client.get(f"/research/ideas/portfolios/{snapshot_body['id']}")
+    assert fetched_snapshot.status_code == 200
+    assert fetched_snapshot.json()["id"] == snapshot_body["id"]
+
+    snapshot_export = client.get(
+        f"/research/ideas/portfolios/{snapshot_body['id']}/export/markdown"
+    )
+    assert snapshot_export.status_code == 200
+    assert snapshot_export.headers["content-type"].startswith("text/markdown")
+    assert "# Saved Ranking Test Portfolio" in snapshot_export.text
+
+    snapshots = client.get("/research/ideas/portfolios?limit=5")
+    assert snapshots.status_code == 200
+    assert any(item["id"] == snapshot_body["id"] for item in snapshots.json())
 
 
 def test_markdown_exports_for_card_and_idea_dossier() -> None:

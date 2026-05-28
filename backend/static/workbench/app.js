@@ -390,6 +390,31 @@ async function shortlistLatestIdea() {
   }
 }
 
+async function savePortfolio() {
+  renderResult("workflowResult", "Saving ranked portfolio snapshot...", "warn");
+  try {
+    const body = await api("/research/ideas/portfolios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        paper_ids: state.paperId ? [state.paperId] : [],
+        limit: 5,
+        deduplicate_lineage: true,
+        title: "Workbench Research Idea Portfolio",
+        description: $("refineFocus").value.trim(),
+        created_by: "workbench",
+      }),
+    });
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Saved portfolio <code>${escapeHtml(body.id)}</code> with ${body.idea_ids.length} ideas.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   $("uploadForm").addEventListener("submit", uploadPaper);
   $("runWorkflowButton").addEventListener("click", runWorkflow);
@@ -400,6 +425,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
+  $("savePortfolioButton").addEventListener("click", savePortfolio);
   checkHealth();
   refreshJobs();
 });

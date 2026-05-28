@@ -216,6 +216,19 @@ class IdeaFeedback(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="researcher")
 
 
+class IdeaPortfolioSnapshot(Base, TimestampMixin):
+    __tablename__ = "idea_portfolio_snapshots"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    title: Mapped[str] = mapped_column(String(512), default="Research Idea Portfolio")
+    description: Mapped[str] = mapped_column(Text, default="")
+    ranking_request_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    idea_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    ranked_items_json: Mapped[list] = mapped_column(JSON, default=list)
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="researcher")
+
+
 class ResearchNode(Base, TimestampMixin):
     __tablename__ = "research_nodes"
 

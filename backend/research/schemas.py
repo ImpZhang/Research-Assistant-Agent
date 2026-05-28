@@ -242,6 +242,28 @@ class IdeaPortfolioExportRequest(IdeaRankingRequest):
     title: str = "Research Idea Portfolio"
 
 
+class IdeaPortfolioSnapshotCreate(IdeaPortfolioExportRequest):
+    description: str = ""
+    created_by: str = "researcher"
+
+
+class IdeaPortfolioSnapshotRead(BaseModel):
+    id: str
+    title: str
+    description: str = ""
+    ranking_request: dict[str, Any] = Field(default_factory=dict)
+    idea_ids: list[str] = Field(default_factory=list)
+    ranked_items: list[dict[str, Any]] = Field(default_factory=list)
+    markdown_export_chars: int = 0
+    created_by: str = "researcher"
+    created_at: datetime
+    updated_at: datetime
+
+
+class IdeaPortfolioSnapshotDetail(IdeaPortfolioSnapshotRead):
+    markdown_export: str = ""
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

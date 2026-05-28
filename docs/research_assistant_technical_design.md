@@ -508,6 +508,21 @@ created_at
 updated_at
 ```
 
+### idea_portfolio_snapshots
+
+```text
+id
+title
+description
+ranking_request_json
+idea_ids_json
+ranked_items_json
+markdown_export
+created_by
+created_at
+updated_at
+```
+
 ### research_nodes
 
 GraphRAG-lite 节点表：
@@ -934,6 +949,10 @@ GET  /research/ideas/{idea_id}
 POST /research/ideas/{idea_id}/score
 POST /research/ideas/rank
 POST /research/ideas/rank/export/markdown
+POST /research/ideas/portfolios
+GET  /research/ideas/portfolios
+GET  /research/ideas/portfolios/{portfolio_id}
+GET  /research/ideas/portfolios/{portfolio_id}/export/markdown
 POST /research/ideas/{idea_id}/revise
 POST /research/ideas/{idea_id}/refine
 POST /research/ideas/{idea_id}/review
@@ -947,6 +966,8 @@ GET  /research/ideas/{idea_id}/feedback
 `/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
 
 `/rank/export/markdown` 使用同一套 ranking 参数导出选题组合报告，包含 rank、score breakdown、rationale、parent lineage、research question、hypothesis 和 method sketch，用于组会讨论、导师 review 或手动归档。
+
+`/ideas/portfolios` 会把某次 ranking 结果保存为 immutable snapshot，固化 ranking request、ranked items、idea ids 和 Markdown report。这样后续的反馈、重排或新论文 ingestion 不会改变当时用于讨论或决策的 shortlist 记录。
 
 `/feedback` 记录人类研究者对 idea 的 shortlist/accept/revise/reject/archive 决策、rating、comment 和 tags。Ranking 会读取这些反馈作为 human preference adjustment；后续可把这张表扩展成偏好学习、选题日志和 active learning 数据源。
 

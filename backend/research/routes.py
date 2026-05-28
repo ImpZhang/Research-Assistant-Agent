@@ -10,6 +10,7 @@ from backend.research.models import (
     ExperimentPlan,
     Idea,
     IdeaFeedback,
+    IdeaPortfolioSnapshot,
     Job,
     NoveltyCheck,
     Paper,
@@ -32,6 +33,9 @@ from backend.research.schemas import (
     IdeaGenerationRequest,
     IdeaGenerationResponse,
     IdeaPortfolioExportRequest,
+    IdeaPortfolioSnapshotCreate,
+    IdeaPortfolioSnapshotDetail,
+    IdeaPortfolioSnapshotRead,
     IdeaRankingRequest,
     IdeaRankingResponse,
     IdeaRefinementRequest,
@@ -75,6 +79,11 @@ from backend.research.services.literature_search_service import LiteratureSearch
 from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
+from backend.research.services.portfolio_service import (
+    PortfolioService,
+    render_idea_portfolio_markdown,
+    render_snapshot_markdown,
+)
 from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
@@ -110,6 +119,7 @@ def status() -> ProjectStatus:
             "idea_ranking_portfolio",
             "human_idea_feedback",
             "portfolio_markdown_export",
+            "persisted_portfolio_snapshots",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -521,6 +531,31 @@ def _serialize_feedback(feedback: IdeaFeedback) -> IdeaFeedbackRead:
     )
 
 
+def _serialize_portfolio_snapshot(
+    snapshot: IdeaPortfolioSnapshot,
+    *,
+    include_markdown: bool = False,
+) -> IdeaPortfolioSnapshotRead | IdeaPortfolioSnapshotDetail:
+    payload = {
+        "id": snapshot.id,
+        "title": snapshot.title,
+        "description": snapshot.description,
+        "ranking_request": snapshot.ranking_request_json or {},
+        "idea_ids": snapshot.idea_ids_json or [],
+        "ranked_items": snapshot.ranked_items_json or [],
+        "markdown_export_chars": len(snapshot.markdown_export or ""),
+        "created_by": snapshot.created_by,
+        "created_at": snapshot.created_at,
+        "updated_at": snapshot.updated_at,
+    }
+    if include_markdown:
+        return IdeaPortfolioSnapshotDetail(
+            **payload,
+            markdown_export=snapshot.markdown_export or "",
+        )
+    return IdeaPortfolioSnapshotRead(**payload)
+
+
 @router.post("/ideas/generate", response_model=IdeaGenerationResponse)
 def generate_ideas(
     payload: IdeaGenerationRequest,
@@ -601,72 +636,62 @@ def export_ranked_ideas_markdown(
         include_refined=payload.include_refined,
         deduplicate_lineage=payload.deduplicate_lineage,
     )
-    markdown = _render_idea_portfolio_markdown(payload.title, ranked)
+    markdown = render_idea_portfolio_markdown(payload.title, ranked)
     return PlainTextResponse(markdown, media_type="text/markdown")
 
 
-def _render_idea_portfolio_markdown(title: str, ranked_items: list) -> str:
-    clean_title = _clean_markdown_text(title) or "Research Idea Portfolio"
-    lines = [
-        f"# {clean_title}",
-        "",
-        f"- Ranked idea count: {len(ranked_items)}",
-        "- Ranking method: weighted heuristic with novelty, feasibility, impact, evidence, experiment readiness, resource efficiency, and human feedback adjustments.",
-    ]
-
-    if not ranked_items:
-        lines.extend(["", "No ranked ideas matched the request."])
-        return "\n".join(lines).strip() + "\n"
-
-    for item in ranked_items:
-        idea = item.idea
-        lines.extend(
-            [
-                "",
-                f"## {item.rank}. {_clean_markdown_text(idea.title)}",
-                "",
-                f"- Idea ID: `{idea.id}`",
-                f"- Parent Idea ID: `{idea.parent_idea_id or 'none'}`",
-                f"- Status: `{idea.status}`",
-                f"- Weighted score: {item.weighted_score}",
-                f"- Related Gap IDs: {_inline_ids(idea.related_gap_ids_json or [])}",
-                f"- Related Paper IDs: {_inline_ids(idea.related_paper_ids_json or [])}",
-                "",
-                "### Score Breakdown",
-                "",
-            ]
-        )
-        for key, value in item.score_breakdown.items():
-            lines.append(f"- {key}: {value}")
-        lines.extend(["", "### Ranking Rationale", ""])
-        lines.extend(f"- {_clean_markdown_text(reason)}" for reason in item.rationale)
-        lines.extend(
-            [
-                "",
-                "### Research Question",
-                "",
-                _clean_markdown_text(idea.research_question),
-                "",
-                "### Core Hypothesis",
-                "",
-                _clean_markdown_text(idea.core_hypothesis),
-                "",
-                "### First Method Sketch",
-                "",
-                _clean_markdown_text(idea.method_sketch),
-            ]
-        )
-    return "\n".join(lines).strip() + "\n"
+@router.post("/ideas/portfolios", response_model=IdeaPortfolioSnapshotDetail)
+def create_idea_portfolio_snapshot(
+    payload: IdeaPortfolioSnapshotCreate,
+    session: Session = Depends(get_session),
+) -> IdeaPortfolioSnapshotDetail:
+    snapshot = PortfolioService(session).create_snapshot(
+        title=payload.title,
+        description=payload.description,
+        created_by=payload.created_by,
+        idea_ids=payload.idea_ids,
+        gap_ids=payload.gap_ids,
+        paper_ids=payload.paper_ids,
+        limit=payload.limit,
+        weights=payload.weights,
+        include_refined=payload.include_refined,
+        deduplicate_lineage=payload.deduplicate_lineage,
+    )
+    return _serialize_portfolio_snapshot(snapshot, include_markdown=True)
 
 
-def _inline_ids(ids: list[str]) -> str:
-    if not ids:
-        return "`none`"
-    return ", ".join(f"`{_clean_markdown_text(item_id)}`" for item_id in ids)
+@router.get("/ideas/portfolios", response_model=list[IdeaPortfolioSnapshotRead])
+def list_idea_portfolio_snapshots(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[IdeaPortfolioSnapshotRead]:
+    snapshots = PortfolioService(session).list_snapshots(limit)
+    return [_serialize_portfolio_snapshot(snapshot) for snapshot in snapshots]
 
 
-def _clean_markdown_text(text: str) -> str:
-    return " ".join(str(text or "").split())
+@router.get("/ideas/portfolios/{snapshot_id}", response_model=IdeaPortfolioSnapshotDetail)
+def get_idea_portfolio_snapshot(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> IdeaPortfolioSnapshotDetail:
+    snapshot = PortfolioService(session).get_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Idea portfolio snapshot not found")
+    return _serialize_portfolio_snapshot(snapshot, include_markdown=True)
+
+
+@router.get(
+    "/ideas/portfolios/{snapshot_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_idea_portfolio_snapshot_markdown(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    snapshot = PortfolioService(session).get_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Idea portfolio snapshot not found")
+    return PlainTextResponse(render_snapshot_markdown(snapshot), media_type="text/markdown")
 
 
 @router.get("/ideas/{idea_id}", response_model=IdeaRead)

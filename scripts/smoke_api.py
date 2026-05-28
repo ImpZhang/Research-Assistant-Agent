@@ -216,6 +216,32 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("portfolio markdown export did not include the requested title")
     if refined_idea["id"] not in portfolio_markdown:
         raise RuntimeError("portfolio markdown export did not include the refined idea")
+    portfolio_snapshot = require_ok(
+        client.post(
+            "/research/ideas/portfolios",
+            json_body={
+                "paper_ids": [paper_id],
+                "limit": 5,
+                "deduplicate_lineage": True,
+                "title": "Smoke Saved Research Idea Portfolio",
+                "description": "Saved by the end-to-end smoke workflow.",
+                "created_by": "smoke_api",
+            },
+        ),
+        "saved idea portfolio snapshot",
+    )
+    saved_portfolio = require_ok(
+        client.get(f"/research/ideas/portfolios/{portfolio_snapshot['id']}"),
+        "saved idea portfolio fetch",
+    )
+    saved_portfolio_markdown = require_ok(
+        client.get(f"/research/ideas/portfolios/{portfolio_snapshot['id']}/export/markdown"),
+        "saved idea portfolio markdown export",
+    )
+    if saved_portfolio["id"] != portfolio_snapshot["id"]:
+        raise RuntimeError("saved portfolio fetch returned the wrong snapshot")
+    if "Smoke Saved Research Idea Portfolio" not in saved_portfolio_markdown:
+        raise RuntimeError("saved portfolio markdown did not include the saved title")
     async_job = require_ok(
         client.post(
             "/research/workflows/literature-to-ideas/async",
@@ -284,6 +310,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "top_ranked_idea_id": ranking["ranked_ideas"][0]["idea"]["id"],
         "top_ranked_idea_score": ranking["ranked_ideas"][0]["weighted_score"],
         "portfolio_markdown_chars": len(portfolio_markdown),
+        "portfolio_snapshot_id": portfolio_snapshot["id"],
+        "portfolio_snapshot_idea_count": len(portfolio_snapshot["idea_ids"]),
         "async_workflow_job_id": async_job["id"],
         "async_workflow_job_status": async_job_status["status"],
         "card_id": workflow["card"]["id"],
