@@ -142,6 +142,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "card_id": workflow["card"]["id"],
         "gap_count": len(workflow["gaps"]),
         "idea_count": len(workflow["ideas"]),
+        "novelty_check_count": len(workflow["novelty_checks"]),
         "review_count": len(workflow["reviews"]),
         "experiment_plan_count": len(workflow["experiment_plans"]),
         "markdown_export_chars": len(workflow["markdown_export"]),

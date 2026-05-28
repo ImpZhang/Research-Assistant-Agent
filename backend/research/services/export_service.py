@@ -6,6 +6,7 @@ from backend.research.models import (
     Evidence,
     ExperimentPlan,
     Idea,
+    NoveltyCheck,
     Paper,
     PaperCard,
     ResearchGap,
@@ -78,6 +79,7 @@ class ExportService:
         gaps = self._load_gaps(idea.related_gap_ids_json or [])
         evidence = self._load_evidence(idea.evidence_ids_json or [])
         reviews = self._load_reviews(idea.id)
+        novelty_checks = self._load_novelty_checks(idea.id)
         plans = self._load_experiment_plans(idea.id)
 
         lines = [
@@ -122,6 +124,7 @@ class ExportService:
         lines.extend(self._render_score(idea.score_json or {}))
         lines.extend(self._render_gaps(gaps))
         lines.extend(self._render_evidence(evidence))
+        lines.extend(self._render_novelty_checks(novelty_checks))
         lines.extend(self._render_reviews(reviews))
         lines.extend(self._render_experiment_plans(plans))
 
@@ -152,6 +155,14 @@ class ExportService:
             self.session.query(Review)
             .filter(Review.idea_id == idea_id)
             .order_by(Review.created_at.desc())
+            .all()
+        )
+
+    def _load_novelty_checks(self, idea_id: str) -> list[NoveltyCheck]:
+        return (
+            self.session.query(NoveltyCheck)
+            .filter(NoveltyCheck.idea_id == idea_id)
+            .order_by(NoveltyCheck.created_at.desc())
             .all()
         )
 
@@ -254,6 +265,37 @@ class ExportService:
                     self._clean(item.summary or item.text),
                 ]
             )
+        return lines
+
+    def _render_novelty_checks(self, novelty_checks: list[NoveltyCheck]) -> list[str]:
+        lines = ["", "## Novelty Check", ""]
+        if not novelty_checks:
+            return lines + ["No novelty check has been generated."]
+
+        latest = novelty_checks[0]
+        lines.extend(
+            [
+                f"- Novelty Check ID: `{latest.id}`",
+                f"- Risk Level: `{latest.risk_level}`",
+                f"- Local Overlap Score: {latest.local_overlap_score}",
+                "",
+                self._clean(latest.summary),
+            ]
+        )
+        lines.extend(self._render_simple_list("Recommended Actions", latest.recommended_actions_json or []))
+
+        signals = latest.collision_signals_json or []
+        lines.extend(["", "### Collision Signals", ""])
+        if not signals:
+            lines.append("No local collision signals found.")
+        for signal in signals:
+            label = self._clean(str(signal.get("label") or "Untitled signal"))
+            source_type = self._clean(str(signal.get("source_type") or "source"))
+            source_id = self._clean(str(signal.get("source_id") or "unknown"))
+            score = signal.get("score")
+            lines.append(f"- `{source_type}` `{source_id}` score={score}: {label}")
+
+        lines.extend(self._render_simple_list("Missing Searches", latest.missing_searches_json or []))
         return lines
 
     def _render_reviews(self, reviews: list[Review]) -> list[str]:

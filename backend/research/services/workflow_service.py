@@ -2,11 +2,20 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from backend.research.models import ExperimentPlan, Idea, Paper, PaperCard, ResearchGap, Review
+from backend.research.models import (
+    ExperimentPlan,
+    Idea,
+    NoveltyCheck,
+    Paper,
+    PaperCard,
+    ResearchGap,
+    Review,
+)
 from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.export_service import ExportService
 from backend.research.services.gap_service import GapService
 from backend.research.services.idea_service import IdeaService
+from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
 
@@ -17,6 +26,7 @@ class LiteratureToIdeasResult:
     card: PaperCard
     gaps: list[ResearchGap]
     ideas: list[Idea]
+    novelty_checks: list[NoveltyCheck]
     reviews: list[Review]
     experiment_plans: list[ExperimentPlan]
     markdown_export: str
@@ -32,6 +42,7 @@ class WorkflowService:
         max_gaps: int = 4,
         max_ideas_per_gap: int = 2,
         run_review: bool = True,
+        run_novelty_check: bool = True,
         run_experiment_plan: bool = True,
         include_markdown_export: bool = True,
     ) -> LiteratureToIdeasResult:
@@ -49,11 +60,15 @@ class WorkflowService:
             max_ideas_per_gap,
         )
 
+        novelty_checks: list[NoveltyCheck] = []
         reviews: list[Review] = []
         experiment_plans: list[ExperimentPlan] = []
+        novelty_service = NoveltyService(self.session)
         review_service = ReviewService(self.session)
         experiment_service = ExperimentService(self.session)
         for idea in ideas:
+            if run_novelty_check:
+                novelty_checks.append(novelty_service.create_check(idea.id))
             if run_review:
                 reviews.append(review_service.create_review(idea.id))
             if run_experiment_plan:
@@ -70,6 +85,7 @@ class WorkflowService:
             card=card,
             gaps=gaps,
             ideas=ideas,
+            novelty_checks=novelty_checks,
             reviews=reviews,
             experiment_plans=experiment_plans,
             markdown_export=markdown_export,

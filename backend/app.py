@@ -14,6 +14,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    init_db()
     app = FastAPI(title="Research Assistant Agent API", lifespan=lifespan)
 
     app.add_middleware(

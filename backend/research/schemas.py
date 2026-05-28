@@ -218,6 +218,24 @@ class ReviewRead(BaseModel):
     updated_at: datetime
 
 
+class NoveltyCheckRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    idea_id: str
+    status: str
+    risk_level: str
+    summary: str
+    local_overlap_score: float | None = None
+    external_overlap_score: float | None = None
+    collision_signals: list[dict[str, Any]] = Field(default_factory=list)
+    missing_searches: list[str] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+    checked_sources: list[str] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
 class ExperimentPlanRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -244,6 +262,7 @@ class LiteratureToIdeasWorkflowRequest(BaseModel):
     paper_id: str
     max_gaps: int = 4
     max_ideas_per_gap: int = 2
+    run_novelty_check: bool = True
     run_review: bool = True
     run_experiment_plan: bool = True
     include_markdown_export: bool = True
@@ -254,6 +273,7 @@ class LiteratureToIdeasWorkflowResponse(BaseModel):
     card: PaperCardRead
     gaps: list[ResearchGapRead]
     ideas: list[IdeaRead]
+    novelty_checks: list[NoveltyCheckRead] = Field(default_factory=list)
     reviews: list[ReviewRead] = Field(default_factory=list)
     experiment_plans: list[ExperimentPlanRead] = Field(default_factory=list)
     markdown_export: str = ""

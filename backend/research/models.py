@@ -168,6 +168,22 @@ class Review(Base, TimestampMixin):
     action_items_json: Mapped[list] = mapped_column(JSON, default=list)
 
 
+class NoveltyCheck(Base, TimestampMixin):
+    __tablename__ = "novelty_checks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    status: Mapped[str] = mapped_column(String(64), default="completed")
+    risk_level: Mapped[str] = mapped_column(String(64), default="unknown")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    local_overlap_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    external_overlap_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    collision_signals_json: Mapped[list] = mapped_column(JSON, default=list)
+    missing_searches_json: Mapped[list] = mapped_column(JSON, default=list)
+    recommended_actions_json: Mapped[list] = mapped_column(JSON, default=list)
+    checked_sources_json: Mapped[list] = mapped_column(JSON, default=list)
+
+
 class ExperimentPlan(Base, TimestampMixin):
     __tablename__ = "experiment_plans"
 

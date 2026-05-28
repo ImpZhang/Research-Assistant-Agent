@@ -202,6 +202,46 @@ Future work should produce reviewer critiques and experiment plans.
     assert plan_body["expected_tables"]
 
 
+def test_novelty_check_records_local_collision_screening() -> None:
+    client = TestClient(create_app())
+    content = b"""Novelty Check Test Paper
+
+Introduction
+Research ideas need collision screening against local evidence before claiming novelty.
+
+Limitations
+The assistant currently lacks external literature search for novelty validation.
+
+Conclusion
+Future work should compare generated ideas against recent preprints.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("novelty_check_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+    gaps = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 2})
+    assert gaps.status_code == 200
+    gap_id = gaps.json()["gaps"][0]["id"]
+    ideas = client.post(f"/research/gaps/{gap_id}/ideas")
+    assert ideas.status_code == 200
+    idea_id = ideas.json()["ideas"][0]["id"]
+
+    check = client.post(f"/research/ideas/{idea_id}/novelty-check")
+    assert check.status_code == 200
+    body = check.json()
+    assert body["idea_id"] == idea_id
+    assert body["risk_level"] in {"unknown", "low", "medium", "high"}
+    assert body["checked_sources"]
+    assert "external_recent_papers" in body["missing_searches"]
+    assert body["recommended_actions"]
+
+    checks = client.get(f"/research/ideas/{idea_id}/novelty-checks")
+    assert checks.status_code == 200
+    assert checks.json()[0]["id"] == body["id"]
+
+
 def test_markdown_exports_for_card_and_idea_dossier() -> None:
     client = TestClient(create_app())
     content = b"""Markdown Export Test Paper
@@ -300,6 +340,7 @@ Future work should connect the workflow to front-end actions and MCP tools.
     assert body["card"]["payload"]["method"]
     assert len(body["gaps"]) >= 1
     assert len(body["ideas"]) == len(body["gaps"])
+    assert len(body["novelty_checks"]) == len(body["ideas"])
     assert len(body["reviews"]) == len(body["ideas"])
     assert len(body["experiment_plans"]) == len(body["ideas"])
     assert "# Research Idea Dossier:" in body["markdown_export"]

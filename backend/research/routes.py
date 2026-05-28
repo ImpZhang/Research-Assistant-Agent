@@ -18,6 +18,7 @@ from backend.research.schemas import (
     IdeaScore,
     LiteratureToIdeasWorkflowRequest,
     LiteratureToIdeasWorkflowResponse,
+    NoveltyCheckRead,
     PaperCreate,
     PaperCardPayload,
     PaperCardRead,
@@ -39,6 +40,7 @@ from backend.research.services.export_service import ExportService
 from backend.research.services.gap_service import GapService
 from backend.research.services.graph_service import GraphService
 from backend.research.services.idea_service import IdeaService
+from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
 from backend.research.services.retrieval_service import RetrievalService
@@ -67,6 +69,7 @@ def status() -> ProjectStatus:
             "structured_extraction_adapter",
             "research_gap_mining",
             "idea_generation",
+            "local_novelty_collision_check",
             "reviewer_simulation",
             "experiment_planning",
             "literature_to_ideas_workflow",
@@ -398,6 +401,49 @@ def get_idea(idea_id: str, session: Session = Depends(get_session)) -> IdeaRead:
     return _serialize_idea(idea)
 
 
+def _serialize_novelty_check(check) -> NoveltyCheckRead:
+    return NoveltyCheckRead(
+        id=check.id,
+        idea_id=check.idea_id,
+        status=check.status,
+        risk_level=check.risk_level,
+        summary=check.summary,
+        local_overlap_score=check.local_overlap_score,
+        external_overlap_score=check.external_overlap_score,
+        collision_signals=check.collision_signals_json or [],
+        missing_searches=check.missing_searches_json or [],
+        recommended_actions=check.recommended_actions_json or [],
+        checked_sources=check.checked_sources_json or [],
+        created_at=check.created_at,
+        updated_at=check.updated_at,
+    )
+
+
+@router.post("/ideas/{idea_id}/novelty-check", response_model=NoveltyCheckRead)
+def create_idea_novelty_check(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> NoveltyCheckRead:
+    try:
+        check = NoveltyService(session).create_check(idea_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_novelty_check(check)
+
+
+@router.get("/ideas/{idea_id}/novelty-checks", response_model=list[NoveltyCheckRead])
+def list_idea_novelty_checks(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> list[NoveltyCheckRead]:
+    if IdeaService(session).get_idea(idea_id) is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+    return [
+        _serialize_novelty_check(check)
+        for check in NoveltyService(session).list_checks_for_idea(idea_id)
+    ]
+
+
 @router.get(
     "/ideas/{idea_id}/export/markdown",
     response_class=PlainTextResponse,
@@ -506,6 +552,7 @@ def run_literature_to_ideas_workflow(
             max_gaps=payload.max_gaps,
             max_ideas_per_gap=payload.max_ideas_per_gap,
             run_review=payload.run_review,
+            run_novelty_check=payload.run_novelty_check,
             run_experiment_plan=payload.run_experiment_plan,
             include_markdown_export=payload.include_markdown_export,
         )
@@ -530,13 +577,15 @@ def run_literature_to_ideas_workflow(
         card=_serialize_card(result.card),
         gaps=[_serialize_gap(gap) for gap in result.gaps],
         ideas=[_serialize_idea(idea) for idea in result.ideas],
+        novelty_checks=[_serialize_novelty_check(check) for check in result.novelty_checks],
         reviews=[_serialize_review(review) for review in result.reviews],
         experiment_plans=[_serialize_experiment_plan(plan) for plan in result.experiment_plans],
         markdown_export=result.markdown_export,
         message=(
             "Completed literature-to-ideas workflow: "
             f"{len(result.gaps)} gaps, {len(result.ideas)} ideas, "
-            f"{len(result.reviews)} reviews, {len(result.experiment_plans)} experiment plans."
+            f"{len(result.novelty_checks)} novelty checks, {len(result.reviews)} reviews, "
+            f"{len(result.experiment_plans)} experiment plans."
         ),
     )
 
