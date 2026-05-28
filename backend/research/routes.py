@@ -8,6 +8,10 @@ from backend.research.schemas import (
     EvidenceRead,
     GapMiningRequest,
     GapMiningResponse,
+    IdeaGenerationRequest,
+    IdeaGenerationResponse,
+    IdeaRead,
+    IdeaScore,
     PaperCreate,
     PaperCardPayload,
     PaperCardRead,
@@ -19,6 +23,7 @@ from backend.research.schemas import (
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.gap_service import GapService
+from backend.research.services.idea_service import IdeaService
 from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
 
@@ -250,3 +255,69 @@ def get_gap(gap_id: str, session: Session = Depends(get_session)) -> ResearchGap
     if gap is None:
         raise HTTPException(status_code=404, detail="Research gap not found")
     return _serialize_gap(gap)
+
+
+def _serialize_idea(idea) -> IdeaRead:
+    return IdeaRead(
+        id=idea.id,
+        title=idea.title,
+        research_question=idea.research_question,
+        core_hypothesis=idea.core_hypothesis,
+        motivation=idea.motivation,
+        related_gap_ids=idea.related_gap_ids_json or [],
+        related_paper_ids=idea.related_paper_ids_json or [],
+        evidence_ids=idea.evidence_ids_json or [],
+        method_sketch=idea.method_sketch,
+        expected_contribution=idea.expected_contribution,
+        novelty_argument=idea.novelty_argument,
+        datasets=idea.datasets_json or [],
+        baselines=idea.baselines_json or [],
+        metrics=idea.metrics_json or [],
+        risks=idea.risks_json or [],
+        resource_requirements=idea.resource_requirements,
+        target_venues=idea.target_venues_json or [],
+        score=IdeaScore(**(idea.score_json or {})),
+        status=idea.status,
+        version=idea.version,
+        created_at=idea.created_at,
+        updated_at=idea.updated_at,
+    )
+
+
+@router.post("/ideas/generate", response_model=IdeaGenerationResponse)
+def generate_ideas(
+    payload: IdeaGenerationRequest,
+    session: Session = Depends(get_session),
+) -> IdeaGenerationResponse:
+    ideas = IdeaService(session).generate_from_gaps(payload.gap_ids, payload.max_ideas_per_gap)
+    return IdeaGenerationResponse(
+        ideas=[_serialize_idea(idea) for idea in ideas],
+        message=f"Generated {len(ideas)} research ideas from selected gaps.",
+    )
+
+
+@router.post("/gaps/{gap_id}/ideas", response_model=IdeaGenerationResponse)
+def generate_ideas_for_gap(
+    gap_id: str,
+    session: Session = Depends(get_session),
+) -> IdeaGenerationResponse:
+    if GapService(session).get_gap(gap_id) is None:
+        raise HTTPException(status_code=404, detail="Research gap not found")
+    ideas = IdeaService(session).generate_from_gaps([gap_id], 2)
+    return IdeaGenerationResponse(
+        ideas=[_serialize_idea(idea) for idea in ideas],
+        message=f"Generated {len(ideas)} research ideas from gap {gap_id}.",
+    )
+
+
+@router.get("/ideas", response_model=list[IdeaRead])
+def list_ideas(session: Session = Depends(get_session)) -> list[IdeaRead]:
+    return [_serialize_idea(idea) for idea in IdeaService(session).list_ideas()]
+
+
+@router.get("/ideas/{idea_id}", response_model=IdeaRead)
+def get_idea(idea_id: str, session: Session = Depends(get_session)) -> IdeaRead:
+    idea = IdeaService(session).get_idea(idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+    return _serialize_idea(idea)

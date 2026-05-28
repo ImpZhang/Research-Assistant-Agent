@@ -165,6 +165,43 @@ class IdeaCreate(BaseModel):
     target_venues: list[str] = Field(default_factory=list)
 
 
+class IdeaGenerationRequest(BaseModel):
+    gap_ids: list[str] = Field(default_factory=list)
+    max_ideas_per_gap: int = 2
+
+
+class IdeaRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    research_question: str
+    core_hypothesis: str
+    motivation: str = ""
+    related_gap_ids: list[str] = Field(default_factory=list)
+    related_paper_ids: list[str] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+    method_sketch: str = ""
+    expected_contribution: str = ""
+    novelty_argument: str = ""
+    datasets: list[str] = Field(default_factory=list)
+    baselines: list[str] = Field(default_factory=list)
+    metrics: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    resource_requirements: str = ""
+    target_venues: list[str] = Field(default_factory=list)
+    score: IdeaScore = Field(default_factory=IdeaScore)
+    status: str
+    version: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class IdeaGenerationResponse(BaseModel):
+    ideas: list[IdeaRead]
+    message: str
+
+
 class JobRead(BaseModel):
     id: str
     job_type: str

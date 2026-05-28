@@ -122,3 +122,41 @@ Future work should connect gap mining to idea generation and reviewer simulation
     fetched = client.get(f"/research/gaps/{gap_id}")
     assert fetched.status_code == 200
     assert fetched.json()["id"] == gap_id
+
+
+def test_generate_ideas_from_gap() -> None:
+    client = TestClient(create_app())
+    content = b"""Idea Generation Test Paper
+
+Introduction
+Research assistants need a way to turn literature gaps into testable hypotheses.
+
+Limitations
+The current pipeline does not yet create executable experiments from generated ideas.
+
+Conclusion
+Future work should connect idea generation to reviewer criticism.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("idea_generation_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    gaps = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 2})
+    assert gaps.status_code == 200
+    gap_id = gaps.json()["gaps"][0]["id"]
+
+    generated = client.post(f"/research/gaps/{gap_id}/ideas")
+    assert generated.status_code == 200
+    body = generated.json()
+    assert len(body["ideas"]) == 2
+    assert all(idea["related_gap_ids"] == [gap_id] for idea in body["ideas"])
+    assert all(idea["evidence_ids"] for idea in body["ideas"])
+    assert all(idea["score"]["overall_score"] for idea in body["ideas"])
+
+    idea_id = body["ideas"][0]["id"]
+    fetched = client.get(f"/research/ideas/{idea_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["id"] == idea_id
