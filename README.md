@@ -40,7 +40,7 @@ GET /research/jobs
 - OpenAI-compatible structured paper card extraction with safe heuristic fallback.
 - Research gap mining from evidence records.
 - OpenAI-compatible structured idea generation with deterministic fallback.
-- Local novelty/collision checks against existing evidence, gaps, and ideas.
+- Novelty/collision checks against existing evidence, gaps, ideas, and literature search results.
 - Local literature search with an optional OpenAlex external-search adapter.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.

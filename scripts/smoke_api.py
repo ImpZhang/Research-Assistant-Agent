@@ -131,6 +131,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workflow returned no gaps")
     if not workflow["ideas"]:
         raise RuntimeError("workflow returned no ideas")
+    if not workflow["novelty_checks"]:
+        raise RuntimeError("workflow returned no novelty checks")
+    first_novelty_check = workflow["novelty_checks"][0]
     job = require_ok(client.get(f"/research/jobs/{workflow['job_id']}"), "workflow job trace")
     embeddings = require_ok(
         client.post(
@@ -170,6 +173,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "gap_count": len(workflow["gaps"]),
         "idea_count": len(workflow["ideas"]),
         "novelty_check_count": len(workflow["novelty_checks"]),
+        "novelty_check_status": first_novelty_check["status"],
+        "novelty_literature_signal_count": len(
+            [
+                signal
+                for signal in first_novelty_check["collision_signals"]
+                if signal["source_type"] == "literature"
+            ]
+        ),
         "review_count": len(workflow["reviews"]),
         "experiment_plan_count": len(workflow["experiment_plans"]),
         "embedding_indexed_count": embeddings["indexed_count"],

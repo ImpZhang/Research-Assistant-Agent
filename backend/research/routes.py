@@ -79,6 +79,7 @@ def status() -> ProjectStatus:
             "idea_generation",
             "structured_idea_generation_adapter",
             "local_novelty_collision_check",
+            "literature_backed_novelty_screening",
             "reviewer_simulation",
             "experiment_planning",
             "literature_to_ideas_workflow",
@@ -501,10 +502,14 @@ def _serialize_novelty_check(check) -> NoveltyCheckRead:
 @router.post("/ideas/{idea_id}/novelty-check", response_model=NoveltyCheckRead)
 def create_idea_novelty_check(
     idea_id: str,
+    include_external: bool = True,
     session: Session = Depends(get_session),
 ) -> NoveltyCheckRead:
     try:
-        check = NoveltyService(session).create_check(idea_id)
+        check = NoveltyService(session).create_check(
+            idea_id,
+            include_external_literature=include_external,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _serialize_novelty_check(check)

@@ -265,14 +265,17 @@ Future work should compare generated ideas against recent preprints.
     assert ideas.status_code == 200
     idea_id = ideas.json()["ideas"][0]["id"]
 
-    check = client.post(f"/research/ideas/{idea_id}/novelty-check")
+    check = client.post(f"/research/ideas/{idea_id}/novelty-check?include_external=true")
     assert check.status_code == 200
     body = check.json()
     assert body["idea_id"] == idea_id
+    assert body["status"] == "completed_literature_screening"
     assert body["risk_level"] in {"unknown", "low", "medium", "high"}
-    assert body["checked_sources"]
-    assert "external_recent_papers" in body["missing_searches"]
+    assert "local_literature_search" in body["checked_sources"]
+    assert "external_literature_search:disabled" in body["checked_sources"]
+    assert "external_literature_search_disabled" in body["missing_searches"]
     assert body["recommended_actions"]
+    assert any(signal["source_type"] == "literature" for signal in body["collision_signals"])
 
     checks = client.get(f"/research/ideas/{idea_id}/novelty-checks")
     assert checks.status_code == 200
