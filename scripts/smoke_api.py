@@ -306,6 +306,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not proposal_graph_edges:
         raise RuntimeError("proposal revision task graph edges were not created")
+    lineage = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/lineage"),
+        "idea lineage",
+    )
+    if proposal_revision["id"] not in lineage["markdown_export"]:
+        raise RuntimeError("idea lineage markdown did not include proposal revision")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -504,6 +510,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "task_snapshot_task_count": task_snapshot["summary"]["task_count"],
         "task_snapshot_markdown_chars": len(task_snapshot_markdown),
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
+        "lineage_task_count": len(lineage["research_tasks"]),
+        "lineage_graph_edge_types": len(lineage["graph_edge_summary"]),
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),

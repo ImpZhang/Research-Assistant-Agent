@@ -20,7 +20,9 @@ from backend.research.models import (
     ProposalReview,
     ProposalRevision,
     RelatedWorkMatrix,
+    ResearchEdge,
     ResearchGap,
+    ResearchNode,
     Review,
     ResearchTask,
     TaskBoardSnapshot,
@@ -38,6 +40,7 @@ from backend.research.schemas import (
     IdeaFeedbackRead,
     IdeaGenerationRequest,
     IdeaGenerationResponse,
+    IdeaLineageResponse,
     IdeaPortfolioComparisonRequest,
     IdeaPortfolioComparisonResponse,
     IdeaPortfolioExportRequest,
@@ -911,6 +914,180 @@ def get_idea(idea_id: str, session: Session = Depends(get_session)) -> IdeaRead:
     if idea is None:
         raise HTTPException(status_code=404, detail="Idea not found")
     return _serialize_idea(idea)
+
+
+@router.get("/ideas/{idea_id}/lineage", response_model=IdeaLineageResponse)
+def get_idea_lineage(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> IdeaLineageResponse:
+    idea = IdeaService(session).get_idea(idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    matrices = (
+        session.query(RelatedWorkMatrix)
+        .filter(RelatedWorkMatrix.idea_id == idea_id)
+        .order_by(RelatedWorkMatrix.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    drafts = (
+        session.query(ProposalDraft)
+        .filter(ProposalDraft.idea_id == idea_id)
+        .order_by(ProposalDraft.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    reviews = (
+        session.query(ProposalReview)
+        .filter(ProposalReview.idea_id == idea_id)
+        .order_by(ProposalReview.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    revisions = (
+        session.query(ProposalRevision)
+        .filter(ProposalRevision.idea_id == idea_id)
+        .order_by(ProposalRevision.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    tasks = (
+        session.query(ResearchTask)
+        .filter(ResearchTask.idea_id == idea_id)
+        .order_by(ResearchTask.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    snapshots = (
+        session.query(TaskBoardSnapshot)
+        .filter(TaskBoardSnapshot.idea_id == idea_id)
+        .order_by(TaskBoardSnapshot.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    graph_edge_summary = _graph_edge_summary(
+        session,
+        [
+            idea_id,
+            *[matrix.id for matrix in matrices],
+            *[draft.id for draft in drafts],
+            *[review.id for review in reviews],
+            *[revision.id for revision in revisions],
+            *[task.id for task in tasks],
+            *[snapshot.id for snapshot in snapshots],
+        ],
+    )
+    markdown_export = _render_idea_lineage_markdown(
+        idea=idea,
+        matrices=matrices,
+        drafts=drafts,
+        reviews=reviews,
+        revisions=revisions,
+        tasks=tasks,
+        snapshots=snapshots,
+        graph_edge_summary=graph_edge_summary,
+    )
+    return IdeaLineageResponse(
+        idea=_serialize_idea(idea),
+        related_work_matrices=[_serialize_related_work_matrix(matrix) for matrix in matrices],
+        proposal_drafts=[_serialize_proposal_draft(draft) for draft in drafts],
+        proposal_reviews=[_serialize_proposal_review(review) for review in reviews],
+        proposal_revisions=[_serialize_proposal_revision(revision) for revision in revisions],
+        research_tasks=[_serialize_research_task(task) for task in tasks],
+        task_board_snapshots=[_serialize_task_board_snapshot(snapshot) for snapshot in snapshots],
+        graph_edge_summary=graph_edge_summary,
+        markdown_export=markdown_export,
+        message=(
+            f"Loaded lineage for idea {idea.id}: {len(drafts)} drafts, "
+            f"{len(reviews)} reviews, {len(revisions)} revisions, {len(tasks)} tasks."
+        ),
+    )
+
+
+def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str, int]:
+    if not canonical_keys:
+        return {}
+    nodes = (
+        session.query(ResearchNode)
+        .filter(ResearchNode.canonical_key.in_(canonical_keys))
+        .limit(500)
+        .all()
+    )
+    node_ids = {node.id for node in nodes}
+    if not node_ids:
+        return {}
+    edge_types = [
+        "idea_has_proposal_draft",
+        "proposal_review_reviews_draft",
+        "proposal_revision_updates_draft",
+        "proposal_revision_addresses_review",
+        "proposal_revision_creates_task",
+        "task_board_snapshot_tracks_task",
+    ]
+    edges = (
+        session.query(ResearchEdge)
+        .filter(ResearchEdge.edge_type.in_(edge_types))
+        .order_by(ResearchEdge.created_at.desc())
+        .limit(2000)
+        .all()
+    )
+    summary: dict[str, int] = {}
+    for edge in edges:
+        if edge.source_node_id in node_ids or edge.target_node_id in node_ids:
+            summary[edge.edge_type] = summary.get(edge.edge_type, 0) + 1
+    return summary
+
+
+def _render_idea_lineage_markdown(
+    *,
+    idea: Idea,
+    matrices: list[RelatedWorkMatrix],
+    drafts: list[ProposalDraft],
+    reviews: list[ProposalReview],
+    revisions: list[ProposalRevision],
+    tasks: list[ResearchTask],
+    snapshots: list[TaskBoardSnapshot],
+    graph_edge_summary: dict[str, int],
+) -> str:
+    lines = [
+        f"# Idea Lineage: {idea.title}",
+        "",
+        f"- Idea ID: `{idea.id}`",
+        f"- Related Work Matrices: {len(matrices)}",
+        f"- Proposal Drafts: {len(drafts)}",
+        f"- Proposal Reviews: {len(reviews)}",
+        f"- Proposal Revisions: {len(revisions)}",
+        f"- Research Tasks: {len(tasks)}",
+        f"- Task Board Snapshots: {len(snapshots)}",
+        "",
+        "## Graph Edge Summary",
+        "",
+    ]
+    if graph_edge_summary:
+        lines.extend(
+            [f"- `{edge_type}`: {count}" for edge_type, count in graph_edge_summary.items()]
+        )
+    else:
+        lines.append("- No proposal artifact graph edges found.")
+
+    lines.extend(["", "## Latest Proposal Artifacts", ""])
+    for draft in drafts[:3]:
+        lines.append(f"- Draft `{draft.id}`: {draft.title}")
+    for review in reviews[:3]:
+        lines.append(f"- Review `{review.id}`: {review.decision} score={review.readiness_score}")
+    for revision in revisions[:3]:
+        lines.append(f"- Revision `{revision.id}`: {revision.status}")
+
+    lines.extend(["", "## Next Tasks", ""])
+    next_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}][:10]
+    if next_tasks:
+        for task in next_tasks:
+            lines.append(f"- `{task.priority}` `{task.status}` {task.title}")
+    else:
+        lines.append("- No open tasks found.")
+    return "\n".join(lines).strip() + "\n"
 
 
 @router.post("/ideas/{idea_id}/related-work-matrix", response_model=RelatedWorkMatrixRead)

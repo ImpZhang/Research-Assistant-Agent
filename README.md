@@ -57,6 +57,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Research task backlog generation from proposal revisions, with task listing and status updates.
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.
 - GraphRAG-lite links for proposal drafts, reviews, revisions, research tasks, and task board snapshots.
+- Idea lineage endpoint that hydrates matrices, proposal artifacts, tasks, task snapshots, and graph edge summaries.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
@@ -196,6 +197,7 @@ POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/review
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}/export/markdown
+GET  /research/ideas/{idea_id}/lineage
 POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revise
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}

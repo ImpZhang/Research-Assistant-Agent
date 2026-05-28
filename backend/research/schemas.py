@@ -450,6 +450,19 @@ class TaskBoardSnapshotDetail(TaskBoardSnapshotRead):
     markdown_export: str = ""
 
 
+class IdeaLineageResponse(BaseModel):
+    idea: IdeaRead
+    related_work_matrices: list[RelatedWorkMatrixRead] = Field(default_factory=list)
+    proposal_drafts: list[ProposalDraftRead] = Field(default_factory=list)
+    proposal_reviews: list[ProposalReviewRead] = Field(default_factory=list)
+    proposal_revisions: list[ProposalRevisionRead] = Field(default_factory=list)
+    research_tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    task_board_snapshots: list[TaskBoardSnapshotRead] = Field(default_factory=list)
+    graph_edge_summary: dict[str, int] = Field(default_factory=dict)
+    markdown_export: str = ""
+    message: str
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

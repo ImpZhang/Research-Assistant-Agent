@@ -500,6 +500,24 @@ async function saveTaskSnapshot() {
   }
 }
 
+async function loadIdeaLineage() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Loading idea lineage...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/lineage`);
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)} Graph edge types: ${Object.keys(body.graph_edge_summary).length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function rankIdeas() {
   renderResult("workflowResult", "Ranking idea portfolio...", "warn");
   try {
@@ -600,6 +618,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("proposalRevisionButton").addEventListener("click", reviseProposalDraft);
   $("taskBacklogButton").addEventListener("click", createTaskBacklog);
   $("taskSnapshotButton").addEventListener("click", saveTaskSnapshot);
+  $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);

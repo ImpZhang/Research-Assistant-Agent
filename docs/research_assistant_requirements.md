@@ -699,6 +699,12 @@ proposal、review、revision、task 和 task snapshot 都需要进入 GraphRAG-l
 - revision 可以追踪到 research tasks。
 - task snapshot 可以追踪到当时的任务集合。
 
+系统需要提供 idea lineage：
+
+- 一次性返回 idea 的 related work、proposal、review、revision、task、snapshot。
+- 返回 graph edge summary，说明研究对象之间的演化关系。
+- 支持 Markdown 导出，用于科研日志、导师沟通和 MCP 上下文。
+
 ### 6.5.4 Idea 输出模板
 
 ```text

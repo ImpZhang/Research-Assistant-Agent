@@ -40,6 +40,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/proposal-drafts/${state.latestProposalDraftId}/revise" in script.text
     assert "/revisions/${state.latestProposalRevisionId}/tasks" in script.text
     assert "/research/tasks/snapshots" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/lineage" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
     assert "/research/ideas/portfolios" in script.text
@@ -554,6 +555,19 @@ Future work should preserve proposal drafts as reviewable artifacts.
         edges = client.get(f"/research/graph/edges?edge_type={edge_type}")
         assert edges.status_code == 200
         assert edges.json()
+
+    lineage = client.get(f"/research/ideas/{idea_id}/lineage")
+    assert lineage.status_code == 200
+    lineage_body = lineage.json()
+    assert lineage_body["idea"]["id"] == idea_id
+    assert lineage_body["related_work_matrices"][0]["id"] == matrix_id
+    assert lineage_body["proposal_drafts"][0]["id"] == body["id"]
+    assert lineage_body["proposal_reviews"][0]["id"] == review_body["id"]
+    assert lineage_body["proposal_revisions"][0]["id"] == revision_body["id"]
+    assert any(task["id"] == task_id for task in lineage_body["research_tasks"])
+    assert lineage_body["task_board_snapshots"][0]["id"] == snapshot_body["id"]
+    assert lineage_body["graph_edge_summary"]["proposal_revision_creates_task"] > 0
+    assert "# Idea Lineage:" in lineage_body["markdown_export"]
 
 
 def test_refine_idea_creates_traceable_revision() -> None:

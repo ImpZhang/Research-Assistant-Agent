@@ -970,6 +970,7 @@ POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/review
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}/export/markdown
+GET  /research/ideas/{idea_id}/lineage
 POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revise
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}
@@ -1003,6 +1004,8 @@ GET  /research/ideas/{idea_id}/feedback
 `/tasks/snapshots` 固化某个 task board 状态，保存 task ids、status/priority summary、blocked tasks、next actions 和 Markdown export。它用于组会汇报、日/周复盘，以及后续自动提醒或 MCP task 工具的输入。
 
 Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_draft`、`proposal_review_reviews_draft`、`proposal_revision_updates_draft`、`proposal_revision_addresses_review`、`proposal_revision_creates_task`、`task_board_snapshot_tracks_task`。这使得后续 context search、MCP tool 或 workflow planner 可以沿着 idea 的演化链路追踪到草案、评审、修订和执行任务。
+
+`/ideas/{idea_id}/lineage` 将 idea 的 related-work matrices、proposal drafts、proposal reviews、proposal revisions、research tasks、task board snapshots 与 graph edge summary 聚合为一个响应，并提供 Markdown lineage export，方便前端和 MCP 一次性读取研究演化轨迹。
 
 `/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
 
