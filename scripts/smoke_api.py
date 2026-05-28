@@ -58,11 +58,11 @@ class InProcessClient:
 
     def get(self, path: str) -> ResponseAdapter:
         response = self.client.get(path)
-        return ResponseAdapter(response.status_code, response.json())
+        return ResponseAdapter(response.status_code, decode_response_body(response))
 
     def post(self, path: str, *, json_body: dict | None = None, files: dict | None = None) -> ResponseAdapter:
         response = self.client.post(path, json=json_body, files=files)
-        return ResponseAdapter(response.status_code, response.json())
+        return ResponseAdapter(response.status_code, decode_response_body(response))
 
 
 class HttpClient:
@@ -71,11 +71,18 @@ class HttpClient:
 
     def get(self, path: str) -> ResponseAdapter:
         response = requests.get(f"{self.base_url}{path}", timeout=20)
-        return ResponseAdapter(response.status_code, response.json())
+        return ResponseAdapter(response.status_code, decode_response_body(response))
 
     def post(self, path: str, *, json_body: dict | None = None, files: dict | None = None) -> ResponseAdapter:
         response = requests.post(f"{self.base_url}{path}", json=json_body, files=files, timeout=30)
-        return ResponseAdapter(response.status_code, response.json())
+        return ResponseAdapter(response.status_code, decode_response_body(response))
+
+
+def decode_response_body(response: Any) -> Any:
+    try:
+        return response.json()
+    except ValueError:
+        return response.text
 
 
 def require_ok(response: ResponseAdapter, label: str) -> Any:
@@ -116,6 +123,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
 
     review = require_ok(client.post(f"/research/ideas/{idea_id}/review"), "review generation")
     plan = require_ok(client.post(f"/research/ideas/{idea_id}/experiment-plan"), "experiment plan generation")
+    idea_export = require_ok(client.get(f"/research/ideas/{idea_id}/export/markdown"), "idea markdown export")
     nodes = require_ok(client.get("/research/graph/nodes"), "graph nodes")
     edges = require_ok(client.get("/research/graph/edges"), "graph edges")
 
@@ -128,6 +136,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "idea_count": len(ideas["ideas"]),
         "review_decision": review["decision"],
         "experiment_plan_id": plan["id"],
+        "idea_export_chars": len(idea_export),
         "graph_node_count": len(nodes),
         "graph_edge_count": len(edges),
     }

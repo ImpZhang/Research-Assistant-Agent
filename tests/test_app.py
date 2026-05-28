@@ -202,6 +202,63 @@ Future work should produce reviewer critiques and experiment plans.
     assert plan_body["expected_tables"]
 
 
+def test_markdown_exports_for_card_and_idea_dossier() -> None:
+    client = TestClient(create_app())
+    content = b"""Markdown Export Test Paper
+
+Introduction
+Research assistants should turn evidence-backed ideas into portable proposal notes.
+
+Method
+The system links papers, evidence, gaps, ideas, reviewer critiques, and experiment plans.
+
+Limitations
+The current workflow still needs exportable dossiers for researcher review.
+
+Conclusion
+Future work should make generated ideas easy to share and revise.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("markdown_export_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    extract = client.post(f"/research/papers/{paper_id}/card/extract-structured")
+    assert extract.status_code == 200
+
+    card_export = client.get(f"/research/papers/{paper_id}/card/export/markdown")
+    assert card_export.status_code == 200
+    assert card_export.headers["content-type"].startswith("text/markdown")
+    assert "# Paper Card:" in card_export.text
+    assert "## Method" in card_export.text
+    assert "Evidence IDs" not in card_export.text
+
+    gaps = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 2})
+    assert gaps.status_code == 200
+    gap_id = gaps.json()["gaps"][0]["id"]
+    ideas = client.post(f"/research/gaps/{gap_id}/ideas")
+    assert ideas.status_code == 200
+    idea_id = ideas.json()["ideas"][0]["id"]
+
+    review = client.post(f"/research/ideas/{idea_id}/review")
+    assert review.status_code == 200
+    plan = client.post(f"/research/ideas/{idea_id}/experiment-plan")
+    assert plan.status_code == 200
+
+    idea_export = client.get(f"/research/ideas/{idea_id}/export/markdown")
+    assert idea_export.status_code == 200
+    assert idea_export.headers["content-type"].startswith("text/markdown")
+    markdown = idea_export.text
+    assert "# Research Idea Dossier:" in markdown
+    assert "## Related Research Gaps" in markdown
+    assert "## Evidence" in markdown
+    assert "## Reviewer Simulation" in markdown
+    assert "## Experiment Plan" in markdown
+    assert f"`{gap_id}`" in markdown
+
+
 def test_graph_rag_lite_records_workflow_links() -> None:
     client = TestClient(create_app())
     content = b"""Graph Link Test Paper

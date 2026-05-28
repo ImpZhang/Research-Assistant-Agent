@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from backend.research.config import settings
@@ -27,6 +28,7 @@ from backend.research.schemas import (
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.experiment_service import ExperimentService
+from backend.research.services.export_service import ExportService
 from backend.research.services.gap_service import GapService
 from backend.research.services.graph_service import GraphService
 from backend.research.services.idea_service import IdeaService
@@ -50,14 +52,24 @@ def status() -> ProjectStatus:
             "fastapi_app",
             "sqlalchemy_models",
             "paper_registry_api",
+            "document_ingestion_api",
+            "evidence_extraction",
+            "paper_card_extraction",
+            "structured_extraction_adapter",
+            "research_gap_mining",
+            "idea_generation",
+            "reviewer_simulation",
+            "experiment_planning",
             "graph_rag_lite_schema",
+            "graph_rag_lite_workflow_links",
+            "markdown_exports",
             "requirements_and_technical_docs",
         ],
         next_capabilities=[
-            "document_ingestion_graph",
-            "paper_card_extraction",
-            "evidence_extraction",
             "evidence_vector_index",
+            "external_novelty_search",
+            "frontend_research_workbench",
+            "mcp_tool_bridge",
         ],
     )
 
@@ -233,6 +245,22 @@ def extract_paper_card_structured(
     return _serialize_card(card)
 
 
+@router.get(
+    "/papers/{paper_id}/card/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_paper_card_markdown(
+    paper_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    try:
+        markdown = ExportService(session).render_paper_card_markdown(paper_id)
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return PlainTextResponse(markdown, media_type="text/markdown")
+
+
 def _serialize_gap(gap) -> ResearchGapRead:
     return ResearchGapRead(
         id=gap.id,
@@ -342,6 +370,21 @@ def get_idea(idea_id: str, session: Session = Depends(get_session)) -> IdeaRead:
     if idea is None:
         raise HTTPException(status_code=404, detail="Idea not found")
     return _serialize_idea(idea)
+
+
+@router.get(
+    "/ideas/{idea_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_idea_markdown(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    try:
+        markdown = ExportService(session).render_idea_markdown(idea_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return PlainTextResponse(markdown, media_type="text/markdown")
 
 
 def _serialize_review(review) -> ReviewRead:
