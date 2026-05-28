@@ -104,6 +104,36 @@ class ResearchGapCreate(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
 
 
+class GapMiningRequest(BaseModel):
+    paper_ids: list[str] = Field(default_factory=list)
+    max_gaps: int = 10
+
+
+class ResearchGapRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    description: str
+    gap_type: str
+    source_paper_ids: list[str] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+    why_important: str = ""
+    why_unsolved: str = ""
+    possible_approaches: list[str] = Field(default_factory=list)
+    feasibility_score: float | None = None
+    novelty_score: float | None = None
+    risk_level: str = ""
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class GapMiningResponse(BaseModel):
+    gaps: list[ResearchGapRead]
+    message: str
+
+
 class IdeaScore(BaseModel):
     novelty: float | None = None
     feasibility: float | None = None

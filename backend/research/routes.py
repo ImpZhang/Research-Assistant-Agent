@@ -6,6 +6,8 @@ from backend.research.db import get_session
 from backend.research.models import Chunk, Evidence, Paper, PaperSection
 from backend.research.schemas import (
     EvidenceRead,
+    GapMiningRequest,
+    GapMiningResponse,
     PaperCreate,
     PaperCardPayload,
     PaperCardRead,
@@ -13,8 +15,10 @@ from backend.research.schemas import (
     PaperRead,
     PaperUploadResponse,
     ProjectStatus,
+    ResearchGapRead,
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
+from backend.research.services.gap_service import GapService
 from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.paper_service import PaperService
 
@@ -201,3 +205,48 @@ def extract_paper_card(paper_id: str, session: Session = Depends(get_session)) -
         status_code = 404 if "not found" in str(exc).lower() else 400
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     return _serialize_card(card)
+
+
+def _serialize_gap(gap) -> ResearchGapRead:
+    return ResearchGapRead(
+        id=gap.id,
+        title=gap.title,
+        description=gap.description,
+        gap_type=gap.gap_type,
+        source_paper_ids=gap.source_paper_ids_json or [],
+        evidence_ids=gap.evidence_ids_json or [],
+        why_important=gap.why_important,
+        why_unsolved=gap.why_unsolved,
+        possible_approaches=gap.possible_approaches_json or [],
+        feasibility_score=gap.feasibility_score,
+        novelty_score=gap.novelty_score,
+        risk_level=gap.risk_level,
+        status=gap.status,
+        created_at=gap.created_at,
+        updated_at=gap.updated_at,
+    )
+
+
+@router.post("/gaps/mine", response_model=GapMiningResponse)
+def mine_gaps(
+    payload: GapMiningRequest,
+    session: Session = Depends(get_session),
+) -> GapMiningResponse:
+    gaps = GapService(session).mine_gaps(payload.paper_ids, payload.max_gaps)
+    return GapMiningResponse(
+        gaps=[_serialize_gap(gap) for gap in gaps],
+        message=f"Generated {len(gaps)} research gaps from available evidence.",
+    )
+
+
+@router.get("/gaps", response_model=list[ResearchGapRead])
+def list_gaps(session: Session = Depends(get_session)) -> list[ResearchGapRead]:
+    return [_serialize_gap(gap) for gap in GapService(session).list_gaps()]
+
+
+@router.get("/gaps/{gap_id}", response_model=ResearchGapRead)
+def get_gap(gap_id: str, session: Session = Depends(get_session)) -> ResearchGapRead:
+    gap = GapService(session).get_gap(gap_id)
+    if gap is None:
+        raise HTTPException(status_code=404, detail="Research gap not found")
+    return _serialize_gap(gap)

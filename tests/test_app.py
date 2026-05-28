@@ -86,3 +86,39 @@ Future work should replace heuristic extraction with LLM structured extraction.
     fetched = client.get(f"/research/papers/{paper_id}/card")
     assert fetched.status_code == 200
     assert fetched.json()["id"] == card["id"]
+
+
+def test_mine_research_gaps_from_evidence() -> None:
+    client = TestClient(create_app())
+    content = b"""Gap Mining Test Paper
+
+Introduction
+Current research assistants still struggle to convert raw literature into testable research gaps.
+
+Method
+The system stores evidence as first-class records.
+
+Limitations
+This preliminary version does not yet check novelty against external literature.
+
+Conclusion
+Future work should connect gap mining to idea generation and reviewer simulation.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("gap_mining_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    response = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 5})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["gaps"]
+    assert any(gap["gap_type"] in {"method_gap", "application_gap"} for gap in body["gaps"])
+    assert all(gap["evidence_ids"] for gap in body["gaps"])
+
+    gap_id = body["gaps"][0]["id"]
+    fetched = client.get(f"/research/gaps/{gap_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["id"] == gap_id
