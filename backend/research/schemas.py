@@ -370,6 +370,22 @@ class LiteratureSearchResponse(BaseModel):
     message: str
 
 
+class EmbeddingRebuildRequest(BaseModel):
+    owner_types: list[str] = Field(default_factory=lambda: ["evidence", "gap", "idea"])
+    paper_ids: list[str] = Field(default_factory=list)
+    limit: int = 500
+
+
+class EmbeddingRebuildResponse(BaseModel):
+    model: str
+    dimension: int
+    indexed_count: int
+    evidence_count: int
+    gap_count: int
+    idea_count: int
+    message: str
+
+
 class JobRead(BaseModel):
     id: str
     job_type: str

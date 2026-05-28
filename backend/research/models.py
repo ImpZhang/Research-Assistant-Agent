@@ -226,6 +226,19 @@ class ResearchEdge(Base, TimestampMixin):
     payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class ResearchEmbedding(Base, TimestampMixin):
+    __tablename__ = "research_embeddings"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    owner_type: Mapped[str] = mapped_column(String(128), index=True)
+    owner_id: Mapped[str] = mapped_column(String(64), index=True)
+    embedding_model: Mapped[str] = mapped_column(String(255), default="local_hash_embedding_v0")
+    dimension: Mapped[int] = mapped_column(Integer, default=128)
+    text_hash: Mapped[str] = mapped_column(String(64), index=True, default="")
+    vector_json: Mapped[list] = mapped_column(JSON, default=list)
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
 class Job(Base, TimestampMixin):
     __tablename__ = "jobs"
 

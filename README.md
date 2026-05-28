@@ -44,9 +44,10 @@ GET /research/jobs
 - Local literature search with an optional OpenAlex external-search adapter.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.
+- Local hashed embedding index for evidence, gaps, and ideas.
 - Markdown export for paper cards and idea dossiers.
 - GraphRAG-lite node and edge persistence.
-- Query-time context retrieval over evidence, gaps, ideas, and graph neighborhoods.
+- Query-time lexical/vector context retrieval over evidence, gaps, ideas, and graph neighborhoods.
 - Synchronous workflow job trace with input, output, status, progress, and errors.
 - End-to-end smoke test covering the current research workflow.
 
@@ -139,6 +140,7 @@ GET  /research/papers
 GET  /research/papers/{paper_id}
 GET  /research/papers/{paper_id}/evidence
 POST /research/literature/search
+POST /research/embeddings/rebuild
 
 POST /research/papers/{paper_id}/card/extract-structured
 GET  /research/papers/{paper_id}/card/export/markdown
@@ -159,7 +161,7 @@ GET  /research/jobs/{job_id}
 
 ## Near-Term Roadmap
 
-- Add embedding-backed vector retrieval and reranking.
+- Add external embedding providers and learned reranking.
 - Add external novelty search through OpenAlex/Semantic Scholar/arXiv adapters.
 - Move long workflows to async/background execution.
 - Add a research workbench frontend.

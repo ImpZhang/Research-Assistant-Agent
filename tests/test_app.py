@@ -434,6 +434,22 @@ Future work should make GraphRAG context retrieval stronger.
     )
     assert workflow.status_code == 200
 
+    embeddings = client.post(
+        "/research/embeddings/rebuild",
+        json={
+            "paper_ids": [paper_id],
+            "owner_types": ["evidence", "gap", "idea"],
+            "limit": 50,
+        },
+    )
+    assert embeddings.status_code == 200
+    embedding_body = embeddings.json()
+    assert embedding_body["model"] == "local_hash_embedding_v0"
+    assert embedding_body["dimension"] == 128
+    assert embedding_body["evidence_count"] >= 1
+    assert embedding_body["gap_count"] >= 1
+    assert embedding_body["idea_count"] >= 1
+
     response = client.post(
         "/research/search/context",
         json={
@@ -445,9 +461,10 @@ Future work should make GraphRAG context retrieval stronger.
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["retrieval_method"] == "lexical_graph_rag_lite_v0"
+    assert body["retrieval_method"] == "lexical_vector_graph_rag_lite_v0"
     assert body["evidences"]
     assert body["gaps"] or body["ideas"]
+    assert any("vector" in item["matched_terms"] for item in body["evidences"])
     assert body["graph_nodes"]
     assert body["graph_edges"]
     assert "Matched" in body["answer_brief"]

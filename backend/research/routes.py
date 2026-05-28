@@ -8,6 +8,8 @@ from backend.research.models import Chunk, Evidence, Job, Paper, PaperSection
 from backend.research.schemas import (
     ContextSearchRequest,
     ContextSearchResponse,
+    EmbeddingRebuildRequest,
+    EmbeddingRebuildResponse,
     EvidenceRead,
     ExperimentPlanRead,
     GapMiningRequest,
@@ -38,6 +40,7 @@ from backend.research.schemas import (
     ScoredResearchGapRead,
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
+from backend.research.services.embedding_service import EmbeddingService
 from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.export_service import ExportService
 from backend.research.services.gap_service import GapService
@@ -81,6 +84,8 @@ def status() -> ProjectStatus:
             "literature_to_ideas_workflow",
             "workflow_job_trace",
             "literature_search_adapter",
+            "local_embedding_index",
+            "embedding_backed_context_retrieval",
             "lexical_context_retrieval",
             "graph_rag_lite_schema",
             "graph_rag_lite_workflow_links",
@@ -89,8 +94,8 @@ def status() -> ProjectStatus:
             "requirements_and_technical_docs",
         ],
         next_capabilities=[
-            "evidence_vector_index",
-            "embedding_reranking",
+            "external_embedding_provider",
+            "learned_reranking",
             "external_novelty_search",
             "frontend_research_workbench",
             "mcp_tool_bridge",
@@ -138,6 +143,27 @@ def search_literature(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/embeddings/rebuild", response_model=EmbeddingRebuildResponse)
+def rebuild_embeddings(
+    payload: EmbeddingRebuildRequest,
+    session: Session = Depends(get_session),
+) -> EmbeddingRebuildResponse:
+    stats = EmbeddingService(session).rebuild_index(
+        owner_types=payload.owner_types,
+        paper_ids=payload.paper_ids,
+        limit=payload.limit,
+    )
+    return EmbeddingRebuildResponse(
+        model=stats.model,
+        dimension=stats.dimension,
+        indexed_count=stats.indexed_count,
+        evidence_count=stats.evidence_count,
+        gap_count=stats.gap_count,
+        idea_count=stats.idea_count,
+        message=f"Indexed {stats.indexed_count} research objects for vector retrieval.",
+    )
 
 
 @router.get("/papers", response_model=list[PaperRead])
@@ -661,7 +687,7 @@ def search_research_context(
 
     return ContextSearchResponse(
         query=payload.query,
-        retrieval_method="lexical_graph_rag_lite_v0",
+        retrieval_method="lexical_vector_graph_rag_lite_v0",
         answer_brief=result.answer_brief,
         evidences=[
             ScoredEvidenceRead(

@@ -132,6 +132,17 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     if not workflow["ideas"]:
         raise RuntimeError("workflow returned no ideas")
     job = require_ok(client.get(f"/research/jobs/{workflow['job_id']}"), "workflow job trace")
+    embeddings = require_ok(
+        client.post(
+            "/research/embeddings/rebuild",
+            json_body={
+                "paper_ids": [paper_id],
+                "owner_types": ["evidence", "gap", "idea"],
+                "limit": 100,
+            },
+        ),
+        "embedding rebuild",
+    )
     context = require_ok(
         client.post(
             "/research/search/context",
@@ -161,6 +172,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "novelty_check_count": len(workflow["novelty_checks"]),
         "review_count": len(workflow["reviews"]),
         "experiment_plan_count": len(workflow["experiment_plans"]),
+        "embedding_indexed_count": embeddings["indexed_count"],
         "markdown_export_chars": len(workflow["markdown_export"]),
         "context_evidence_count": len(context["evidences"]),
         "context_graph_node_count": len(context["graph_nodes"]),

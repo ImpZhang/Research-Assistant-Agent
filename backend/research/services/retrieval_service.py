@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from backend.research.models import Evidence, Idea, ResearchEdge, ResearchGap, ResearchNode
+from backend.research.services.embedding_service import EmbeddingService, VectorHit
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_\-]{2,}")
@@ -43,9 +44,16 @@ class RetrievalService:
             raise ValueError("Query must contain at least one searchable term")
 
         limit = max(1, min(limit, 25))
+        embedding = EmbeddingService(self.session)
+        embedding.ensure_indexed(paper_ids or [], 800)
+        vector_hits = embedding.search(query, limit=limit * 6)
+
         evidences = self._score_evidences(terms, paper_ids or [], limit)
         gaps = self._score_gaps(terms, paper_ids or [], limit)
         ideas = self._score_ideas(terms, paper_ids or [], limit)
+        evidences = self._merge_vector_hits("evidence", evidences, vector_hits, paper_ids or [], limit)
+        gaps = self._merge_vector_hits("gap", gaps, vector_hits, paper_ids or [], limit)
+        ideas = self._merge_vector_hits("idea", ideas, vector_hits, paper_ids or [], limit)
 
         graph_nodes: list[ResearchNode] = []
         graph_edges: list[ResearchEdge] = []
@@ -212,6 +220,53 @@ class RetrievalService:
             .all()
         )
         return nodes, edges
+
+    def _merge_vector_hits(
+        self,
+        owner_type: str,
+        scored: list[ScoredItem],
+        vector_hits: list[VectorHit],
+        paper_ids: list[str],
+        limit: int,
+    ) -> list[ScoredItem]:
+        by_id = {item.item.id: item for item in scored}
+        model_by_type = {"evidence": Evidence, "gap": ResearchGap, "idea": Idea}
+        model = model_by_type[owner_type]
+
+        for hit in vector_hits:
+            if hit.owner_type != owner_type:
+                continue
+            item = self.session.get(model, hit.owner_id)
+            if item is None or not self._matches_paper_filter(owner_type, item, paper_ids):
+                continue
+
+            vector_boost = round(hit.score * 3.0, 4)
+            if item.id in by_id:
+                current = by_id[item.id]
+                current.score = round(current.score + vector_boost, 4)
+                if "vector" not in current.matched_terms:
+                    current.matched_terms.append("vector")
+            else:
+                by_id[item.id] = ScoredItem(
+                    item=item,
+                    score=vector_boost,
+                    matched_terms=["vector"],
+                )
+
+        merged = list(by_id.values())
+        merged.sort(key=lambda item: item.score, reverse=True)
+        return merged[:limit]
+
+    def _matches_paper_filter(self, owner_type: str, item: Any, paper_ids: list[str]) -> bool:
+        if not paper_ids:
+            return True
+        if owner_type == "evidence":
+            return item.paper_id in paper_ids
+        if owner_type == "gap":
+            return bool(set(item.source_paper_ids_json or []).intersection(paper_ids))
+        if owner_type == "idea":
+            return bool(set(item.related_paper_ids_json or []).intersection(paper_ids))
+        return True
 
     def _score_item(
         self,
