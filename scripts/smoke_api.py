@@ -97,7 +97,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     paper_id = upload["paper"]["id"]
 
-    card = require_ok(client.post(f"/research/papers/{paper_id}/card/extract"), "paper card extraction")
+    card = require_ok(
+        client.post(f"/research/papers/{paper_id}/card/extract-structured"),
+        "structured paper card extraction",
+    )
     gaps = require_ok(
         client.post("/research/gaps/mine", json_body={"paper_ids": [paper_id], "max_gaps": 4}),
         "gap mining",

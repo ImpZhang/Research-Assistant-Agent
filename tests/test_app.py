@@ -237,3 +237,31 @@ Future work should expose graph nodes and edges through the API.
     assert "paper_has_evidence" in edge_types
     assert "gap_supported_by_evidence" in edge_types
     assert "idea_addresses_gap" in edge_types
+
+
+def test_structured_card_extraction_falls_back_without_model_config() -> None:
+    client = TestClient(create_app())
+    content = b"""Structured Extraction Fallback Test
+
+Abstract
+This paper validates the structured extraction endpoint.
+
+Method
+The endpoint should call a model when configured and otherwise fall back safely.
+
+Conclusion
+Future work should add stronger prompt evaluation.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("structured_fallback_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    response = client.post(f"/research/papers/{paper_id}/card/extract-structured")
+    assert response.status_code == 200
+    card = response.json()
+    assert card["extraction_status"] == "completed"
+    assert "heuristic" in card["extraction_model"]
+    assert card["payload"]["method"]
