@@ -242,6 +242,43 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("saved portfolio fetch returned the wrong snapshot")
     if "Smoke Saved Research Idea Portfolio" not in saved_portfolio_markdown:
         raise RuntimeError("saved portfolio markdown did not include the saved title")
+    baseline_snapshot = require_ok(
+        client.post(
+            "/research/ideas/portfolios",
+            json_body={
+                "idea_ids": [source_idea_id],
+                "limit": 1,
+                "deduplicate_lineage": False,
+                "title": "Smoke Baseline Portfolio",
+                "created_by": "smoke_api",
+            },
+        ),
+        "baseline idea portfolio snapshot",
+    )
+    portfolio_comparison = require_ok(
+        client.post(
+            "/research/ideas/portfolios/compare",
+            json_body={
+                "baseline_snapshot_id": baseline_snapshot["id"],
+                "candidate_snapshot_id": portfolio_snapshot["id"],
+            },
+        ),
+        "idea portfolio snapshot comparison",
+    )
+    portfolio_comparison_markdown = require_ok(
+        client.post(
+            "/research/ideas/portfolios/compare/export/markdown",
+            json_body={
+                "baseline_snapshot_id": baseline_snapshot["id"],
+                "candidate_snapshot_id": portfolio_snapshot["id"],
+            },
+        ),
+        "idea portfolio comparison markdown export",
+    )
+    if refined_idea["id"] not in portfolio_comparison["added_idea_ids"]:
+        raise RuntimeError("portfolio comparison did not record the refined idea as added")
+    if "# Research Idea Portfolio Comparison" not in portfolio_comparison_markdown:
+        raise RuntimeError("portfolio comparison markdown did not include the report title")
     async_job = require_ok(
         client.post(
             "/research/workflows/literature-to-ideas/async",
@@ -312,6 +349,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "portfolio_markdown_chars": len(portfolio_markdown),
         "portfolio_snapshot_id": portfolio_snapshot["id"],
         "portfolio_snapshot_idea_count": len(portfolio_snapshot["idea_ids"]),
+        "portfolio_comparison_added_count": len(portfolio_comparison["added_idea_ids"]),
+        "portfolio_comparison_markdown_chars": len(portfolio_comparison_markdown),
         "async_workflow_job_id": async_job["id"],
         "async_workflow_job_status": async_job_status["status"],
         "card_id": workflow["card"]["id"],

@@ -55,6 +55,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.
 - Persisted idea portfolio snapshots for saved shortlist/ranking review states.
+- Portfolio snapshot comparison for tracking shortlist/ranking changes over time.
 - Local literature search with an optional OpenAlex external-search adapter.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.
@@ -179,6 +180,8 @@ POST /research/ideas/rank
 POST /research/ideas/rank/export/markdown
 POST /research/ideas/portfolios
 GET  /research/ideas/portfolios
+POST /research/ideas/portfolios/compare
+POST /research/ideas/portfolios/compare/export/markdown
 GET  /research/ideas/portfolios/{portfolio_id}
 GET  /research/ideas/portfolios/{portfolio_id}/export/markdown
 POST /research/ideas/{idea_id}/feedback

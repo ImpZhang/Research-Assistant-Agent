@@ -59,6 +59,47 @@ class PortfolioService:
     def get_snapshot(self, snapshot_id: str) -> IdeaPortfolioSnapshot | None:
         return self.session.get(IdeaPortfolioSnapshot, snapshot_id)
 
+    def compare_snapshots(
+        self,
+        baseline_snapshot_id: str,
+        candidate_snapshot_id: str,
+    ) -> dict:
+        baseline = self.get_snapshot(baseline_snapshot_id)
+        candidate = self.get_snapshot(candidate_snapshot_id)
+        if baseline is None:
+            raise ValueError("Baseline portfolio snapshot not found")
+        if candidate is None:
+            raise ValueError("Candidate portfolio snapshot not found")
+
+        baseline_items = _items_by_idea_id(baseline.ranked_items_json or [])
+        candidate_items = _items_by_idea_id(candidate.ranked_items_json or [])
+        baseline_ids = set(baseline_items)
+        candidate_ids = set(candidate_items)
+        added_ids = sorted(candidate_ids - baseline_ids)
+        removed_ids = sorted(baseline_ids - candidate_ids)
+        kept_ids = sorted(baseline_ids & candidate_ids)
+        rank_changes = [
+            _rank_change_payload(baseline_items[idea_id], candidate_items[idea_id])
+            for idea_id in kept_ids
+        ]
+        rank_changes.sort(key=lambda item: (item["to_rank"], item["idea_id"]))
+        comparison = {
+            "baseline_snapshot_id": baseline.id,
+            "candidate_snapshot_id": candidate.id,
+            "baseline_title": baseline.title,
+            "candidate_title": candidate.title,
+            "added_idea_ids": added_ids,
+            "removed_idea_ids": removed_ids,
+            "kept_idea_ids": kept_ids,
+            "rank_changes": rank_changes,
+            "summary": (
+                f"Compared portfolio snapshots: {len(added_ids)} added, "
+                f"{len(removed_ids)} removed, {len(kept_ids)} kept."
+            ),
+        }
+        comparison["markdown_export"] = render_portfolio_comparison_markdown(comparison)
+        return comparison
+
 
 def render_idea_portfolio_markdown(title: str, ranked_items: list[RankedIdea]) -> str:
     clean_title = _clean_text(title) or "Research Idea Portfolio"
@@ -118,6 +159,40 @@ def render_snapshot_markdown(snapshot: IdeaPortfolioSnapshot) -> str:
     return snapshot.markdown_export
 
 
+def render_portfolio_comparison_markdown(comparison: dict) -> str:
+    lines = [
+        "# Research Idea Portfolio Comparison",
+        "",
+        f"- Baseline: `{comparison['baseline_snapshot_id']}` {_clean_text(comparison['baseline_title'])}",
+        f"- Candidate: `{comparison['candidate_snapshot_id']}` {_clean_text(comparison['candidate_title'])}",
+        f"- Added: {len(comparison['added_idea_ids'])}",
+        f"- Removed: {len(comparison['removed_idea_ids'])}",
+        f"- Kept: {len(comparison['kept_idea_ids'])}",
+        "",
+        "## Added Ideas",
+        "",
+    ]
+    lines.extend(_render_id_list(comparison["added_idea_ids"]))
+    lines.extend(["", "## Removed Ideas", ""])
+    lines.extend(_render_id_list(comparison["removed_idea_ids"]))
+    lines.extend(["", "## Rank Changes", ""])
+    if not comparison["rank_changes"]:
+        lines.append("No overlapping ideas to compare.")
+    for item in comparison["rank_changes"]:
+        lines.extend(
+            [
+                f"### {_clean_text(item['title'])}",
+                "",
+                f"- Idea ID: `{item['idea_id']}`",
+                f"- Rank: {item['from_rank']} -> {item['to_rank']} ({item['rank_delta']:+d})",
+                f"- Score: {item['from_score']} -> {item['to_score']} ({item['score_delta']:+.3f})",
+                f"- Status: `{item['status']}`",
+                "",
+            ]
+        )
+    return _finish(lines)
+
+
 def _ranked_item_payload(item: RankedIdea) -> dict:
     idea: Idea = item.idea
     return {
@@ -131,6 +206,35 @@ def _ranked_item_payload(item: RankedIdea) -> dict:
         "status": idea.status,
         "version": idea.version,
     }
+
+
+def _items_by_idea_id(items: list[dict]) -> dict[str, dict]:
+    return {str(item.get("idea_id")): item for item in items if item.get("idea_id")}
+
+
+def _rank_change_payload(baseline: dict, candidate: dict) -> dict:
+    from_rank = int(baseline.get("rank") or 0)
+    to_rank = int(candidate.get("rank") or 0)
+    from_score = float(baseline.get("weighted_score") or 0.0)
+    to_score = float(candidate.get("weighted_score") or 0.0)
+    return {
+        "idea_id": candidate.get("idea_id") or baseline.get("idea_id"),
+        "title": candidate.get("title") or baseline.get("title") or "Untitled idea",
+        "from_rank": from_rank,
+        "to_rank": to_rank,
+        "rank_delta": from_rank - to_rank,
+        "from_score": round(from_score, 3),
+        "to_score": round(to_score, 3),
+        "score_delta": round(to_score - from_score, 3),
+        "status": candidate.get("status") or baseline.get("status") or "",
+        "parent_idea_id": candidate.get("parent_idea_id") or baseline.get("parent_idea_id"),
+    }
+
+
+def _render_id_list(ids: list[str]) -> list[str]:
+    if not ids:
+        return ["None."]
+    return [f"- `{item_id}`" for item_id in ids]
 
 
 def _inline_ids(ids: list[str]) -> str:

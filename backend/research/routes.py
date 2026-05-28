@@ -32,6 +32,8 @@ from backend.research.schemas import (
     IdeaFeedbackRead,
     IdeaGenerationRequest,
     IdeaGenerationResponse,
+    IdeaPortfolioComparisonRequest,
+    IdeaPortfolioComparisonResponse,
     IdeaPortfolioExportRequest,
     IdeaPortfolioSnapshotCreate,
     IdeaPortfolioSnapshotDetail,
@@ -120,6 +122,7 @@ def status() -> ProjectStatus:
             "human_idea_feedback",
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",
+            "portfolio_snapshot_comparison",
             "local_novelty_collision_check",
             "literature_backed_novelty_screening",
             "reviewer_simulation",
@@ -667,6 +670,39 @@ def list_idea_portfolio_snapshots(
 ) -> list[IdeaPortfolioSnapshotRead]:
     snapshots = PortfolioService(session).list_snapshots(limit)
     return [_serialize_portfolio_snapshot(snapshot) for snapshot in snapshots]
+
+
+@router.post("/ideas/portfolios/compare", response_model=IdeaPortfolioComparisonResponse)
+def compare_idea_portfolio_snapshots(
+    payload: IdeaPortfolioComparisonRequest,
+    session: Session = Depends(get_session),
+) -> IdeaPortfolioComparisonResponse:
+    try:
+        comparison = PortfolioService(session).compare_snapshots(
+            payload.baseline_snapshot_id,
+            payload.candidate_snapshot_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return IdeaPortfolioComparisonResponse(**comparison)
+
+
+@router.post(
+    "/ideas/portfolios/compare/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_idea_portfolio_comparison_markdown(
+    payload: IdeaPortfolioComparisonRequest,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    try:
+        comparison = PortfolioService(session).compare_snapshots(
+            payload.baseline_snapshot_id,
+            payload.candidate_snapshot_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return PlainTextResponse(comparison["markdown_export"], media_type="text/markdown")
 
 
 @router.get("/ideas/portfolios/{snapshot_id}", response_model=IdeaPortfolioSnapshotDetail)

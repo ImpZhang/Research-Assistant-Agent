@@ -505,6 +505,42 @@ Future work should learn ranking weights from researcher feedback.
     assert snapshots.status_code == 200
     assert any(item["id"] == snapshot_body["id"] for item in snapshots.json())
 
+    baseline_snapshot = client.post(
+        "/research/ideas/portfolios",
+        json={
+            "idea_ids": [source_idea_id],
+            "deduplicate_lineage": False,
+            "title": "Baseline Ranking Test Portfolio",
+        },
+    )
+    assert baseline_snapshot.status_code == 200
+    baseline_body = baseline_snapshot.json()
+
+    comparison = client.post(
+        "/research/ideas/portfolios/compare",
+        json={
+            "baseline_snapshot_id": baseline_body["id"],
+            "candidate_snapshot_id": snapshot_body["id"],
+        },
+    )
+    assert comparison.status_code == 200
+    comparison_body = comparison.json()
+    assert refined_idea_id in comparison_body["added_idea_ids"]
+    assert source_idea_id in comparison_body["removed_idea_ids"]
+    assert "Compared portfolio snapshots" in comparison_body["summary"]
+    assert "# Research Idea Portfolio Comparison" in comparison_body["markdown_export"]
+
+    comparison_export = client.post(
+        "/research/ideas/portfolios/compare/export/markdown",
+        json={
+            "baseline_snapshot_id": baseline_body["id"],
+            "candidate_snapshot_id": snapshot_body["id"],
+        },
+    )
+    assert comparison_export.status_code == 200
+    assert comparison_export.headers["content-type"].startswith("text/markdown")
+    assert "`" + refined_idea_id + "`" in comparison_export.text
+
 
 def test_markdown_exports_for_card_and_idea_dossier() -> None:
     client = TestClient(create_app())

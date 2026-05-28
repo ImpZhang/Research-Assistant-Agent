@@ -264,6 +264,24 @@ class IdeaPortfolioSnapshotDetail(IdeaPortfolioSnapshotRead):
     markdown_export: str = ""
 
 
+class IdeaPortfolioComparisonRequest(BaseModel):
+    baseline_snapshot_id: str
+    candidate_snapshot_id: str
+
+
+class IdeaPortfolioComparisonResponse(BaseModel):
+    baseline_snapshot_id: str
+    candidate_snapshot_id: str
+    baseline_title: str
+    candidate_title: str
+    added_idea_ids: list[str] = Field(default_factory=list)
+    removed_idea_ids: list[str] = Field(default_factory=list)
+    kept_idea_ids: list[str] = Field(default_factory=list)
+    rank_changes: list[dict[str, Any]] = Field(default_factory=list)
+    summary: str
+    markdown_export: str = ""
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None
