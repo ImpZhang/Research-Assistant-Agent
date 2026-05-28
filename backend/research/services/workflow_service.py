@@ -16,9 +16,9 @@ from backend.research.models import (
 from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.export_service import ExportService
 from backend.research.services.gap_service import GapService
-from backend.research.services.idea_service import IdeaService
 from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.review_service import ReviewService
+from backend.research.services.structured_idea_service import StructuredIdeaService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
 
 
@@ -98,7 +98,7 @@ class WorkflowService:
         self._update_job(job.id, progress=0.2, output={"paper_id": paper.id, "card_id": card.id})
         gaps = GapService(self.session).mine_gaps([paper.id], max_gaps)
         self._update_job(job.id, progress=0.4, output={"gap_ids": [gap.id for gap in gaps]})
-        ideas = IdeaService(self.session).generate_from_gaps(
+        ideas = StructuredIdeaService(self.session).generate_from_gaps(
             [gap.id for gap in gaps],
             max_ideas_per_gap,
         )

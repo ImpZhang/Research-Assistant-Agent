@@ -151,6 +151,7 @@ Future work should connect idea generation to reviewer criticism.
     generated = client.post(f"/research/gaps/{gap_id}/ideas")
     assert generated.status_code == 200
     body = generated.json()
+    assert "structured adapter" in body["message"]
     assert len(body["ideas"]) == 2
     assert all(idea["related_gap_ids"] == [gap_id] for idea in body["ideas"])
     assert all(idea["evidence_ids"] for idea in body["ideas"])

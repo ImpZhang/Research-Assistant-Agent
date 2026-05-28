@@ -47,6 +47,7 @@ from backend.research.services.paper_service import PaperService
 from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
+from backend.research.services.structured_idea_service import StructuredIdeaService
 from backend.research.services.workflow_service import WorkflowService
 
 
@@ -70,6 +71,7 @@ def status() -> ProjectStatus:
             "structured_extraction_adapter",
             "research_gap_mining",
             "idea_generation",
+            "structured_idea_generation_adapter",
             "local_novelty_collision_check",
             "reviewer_simulation",
             "experiment_planning",
@@ -396,10 +398,13 @@ def generate_ideas(
     payload: IdeaGenerationRequest,
     session: Session = Depends(get_session),
 ) -> IdeaGenerationResponse:
-    ideas = IdeaService(session).generate_from_gaps(payload.gap_ids, payload.max_ideas_per_gap)
+    ideas = StructuredIdeaService(session).generate_from_gaps(
+        payload.gap_ids,
+        payload.max_ideas_per_gap,
+    )
     return IdeaGenerationResponse(
         ideas=[_serialize_idea(idea) for idea in ideas],
-        message=f"Generated {len(ideas)} research ideas from selected gaps.",
+        message=f"Generated {len(ideas)} research ideas from selected gaps with structured adapter.",
     )
 
 
@@ -410,10 +415,10 @@ def generate_ideas_for_gap(
 ) -> IdeaGenerationResponse:
     if GapService(session).get_gap(gap_id) is None:
         raise HTTPException(status_code=404, detail="Research gap not found")
-    ideas = IdeaService(session).generate_from_gaps([gap_id], 2)
+    ideas = StructuredIdeaService(session).generate_from_gaps([gap_id], 2)
     return IdeaGenerationResponse(
         ideas=[_serialize_idea(idea) for idea in ideas],
-        message=f"Generated {len(ideas)} research ideas from gap {gap_id}.",
+        message=f"Generated {len(ideas)} research ideas from gap {gap_id} with structured adapter.",
     )
 
 
