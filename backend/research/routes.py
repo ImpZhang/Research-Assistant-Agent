@@ -7,6 +7,7 @@ from backend.research.db import get_session
 from backend.research.models import (
     Chunk,
     Evidence,
+    ExperimentAnalysis,
     ExperimentPlan,
     ExperimentRun,
     Idea,
@@ -35,6 +36,8 @@ from backend.research.schemas import (
     EmbeddingRebuildRequest,
     EmbeddingRebuildResponse,
     EvidenceRead,
+    ExperimentAnalysisCreate,
+    ExperimentAnalysisRead,
     ExperimentPlanRead,
     ExperimentRunCreate,
     ExperimentRunRead,
@@ -100,6 +103,7 @@ from backend.research.schemas import (
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.embedding_service import EmbeddingService
+from backend.research.services.experiment_analysis_service import ExperimentAnalysisService
 from backend.research.services.experiment_run_service import ExperimentRunService
 from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.export_service import ExportService
@@ -174,6 +178,7 @@ def status() -> ProjectStatus:
             "reviewer_simulation",
             "experiment_planning",
             "experiment_run_tracking",
+            "experiment_result_analysis",
             "literature_to_ideas_workflow",
             "async_literature_to_ideas_workflow",
             "workflow_job_trace",
@@ -987,6 +992,13 @@ def get_idea_lineage(
         .limit(50)
         .all()
     )
+    experiment_analyses = (
+        session.query(ExperimentAnalysis)
+        .filter(ExperimentAnalysis.idea_id == idea_id)
+        .order_by(ExperimentAnalysis.created_at.desc())
+        .limit(50)
+        .all()
+    )
     tasks = (
         session.query(ResearchTask)
         .filter(ResearchTask.idea_id == idea_id)
@@ -1011,6 +1023,7 @@ def get_idea_lineage(
             *[revision.id for revision in revisions],
             *[run.experiment_plan_id for run in experiment_runs],
             *[run.id for run in experiment_runs],
+            *[analysis.id for analysis in experiment_analyses],
             *[task.id for task in tasks],
             *[snapshot.id for snapshot in snapshots],
         ],
@@ -1022,6 +1035,7 @@ def get_idea_lineage(
         reviews=reviews,
         revisions=revisions,
         experiment_runs=experiment_runs,
+        experiment_analyses=experiment_analyses,
         tasks=tasks,
         snapshots=snapshots,
         graph_edge_summary=graph_edge_summary,
@@ -1033,6 +1047,9 @@ def get_idea_lineage(
         proposal_reviews=[_serialize_proposal_review(review) for review in reviews],
         proposal_revisions=[_serialize_proposal_revision(revision) for revision in revisions],
         experiment_runs=[_serialize_experiment_run(run) for run in experiment_runs],
+        experiment_analyses=[
+            _serialize_experiment_analysis(analysis) for analysis in experiment_analyses
+        ],
         research_tasks=[_serialize_research_task(task) for task in tasks],
         task_board_snapshots=[_serialize_task_board_snapshot(snapshot) for snapshot in snapshots],
         graph_edge_summary=graph_edge_summary,
@@ -1040,7 +1057,8 @@ def get_idea_lineage(
         message=(
             f"Loaded lineage for idea {idea.id}: {len(drafts)} drafts, "
             f"{len(reviews)} reviews, {len(revisions)} revisions, "
-            f"{len(experiment_runs)} experiment runs, {len(tasks)} tasks."
+            f"{len(experiment_runs)} experiment runs, "
+            f"{len(experiment_analyses)} analyses, {len(tasks)} tasks."
         ),
     )
 
@@ -1068,6 +1086,9 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "experiment_plan_has_run",
         "idea_has_experiment_run",
         "task_records_experiment_run",
+        "experiment_run_has_analysis",
+        "idea_has_experiment_analysis",
+        "task_records_experiment_analysis",
     ]
     edges = (
         session.query(ResearchEdge)
@@ -1091,6 +1112,7 @@ def _render_idea_lineage_markdown(
     reviews: list[ProposalReview],
     revisions: list[ProposalRevision],
     experiment_runs: list[ExperimentRun],
+    experiment_analyses: list[ExperimentAnalysis],
     tasks: list[ResearchTask],
     snapshots: list[TaskBoardSnapshot],
     graph_edge_summary: dict[str, int],
@@ -1104,6 +1126,7 @@ def _render_idea_lineage_markdown(
         f"- Proposal Reviews: {len(reviews)}",
         f"- Proposal Revisions: {len(revisions)}",
         f"- Experiment Runs: {len(experiment_runs)}",
+        f"- Experiment Analyses: {len(experiment_analyses)}",
         f"- Research Tasks: {len(tasks)}",
         f"- Task Board Snapshots: {len(snapshots)}",
         "",
@@ -1131,6 +1154,15 @@ def _render_idea_lineage_markdown(
             lines.append(f"- `{run.id}` `{run.status}` {run.title}")
     else:
         lines.append("- No experiment runs recorded yet.")
+
+    lines.extend(["", "## Experiment Analyses", ""])
+    if experiment_analyses:
+        for analysis in experiment_analyses[:5]:
+            lines.append(
+                f"- `{analysis.id}` `{analysis.decision}` confidence={analysis.confidence:.2f}"
+            )
+    else:
+        lines.append("- No experiment analyses recorded yet.")
 
     lines.extend(["", "## Next Tasks", ""])
     next_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}][:10]
@@ -1783,6 +1815,26 @@ def _serialize_experiment_run(run: ExperimentRun) -> ExperimentRunRead:
     )
 
 
+def _serialize_experiment_analysis(analysis: ExperimentAnalysis) -> ExperimentAnalysisRead:
+    return ExperimentAnalysisRead(
+        id=analysis.id,
+        experiment_run_id=analysis.experiment_run_id,
+        experiment_plan_id=analysis.experiment_plan_id,
+        idea_id=analysis.idea_id,
+        task_id=analysis.task_id,
+        decision=analysis.decision,
+        confidence=analysis.confidence,
+        metric_interpretation=analysis.metric_interpretation_json or {},
+        key_findings=analysis.key_findings_json or [],
+        concerns=analysis.concerns_json or [],
+        next_actions=analysis.next_actions_json or [],
+        markdown_export=analysis.markdown_export or "",
+        created_by=analysis.created_by,
+        created_at=analysis.created_at,
+        updated_at=analysis.updated_at,
+    )
+
+
 @router.post("/ideas/{idea_id}/experiment-plan", response_model=ExperimentPlanRead)
 def create_experiment_plan(
     idea_id: str,
@@ -1906,6 +1958,73 @@ def export_experiment_run_markdown(
     if run is None:
         raise HTTPException(status_code=404, detail="Experiment run not found")
     return PlainTextResponse(run.markdown_export or "", media_type="text/markdown")
+
+
+@router.post("/experiment-runs/{run_id}/analysis", response_model=ExperimentAnalysisRead)
+def create_experiment_analysis(
+    run_id: str,
+    payload: ExperimentAnalysisCreate,
+    session: Session = Depends(get_session),
+) -> ExperimentAnalysisRead:
+    try:
+        analysis = ExperimentAnalysisService(session).create_analysis(
+            run_id,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_experiment_analysis(analysis)
+
+
+@router.get("/experiment-runs/{run_id}/analyses", response_model=list[ExperimentAnalysisRead])
+def list_experiment_analyses_for_run(
+    run_id: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ExperimentAnalysisRead]:
+    try:
+        analyses = ExperimentAnalysisService(session).list_for_run(run_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_experiment_analysis(analysis) for analysis in analyses]
+
+
+@router.get("/ideas/{idea_id}/experiment-analyses", response_model=list[ExperimentAnalysisRead])
+def list_experiment_analyses_for_idea(
+    idea_id: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ExperimentAnalysisRead]:
+    try:
+        analyses = ExperimentAnalysisService(session).list_for_idea(idea_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_experiment_analysis(analysis) for analysis in analyses]
+
+
+@router.get("/experiment-analyses/{analysis_id}", response_model=ExperimentAnalysisRead)
+def get_experiment_analysis(
+    analysis_id: str,
+    session: Session = Depends(get_session),
+) -> ExperimentAnalysisRead:
+    analysis = ExperimentAnalysisService(session).get_analysis(analysis_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="Experiment analysis not found")
+    return _serialize_experiment_analysis(analysis)
+
+
+@router.get(
+    "/experiment-analyses/{analysis_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_experiment_analysis_markdown(
+    analysis_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    analysis = ExperimentAnalysisService(session).get_analysis(analysis_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="Experiment analysis not found")
+    return PlainTextResponse(analysis.markdown_export or "", media_type="text/markdown")
 
 
 @router.post(

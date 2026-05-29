@@ -345,6 +345,25 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "## Conclusion" not in run_markdown:
         raise RuntimeError("experiment run markdown did not include the conclusion section")
+    experiment_analysis = require_ok(
+        client.post(
+            f"/research/experiment-runs/{experiment_run['id']}/analysis",
+            json_body={"created_by": "smoke_api"},
+        ),
+        "experiment analysis",
+    )
+    analysis_markdown = require_ok(
+        client.get(f"/research/experiment-analyses/{experiment_analysis['id']}/export/markdown"),
+        "experiment analysis markdown",
+    )
+    if "## Next Actions" not in analysis_markdown:
+        raise RuntimeError("experiment analysis markdown did not include next actions")
+    run_analyses = require_ok(
+        client.get(f"/research/experiment-runs/{experiment_run['id']}/analyses"),
+        "experiment analyses for run",
+    )
+    if not run_analyses or run_analyses[0]["id"] != experiment_analysis["id"]:
+        raise RuntimeError("experiment run did not list its analysis")
     plan_runs = require_ok(
         client.get(f"/research/experiment-plans/{refined_plan['id']}/runs"),
         "experiment runs for plan",
@@ -353,11 +372,17 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("experiment plan did not list the new run")
     task_events_after_run = require_ok(
         client.get(f"/research/tasks/{updated_task['id']}/events"),
-        "research task events after experiment run",
+        "research task events after experiment analysis",
     )
     run_event_types = {event["event_type"] for event in task_events_after_run}
-    if not {"experiment_run_created", "experiment_run_updated"}.issubset(run_event_types):
-        raise RuntimeError(f"experiment run task events were incomplete: {run_event_types}")
+    if not {
+        "experiment_run_created",
+        "experiment_run_updated",
+        "experiment_analysis_created",
+    }.issubset(run_event_types):
+        raise RuntimeError(
+            f"experiment run/analysis task events were incomplete: {run_event_types}"
+        )
     task_snapshot = require_ok(
         client.post(
             "/research/tasks/snapshots",
@@ -390,6 +415,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea lineage markdown did not include proposal revision")
     if experiment_run["id"] not in lineage["markdown_export"]:
         raise RuntimeError("idea lineage markdown did not include experiment run")
+    if experiment_analysis["id"] not in lineage["markdown_export"]:
+        raise RuntimeError("idea lineage markdown did not include experiment analysis")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -585,11 +612,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "task_backlog_count": len(task_backlog["tasks"]),
         "updated_task_status": updated_task["status"],
         "task_event_count": len(task_events),
-        "task_event_count_after_run": len(task_events_after_run),
+        "task_event_count_after_analysis": len(task_events_after_run),
         "manual_task_event_id": manual_task_event["id"],
         "experiment_run_id": experiment_run["id"],
         "experiment_run_status": completed_run["status"],
         "experiment_run_markdown_chars": len(run_markdown),
+        "experiment_analysis_id": experiment_analysis["id"],
+        "experiment_analysis_decision": experiment_analysis["decision"],
+        "experiment_analysis_markdown_chars": len(analysis_markdown),
         "task_snapshot_id": task_snapshot["id"],
         "task_snapshot_task_count": task_snapshot["summary"]["task_count"],
         "task_snapshot_markdown_chars": len(task_snapshot_markdown),

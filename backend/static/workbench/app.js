@@ -5,6 +5,7 @@ const state = {
   latestRelatedWorkMatrixId: "",
   latestExperimentPlanId: "",
   latestExperimentRunId: "",
+  latestExperimentAnalysisId: "",
   latestProposalDraftId: "",
   latestProposalReviewId: "",
   latestProposalRevisionId: "",
@@ -340,6 +341,7 @@ async function refineLatestIdea() {
     state.latestRelatedWorkMatrixId = "";
     state.latestExperimentPlanId = "";
     state.latestExperimentRunId = "";
+    state.latestExperimentAnalysisId = "";
     state.latestProposalDraftId = "";
     state.latestProposalReviewId = "";
     state.latestProposalRevisionId = "";
@@ -552,10 +554,34 @@ async function createExperimentRun() {
       }),
     });
     state.latestExperimentRunId = body.id;
+    state.latestExperimentAnalysisId = "";
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "workflowResult",
       `Recorded experiment run <code>${escapeHtml(body.id)}</code> with status ${escapeHtml(body.status)}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function analyzeExperimentRun() {
+  if (!state.latestExperimentRunId) {
+    renderResult("workflowResult", "Record an experiment run first.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Analyzing experiment run...", "warn");
+  try {
+    const body = await api(`/research/experiment-runs/${state.latestExperimentRunId}/analysis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ created_by: "workbench" }),
+    });
+    state.latestExperimentAnalysisId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Analyzed run <code>${escapeHtml(body.experiment_run_id)}</code>: ${escapeHtml(body.decision)} (${body.confidence}).`,
     );
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
@@ -681,6 +707,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("taskBacklogButton").addEventListener("click", createTaskBacklog);
   $("taskSnapshotButton").addEventListener("click", saveTaskSnapshot);
   $("experimentRunButton").addEventListener("click", createExperimentRun);
+  $("experimentAnalysisButton").addEventListener("click", analyzeExperimentRun);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);

@@ -41,6 +41,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/revisions/${state.latestProposalRevisionId}/tasks" in script.text
     assert "/research/tasks/snapshots" in script.text
     assert "/research/experiment-plans/${state.latestExperimentPlanId}/runs" in script.text
+    assert "/research/experiment-runs/${state.latestExperimentRunId}/analysis" in script.text
     assert "/research/ideas/${state.latestIdeaId}/lineage" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
@@ -602,11 +603,42 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "## Metrics" in run_export.text
     assert "## Conclusion" in run_export.text
 
+    analysis = client.post(
+        f"/research/experiment-runs/{run_body['id']}/analysis",
+        json={"created_by": "pytest"},
+    )
+    assert analysis.status_code == 200
+    analysis_body = analysis.json()
+    assert analysis_body["experiment_run_id"] == run_body["id"]
+    assert analysis_body["idea_id"] == idea_id
+    assert analysis_body["decision"] == "supports_hypothesis"
+    assert analysis_body["next_actions"]
+    assert "# Experiment Analysis:" in analysis_body["markdown_export"]
+
+    run_analyses = client.get(f"/research/experiment-runs/{run_body['id']}/analyses")
+    assert run_analyses.status_code == 200
+    assert run_analyses.json()[0]["id"] == analysis_body["id"]
+
+    idea_analyses = client.get(f"/research/ideas/{idea_id}/experiment-analyses")
+    assert idea_analyses.status_code == 200
+    assert idea_analyses.json()[0]["id"] == analysis_body["id"]
+
+    fetched_analysis = client.get(f"/research/experiment-analyses/{analysis_body['id']}")
+    assert fetched_analysis.status_code == 200
+    assert fetched_analysis.json()["confidence"] > 0
+
+    analysis_export = client.get(
+        f"/research/experiment-analyses/{analysis_body['id']}/export/markdown"
+    )
+    assert analysis_export.status_code == 200
+    assert "## Next Actions" in analysis_export.text
+
     task_events_after_run = client.get(f"/research/tasks/{task_id}/events")
     assert task_events_after_run.status_code == 200
     event_types_after_run = [event["event_type"] for event in task_events_after_run.json()]
     assert "experiment_run_created" in event_types_after_run
     assert "experiment_run_updated" in event_types_after_run
+    assert "experiment_analysis_created" in event_types_after_run
 
     snapshot = client.post(
         "/research/tasks/snapshots",
@@ -639,6 +671,8 @@ Future work should preserve proposal drafts as reviewable artifacts.
         "task_board_snapshot_tracks_task",
         "experiment_plan_has_run",
         "task_records_experiment_run",
+        "experiment_run_has_analysis",
+        "task_records_experiment_analysis",
     ]
     for edge_type in graph_edge_types:
         edges = client.get(f"/research/graph/edges?edge_type={edge_type}")
@@ -654,12 +688,15 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert lineage_body["proposal_reviews"][0]["id"] == review_body["id"]
     assert lineage_body["proposal_revisions"][0]["id"] == revision_body["id"]
     assert lineage_body["experiment_runs"][0]["id"] == run_body["id"]
+    assert lineage_body["experiment_analyses"][0]["id"] == analysis_body["id"]
     assert any(task["id"] == task_id for task in lineage_body["research_tasks"])
     assert lineage_body["task_board_snapshots"][0]["id"] == snapshot_body["id"]
     assert lineage_body["graph_edge_summary"]["proposal_revision_creates_task"] > 0
     assert lineage_body["graph_edge_summary"]["experiment_plan_has_run"] > 0
+    assert lineage_body["graph_edge_summary"]["experiment_run_has_analysis"] > 0
     assert "# Idea Lineage:" in lineage_body["markdown_export"]
     assert "## Experiment Runs" in lineage_body["markdown_export"]
+    assert "## Experiment Analyses" in lineage_body["markdown_export"]
 
 
 def test_refine_idea_creates_traceable_revision() -> None:

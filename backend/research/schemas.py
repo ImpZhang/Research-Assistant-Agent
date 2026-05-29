@@ -523,6 +523,28 @@ class ExperimentRunRead(BaseModel):
     updated_at: datetime
 
 
+class ExperimentAnalysisCreate(BaseModel):
+    created_by: str = "system"
+
+
+class ExperimentAnalysisRead(BaseModel):
+    id: str
+    experiment_run_id: str
+    experiment_plan_id: str
+    idea_id: str
+    task_id: str | None = None
+    decision: str
+    confidence: float = 0.0
+    metric_interpretation: dict[str, Any] = Field(default_factory=dict)
+    key_findings: list[str] = Field(default_factory=list)
+    concerns: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+    markdown_export: str = ""
+    created_by: str = "system"
+    created_at: datetime
+    updated_at: datetime
+
+
 class IdeaLineageResponse(BaseModel):
     idea: IdeaRead
     related_work_matrices: list[RelatedWorkMatrixRead] = Field(default_factory=list)
@@ -530,6 +552,7 @@ class IdeaLineageResponse(BaseModel):
     proposal_reviews: list[ProposalReviewRead] = Field(default_factory=list)
     proposal_revisions: list[ProposalRevisionRead] = Field(default_factory=list)
     experiment_runs: list[ExperimentRunRead] = Field(default_factory=list)
+    experiment_analyses: list[ExperimentAnalysisRead] = Field(default_factory=list)
     research_tasks: list[ResearchTaskRead] = Field(default_factory=list)
     task_board_snapshots: list[TaskBoardSnapshotRead] = Field(default_factory=list)
     graph_edge_summary: dict[str, int] = Field(default_factory=dict)

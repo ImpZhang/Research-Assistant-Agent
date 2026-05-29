@@ -230,6 +230,26 @@ class ExperimentRun(Base, TimestampMixin):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class ExperimentAnalysis(Base, TimestampMixin):
+    __tablename__ = "experiment_analyses"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    experiment_run_id: Mapped[str] = mapped_column(ForeignKey("experiment_runs.id"), index=True)
+    experiment_plan_id: Mapped[str] = mapped_column(ForeignKey("experiment_plans.id"), index=True)
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    task_id: Mapped[str | None] = mapped_column(
+        ForeignKey("research_tasks.id"), nullable=True, index=True
+    )
+    decision: Mapped[str] = mapped_column(String(128), default="needs_more_evidence", index=True)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    metric_interpretation_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    key_findings_json: Mapped[list] = mapped_column(JSON, default=list)
+    concerns_json: Mapped[list] = mapped_column(JSON, default=list)
+    next_actions_json: Mapped[list] = mapped_column(JSON, default=list)
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="system")
+
+
 class IdeaFeedback(Base, TimestampMixin):
     __tablename__ = "idea_feedback"
 
