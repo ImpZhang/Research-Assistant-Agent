@@ -90,6 +90,7 @@ from backend.research.schemas import (
     ResearchEdgeRead,
     ResearchGapRead,
     ResearchNodeRead,
+    ResearchOverviewResponse,
     ResearchTaskGenerateRequest,
     ResearchTaskGenerationResponse,
     ResearchTaskEventCreate,
@@ -166,6 +167,7 @@ def status() -> ProjectStatus:
             "idea_refinement_loop",
             "idea_ranking_portfolio",
             "idea_progress_summary",
+            "project_progress_overview",
             "human_idea_feedback",
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",
@@ -205,6 +207,172 @@ def status() -> ProjectStatus:
             "mcp_tool_bridge",
         ],
     )
+
+
+@router.get("/progress/overview", response_model=ResearchOverviewResponse)
+def get_research_progress_overview(
+    idea_limit: int = 50,
+    task_limit: int = 300,
+    session: Session = Depends(get_session),
+) -> ResearchOverviewResponse:
+    idea_limit = max(1, min(idea_limit, 200))
+    task_limit = max(1, min(task_limit, 1000))
+    ideas = session.query(Idea).order_by(Idea.updated_at.desc()).limit(idea_limit).all()
+    tasks = (
+        session.query(ResearchTask).order_by(ResearchTask.created_at.desc()).limit(task_limit).all()
+    )
+    analyses = (
+        session.query(ExperimentAnalysis)
+        .order_by(ExperimentAnalysis.created_at.desc())
+        .limit(30)
+        .all()
+    )
+    status_counts = dict(Counter(idea.status for idea in ideas))
+    task_summary = _overview_task_summary(tasks)
+    recent_experiment_analyses = [
+        {
+            "id": analysis.id,
+            "idea_id": analysis.idea_id,
+            "experiment_run_id": analysis.experiment_run_id,
+            "decision": analysis.decision,
+            "confidence": analysis.confidence,
+        }
+        for analysis in analyses[:10]
+    ]
+    blocked_tasks = [
+        {
+            "id": task.id,
+            "idea_id": task.idea_id,
+            "title": task.title,
+            "priority": task.priority,
+            "owner_type": task.owner_type,
+        }
+        for task in tasks
+        if task.status == "blocked"
+    ][:20]
+    recommended_actions = _overview_recommendations(
+        idea_count=len(ideas),
+        task_summary=task_summary,
+        blocked_tasks=blocked_tasks,
+        recent_experiment_analyses=recent_experiment_analyses,
+    )
+    markdown_export = _render_research_overview_markdown(
+        idea_count=len(ideas),
+        status_counts=status_counts,
+        task_summary=task_summary,
+        recent_experiment_analyses=recent_experiment_analyses,
+        blocked_tasks=blocked_tasks,
+        recommended_actions=recommended_actions,
+    )
+    return ResearchOverviewResponse(
+        idea_count=len(ideas),
+        status_counts=status_counts,
+        task_summary=task_summary,
+        recent_experiment_analyses=recent_experiment_analyses,
+        blocked_tasks=blocked_tasks,
+        recommended_actions=recommended_actions,
+        markdown_export=markdown_export,
+        message=(
+            f"Loaded project progress overview for {len(ideas)} ideas and "
+            f"{len(tasks)} recent tasks."
+        ),
+    )
+
+
+def _overview_task_summary(tasks: list[ResearchTask]) -> dict:
+    by_status = Counter(task.status for task in tasks)
+    by_priority = Counter(task.priority for task in tasks)
+    open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
+    top_open_tasks = sorted(open_tasks, key=_progress_task_order)[:10]
+    return {
+        "total_recent_tasks": len(tasks),
+        "open_task_count": len(open_tasks),
+        "by_status": dict(by_status),
+        "by_priority": dict(by_priority),
+        "top_open_tasks": [
+            {
+                "id": task.id,
+                "idea_id": task.idea_id,
+                "title": task.title,
+                "priority": task.priority,
+                "status": task.status,
+                "owner_type": task.owner_type,
+            }
+            for task in top_open_tasks
+        ],
+    }
+
+
+def _overview_recommendations(
+    *,
+    idea_count: int,
+    task_summary: dict,
+    blocked_tasks: list[dict],
+    recent_experiment_analyses: list[dict],
+) -> list[str]:
+    if idea_count == 0:
+        return ["Ingest papers and run the literature-to-ideas workflow."]
+    if blocked_tasks:
+        return ["Resolve blocked research tasks before expanding the portfolio."]
+    if not recent_experiment_analyses:
+        return ["Record and analyze experiment runs for the strongest shortlisted ideas."]
+    top_open_tasks = task_summary.get("top_open_tasks") or []
+    if top_open_tasks:
+        first = top_open_tasks[0]
+        return [
+            f"Work the highest-priority task: {first['title']}",
+            "Refresh the idea progress summary after completing or blocking that task.",
+        ]
+    return [
+        "Create a new portfolio snapshot or ingest new literature to refresh the research queue."
+    ]
+
+
+def _render_research_overview_markdown(
+    *,
+    idea_count: int,
+    status_counts: dict[str, int],
+    task_summary: dict,
+    recent_experiment_analyses: list[dict],
+    blocked_tasks: list[dict],
+    recommended_actions: list[str],
+) -> str:
+    lines = [
+        "# Research Progress Overview",
+        "",
+        f"- Idea Count: {idea_count}",
+        f"- Status Counts: {status_counts}",
+        f"- Open Tasks: {task_summary.get('open_task_count', 0)}",
+        "",
+        "## Top Open Tasks",
+        "",
+    ]
+    top_open_tasks = task_summary.get("top_open_tasks") or []
+    if top_open_tasks:
+        for task in top_open_tasks:
+            lines.append(
+                f"- `{task['id']}` `{task['priority']}` `{task['status']}` {task['title']}"
+            )
+    else:
+        lines.append("- No open tasks.")
+    lines.extend(["", "## Recent Experiment Analyses", ""])
+    if recent_experiment_analyses:
+        for analysis in recent_experiment_analyses:
+            lines.append(
+                f"- `{analysis['id']}` `{analysis['decision']}` "
+                f"confidence={analysis['confidence']:.2f}"
+            )
+    else:
+        lines.append("- No experiment analyses yet.")
+    lines.extend(["", "## Blocked Tasks", ""])
+    if blocked_tasks:
+        for task in blocked_tasks:
+            lines.append(f"- `{task['id']}` `{task['priority']}` {task['title']}")
+    else:
+        lines.append("- No blocked tasks.")
+    lines.extend(["", "## Recommended Actions", ""])
+    lines.extend(f"- {action}" for action in recommended_actions)
+    return "\n".join(lines).strip() + "\n"
 
 
 def _serialize_job(job: Job) -> JobRead:

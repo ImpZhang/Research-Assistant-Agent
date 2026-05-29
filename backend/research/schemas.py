@@ -572,6 +572,17 @@ class IdeaProgressResponse(BaseModel):
     message: str
 
 
+class ResearchOverviewResponse(BaseModel):
+    idea_count: int = 0
+    status_counts: dict[str, int] = Field(default_factory=dict)
+    task_summary: dict[str, Any] = Field(default_factory=dict)
+    recent_experiment_analyses: list[dict[str, Any]] = Field(default_factory=list)
+    blocked_tasks: list[dict[str, Any]] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

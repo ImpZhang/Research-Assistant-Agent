@@ -45,6 +45,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/experiment-analyses/${state.latestExperimentAnalysisId}/tasks" in script.text
     assert "/research/ideas/${state.latestIdeaId}/lineage" in script.text
     assert "/research/ideas/${state.latestIdeaId}/progress" in script.text
+    assert "/research/progress/overview" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
     assert "/research/ideas/portfolios" in script.text
@@ -729,6 +730,15 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert progress_body["experiment_summary"]["latest_analysis_decision"] == "supports_hypothesis"
     assert progress_body["recommended_next_step"]
     assert "# Idea Progress:" in progress_body["markdown_export"]
+
+    overview = client.get("/research/progress/overview")
+    assert overview.status_code == 200
+    overview_body = overview.json()
+    assert overview_body["idea_count"] >= 1
+    assert overview_body["task_summary"]["open_task_count"] >= 1
+    assert overview_body["recent_experiment_analyses"]
+    assert overview_body["recommended_actions"]
+    assert "# Research Progress Overview" in overview_body["markdown_export"]
 
 
 def test_refine_idea_creates_traceable_revision() -> None:

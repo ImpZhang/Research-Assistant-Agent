@@ -646,6 +646,20 @@ async function loadIdeaProgress() {
   }
 }
 
+async function loadProjectOverview() {
+  renderResult("workflowResult", "Loading project overview...", "warn");
+  try {
+    const body = await api("/research/progress/overview");
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)} Recommended actions: ${body.recommended_actions.length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function rankIdeas() {
   renderResult("workflowResult", "Ranking idea portfolio...", "warn");
   try {
@@ -751,6 +765,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("analysisTasksButton").addEventListener("click", createAnalysisTasks);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("progressButton").addEventListener("click", loadIdeaProgress);
+  $("overviewButton").addEventListener("click", loadProjectOverview);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);

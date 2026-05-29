@@ -438,6 +438,11 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea progress did not count analysis follow-up tasks")
     if "Idea Progress" not in progress["markdown_export"]:
         raise RuntimeError("idea progress markdown did not include the report title")
+    overview = require_ok(client.get("/research/progress/overview"), "research progress overview")
+    if overview["idea_count"] < 1:
+        raise RuntimeError("research overview did not include ideas")
+    if not overview["recommended_actions"]:
+        raise RuntimeError("research overview did not include recommended actions")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -650,6 +655,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "lineage_graph_edge_types": len(lineage["graph_edge_summary"]),
         "progress_open_task_count": progress["artifact_counts"]["open_tasks"],
         "progress_recommended_next_step": progress["recommended_next_step"],
+        "overview_idea_count": overview["idea_count"],
+        "overview_open_task_count": overview["task_summary"]["open_task_count"],
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),
