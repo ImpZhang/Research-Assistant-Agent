@@ -262,6 +262,21 @@ class IdeaFeedback(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="researcher")
 
 
+class IdeaDecisionMemo(Base, TimestampMixin):
+    __tablename__ = "idea_decision_memos"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    decision: Mapped[str] = mapped_column(String(64), default="revise", index=True)
+    rationale_json: Mapped[list] = mapped_column(JSON, default=list)
+    evidence_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    risk_register_json: Mapped[list] = mapped_column(JSON, default=list)
+    next_commitments_json: Mapped[list] = mapped_column(JSON, default=list)
+    source_artifacts_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="researcher")
+
+
 class RelatedWorkMatrix(Base, TimestampMixin):
     __tablename__ = "related_work_matrices"
 

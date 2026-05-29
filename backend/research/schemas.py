@@ -545,6 +545,30 @@ class ExperimentAnalysisRead(BaseModel):
     updated_at: datetime
 
 
+class IdeaDecisionMemoCreate(BaseModel):
+    decision: Literal["pursue", "revise", "park", "reject"] = "revise"
+    rationale: list[str] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    next_commitments: list[str] = Field(default_factory=list)
+    created_by: str = "researcher"
+
+
+class IdeaDecisionMemoRead(BaseModel):
+    id: str
+    idea_id: str
+    decision: str
+    rationale: list[str] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list)
+    risk_register: list[str] = Field(default_factory=list)
+    next_commitments: list[str] = Field(default_factory=list)
+    source_artifacts: dict[str, Any] = Field(default_factory=dict)
+    markdown_export: str = ""
+    created_by: str = "researcher"
+    created_at: datetime
+    updated_at: datetime
+
+
 class IdeaLineageResponse(BaseModel):
     idea: IdeaRead
     related_work_matrices: list[RelatedWorkMatrixRead] = Field(default_factory=list)
@@ -553,6 +577,7 @@ class IdeaLineageResponse(BaseModel):
     proposal_revisions: list[ProposalRevisionRead] = Field(default_factory=list)
     experiment_runs: list[ExperimentRunRead] = Field(default_factory=list)
     experiment_analyses: list[ExperimentAnalysisRead] = Field(default_factory=list)
+    decision_memos: list[IdeaDecisionMemoRead] = Field(default_factory=list)
     research_tasks: list[ResearchTaskRead] = Field(default_factory=list)
     task_board_snapshots: list[TaskBoardSnapshotRead] = Field(default_factory=list)
     graph_edge_summary: dict[str, int] = Field(default_factory=dict)

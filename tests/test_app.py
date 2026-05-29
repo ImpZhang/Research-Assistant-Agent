@@ -25,6 +25,7 @@ def test_research_status() -> None:
     assert "sqlalchemy_models" in body["implemented_capabilities"]
     assert "tool_manifest" in body["implemented_capabilities"]
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
+    assert "idea_decision_memos" in body["implemented_capabilities"]
 
 
 def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
@@ -38,6 +39,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "upload_paper" in names
     assert "search_research_context" in names
     assert "get_project_progress_overview" in names
+    assert "create_idea_decision_memo" in names
     assert "create_advisor_brief" in names
     assert "analyze_experiment_run" in names
     assert "cancel_job" in names
@@ -749,6 +751,28 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert snapshot_export.status_code == 200
     assert "## Next Actions" in snapshot_export.text
 
+    decision_memo = client.post(
+        f"/research/ideas/{idea_id}/decision-memo",
+        json={"decision": "pursue", "created_by": "pytest"},
+    )
+    assert decision_memo.status_code == 200
+    decision_memo_body = decision_memo.json()
+    assert decision_memo_body["idea_id"] == idea_id
+    assert decision_memo_body["decision"] == "pursue"
+    assert decision_memo_body["rationale"]
+    assert decision_memo_body["next_commitments"]
+    assert "# Idea Decision Memo:" in decision_memo_body["markdown_export"]
+
+    decision_memos = client.get(f"/research/ideas/{idea_id}/decision-memos")
+    assert decision_memos.status_code == 200
+    assert decision_memos.json()[0]["id"] == decision_memo_body["id"]
+
+    decision_memo_export = client.get(
+        f"/research/ideas/{idea_id}/decision-memos/{decision_memo_body['id']}/export/markdown"
+    )
+    assert decision_memo_export.status_code == 200
+    assert "## Risk Register" in decision_memo_export.text
+
     graph_edge_types = [
         "idea_has_proposal_draft",
         "proposal_review_reviews_draft",
@@ -760,6 +784,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         "experiment_run_has_analysis",
         "task_records_experiment_analysis",
         "experiment_analysis_creates_task",
+        "idea_has_decision_memo",
     ]
     for edge_type in graph_edge_types:
         edges = client.get(f"/research/graph/edges?edge_type={edge_type}")
@@ -776,6 +801,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert lineage_body["proposal_revisions"][0]["id"] == revision_body["id"]
     assert lineage_body["experiment_runs"][0]["id"] == run_body["id"]
     assert lineage_body["experiment_analyses"][0]["id"] == analysis_body["id"]
+    assert lineage_body["decision_memos"][0]["id"] == decision_memo_body["id"]
     assert any(task["id"] == task_id for task in lineage_body["research_tasks"])
     assert any(task["id"] == analysis_task_id for task in lineage_body["research_tasks"])
     assert lineage_body["task_board_snapshots"][0]["id"] == snapshot_body["id"]
@@ -783,9 +809,11 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert lineage_body["graph_edge_summary"]["experiment_plan_has_run"] > 0
     assert lineage_body["graph_edge_summary"]["experiment_run_has_analysis"] > 0
     assert lineage_body["graph_edge_summary"]["experiment_analysis_creates_task"] > 0
+    assert lineage_body["graph_edge_summary"]["idea_has_decision_memo"] > 0
     assert "# Idea Lineage:" in lineage_body["markdown_export"]
     assert "## Experiment Runs" in lineage_body["markdown_export"]
     assert "## Experiment Analyses" in lineage_body["markdown_export"]
+    assert "## Decision Memos" in lineage_body["markdown_export"]
 
     progress = client.get(f"/research/ideas/{idea_id}/progress")
     assert progress.status_code == 200
@@ -793,6 +821,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert progress_body["idea"]["id"] == idea_id
     assert progress_body["artifact_counts"]["experiment_runs"] >= 1
     assert progress_body["artifact_counts"]["experiment_analyses"] >= 1
+    assert progress_body["artifact_counts"]["decision_memos"] >= 1
     assert progress_body["artifact_counts"]["analysis_follow_up_tasks"] >= 1
     assert progress_body["task_summary"]["next_tasks"]
     assert progress_body["experiment_summary"]["latest_analysis_decision"] == "supports_hypothesis"

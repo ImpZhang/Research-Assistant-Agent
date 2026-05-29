@@ -2,6 +2,7 @@ from backend.research.models import (
     ExperimentAnalysis,
     ExperimentPlan,
     ExperimentRun,
+    IdeaDecisionMemo,
     ProposalDraft,
     ProposalReview,
     ProposalRevision,
@@ -297,6 +298,25 @@ class ArtifactGraphService:
                 edge_type="experiment_analysis_creates_task",
                 payload={"source": "experiment_analysis_next_actions"},
             )
+
+    def link_idea_decision_memo(self, memo: IdeaDecisionMemo) -> None:
+        idea_node = self._idea_node(memo.idea_id)
+        memo_node = self.graph.get_or_create_node(
+            node_type="idea_decision_memo",
+            label=f"{memo.decision}: {memo.id}",
+            canonical_key=memo.id,
+            payload={
+                "decision": memo.decision,
+                "source_artifacts": memo.source_artifacts_json or {},
+            },
+        )
+        self.graph.create_edge(
+            source_node=idea_node,
+            target_node=memo_node,
+            edge_type="idea_has_decision_memo",
+            evidence_ids=memo.evidence_ids_json or [],
+            payload={"source": "idea_decision_memo"},
+        )
 
     def _idea_node(self, idea_id: str):
         return self.graph.get_or_create_node(

@@ -715,6 +715,13 @@ proposal revision 之后需要进入 task backlog：
 - analysis 需要支持 Markdown 导出，用于组会决策、导师沟通和后续 proposal revision。
 - analysis 的 next actions 需要能一键生成下一轮 research tasks，让实验结论进入执行队列。
 
+idea 需要支持 decision memo：
+
+- 记录 pursue、revise、park、reject 等阶段性决策。
+- 自动汇总 latest feedback、novelty check、review、experiment analysis、open tasks 作为 source artifacts。
+- 保存 rationale、evidence ids、risk register 和 next commitments。
+- 支持 Markdown 导出，并进入 GraphRAG-lite，避免“为什么选/不选这个方向”只留在聊天记录中。
+
 proposal、review、revision、experiment run、experiment analysis、task 和 task snapshot 都需要进入 GraphRAG-lite：
 
 - idea 可以追踪到 proposal draft。
@@ -725,11 +732,12 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - research task 可以追踪到支撑它的 experiment run。
 - research task 可以追踪到基于实验结果生成的 analysis。
 - experiment analysis 可以追踪到它生成的 follow-up tasks。
+- idea 可以追踪到 decision memo。
 - task snapshot 可以追踪到当时的任务集合。
 
 系统需要提供 idea lineage：
 
-- 一次性返回 idea 的 related work、proposal、review、revision、experiment run、experiment analysis、task、snapshot。
+- 一次性返回 idea 的 related work、proposal、review、revision、experiment run、experiment analysis、decision memo、task、snapshot。
 - 返回 graph edge summary，说明研究对象之间的演化关系。
 - 支持 Markdown 导出，用于科研日志、导师沟通和 MCP 上下文。
 
