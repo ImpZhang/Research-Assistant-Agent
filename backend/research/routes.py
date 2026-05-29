@@ -25,6 +25,7 @@ from backend.research.models import (
     ResearchNode,
     Review,
     ResearchTask,
+    ResearchTaskEvent,
     TaskBoardSnapshot,
 )
 from backend.research.schemas import (
@@ -81,6 +82,8 @@ from backend.research.schemas import (
     ResearchNodeRead,
     ResearchTaskGenerateRequest,
     ResearchTaskGenerationResponse,
+    ResearchTaskEventCreate,
+    ResearchTaskEventRead,
     ResearchTaskRead,
     ResearchTaskUpdate,
     ReviewRead,
@@ -694,6 +697,24 @@ def _serialize_research_task(task: ResearchTask) -> ResearchTaskRead:
         created_by=task.created_by,
         created_at=task.created_at,
         updated_at=task.updated_at,
+    )
+
+
+def _serialize_research_task_event(event: ResearchTaskEvent) -> ResearchTaskEventRead:
+    return ResearchTaskEventRead(
+        id=event.id,
+        task_id=event.task_id,
+        idea_id=event.idea_id,
+        event_type=event.event_type,
+        status_from=event.status_from,
+        status_to=event.status_to,
+        priority_from=event.priority_from,
+        priority_to=event.priority_to,
+        note=event.note,
+        metadata=event.metadata_json or {},
+        created_by=event.created_by,
+        created_at=event.created_at,
+        updated_at=event.updated_at,
     )
 
 
@@ -1476,6 +1497,38 @@ def get_research_task(
     return _serialize_research_task(task)
 
 
+@router.post("/tasks/{task_id}/events", response_model=ResearchTaskEventRead)
+def create_research_task_event(
+    task_id: str,
+    payload: ResearchTaskEventCreate,
+    session: Session = Depends(get_session),
+) -> ResearchTaskEventRead:
+    try:
+        event = ResearchTaskService(session).create_event(
+            task_id,
+            event_type=payload.event_type,
+            note=payload.note,
+            metadata=payload.metadata,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_research_task_event(event)
+
+
+@router.get("/tasks/{task_id}/events", response_model=list[ResearchTaskEventRead])
+def list_research_task_events(
+    task_id: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchTaskEventRead]:
+    try:
+        events = ResearchTaskService(session).list_events(task_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_research_task_event(event) for event in events]
+
+
 @router.patch("/tasks/{task_id}", response_model=ResearchTaskRead)
 def update_research_task(
     task_id: str,
@@ -1488,6 +1541,8 @@ def update_research_task(
             status=payload.status,
             priority=payload.priority,
             description=payload.description,
+            note=payload.note,
+            created_by=payload.created_by,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

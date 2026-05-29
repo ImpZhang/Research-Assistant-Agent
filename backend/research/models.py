@@ -322,6 +322,22 @@ class ResearchTask(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="system")
 
 
+class ResearchTaskEvent(Base, TimestampMixin):
+    __tablename__ = "research_task_events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    task_id: Mapped[str] = mapped_column(ForeignKey("research_tasks.id"), index=True)
+    idea_id: Mapped[str | None] = mapped_column(ForeignKey("ideas.id"), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(128), default="note", index=True)
+    status_from: Mapped[str] = mapped_column(String(64), default="")
+    status_to: Mapped[str] = mapped_column(String(64), default="")
+    priority_from: Mapped[str] = mapped_column(String(64), default="")
+    priority_to: Mapped[str] = mapped_column(String(64), default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[str] = mapped_column(String(128), default="system")
+
+
 class TaskBoardSnapshot(Base, TimestampMixin):
     __tablename__ = "task_board_snapshots"
 

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from backend.research.models import ProposalRevision, ResearchTask
+from backend.research.models import ProposalRevision, ResearchTask, ResearchTaskEvent
 from backend.research.services.artifact_graph_service import ArtifactGraphService
 from backend.research.services.graph_service import GraphService
 
@@ -66,6 +66,27 @@ class ResearchTaskService:
             )
 
         self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note=f"Created from proposal revision {revision.id}.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
         self.session.commit()
         for task in tasks:
             self.session.refresh(task)
@@ -101,19 +122,81 @@ class ResearchTaskService:
         status: str | None = None,
         priority: str | None = None,
         description: str | None = None,
+        note: str = "",
+        created_by: str = "system",
     ) -> ResearchTask:
         task = self.session.get(ResearchTask, task_id)
         if task is None:
             raise ValueError("Research task not found")
+        status_from = task.status
+        priority_from = task.priority
         if status is not None:
             task.status = status
         if priority is not None:
             task.priority = priority
         if description is not None:
             task.description = description
+        if status is not None or priority is not None or description is not None or note:
+            self.session.add(
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="task_updated",
+                    status_from=status_from,
+                    status_to=task.status,
+                    priority_from=priority_from,
+                    priority_to=task.priority,
+                    note=note,
+                    metadata_json={
+                        "description_updated": description is not None,
+                    },
+                    created_by=created_by or "system",
+                )
+            )
         self.session.commit()
         self.session.refresh(task)
         return task
+
+    def create_event(
+        self,
+        task_id: str,
+        *,
+        event_type: str = "note",
+        note: str = "",
+        metadata: dict | None = None,
+        created_by: str = "system",
+    ) -> ResearchTaskEvent:
+        task = self.session.get(ResearchTask, task_id)
+        if task is None:
+            raise ValueError("Research task not found")
+        event = ResearchTaskEvent(
+            task_id=task.id,
+            idea_id=task.idea_id,
+            event_type=event_type or "note",
+            status_from=task.status,
+            status_to=task.status,
+            priority_from=task.priority,
+            priority_to=task.priority,
+            note=note,
+            metadata_json=metadata or {},
+            created_by=created_by or "system",
+        )
+        self.session.add(event)
+        self.session.commit()
+        self.session.refresh(event)
+        return event
+
+    def list_events(self, task_id: str, limit: int = 50) -> list[ResearchTaskEvent]:
+        if self.session.get(ResearchTask, task_id) is None:
+            raise ValueError("Research task not found")
+        limit = max(1, min(limit, 200))
+        return (
+            self.session.query(ResearchTaskEvent)
+            .filter(ResearchTaskEvent.task_id == task_id)
+            .order_by(ResearchTaskEvent.created_at.desc())
+            .limit(limit)
+            .all()
+        )
 
     def _task(
         self,

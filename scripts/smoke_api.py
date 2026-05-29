@@ -276,12 +276,36 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     updated_task = require_ok(
         client.patch(
             f"/research/tasks/{task_backlog['tasks'][0]['id']}",
-            json_body={"status": "doing", "priority": "critical"},
+            json_body={
+                "status": "doing",
+                "priority": "critical",
+                "note": "Smoke task execution started.",
+                "created_by": "smoke_api",
+            },
         ),
         "research task update",
     )
     if updated_task["status"] != "doing":
         raise RuntimeError("research task update did not persist status")
+    manual_task_event = require_ok(
+        client.post(
+            f"/research/tasks/{updated_task['id']}/events",
+            json_body={
+                "event_type": "progress",
+                "note": "Smoke progress event for task execution history.",
+                "metadata": {"source": "smoke_api"},
+                "created_by": "smoke_api",
+            },
+        ),
+        "research task event",
+    )
+    task_events = require_ok(
+        client.get(f"/research/tasks/{updated_task['id']}/events"),
+        "research task events",
+    )
+    event_types = {event["event_type"] for event in task_events}
+    if not {"created", "task_updated", "progress"}.issubset(event_types):
+        raise RuntimeError(f"research task events were incomplete: {event_types}")
     task_snapshot = require_ok(
         client.post(
             "/research/tasks/snapshots",
@@ -506,6 +530,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "proposal_revision_markdown_chars": len(proposal_revision_markdown),
         "task_backlog_count": len(task_backlog["tasks"]),
         "updated_task_status": updated_task["status"],
+        "task_event_count": len(task_events),
+        "manual_task_event_id": manual_task_event["id"],
         "task_snapshot_id": task_snapshot["id"],
         "task_snapshot_task_count": task_snapshot["summary"]["task_count"],
         "task_snapshot_markdown_chars": len(task_snapshot_markdown),

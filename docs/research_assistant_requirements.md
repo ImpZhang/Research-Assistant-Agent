@@ -686,6 +686,13 @@ proposal revision 之后需要进入 task backlog：
 - 每个任务需要 status、priority、due phase、source id 和 owner id。
 - 支持查询、推进状态和后续看板扩展。
 
+任务执行需要 event log：
+
+- 创建任务时记录 created event。
+- 更新任务状态、优先级或描述时记录 task_updated event。
+- 支持手动追加 progress、blocker、decision、evidence 等事件。
+- 后续 task board 和 agent executor 应基于 event history 判断真实进展。
+
 任务需要支持 board snapshot：
 
 - 固化某一时刻的 task ids、status summary、priority summary 和 next actions。

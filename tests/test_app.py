@@ -515,11 +515,35 @@ Future work should preserve proposal drafts as reviewable artifacts.
 
     updated_task = client.patch(
         f"/research/tasks/{task_id}",
-        json={"status": "doing", "priority": "critical"},
+        json={
+            "status": "doing",
+            "priority": "critical",
+            "note": "Started the first execution pass.",
+            "created_by": "pytest",
+        },
     )
     assert updated_task.status_code == 200
     assert updated_task.json()["status"] == "doing"
     assert updated_task.json()["priority"] == "critical"
+
+    manual_event = client.post(
+        f"/research/tasks/{task_id}/events",
+        json={
+            "event_type": "progress",
+            "note": "Collected baseline notes for the task.",
+            "metadata": {"source": "pytest"},
+            "created_by": "pytest",
+        },
+    )
+    assert manual_event.status_code == 200
+    assert manual_event.json()["event_type"] == "progress"
+
+    task_events = client.get(f"/research/tasks/{task_id}/events")
+    assert task_events.status_code == 200
+    event_types = [event["event_type"] for event in task_events.json()]
+    assert "created" in event_types
+    assert "task_updated" in event_types
+    assert "progress" in event_types
 
     snapshot = client.post(
         "/research/tasks/snapshots",

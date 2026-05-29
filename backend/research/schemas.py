@@ -399,6 +399,8 @@ class ResearchTaskUpdate(BaseModel):
     status: Literal["todo", "doing", "blocked", "done", "archived"] | None = None
     priority: Literal["low", "medium", "high", "critical"] | None = None
     description: str | None = None
+    note: str = ""
+    created_by: str = "system"
 
 
 class ResearchTaskRead(BaseModel):
@@ -413,6 +415,29 @@ class ResearchTaskRead(BaseModel):
     priority: str = "medium"
     status: str = "todo"
     due_phase: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_by: str = "system"
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResearchTaskEventCreate(BaseModel):
+    event_type: Literal["note", "progress", "blocker", "decision", "evidence"] = "note"
+    note: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_by: str = "system"
+
+
+class ResearchTaskEventRead(BaseModel):
+    id: str
+    task_id: str
+    idea_id: str | None = None
+    event_type: str
+    status_from: str = ""
+    status_to: str = ""
+    priority_from: str = ""
+    priority_to: str = ""
+    note: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_by: str = "system"
     created_at: datetime

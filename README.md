@@ -55,6 +55,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Proposal readiness reviews with advisor-style scores, concerns, required revisions, and missing evidence.
 - Proposal revision artifacts that turn readiness-review actions into a revised proposal checkpoint.
 - Research task backlog generation from proposal revisions, with task listing and status updates.
+- Research task event logs for created/updated/progress/blocker notes and execution history.
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.
 - GraphRAG-lite links for proposal drafts, reviews, revisions, research tasks, and task board snapshots.
 - Idea lineage endpoint that hydrates matrices, proposal artifacts, tasks, task snapshots, and graph edge summaries.
@@ -206,6 +207,8 @@ POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id
 GET  /research/tasks
 GET  /research/tasks/{task_id}
 PATCH /research/tasks/{task_id}
+POST /research/tasks/{task_id}/events
+GET  /research/tasks/{task_id}/events
 POST /research/tasks/snapshots
 GET  /research/tasks/snapshots
 GET  /research/tasks/snapshots/{snapshot_id}
