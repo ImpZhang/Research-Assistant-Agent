@@ -9,6 +9,8 @@ const state = {
   latestProposalDraftId: "",
   latestProposalReviewId: "",
   latestProposalRevisionId: "",
+  latestDecisionMemoId: "",
+  latestAssumptionAuditId: "",
   latestTaskIds: [],
   latestTaskSnapshotId: "",
   pollTimer: null,
@@ -610,6 +612,80 @@ async function createAnalysisTasks() {
   }
 }
 
+async function createDecisionMemo() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Creating idea decision memo...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/decision-memo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decision: "pursue",
+        created_by: "workbench",
+      }),
+    });
+    state.latestDecisionMemoId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Created decision memo <code>${escapeHtml(body.id)}</code> with ${body.next_commitments.length} commitments.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createDecisionMemoTasks() {
+  if (!state.latestIdeaId || !state.latestDecisionMemoId) {
+    renderResult("workflowResult", "Create a decision memo first.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Creating decision follow-up tasks...", "warn");
+  try {
+    const body = await api(
+      `/research/ideas/${state.latestIdeaId}/decision-memos/${state.latestDecisionMemoId}/tasks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ created_by: "workbench" }),
+      },
+    );
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Decision tasks", body.tasks, (task) => `${task.priority} ${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createAssumptionAudit() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Auditing idea assumptions...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/assumption-audit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ created_by: "workbench" }),
+    });
+    state.latestAssumptionAuditId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Created assumption audit <code>${escapeHtml(body.id)}</code> with ${body.assumptions.length} assumptions.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadIdeaLineage() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -646,6 +722,42 @@ async function loadIdeaProgress() {
   }
 }
 
+async function loadResearchPacket() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Loading idea research packet...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/research-packet`);
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)} Open tasks: ${body.open_tasks.length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function loadIdeaReadiness() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Scoring idea readiness...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/readiness`);
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Readiness ${body.readiness_score}: <strong>${escapeHtml(body.decision)}</strong>. Blockers: ${body.blockers.length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectOverview() {
   renderResult("workflowResult", "Loading project overview...", "warn");
   try {
@@ -654,6 +766,20 @@ async function loadProjectOverview() {
     renderResult(
       "workflowResult",
       `${escapeHtml(body.message)} Recommended actions: ${body.recommended_actions.length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function loadProjectReadinessOverview() {
+  renderResult("workflowResult", "Loading project readiness overview...", "warn");
+  try {
+    const body = await api("/research/readiness/overview");
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)} Average readiness: ${body.average_readiness}.`,
     );
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
@@ -786,9 +912,15 @@ document.addEventListener("DOMContentLoaded", () => {
   $("experimentRunButton").addEventListener("click", createExperimentRun);
   $("experimentAnalysisButton").addEventListener("click", analyzeExperimentRun);
   $("analysisTasksButton").addEventListener("click", createAnalysisTasks);
+  $("decisionMemoButton").addEventListener("click", createDecisionMemo);
+  $("decisionMemoTasksButton").addEventListener("click", createDecisionMemoTasks);
+  $("assumptionAuditButton").addEventListener("click", createAssumptionAudit);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("progressButton").addEventListener("click", loadIdeaProgress);
+  $("researchPacketButton").addEventListener("click", loadResearchPacket);
+  $("readinessButton").addEventListener("click", loadIdeaReadiness);
   $("overviewButton").addEventListener("click", loadProjectOverview);
+  $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
   $("advisorBriefButton").addEventListener("click", createAdvisorBrief);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);

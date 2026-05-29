@@ -80,7 +80,15 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/experiment-analyses/${state.latestExperimentAnalysisId}/tasks" in script.text
     assert "/research/ideas/${state.latestIdeaId}/lineage" in script.text
     assert "/research/ideas/${state.latestIdeaId}/progress" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/research-packet" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/readiness" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/decision-memo" in script.text
+    assert (
+        "/research/ideas/${state.latestIdeaId}/decision-memos/${state.latestDecisionMemoId}/tasks"
+    ) in script.text
+    assert "/research/ideas/${state.latestIdeaId}/assumption-audit" in script.text
     assert "/research/progress/overview" in script.text
+    assert "/research/readiness/overview" in script.text
     assert "/research/briefs" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
