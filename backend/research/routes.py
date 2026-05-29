@@ -108,6 +108,8 @@ from backend.research.schemas import (
     TaskBoardSnapshotCreate,
     TaskBoardSnapshotDetail,
     TaskBoardSnapshotRead,
+    ToolManifestItem,
+    ToolManifestResponse,
 )
 from backend.research.services.brief_service import ResearchBriefService
 from backend.research.services.document_ingestion import DocumentIngestionService
@@ -174,6 +176,7 @@ def status() -> ProjectStatus:
             "idea_progress_summary",
             "project_progress_overview",
             "advisor_research_briefs",
+            "tool_manifest",
             "human_idea_feedback",
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",
@@ -212,6 +215,118 @@ def status() -> ProjectStatus:
             "external_novelty_search",
             "mcp_tool_bridge",
         ],
+    )
+
+
+@router.get("/tools/manifest", response_model=ToolManifestResponse)
+def tool_manifest() -> ToolManifestResponse:
+    tools = [
+        ToolManifestItem(
+            name="upload_paper",
+            description="Upload and ingest a paper into sections, chunks, and evidence records.",
+            method="POST",
+            path="/research/papers/upload",
+            input_model="multipart/form-data",
+            output_model="PaperUploadResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="search_research_context",
+            description="Search evidence, gaps, ideas, and GraphRAG-lite neighborhoods.",
+            method="POST",
+            path="/research/search/context",
+            input_model="ContextSearchRequest",
+            output_model="ContextSearchResponse",
+        ),
+        ToolManifestItem(
+            name="search_literature",
+            description="Search local literature and optional external providers.",
+            method="POST",
+            path="/research/literature/search",
+            input_model="LiteratureSearchRequest",
+            output_model="LiteratureSearchResponse",
+        ),
+        ToolManifestItem(
+            name="run_literature_to_ideas_workflow",
+            description="Run the full literature-to-ideas workflow for an ingested paper.",
+            method="POST",
+            path="/research/workflows/literature-to-ideas",
+            input_model="LiteratureToIdeasWorkflowRequest",
+            output_model="LiteratureToIdeasWorkflowResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="queue_literature_to_ideas_workflow",
+            description="Queue the literature-to-ideas workflow as a background job.",
+            method="POST",
+            path="/research/workflows/literature-to-ideas/async",
+            input_model="LiteratureToIdeasWorkflowRequest",
+            output_model="JobRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="get_idea_lineage",
+            description="Load proposal, experiment, task, and graph lineage for one idea.",
+            method="GET",
+            path="/research/ideas/{idea_id}/lineage",
+            output_model="IdeaLineageResponse",
+        ),
+        ToolManifestItem(
+            name="get_idea_progress",
+            description="Load progress summary and recommended next step for one idea.",
+            method="GET",
+            path="/research/ideas/{idea_id}/progress",
+            output_model="IdeaProgressResponse",
+        ),
+        ToolManifestItem(
+            name="get_project_progress_overview",
+            description="Load project-level progress, open tasks, blockers, and recommended actions.",
+            method="GET",
+            path="/research/progress/overview",
+            output_model="ResearchOverviewResponse",
+        ),
+        ToolManifestItem(
+            name="create_advisor_brief",
+            description="Create a persisted Markdown research brief for advisor or group review.",
+            method="POST",
+            path="/research/briefs",
+            input_model="ResearchBriefCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_experiment_run",
+            description="Record an experiment run for a planned experiment.",
+            method="POST",
+            path="/research/experiment-plans/{plan_id}/runs",
+            input_model="ExperimentRunCreate",
+            output_model="ExperimentRunRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="analyze_experiment_run",
+            description="Analyze a recorded experiment run and produce next actions.",
+            method="POST",
+            path="/research/experiment-runs/{run_id}/analysis",
+            input_model="ExperimentAnalysisCreate",
+            output_model="ExperimentAnalysisRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_experiment_analysis",
+            description="Turn experiment-analysis next actions into research tasks.",
+            method="POST",
+            path="/research/experiment-analyses/{analysis_id}/tasks",
+            input_model="ResearchTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
+        ),
+    ]
+    return ToolManifestResponse(
+        service=settings.app_name,
+        mcp_enabled=settings.mcp_enabled,
+        tools=tools,
+        message=f"Loaded {len(tools)} tool definitions for future MCP/tool bridge use.",
     )
 
 

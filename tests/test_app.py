@@ -21,6 +21,23 @@ def test_research_status() -> None:
     body = response.json()
     assert body["phase"] == "phase_0_foundation"
     assert "sqlalchemy_models" in body["implemented_capabilities"]
+    assert "tool_manifest" in body["implemented_capabilities"]
+
+
+def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
+    client = TestClient(create_app())
+    response = client.get("/research/tools/manifest")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["service"] == "Research Assistant Agent"
+    assert isinstance(body["mcp_enabled"], bool)
+    names = {tool["name"] for tool in body["tools"]}
+    assert "upload_paper" in names
+    assert "search_research_context" in names
+    assert "get_project_progress_overview" in names
+    assert "create_advisor_brief" in names
+    assert "analyze_experiment_run" in names
+    assert any(tool["side_effect"] for tool in body["tools"])
 
 
 def test_workbench_static_assets_are_served() -> None:

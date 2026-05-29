@@ -606,6 +606,23 @@ class ResearchBriefDetail(ResearchBriefRead):
     markdown_export: str = ""
 
 
+class ToolManifestItem(BaseModel):
+    name: str
+    description: str
+    method: str
+    path: str
+    input_model: str = ""
+    output_model: str = ""
+    side_effect: bool = False
+
+
+class ToolManifestResponse(BaseModel):
+    service: str
+    mcp_enabled: bool
+    tools: list[ToolManifestItem] = Field(default_factory=list)
+    message: str
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

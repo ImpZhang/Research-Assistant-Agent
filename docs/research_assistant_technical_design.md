@@ -1083,6 +1083,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/briefs` 将项目级或 idea-set 状态保存为 `ResearchBrief` artifact，包含 idea list、recent experiment decisions、highest-priority open tasks、discussion prompts 和 Markdown export。它是组会、导师沟通和后续 MCP 报告导出的稳定快照。
 
+`/tools/manifest` 是 runtime-neutral tool registry：返回 tool name、method/path、input/output schema 和 side-effect 标记。它不要求当前服务直接运行 MCP server，但为后续 MCP adapter、DeerFlow graph node 或自研 planner 提供同一份能力契约，避免外部编排层把 FastAPI 路由写死。
+
 外部 literature search adapter 第一阶段支持 OpenAlex、arXiv 与 Semantic Scholar。三者都通过 `EXTERNAL_LITERATURE_SEARCH_ENABLED` 控制，`EXTERNAL_LITERATURE_PROVIDERS=openalex,arxiv,semantic_scholar` 选择 provider；默认测试环境关闭外部检索，避免工作流依赖公网。
 
 `/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
@@ -1111,6 +1113,7 @@ POST /research/ideas/{idea_id}/experiment-plan
 GET  /research/ideas/{idea_id}/experiment-plans
 GET  /research/ideas/{idea_id}/progress
 GET  /research/progress/overview
+GET  /research/tools/manifest
 POST /research/briefs
 GET  /research/briefs
 GET  /research/briefs/{brief_id}

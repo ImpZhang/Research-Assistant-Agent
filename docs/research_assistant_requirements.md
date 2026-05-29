@@ -943,6 +943,8 @@ metric 选择理由
 
 短期不作为核心依赖。当前外部 literature search adapter 至少需要支持 OpenAlex、arXiv 与 Semantic Scholar，并且必须可通过环境变量关闭，保证本地测试和无外网环境仍可运行。
 
+在正式接 MCP server 之前，系统必须先暴露一个轻量 tool manifest，列出稳定 tool name、HTTP method/path、输入/输出 schema 名称、是否有写入副作用。这样 DeerFlow、MCP 或自研 planner 后续可以读取同一份能力契约，而不是把路由和 prompt 写死在外部编排层。
+
 验收标准：
 
 - 能通过关键词找相关论文。

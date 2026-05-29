@@ -107,7 +107,13 @@ def require_ok(response: ResponseAdapter, label: str) -> Any:
 def run_smoke(client: InProcessClient | HttpClient) -> dict:
     health = require_ok(client.get("/health"), "health")
     status = require_ok(client.get("/research/status"), "research status")
+    tool_manifest = require_ok(client.get("/research/tools/manifest"), "tool manifest")
     workbench = require_ok(client.get("/workbench"), "workbench")
+    manifest_names = {tool["name"] for tool in tool_manifest["tools"]}
+    if "create_advisor_brief" not in manifest_names:
+        raise RuntimeError("tool manifest did not include advisor brief tool")
+    if "get_project_progress_overview" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project progress overview tool")
 
     upload = require_ok(
         client.post(
@@ -632,6 +638,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     return {
         "health": health,
         "phase": status["phase"],
+        "tool_manifest_count": len(tool_manifest["tools"]),
         "workbench_available": "Research Assistant Workbench" in workbench,
         "paper_id": paper_id,
         "literature_result_count": len(literature["items"]),
