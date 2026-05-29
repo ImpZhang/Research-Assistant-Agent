@@ -21,7 +21,12 @@ class Settings:
     external_literature_search_enabled: bool = (
         os.getenv("EXTERNAL_LITERATURE_SEARCH_ENABLED", "false").lower() == "true"
     )
+    external_literature_providers: str = os.getenv(
+        "EXTERNAL_LITERATURE_PROVIDERS",
+        "openalex,arxiv",
+    )
     openalex_base_url: str = os.getenv("OPENALEX_BASE_URL", "https://api.openalex.org")
+    arxiv_base_url: str = os.getenv("ARXIV_BASE_URL", "https://export.arxiv.org/api/query")
 
     main_model: str = os.getenv("MAIN_MODEL") or os.getenv("MODEL", "")
     main_base_url: str = os.getenv("MAIN_BASE_URL") or os.getenv("BASE_URL", "")

@@ -72,7 +72,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Persisted idea portfolio snapshots for saved shortlist/ranking review states.
 - Portfolio snapshot comparison for tracking shortlist/ranking changes over time.
 - 30/60/90-day execution agenda export for saved idea portfolios.
-- Local literature search with an optional OpenAlex external-search adapter.
+- Local literature search with optional OpenAlex and arXiv external-search adapters.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.
 - Local hashed embedding index for evidence, gaps, and ideas.

@@ -1,5 +1,6 @@
 import re
 from typing import Any
+from xml.etree import ElementTree
 
 import requests
 from sqlalchemy.orm import Session
@@ -35,11 +36,7 @@ class LiteratureSearchService:
             if not settings.external_literature_search_enabled:
                 external_status = "disabled"
             else:
-                try:
-                    external_items = self._search_openalex(query, limit)
-                    external_status = "completed"
-                except requests.RequestException as exc:
-                    external_status = f"failed:{type(exc).__name__}"
+                external_items, external_status = self._search_external(query, limit)
 
         items = sorted(
             local_items + external_items,
@@ -121,17 +118,44 @@ class LiteratureSearchService:
         results = response.json().get("results", [])
         return [self._openalex_item(item, idx) for idx, item in enumerate(results)]
 
+    def _search_external(self, query: str, limit: int) -> tuple[list[LiteratureSearchItem], str]:
+        provider_items: list[LiteratureSearchItem] = []
+        provider_statuses: list[str] = []
+        for provider in self._external_providers():
+            try:
+                if provider == "openalex":
+                    provider_items.extend(self._search_openalex(query, limit))
+                    provider_statuses.append("openalex:completed")
+                elif provider == "arxiv":
+                    provider_items.extend(self._search_arxiv(query, limit))
+                    provider_statuses.append("arxiv:completed")
+            except requests.RequestException as exc:
+                provider_statuses.append(f"{provider}:failed:{type(exc).__name__}")
+            except ElementTree.ParseError:
+                provider_statuses.append(f"{provider}:failed:ParseError")
+        if not provider_statuses:
+            return [], "not_configured"
+        if all(status.endswith(":completed") for status in provider_statuses):
+            return provider_items, "completed"
+        if provider_items:
+            return provider_items, "partial:" + ",".join(provider_statuses)
+        return [], "failed:" + ",".join(provider_statuses)
+
+    def _external_providers(self) -> list[str]:
+        providers = []
+        for provider in settings.external_literature_providers.split(","):
+            normalized = provider.strip().lower()
+            if normalized in {"openalex", "arxiv"} and normalized not in providers:
+                providers.append(normalized)
+        return providers
+
     def _openalex_item(self, item: dict[str, Any], idx: int) -> LiteratureSearchItem:
         authors = [
             authorship.get("author", {}).get("display_name", "")
             for authorship in item.get("authorships", [])
             if authorship.get("author", {}).get("display_name")
         ]
-        venue = (
-            item.get("primary_location", {})
-            .get("source", {})
-            .get("display_name", "")
-        )
+        venue = item.get("primary_location", {}).get("source", {}).get("display_name", "")
         return LiteratureSearchItem(
             provider="openalex",
             source_id=item.get("id", ""),
@@ -148,6 +172,66 @@ class LiteratureSearchService:
             },
         )
 
+    def _search_arxiv(self, query: str, limit: int) -> list[LiteratureSearchItem]:
+        response = requests.get(
+            settings.arxiv_base_url,
+            params={
+                "search_query": f"all:{query}",
+                "start": 0,
+                "max_results": limit,
+                "sortBy": "relevance",
+                "sortOrder": "descending",
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+        root = ElementTree.fromstring(response.text)
+        namespace = {"atom": "http://www.w3.org/2005/Atom"}
+        entries = root.findall("atom:entry", namespace)
+        return [self._arxiv_item(entry, idx, namespace) for idx, entry in enumerate(entries)]
+
+    def _arxiv_item(
+        self,
+        entry: ElementTree.Element,
+        idx: int,
+        namespace: dict[str, str],
+    ) -> LiteratureSearchItem:
+        title = self._xml_text(entry.find("atom:title", namespace))
+        source_id = self._xml_text(entry.find("atom:id", namespace))
+        abstract = self._xml_text(entry.find("atom:summary", namespace))
+        published = self._xml_text(entry.find("atom:published", namespace))
+        authors = [
+            self._xml_text(author.find("atom:name", namespace))
+            for author in entry.findall("atom:author", namespace)
+        ]
+        authors = [author for author in authors if author]
+        categories = [
+            category.attrib.get("term", "")
+            for category in entry.findall("atom:category", namespace)
+            if category.attrib.get("term")
+        ]
+        year = int(published[:4]) if published[:4].isdigit() else None
+        return LiteratureSearchItem(
+            provider="arxiv",
+            source_id=source_id,
+            title=" ".join(title.split()) or "Untitled arXiv preprint",
+            authors=authors,
+            year=year,
+            venue="arXiv",
+            url=source_id,
+            abstract=" ".join(abstract.split())[:1200],
+            score=max(1.0, 9.5 - idx),
+            metadata={
+                "published": published,
+                "categories": categories,
+            },
+        )
+
+    def _xml_text(self, element: ElementTree.Element | None) -> str:
+        if element is None or element.text is None:
+            return ""
+        return element.text.strip()
+
     def _abstract_from_inverted_index(self, inverted_index: dict[str, list[int]]) -> str:
         if not inverted_index:
             return ""
@@ -155,7 +239,9 @@ class LiteratureSearchService:
         for word, positions in inverted_index.items():
             for position in positions:
                 words_by_position[position] = word
-        return " ".join(words_by_position[position] for position in sorted(words_by_position))[:1200]
+        return " ".join(words_by_position[position] for position in sorted(words_by_position))[
+            :1200
+        ]
 
     def _score(self, terms: list[str], text: str) -> float:
         normalized = text.lower()

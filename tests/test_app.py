@@ -1,8 +1,10 @@
 import time
+from xml.etree import ElementTree
 
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
+from backend.research.services.literature_search_service import LiteratureSearchService
 
 
 def test_health() -> None:
@@ -119,6 +121,28 @@ Future work should connect OpenAlex and arXiv providers.
     assert body["items"]
     assert body["items"][0]["provider"] == "local"
     assert any(item["source_id"] == paper_id for item in body["items"])
+
+
+def test_arxiv_literature_item_parser() -> None:
+    namespace = {"atom": "http://www.w3.org/2005/Atom"}
+    entry = ElementTree.fromstring(
+        """<entry xmlns="http://www.w3.org/2005/Atom">
+          <id>http://arxiv.org/abs/2601.01234v1</id>
+          <published>2026-01-02T00:00:00Z</published>
+          <title> Evidence Grounded Research Assistants </title>
+          <summary> A short abstract about research agents. </summary>
+          <author><name>Ada Lovelace</name></author>
+          <author><name>Grace Hopper</name></author>
+          <category term="cs.AI" />
+        </entry>"""
+    )
+    item = LiteratureSearchService(None)._arxiv_item(entry, 0, namespace)
+    assert item.provider == "arxiv"
+    assert item.source_id.endswith("2601.01234v1")
+    assert item.title == "Evidence Grounded Research Assistants"
+    assert item.authors == ["Ada Lovelace", "Grace Hopper"]
+    assert item.year == 2026
+    assert item.metadata["categories"] == ["cs.AI"]
 
 
 def test_extract_paper_card_from_evidence() -> None:
