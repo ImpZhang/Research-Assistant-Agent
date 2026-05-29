@@ -723,6 +723,13 @@ idea 需要支持 decision memo：
 - next commitments 需要能一键生成下一轮 research tasks，让决策进入执行队列。
 - 支持 Markdown 导出，并进入 GraphRAG-lite，避免“为什么选/不选这个方向”只留在聊天记录中。
 
+idea 需要支持 assumption audit：
+
+- 显式列出核心假设、为什么重要、验证信号、风险等级和当前状态。
+- 自动汇总 latest experiment plan、novelty check、proposal review、experiment analysis、related-work matrix 作为 source artifacts。
+- 至少覆盖 core hypothesis、novelty differentiation、evidence sufficiency、evaluation validity 和 resource feasibility。
+- 支持 Markdown 导出，并进入 GraphRAG-lite，避免“这个方向必须满足什么条件才值得继续”停留在隐含判断里。
+
 proposal、review、revision、experiment run、experiment analysis、task 和 task snapshot 都需要进入 GraphRAG-lite：
 
 - idea 可以追踪到 proposal draft。
@@ -735,11 +742,12 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - experiment analysis 可以追踪到它生成的 follow-up tasks。
 - idea 可以追踪到 decision memo。
 - decision memo 可以追踪到它生成的 follow-up tasks。
+- idea 可以追踪到 assumption audit。
 - task snapshot 可以追踪到当时的任务集合。
 
 系统需要提供 idea lineage：
 
-- 一次性返回 idea 的 related work、proposal、review、revision、experiment run、experiment analysis、decision memo、task、snapshot。
+- 一次性返回 idea 的 related work、proposal、review、revision、experiment run、experiment analysis、decision memo、assumption audit、task、snapshot。
 - 返回 graph edge summary，说明研究对象之间的演化关系。
 - 支持 Markdown 导出，用于科研日志、导师沟通和 MCP 上下文。
 

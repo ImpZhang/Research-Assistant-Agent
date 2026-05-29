@@ -569,6 +569,23 @@ class IdeaDecisionMemoRead(BaseModel):
     updated_at: datetime
 
 
+class IdeaAssumptionAuditCreate(BaseModel):
+    assumptions: list[dict[str, Any]] = Field(default_factory=list)
+    created_by: str = "system"
+
+
+class IdeaAssumptionAuditRead(BaseModel):
+    id: str
+    idea_id: str
+    status: str
+    assumptions: list[dict[str, Any]] = Field(default_factory=list)
+    source_artifacts: dict[str, Any] = Field(default_factory=dict)
+    markdown_export: str = ""
+    created_by: str = "system"
+    created_at: datetime
+    updated_at: datetime
+
+
 class IdeaLineageResponse(BaseModel):
     idea: IdeaRead
     related_work_matrices: list[RelatedWorkMatrixRead] = Field(default_factory=list)
@@ -578,6 +595,7 @@ class IdeaLineageResponse(BaseModel):
     experiment_runs: list[ExperimentRunRead] = Field(default_factory=list)
     experiment_analyses: list[ExperimentAnalysisRead] = Field(default_factory=list)
     decision_memos: list[IdeaDecisionMemoRead] = Field(default_factory=list)
+    assumption_audits: list[IdeaAssumptionAuditRead] = Field(default_factory=list)
     research_tasks: list[ResearchTaskRead] = Field(default_factory=list)
     task_board_snapshots: list[TaskBoardSnapshotRead] = Field(default_factory=list)
     graph_edge_summary: dict[str, int] = Field(default_factory=dict)

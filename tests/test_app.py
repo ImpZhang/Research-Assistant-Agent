@@ -26,6 +26,7 @@ def test_research_status() -> None:
     assert "tool_manifest" in body["implemented_capabilities"]
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
+    assert "idea_assumption_audits" in body["implemented_capabilities"]
 
 
 def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
@@ -41,6 +42,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_progress_overview" in names
     assert "create_idea_decision_memo" in names
     assert "create_tasks_from_idea_decision_memo" in names
+    assert "create_idea_assumption_audit" in names
     assert "create_advisor_brief" in names
     assert "analyze_experiment_run" in names
     assert "cancel_job" in names
@@ -784,6 +786,22 @@ Future work should preserve proposal drafts as reviewable artifacts.
     decision_task_id = decision_task_body["tasks"][0]["id"]
     assert decision_task_body["tasks"][0]["owner_type"] == "idea_decision_memo"
 
+    assumption_audit = client.post(
+        f"/research/ideas/{idea_id}/assumption-audit",
+        json={"created_by": "pytest"},
+    )
+    assert assumption_audit.status_code == 200
+    assumption_audit_body = assumption_audit.json()
+    assert assumption_audit_body["idea_id"] == idea_id
+    assert assumption_audit_body["assumptions"]
+    assert "# Idea Assumption Audit:" in assumption_audit_body["markdown_export"]
+
+    assumption_audit_export = client.get(
+        f"/research/ideas/{idea_id}/assumption-audits/{assumption_audit_body['id']}/export/markdown"
+    )
+    assert assumption_audit_export.status_code == 200
+    assert "## Assumptions" in assumption_audit_export.text
+
     graph_edge_types = [
         "idea_has_proposal_draft",
         "proposal_review_reviews_draft",
@@ -797,6 +815,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         "experiment_analysis_creates_task",
         "idea_has_decision_memo",
         "decision_memo_creates_task",
+        "idea_has_assumption_audit",
     ]
     for edge_type in graph_edge_types:
         edges = client.get(f"/research/graph/edges?edge_type={edge_type}")
@@ -814,6 +833,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert lineage_body["experiment_runs"][0]["id"] == run_body["id"]
     assert lineage_body["experiment_analyses"][0]["id"] == analysis_body["id"]
     assert lineage_body["decision_memos"][0]["id"] == decision_memo_body["id"]
+    assert lineage_body["assumption_audits"][0]["id"] == assumption_audit_body["id"]
     assert any(task["id"] == task_id for task in lineage_body["research_tasks"])
     assert any(task["id"] == analysis_task_id for task in lineage_body["research_tasks"])
     assert any(task["id"] == decision_task_id for task in lineage_body["research_tasks"])
@@ -824,10 +844,12 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert lineage_body["graph_edge_summary"]["experiment_analysis_creates_task"] > 0
     assert lineage_body["graph_edge_summary"]["idea_has_decision_memo"] > 0
     assert lineage_body["graph_edge_summary"]["decision_memo_creates_task"] > 0
+    assert lineage_body["graph_edge_summary"]["idea_has_assumption_audit"] > 0
     assert "# Idea Lineage:" in lineage_body["markdown_export"]
     assert "## Experiment Runs" in lineage_body["markdown_export"]
     assert "## Experiment Analyses" in lineage_body["markdown_export"]
     assert "## Decision Memos" in lineage_body["markdown_export"]
+    assert "## Assumption Audits" in lineage_body["markdown_export"]
 
     progress = client.get(f"/research/ideas/{idea_id}/progress")
     assert progress.status_code == 200
@@ -836,6 +858,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert progress_body["artifact_counts"]["experiment_runs"] >= 1
     assert progress_body["artifact_counts"]["experiment_analyses"] >= 1
     assert progress_body["artifact_counts"]["decision_memos"] >= 1
+    assert progress_body["artifact_counts"]["assumption_audits"] >= 1
     assert progress_body["artifact_counts"]["analysis_follow_up_tasks"] >= 1
     assert progress_body["artifact_counts"]["decision_follow_up_tasks"] >= 1
     assert progress_body["task_summary"]["next_tasks"]

@@ -115,6 +115,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea decision memos")
     if "idea_decision_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision task generation")
+    if "idea_assumption_audits" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea assumption audits")
     manifest_names = {tool["name"] for tool in tool_manifest["tools"]}
     if "create_advisor_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include advisor brief tool")
@@ -126,6 +128,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea decision memo tool")
     if "create_tasks_from_idea_decision_memo" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea decision task tool")
+    if "create_idea_assumption_audit" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea assumption audit tool")
 
     upload = require_ok(
         client.post(
@@ -459,6 +463,21 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea decision memo task generation returned no tasks")
     if decision_tasks["tasks"][0]["owner_type"] != "idea_decision_memo":
         raise RuntimeError("idea decision memo tasks used the wrong owner type")
+    assumption_audit = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/assumption-audit",
+            json_body={"created_by": "smoke_api"},
+        ),
+        "idea assumption audit",
+    )
+    assumption_audit_markdown = require_ok(
+        client.get(
+            f"/research/ideas/{refined_idea['id']}/assumption-audits/{assumption_audit['id']}/export/markdown"
+        ),
+        "idea assumption audit markdown",
+    )
+    if "## Assumptions" not in assumption_audit_markdown:
+        raise RuntimeError("idea assumption audit markdown did not include assumptions")
     proposal_graph_edges = require_ok(
         client.get("/research/graph/edges?edge_type=proposal_revision_creates_task"),
         "proposal task graph edges",
@@ -481,6 +500,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea lineage markdown did not include experiment analysis task")
     if decision_tasks["tasks"][0]["id"] not in lineage["markdown_export"]:
         raise RuntimeError("idea lineage markdown did not include decision memo task")
+    if assumption_audit["id"] not in lineage["markdown_export"]:
+        raise RuntimeError("idea lineage markdown did not include assumption audit")
     progress = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/progress"),
         "idea progress",
@@ -491,6 +512,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea progress did not count decision memos")
     if progress["artifact_counts"]["decision_follow_up_tasks"] < 1:
         raise RuntimeError("idea progress did not count decision follow-up tasks")
+    if progress["artifact_counts"]["assumption_audits"] < 1:
+        raise RuntimeError("idea progress did not count assumption audits")
     if "Idea Progress" not in progress["markdown_export"]:
         raise RuntimeError("idea progress markdown did not include the report title")
     overview = require_ok(client.get("/research/progress/overview"), "research progress overview")
@@ -727,6 +750,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "decision_memo_id": decision_memo["id"],
         "decision_memo_markdown_chars": len(decision_memo_markdown),
         "decision_memo_task_count": len(decision_tasks["tasks"]),
+        "assumption_audit_id": assumption_audit["id"],
+        "assumption_audit_count": len(assumption_audit["assumptions"]),
+        "assumption_audit_markdown_chars": len(assumption_audit_markdown),
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
         "lineage_task_count": len(lineage["research_tasks"]),
         "lineage_graph_edge_types": len(lineage["graph_edge_summary"]),

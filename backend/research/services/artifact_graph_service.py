@@ -2,6 +2,7 @@ from backend.research.models import (
     ExperimentAnalysis,
     ExperimentPlan,
     ExperimentRun,
+    IdeaAssumptionAudit,
     IdeaDecisionMemo,
     ProposalDraft,
     ProposalReview,
@@ -347,6 +348,25 @@ class ArtifactGraphService:
                 edge_type="decision_memo_creates_task",
                 payload={"source": "idea_decision_memo_next_commitments"},
             )
+
+    def link_idea_assumption_audit(self, audit: IdeaAssumptionAudit) -> None:
+        idea_node = self._idea_node(audit.idea_id)
+        audit_node = self.graph.get_or_create_node(
+            node_type="idea_assumption_audit",
+            label=f"Assumption audit {audit.id}",
+            canonical_key=audit.id,
+            payload={
+                "status": audit.status,
+                "assumption_count": len(audit.assumptions_json or []),
+                "source_artifacts": audit.source_artifacts_json or {},
+            },
+        )
+        self.graph.create_edge(
+            source_node=idea_node,
+            target_node=audit_node,
+            edge_type="idea_has_assumption_audit",
+            payload={"source": "idea_assumption_audit"},
+        )
 
     def _idea_node(self, idea_id: str):
         return self.graph.get_or_create_node(

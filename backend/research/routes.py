@@ -13,6 +13,7 @@ from backend.research.models import (
     ExperimentPlan,
     ExperimentRun,
     Idea,
+    IdeaAssumptionAudit,
     IdeaDecisionMemo,
     IdeaFeedback,
     IdeaPortfolioSnapshot,
@@ -48,6 +49,8 @@ from backend.research.schemas import (
     ExperimentRunUpdate,
     GapMiningRequest,
     GapMiningResponse,
+    IdeaAssumptionAuditCreate,
+    IdeaAssumptionAuditRead,
     IdeaFeedbackCreate,
     IdeaFeedbackRead,
     IdeaGenerationRequest,
@@ -115,6 +118,7 @@ from backend.research.schemas import (
     ToolManifestResponse,
 )
 from backend.research.services.brief_service import ResearchBriefService
+from backend.research.services.assumption_audit_service import IdeaAssumptionAuditService
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.decision_memo_service import IdeaDecisionMemoService
 from backend.research.services.embedding_service import EmbeddingService
@@ -180,6 +184,7 @@ def status() -> ProjectStatus:
             "idea_progress_summary",
             "idea_decision_memos",
             "idea_decision_task_generation",
+            "idea_assumption_audits",
             "project_progress_overview",
             "advisor_research_briefs",
             "tool_manifest",
@@ -317,6 +322,15 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/ideas/{idea_id}/decision-memos/{memo_id}/tasks",
             input_model="ResearchTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_idea_assumption_audit",
+            description="Persist a falsifiability-focused assumption audit for one idea.",
+            method="POST",
+            path="/research/ideas/{idea_id}/assumption-audit",
+            input_model="IdeaAssumptionAuditCreate",
+            output_model="IdeaAssumptionAuditRead",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -1144,6 +1158,20 @@ def _serialize_idea_decision_memo(memo: IdeaDecisionMemo) -> IdeaDecisionMemoRea
     )
 
 
+def _serialize_idea_assumption_audit(audit: IdeaAssumptionAudit) -> IdeaAssumptionAuditRead:
+    return IdeaAssumptionAuditRead(
+        id=audit.id,
+        idea_id=audit.idea_id,
+        status=audit.status,
+        assumptions=audit.assumptions_json or [],
+        source_artifacts=audit.source_artifacts_json or {},
+        markdown_export=audit.markdown_export or "",
+        created_by=audit.created_by,
+        created_at=audit.created_at,
+        updated_at=audit.updated_at,
+    )
+
+
 def _serialize_research_task(task: ResearchTask) -> ResearchTaskRead:
     return ResearchTaskRead(
         id=task.id,
@@ -1459,6 +1487,13 @@ def get_idea_lineage(
         .limit(20)
         .all()
     )
+    assumption_audits = (
+        session.query(IdeaAssumptionAudit)
+        .filter(IdeaAssumptionAudit.idea_id == idea_id)
+        .order_by(IdeaAssumptionAudit.created_at.desc())
+        .limit(20)
+        .all()
+    )
     tasks = (
         session.query(ResearchTask)
         .filter(ResearchTask.idea_id == idea_id)
@@ -1485,6 +1520,7 @@ def get_idea_lineage(
             *[run.id for run in experiment_runs],
             *[analysis.id for analysis in experiment_analyses],
             *[memo.id for memo in decision_memos],
+            *[audit.id for audit in assumption_audits],
             *[task.id for task in tasks],
             *[snapshot.id for snapshot in snapshots],
         ],
@@ -1498,6 +1534,7 @@ def get_idea_lineage(
         experiment_runs=experiment_runs,
         experiment_analyses=experiment_analyses,
         decision_memos=decision_memos,
+        assumption_audits=assumption_audits,
         tasks=tasks,
         snapshots=snapshots,
         graph_edge_summary=graph_edge_summary,
@@ -1513,6 +1550,7 @@ def get_idea_lineage(
             _serialize_experiment_analysis(analysis) for analysis in experiment_analyses
         ],
         decision_memos=[_serialize_idea_decision_memo(memo) for memo in decision_memos],
+        assumption_audits=[_serialize_idea_assumption_audit(audit) for audit in assumption_audits],
         research_tasks=[_serialize_research_task(task) for task in tasks],
         task_board_snapshots=[_serialize_task_board_snapshot(snapshot) for snapshot in snapshots],
         graph_edge_summary=graph_edge_summary,
@@ -1522,7 +1560,8 @@ def get_idea_lineage(
             f"{len(reviews)} reviews, {len(revisions)} revisions, "
             f"{len(experiment_runs)} experiment runs, "
             f"{len(experiment_analyses)} analyses, "
-            f"{len(decision_memos)} decision memos, {len(tasks)} tasks."
+            f"{len(decision_memos)} decision memos, "
+            f"{len(assumption_audits)} assumption audits, {len(tasks)} tasks."
         ),
     )
 
@@ -1543,6 +1582,7 @@ def get_idea_progress(
     experiment_runs = _latest_for_idea(session, ExperimentRun, idea_id, 50)
     experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 50)
     decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea_id, 20)
+    assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea_id, 20)
     tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
     snapshots = _latest_for_idea(session, TaskBoardSnapshot, idea_id, 20)
 
@@ -1570,6 +1610,7 @@ def get_idea_progress(
         "experiment_runs": len(experiment_runs),
         "experiment_analyses": len(experiment_analyses),
         "decision_memos": len(decision_memos),
+        "assumption_audits": len(assumption_audits),
         "research_tasks": len(tasks),
         "open_tasks": len([task for task in tasks if task.status in {"todo", "doing", "blocked"}]),
         "blocked_tasks": len([task for task in tasks if task.status == "blocked"]),
@@ -1585,6 +1626,7 @@ def get_idea_progress(
         experiment_runs,
         experiment_analyses,
         decision_memos,
+        assumption_audits,
         snapshots,
     )
     task_summary = _progress_task_summary(tasks)
@@ -1636,11 +1678,13 @@ def _progress_latest_artifacts(
     experiment_runs: list[ExperimentRun],
     experiment_analyses: list[ExperimentAnalysis],
     decision_memos: list[IdeaDecisionMemo],
+    assumption_audits: list[IdeaAssumptionAudit],
     snapshots: list[TaskBoardSnapshot],
 ) -> dict[str, dict | None]:
     latest_run = experiment_runs[0] if experiment_runs else None
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
     latest_memo = decision_memos[0] if decision_memos else None
+    latest_audit = assumption_audits[0] if assumption_audits else None
     return {
         "related_work_matrix": {"id": matrices[0].id, "status": matrices[0].status}
         if matrices
@@ -1668,6 +1712,12 @@ def _progress_latest_artifacts(
         else None,
         "decision_memo": {"id": latest_memo.id, "decision": latest_memo.decision}
         if latest_memo
+        else None,
+        "assumption_audit": {
+            "id": latest_audit.id,
+            "assumption_count": len(latest_audit.assumptions_json or []),
+        }
+        if latest_audit
         else None,
         "task_board_snapshot": {"id": snapshots[0].id, "title": snapshots[0].title}
         if snapshots
@@ -1766,6 +1816,8 @@ def _progress_recommendation(
         return "Draft a proposal to make the idea reviewable."
     if artifact_counts["proposal_reviews"] == 0:
         return "Run a proposal readiness review."
+    if artifact_counts["assumption_audits"] == 0:
+        return "Create an assumption audit to expose what must be true before deeper execution."
     if artifact_counts["proposal_revisions"] == 0:
         return "Create a proposal revision from the latest review."
     if artifact_counts["research_tasks"] == 0:
@@ -1925,6 +1977,63 @@ def create_tasks_from_idea_decision_memo(
     )
 
 
+@router.post("/ideas/{idea_id}/assumption-audit", response_model=IdeaAssumptionAuditRead)
+def create_idea_assumption_audit(
+    idea_id: str,
+    payload: IdeaAssumptionAuditCreate,
+    session: Session = Depends(get_session),
+) -> IdeaAssumptionAuditRead:
+    try:
+        audit = IdeaAssumptionAuditService(session).create_audit(
+            idea_id,
+            assumptions=payload.assumptions,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_idea_assumption_audit(audit)
+
+
+@router.get("/ideas/{idea_id}/assumption-audits", response_model=list[IdeaAssumptionAuditRead])
+def list_idea_assumption_audits(
+    idea_id: str,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+) -> list[IdeaAssumptionAuditRead]:
+    try:
+        audits = IdeaAssumptionAuditService(session).list_for_idea(idea_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_idea_assumption_audit(audit) for audit in audits]
+
+
+@router.get("/ideas/{idea_id}/assumption-audits/{audit_id}", response_model=IdeaAssumptionAuditRead)
+def get_idea_assumption_audit(
+    idea_id: str,
+    audit_id: str,
+    session: Session = Depends(get_session),
+) -> IdeaAssumptionAuditRead:
+    audit = IdeaAssumptionAuditService(session).get_audit(idea_id, audit_id)
+    if audit is None:
+        raise HTTPException(status_code=404, detail="Idea assumption audit not found")
+    return _serialize_idea_assumption_audit(audit)
+
+
+@router.get(
+    "/ideas/{idea_id}/assumption-audits/{audit_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_idea_assumption_audit_markdown(
+    idea_id: str,
+    audit_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    audit = IdeaAssumptionAuditService(session).get_audit(idea_id, audit_id)
+    if audit is None:
+        raise HTTPException(status_code=404, detail="Idea assumption audit not found")
+    return PlainTextResponse(audit.markdown_export or "", media_type="text/markdown")
+
+
 def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str, int]:
     if not canonical_keys:
         return {}
@@ -1954,6 +2063,7 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "experiment_analysis_creates_task",
         "idea_has_decision_memo",
         "decision_memo_creates_task",
+        "idea_has_assumption_audit",
     ]
     edges = (
         session.query(ResearchEdge)
@@ -1979,6 +2089,7 @@ def _render_idea_lineage_markdown(
     experiment_runs: list[ExperimentRun],
     experiment_analyses: list[ExperimentAnalysis],
     decision_memos: list[IdeaDecisionMemo],
+    assumption_audits: list[IdeaAssumptionAudit],
     tasks: list[ResearchTask],
     snapshots: list[TaskBoardSnapshot],
     graph_edge_summary: dict[str, int],
@@ -1994,6 +2105,7 @@ def _render_idea_lineage_markdown(
         f"- Experiment Runs: {len(experiment_runs)}",
         f"- Experiment Analyses: {len(experiment_analyses)}",
         f"- Decision Memos: {len(decision_memos)}",
+        f"- Assumption Audits: {len(assumption_audits)}",
         f"- Research Tasks: {len(tasks)}",
         f"- Task Board Snapshots: {len(snapshots)}",
         "",
@@ -2037,6 +2149,15 @@ def _render_idea_lineage_markdown(
             lines.append(f"- `{memo.id}` `{memo.decision}` by {memo.created_by}")
     else:
         lines.append("- No decision memos recorded yet.")
+
+    lines.extend(["", "## Assumption Audits", ""])
+    if assumption_audits:
+        for audit in assumption_audits[:5]:
+            lines.append(
+                f"- `{audit.id}` `{audit.status}` assumptions={len(audit.assumptions_json or [])}"
+            )
+    else:
+        lines.append("- No assumption audits recorded yet.")
 
     lines.extend(["", "## Next Tasks", ""])
     next_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}][:20]
