@@ -1111,6 +1111,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/feedback` 记录人类研究者对 idea 的 shortlist/accept/revise/reject/archive 决策、rating、comment 和 tags。Ranking 会读取这些反馈作为 human preference adjustment；后续可把这张表扩展成偏好学习、选题日志和 active learning 数据源。
 
+`/ideas/{idea_id}/export/bundle` produces an `application/zip` handoff package for one idea. It includes the dossier, lineage, progress report, research packet, readiness report, artifact Markdown files, and JSON metadata so the workbench, advisor meetings, backups, and later MCP tools can consume the same state without stitching many endpoints together.
+
 ## 11.5 Reviews
 
 ```text
@@ -1126,6 +1128,7 @@ GET  /research/ideas/{idea_id}/experiment-plans
 GET  /research/ideas/{idea_id}/progress
 GET  /research/ideas/{idea_id}/research-packet
 GET  /research/ideas/{idea_id}/readiness
+GET  /research/ideas/{idea_id}/export/bundle
 GET  /research/readiness/overview
 GET  /research/progress/overview
 GET  /research/tools/manifest

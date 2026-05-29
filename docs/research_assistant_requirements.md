@@ -1280,6 +1280,7 @@ revised
 - idea scorer。
 - idea storage。
 - idea markdown export。
+- idea artifact bundle export。
 
 验收：
 

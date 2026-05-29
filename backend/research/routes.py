@@ -1,8 +1,13 @@
+import io
+import json
+import zipfile
 from collections import Counter
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
-from fastapi.responses import PlainTextResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy.orm import Session
 
 from backend.research.config import settings
@@ -194,6 +199,7 @@ def status() -> ProjectStatus:
             "idea_assumption_audits",
             "project_progress_overview",
             "project_readiness_overview",
+            "idea_artifact_bundle_export",
             "advisor_research_briefs",
             "tool_manifest",
             "human_idea_feedback",
@@ -320,6 +326,13 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/ideas/{idea_id}/research-packet",
             output_model="IdeaResearchPacketResponse",
+        ),
+        ToolManifestItem(
+            name="export_idea_bundle",
+            description="Download a zip bundle with one idea's dossier, lineage, readiness, tasks, and artifact Markdown.",
+            method="GET",
+            path="/research/ideas/{idea_id}/export/bundle",
+            output_model="application/zip",
         ),
         ToolManifestItem(
             name="get_idea_readiness",
@@ -3342,6 +3355,203 @@ def export_idea_markdown(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return PlainTextResponse(markdown, media_type="text/markdown")
+
+
+@router.get("/ideas/{idea_id}/export/bundle")
+def export_idea_bundle(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> Response:
+    try:
+        content = _build_idea_bundle_zip(session, idea_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="idea-{idea_id}-research-bundle.zip"'
+        },
+    )
+
+
+def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
+    idea = IdeaService(session).get_idea(idea_id)
+    if idea is None:
+        raise ValueError("Idea not found")
+
+    idea_markdown = ExportService(session).render_idea_markdown(idea_id)
+    lineage = get_idea_lineage(idea_id, session=session)
+    progress = get_idea_progress(idea_id, session=session)
+    research_packet = get_idea_research_packet(idea_id, session=session)
+    readiness = get_idea_readiness(idea_id, session=session)
+    manifest = _idea_bundle_manifest(
+        idea_id=idea_id,
+        title=idea.title,
+        lineage=lineage,
+        readiness=readiness,
+        progress=progress,
+        research_packet=research_packet,
+    )
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("README.md", _render_idea_bundle_readme(manifest))
+        archive.writestr("metadata/manifest.json", _json_dump(manifest))
+        archive.writestr("metadata/lineage.json", _json_dump(lineage))
+        archive.writestr("metadata/progress.json", _json_dump(progress))
+        archive.writestr("metadata/research-packet.json", _json_dump(research_packet))
+        archive.writestr("metadata/readiness.json", _json_dump(readiness))
+        _write_markdown(archive, "01-idea-dossier.md", idea_markdown)
+        _write_markdown(archive, "02-lineage.md", lineage.markdown_export)
+        _write_markdown(archive, "03-progress.md", progress.markdown_export)
+        _write_markdown(archive, "04-research-packet.md", research_packet.markdown_export)
+        _write_markdown(archive, "05-readiness.md", readiness.markdown_export)
+        _write_artifact_markdowns(
+            archive,
+            "artifacts/related-work",
+            "related-work-matrix",
+            lineage.related_work_matrices,
+        )
+        _write_artifact_markdowns(
+            archive,
+            "artifacts/proposals/drafts",
+            "proposal-draft",
+            lineage.proposal_drafts,
+        )
+        _write_artifact_markdowns(
+            archive,
+            "artifacts/proposals/reviews",
+            "proposal-review",
+            lineage.proposal_reviews,
+        )
+        _write_artifact_markdowns(
+            archive,
+            "artifacts/proposals/revisions",
+            "proposal-revision",
+            lineage.proposal_revisions,
+        )
+        _write_artifact_markdowns(
+            archive,
+            "artifacts/experiments/runs",
+            "experiment-run",
+            lineage.experiment_runs,
+        )
+        _write_artifact_markdowns(
+            archive,
+            "artifacts/experiments/analyses",
+            "experiment-analysis",
+            lineage.experiment_analyses,
+        )
+        _write_artifact_markdowns(
+            archive,
+            "artifacts/decisions",
+            "decision-memo",
+            lineage.decision_memos,
+        )
+        _write_artifact_markdowns(
+            archive,
+            "artifacts/assumptions",
+            "assumption-audit",
+            lineage.assumption_audits,
+        )
+        for snapshot in lineage.task_board_snapshots:
+            persisted = session.get(TaskBoardSnapshot, snapshot.id)
+            if persisted and persisted.markdown_export:
+                _write_markdown(
+                    archive,
+                    f"artifacts/tasks/task-board-snapshot-{snapshot.id}.md",
+                    persisted.markdown_export,
+                )
+    return buffer.getvalue()
+
+
+def _idea_bundle_manifest(
+    *,
+    idea_id: str,
+    title: str,
+    lineage: IdeaLineageResponse,
+    readiness: IdeaReadinessResponse,
+    progress: IdeaProgressResponse,
+    research_packet: IdeaResearchPacketResponse,
+) -> dict[str, Any]:
+    return {
+        "bundle_type": "idea_research_bundle",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "idea_id": idea_id,
+        "title": title,
+        "readiness": {
+            "score": readiness.readiness_score,
+            "decision": readiness.decision,
+            "blocker_count": len(readiness.blockers),
+        },
+        "recommended_next_step": progress.recommended_next_step,
+        "open_task_count": len(research_packet.open_tasks),
+        "artifact_counts": {
+            "related_work_matrices": len(lineage.related_work_matrices),
+            "proposal_drafts": len(lineage.proposal_drafts),
+            "proposal_reviews": len(lineage.proposal_reviews),
+            "proposal_revisions": len(lineage.proposal_revisions),
+            "experiment_runs": len(lineage.experiment_runs),
+            "experiment_analyses": len(lineage.experiment_analyses),
+            "decision_memos": len(lineage.decision_memos),
+            "assumption_audits": len(lineage.assumption_audits),
+            "research_tasks": len(lineage.research_tasks),
+            "task_board_snapshots": len(lineage.task_board_snapshots),
+        },
+        "graph_edge_summary": lineage.graph_edge_summary,
+    }
+
+
+def _render_idea_bundle_readme(manifest: dict[str, Any]) -> str:
+    lines = [
+        f"# Research Bundle: {manifest['title']}",
+        "",
+        f"- Idea ID: `{manifest['idea_id']}`",
+        f"- Generated At: `{manifest['generated_at']}`",
+        f"- Readiness: `{manifest['readiness']['decision']}` ({manifest['readiness']['score']})",
+        f"- Open Tasks In Packet: {manifest['open_task_count']}",
+        "",
+        "## Start Here",
+        "",
+        "- `01-idea-dossier.md`: full idea dossier with evidence, novelty, review, and experiment plan.",
+        "- `02-lineage.md`: artifact lineage and graph edge summary.",
+        "- `03-progress.md`: open work, blockers, and recommended next step.",
+        "- `04-research-packet.md`: concise advisor/MCP context packet.",
+        "- `05-readiness.md`: readiness score, blockers, and decision.",
+        "",
+        "## Artifact Folders",
+        "",
+        "- `artifacts/`: Markdown exports for proposal, experiment, decision, audit, and task artifacts.",
+        "- `metadata/`: JSON payloads for rebuilding or passing the bundle into external tools.",
+        "",
+        "## Recommended Next Step",
+        "",
+        manifest.get("recommended_next_step") or "No recommended next step recorded.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _write_artifact_markdowns(
+    archive: zipfile.ZipFile,
+    folder: str,
+    prefix: str,
+    artifacts: list[Any],
+) -> None:
+    for artifact in artifacts:
+        markdown = getattr(artifact, "markdown_export", "")
+        if markdown:
+            _write_markdown(archive, f"{folder}/{prefix}-{artifact.id}.md", markdown)
+
+
+def _write_markdown(archive: zipfile.ZipFile, path: str, content: str) -> None:
+    archive.writestr(path, (content or "").strip() + "\n")
+
+
+def _json_dump(payload: Any) -> str:
+    return json.dumps(jsonable_encoder(payload), ensure_ascii=False, indent=2, sort_keys=True)
 
 
 def _serialize_review(review) -> ReviewRead:

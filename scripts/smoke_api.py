@@ -7,10 +7,12 @@ running server. Pass --base-url to test an already running HTTP service.
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import sys
 import time
-from dataclasses import dataclass
+import zipfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +46,8 @@ Future work should connect structured extraction, reviewer simulation, and exper
 class ResponseAdapter:
     status_code: int
     body: Any
+    headers: dict[str, str] = field(default_factory=dict)
+    content: bytes = b""
 
     def json(self) -> Any:
         return self.body
@@ -59,17 +63,32 @@ class InProcessClient:
 
     def get(self, path: str) -> ResponseAdapter:
         response = self.client.get(path)
-        return ResponseAdapter(response.status_code, decode_response_body(response))
+        return ResponseAdapter(
+            response.status_code,
+            decode_response_body(response),
+            dict(response.headers),
+            response.content,
+        )
 
     def post(
         self, path: str, *, json_body: dict | None = None, files: dict | None = None
     ) -> ResponseAdapter:
         response = self.client.post(path, json=json_body, files=files)
-        return ResponseAdapter(response.status_code, decode_response_body(response))
+        return ResponseAdapter(
+            response.status_code,
+            decode_response_body(response),
+            dict(response.headers),
+            response.content,
+        )
 
     def patch(self, path: str, *, json_body: dict | None = None) -> ResponseAdapter:
         response = self.client.patch(path, json=json_body)
-        return ResponseAdapter(response.status_code, decode_response_body(response))
+        return ResponseAdapter(
+            response.status_code,
+            decode_response_body(response),
+            dict(response.headers),
+            response.content,
+        )
 
 
 class HttpClient:
@@ -78,17 +97,32 @@ class HttpClient:
 
     def get(self, path: str) -> ResponseAdapter:
         response = requests.get(f"{self.base_url}{path}", timeout=20)
-        return ResponseAdapter(response.status_code, decode_response_body(response))
+        return ResponseAdapter(
+            response.status_code,
+            decode_response_body(response),
+            dict(response.headers),
+            response.content,
+        )
 
     def post(
         self, path: str, *, json_body: dict | None = None, files: dict | None = None
     ) -> ResponseAdapter:
         response = requests.post(f"{self.base_url}{path}", json=json_body, files=files, timeout=30)
-        return ResponseAdapter(response.status_code, decode_response_body(response))
+        return ResponseAdapter(
+            response.status_code,
+            decode_response_body(response),
+            dict(response.headers),
+            response.content,
+        )
 
     def patch(self, path: str, *, json_body: dict | None = None) -> ResponseAdapter:
         response = requests.patch(f"{self.base_url}{path}", json=json_body, timeout=20)
-        return ResponseAdapter(response.status_code, decode_response_body(response))
+        return ResponseAdapter(
+            response.status_code,
+            decode_response_body(response),
+            dict(response.headers),
+            response.content,
+        )
 
 
 def decode_response_body(response: Any) -> Any:
@@ -117,6 +151,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea readiness scoring")
     if "project_readiness_overview" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project readiness overview")
+    if "idea_artifact_bundle_export" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea artifact bundle export")
     if "idea_decision_memos" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision memos")
     if "idea_decision_task_generation" not in status["implemented_capabilities"]:
@@ -132,6 +168,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include job retry tool")
     if "get_idea_research_packet" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea research packet tool")
+    if "export_idea_bundle" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea bundle export tool")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_project_readiness_overview" not in manifest_names:
@@ -544,6 +582,31 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea readiness did not return a positive score")
     if "## Score Breakdown" not in readiness["markdown_export"]:
         raise RuntimeError("idea readiness markdown did not include score breakdown")
+    bundle_response = client.get(f"/research/ideas/{refined_idea['id']}/export/bundle")
+    if bundle_response.status_code != 200:
+        raise RuntimeError(
+            "idea bundle export failed with HTTP "
+            f"{bundle_response.status_code}: {bundle_response.json()}"
+        )
+    if bundle_response.headers.get("content-type") != "application/zip":
+        raise RuntimeError("idea bundle export did not return an application/zip response")
+    with zipfile.ZipFile(io.BytesIO(bundle_response.content)) as archive:
+        bundle_files = set(archive.namelist())
+        required_bundle_files = {
+            "README.md",
+            "01-idea-dossier.md",
+            "02-lineage.md",
+            "03-progress.md",
+            "04-research-packet.md",
+            "05-readiness.md",
+            "metadata/manifest.json",
+        }
+        missing_bundle_files = required_bundle_files - bundle_files
+        if missing_bundle_files:
+            raise RuntimeError(f"idea bundle export missed files: {missing_bundle_files}")
+        bundle_manifest = json.loads(archive.read("metadata/manifest.json"))
+    if bundle_manifest["idea_id"] != refined_idea["id"]:
+        raise RuntimeError("idea bundle manifest returned the wrong idea id")
     overview = require_ok(client.get("/research/progress/overview"), "research progress overview")
     if overview["idea_count"] < 1:
         raise RuntimeError("research overview did not include ideas")
@@ -797,6 +860,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "research_packet_markdown_chars": len(research_packet["markdown_export"]),
         "readiness_score": readiness["readiness_score"],
         "readiness_decision": readiness["decision"],
+        "idea_bundle_file_count": len(bundle_files),
+        "idea_bundle_manifest_decision": bundle_manifest["readiness"]["decision"],
         "overview_idea_count": overview["idea_count"],
         "overview_open_task_count": overview["task_summary"]["open_task_count"],
         "readiness_overview_idea_count": readiness_overview["idea_count"],

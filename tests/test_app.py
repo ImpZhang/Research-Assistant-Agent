@@ -1,4 +1,7 @@
+import io
+import json
 import time
+import zipfile
 from xml.etree import ElementTree
 
 from fastapi.testclient import TestClient
@@ -28,6 +31,7 @@ def test_research_status() -> None:
     assert "idea_research_packet" in body["implemented_capabilities"]
     assert "idea_readiness_scoring" in body["implemented_capabilities"]
     assert "project_readiness_overview" in body["implemented_capabilities"]
+    assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
 
@@ -44,6 +48,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "search_research_context" in names
     assert "get_project_progress_overview" in names
     assert "get_idea_research_packet" in names
+    assert "export_idea_bundle" in names
     assert "get_idea_readiness" in names
     assert "get_project_readiness_overview" in names
     assert "create_idea_decision_memo" in names
@@ -62,6 +67,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert response.status_code == 200
     assert "Research Assistant Workbench" in response.text
     assert "/workbench-assets/app.js" in response.text
+    assert "ideaBundleButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -84,6 +90,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/lineage" in script.text
     assert "/research/ideas/${state.latestIdeaId}/progress" in script.text
     assert "/research/ideas/${state.latestIdeaId}/research-packet" in script.text
+    assert "/research/ideas/${encodeURIComponent(state.latestIdeaId)}/export/bundle" in script.text
     assert "/research/ideas/${state.latestIdeaId}/readiness" in script.text
     assert "/research/ideas/${state.latestIdeaId}/decision-memo" in script.text
     assert (
@@ -908,6 +915,27 @@ Future work should preserve proposal drafts as reviewable artifacts.
     }
     assert "proposal" in readiness_body["score_breakdown"]
     assert "# Idea Readiness:" in readiness_body["markdown_export"]
+
+    bundle = client.get(f"/research/ideas/{idea_id}/export/bundle")
+    assert bundle.status_code == 200
+    assert bundle.headers["content-type"] == "application/zip"
+    assert "idea-" in bundle.headers["content-disposition"]
+    with zipfile.ZipFile(io.BytesIO(bundle.content)) as archive:
+        names = set(archive.namelist())
+        assert "README.md" in names
+        assert "01-idea-dossier.md" in names
+        assert "02-lineage.md" in names
+        assert "03-progress.md" in names
+        assert "04-research-packet.md" in names
+        assert "05-readiness.md" in names
+        assert f"artifacts/proposals/drafts/proposal-draft-{body['id']}.md" in names
+        assert (f"artifacts/proposals/reviews/proposal-review-{review_body['id']}.md") in names
+        assert f"artifacts/decisions/decision-memo-{decision_memo_body['id']}.md" in names
+        assert (f"artifacts/assumptions/assumption-audit-{assumption_audit_body['id']}.md") in names
+        manifest = json.loads(archive.read("metadata/manifest.json"))
+        assert manifest["idea_id"] == idea_id
+        assert manifest["artifact_counts"]["proposal_drafts"] >= 1
+        assert manifest["readiness"]["score"] == readiness_body["readiness_score"]
 
     readiness_overview = client.get("/research/readiness/overview?limit=20")
     assert readiness_overview.status_code == 200

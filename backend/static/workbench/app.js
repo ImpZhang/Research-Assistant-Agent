@@ -781,6 +781,24 @@ async function loadResearchPacket() {
   }
 }
 
+function downloadIdeaBundle() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  const url = `/research/ideas/${encodeURIComponent(state.latestIdeaId)}/export/bundle`;
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `idea-${state.latestIdeaId}-research-bundle.zip`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  renderResult(
+    "workflowResult",
+    `Started bundle export for idea <code>${escapeHtml(state.latestIdeaId)}</code>.`,
+  );
+}
+
 async function loadIdeaReadiness() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -960,6 +978,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("progressButton").addEventListener("click", loadIdeaProgress);
   $("researchPacketButton").addEventListener("click", loadResearchPacket);
+  $("ideaBundleButton").addEventListener("click", downloadIdeaBundle);
   $("readinessButton").addEventListener("click", loadIdeaReadiness);
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
