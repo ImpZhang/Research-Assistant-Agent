@@ -129,6 +129,9 @@ class LiteratureSearchService:
                 elif provider == "arxiv":
                     provider_items.extend(self._search_arxiv(query, limit))
                     provider_statuses.append("arxiv:completed")
+                elif provider == "semantic_scholar":
+                    provider_items.extend(self._search_semantic_scholar(query, limit))
+                    provider_statuses.append("semantic_scholar:completed")
             except requests.RequestException as exc:
                 provider_statuses.append(f"{provider}:failed:{type(exc).__name__}")
             except ElementTree.ParseError:
@@ -145,7 +148,12 @@ class LiteratureSearchService:
         providers = []
         for provider in settings.external_literature_providers.split(","):
             normalized = provider.strip().lower()
-            if normalized in {"openalex", "arxiv"} and normalized not in providers:
+            if normalized in {"semantic-scholar", "semanticscholar"}:
+                normalized = "semantic_scholar"
+            if (
+                normalized in {"openalex", "arxiv", "semantic_scholar"}
+                and normalized not in providers
+            ):
                 providers.append(normalized)
         return providers
 
@@ -231,6 +239,42 @@ class LiteratureSearchService:
         if element is None or element.text is None:
             return ""
         return element.text.strip()
+
+    def _search_semantic_scholar(self, query: str, limit: int) -> list[LiteratureSearchItem]:
+        response = requests.get(
+            settings.semantic_scholar_base_url,
+            params={
+                "query": query,
+                "limit": limit,
+                "fields": "title,authors,year,venue,url,abstract,citationCount,externalIds",
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+        results = response.json().get("data", [])
+        return [self._semantic_scholar_item(item, idx) for idx, item in enumerate(results)]
+
+    def _semantic_scholar_item(self, item: dict[str, Any], idx: int) -> LiteratureSearchItem:
+        authors = [
+            author.get("name", "") for author in item.get("authors", []) if author.get("name")
+        ]
+        external_ids = item.get("externalIds") or {}
+        source_id = item.get("paperId") or external_ids.get("DOI") or item.get("url") or ""
+        return LiteratureSearchItem(
+            provider="semantic_scholar",
+            source_id=source_id,
+            title=item.get("title") or "Untitled Semantic Scholar paper",
+            authors=authors,
+            year=item.get("year"),
+            venue=item.get("venue") or "",
+            url=item.get("url") or "",
+            abstract=(item.get("abstract") or "")[:1200],
+            score=max(1.0, 9.0 - idx),
+            metadata={
+                "citation_count": item.get("citationCount"),
+                "external_ids": external_ids,
+            },
+        )
 
     def _abstract_from_inverted_index(self, inverted_index: dict[str, list[int]]) -> str:
         if not inverted_index:

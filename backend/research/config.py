@@ -23,10 +23,14 @@ class Settings:
     )
     external_literature_providers: str = os.getenv(
         "EXTERNAL_LITERATURE_PROVIDERS",
-        "openalex,arxiv",
+        "openalex,arxiv,semantic_scholar",
     )
     openalex_base_url: str = os.getenv("OPENALEX_BASE_URL", "https://api.openalex.org")
     arxiv_base_url: str = os.getenv("ARXIV_BASE_URL", "https://export.arxiv.org/api/query")
+    semantic_scholar_base_url: str = os.getenv(
+        "SEMANTIC_SCHOLAR_BASE_URL",
+        "https://api.semanticscholar.org/graph/v1/paper/search",
+    )
 
     main_model: str = os.getenv("MAIN_MODEL") or os.getenv("MODEL", "")
     main_base_url: str = os.getenv("MAIN_BASE_URL") or os.getenv("BASE_URL", "")

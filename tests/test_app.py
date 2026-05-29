@@ -145,6 +145,27 @@ def test_arxiv_literature_item_parser() -> None:
     assert item.metadata["categories"] == ["cs.AI"]
 
 
+def test_semantic_scholar_literature_item_parser() -> None:
+    payload = {
+        "paperId": "s2-paper-id",
+        "title": "Research Agents with Evidence",
+        "authors": [{"name": "Alan Turing"}, {"name": "Katherine Johnson"}],
+        "year": 2026,
+        "venue": "ACL",
+        "url": "https://www.semanticscholar.org/paper/s2-paper-id",
+        "abstract": "A semantic scholar fixture.",
+        "citationCount": 42,
+        "externalIds": {"DOI": "10.0000/example"},
+    }
+    item = LiteratureSearchService(None)._semantic_scholar_item(payload, 0)
+    assert item.provider == "semantic_scholar"
+    assert item.source_id == "s2-paper-id"
+    assert item.title == "Research Agents with Evidence"
+    assert item.authors == ["Alan Turing", "Katherine Johnson"]
+    assert item.year == 2026
+    assert item.metadata["citation_count"] == 42
+
+
 def test_extract_paper_card_from_evidence() -> None:
     client = TestClient(create_app())
     content = b"""Paper Card Extraction Test

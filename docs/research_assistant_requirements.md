@@ -941,7 +941,7 @@ metric 选择理由
 - GitHub。
 - 浏览器搜索。
 
-短期不作为核心依赖。当前外部 literature search adapter 至少需要支持 OpenAlex 与 arXiv，并且必须可通过环境变量关闭，保证本地测试和无外网环境仍可运行。
+短期不作为核心依赖。当前外部 literature search adapter 至少需要支持 OpenAlex、arXiv 与 Semantic Scholar，并且必须可通过环境变量关闭，保证本地测试和无外网环境仍可运行。
 
 验收标准：
 
