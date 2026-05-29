@@ -2,6 +2,9 @@ const state = {
   paperId: "",
   jobId: "",
   latestIdeaId: "",
+  latestRelatedWorkMatrixId: "",
+  latestExperimentPlanId: "",
+  latestExperimentRunId: "",
   latestProposalDraftId: "",
   latestProposalReviewId: "",
   latestProposalRevisionId: "",
@@ -138,6 +141,13 @@ async function pollJob(jobId) {
     if (job.output && Array.isArray(job.output.idea_ids) && job.output.idea_ids.length) {
       state.latestIdeaId = job.output.idea_ids[0];
     }
+    if (
+      job.output &&
+      Array.isArray(job.output.experiment_plan_ids) &&
+      job.output.experiment_plan_ids.length
+    ) {
+      state.latestExperimentPlanId = job.output.experiment_plan_ids[0];
+    }
     renderResult(
       "workflowResult",
       `Job <code>${job.id}</code> is <strong>${job.status}</strong> at ${Math.round((job.progress || 0) * 100)}%.<br />${renderJobOutput(job.output)}`,
@@ -173,6 +183,9 @@ async function loadJobArtifacts(jobId) {
   const artifacts = await api(`/research/jobs/${jobId}/artifacts`);
   if (artifacts.ideas && artifacts.ideas.length) {
     state.latestIdeaId = artifacts.ideas[0].id;
+  }
+  if (artifacts.experiment_plans && artifacts.experiment_plans.length) {
+    state.latestExperimentPlanId = artifacts.experiment_plans[0].id;
   }
   if (artifacts.markdown_export) {
     $("dossierPreview").textContent = artifacts.markdown_export;
@@ -324,6 +337,14 @@ async function refineLatestIdea() {
       }),
     });
     state.latestIdeaId = body.refined_idea.id;
+    state.latestRelatedWorkMatrixId = "";
+    state.latestExperimentPlanId = "";
+    state.latestExperimentRunId = "";
+    state.latestProposalDraftId = "";
+    state.latestProposalReviewId = "";
+    state.latestProposalRevisionId = "";
+    state.latestTaskIds = [];
+    state.latestTaskSnapshotId = "";
     renderResult(
       "workflowResult",
       `Created refined idea <code>${escapeHtml(body.refined_idea.id)}</code> from <code>${escapeHtml(body.source_idea.id)}</code>.<br />${renderList("Applied actions", body.applied_actions, (item) => item)}`,
@@ -350,7 +371,7 @@ async function createRelatedWorkMatrix() {
         created_by: "workbench",
       }),
     });
-    state.latestProposalDraftId = body.id;
+    state.latestRelatedWorkMatrixId = body.id;
     state.latestProposalReviewId = "";
     state.latestProposalRevisionId = "";
     state.latestTaskIds = [];
@@ -381,6 +402,8 @@ async function createProposalDraft() {
         created_by: "workbench",
       }),
     });
+    state.latestProposalDraftId = body.id;
+    state.latestExperimentPlanId = body.experiment_plan_id || state.latestExperimentPlanId;
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "workflowResult",
@@ -494,6 +517,45 @@ async function saveTaskSnapshot() {
     renderResult(
       "workflowResult",
       `Saved task snapshot <code>${escapeHtml(body.id)}</code> with ${body.task_ids.length} tasks.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createExperimentRun() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Recording experiment run...", "warn");
+  try {
+    if (!state.latestExperimentPlanId) {
+      const plan = await api(`/research/ideas/${state.latestIdeaId}/experiment-plan`, {
+        method: "POST",
+      });
+      state.latestExperimentPlanId = plan.id;
+    }
+    const body = await api(`/research/experiment-plans/${state.latestExperimentPlanId}/runs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Workbench experiment run",
+        task_id: state.latestTaskIds.length ? state.latestTaskIds[0] : null,
+        status: "running",
+        dataset_snapshot: "Workbench run dataset snapshot pending.",
+        parameters: { source: "workbench" },
+        metric_results: {},
+        artifact_links: [],
+        notes: $("refineFocus").value.trim(),
+        created_by: "workbench",
+      }),
+    });
+    state.latestExperimentRunId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Recorded experiment run <code>${escapeHtml(body.id)}</code> with status ${escapeHtml(body.status)}.`,
     );
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
@@ -618,6 +680,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("proposalRevisionButton").addEventListener("click", reviseProposalDraft);
   $("taskBacklogButton").addEventListener("click", createTaskBacklog);
   $("taskSnapshotButton").addEventListener("click", saveTaskSnapshot);
+  $("experimentRunButton").addEventListener("click", createExperimentRun);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);

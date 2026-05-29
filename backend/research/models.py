@@ -204,6 +204,32 @@ class ExperimentPlan(Base, TimestampMixin):
     timeline_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class ExperimentRun(Base, TimestampMixin):
+    __tablename__ = "experiment_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    experiment_plan_id: Mapped[str] = mapped_column(ForeignKey("experiment_plans.id"), index=True)
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    task_id: Mapped[str | None] = mapped_column(
+        ForeignKey("research_tasks.id"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(512), default="")
+    status: Mapped[str] = mapped_column(String(64), default="running", index=True)
+    objective_snapshot: Mapped[str] = mapped_column(Text, default="")
+    hypothesis_snapshot: Mapped[str] = mapped_column(Text, default="")
+    dataset_snapshot: Mapped[str] = mapped_column(Text, default="")
+    baseline_snapshot_json: Mapped[list] = mapped_column(JSON, default=list)
+    parameters_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    metric_results_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    artifact_links_json: Mapped[list] = mapped_column(JSON, default=list)
+    conclusion: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="system")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class IdeaFeedback(Base, TimestampMixin):
     __tablename__ = "idea_feedback"
 

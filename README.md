@@ -56,9 +56,10 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Proposal revision artifacts that turn readiness-review actions into a revised proposal checkpoint.
 - Research task backlog generation from proposal revisions, with task listing and status updates.
 - Research task event logs for created/updated/progress/blocker notes and execution history.
+- Experiment run tracking that links an experiment plan to task events, metrics, conclusions, artifacts, and Markdown run reports.
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.
-- GraphRAG-lite links for proposal drafts, reviews, revisions, research tasks, and task board snapshots.
-- Idea lineage endpoint that hydrates matrices, proposal artifacts, tasks, task snapshots, and graph edge summaries.
+- GraphRAG-lite links for proposal drafts, reviews, revisions, experiment runs, research tasks, and task board snapshots.
+- Idea lineage endpoint that hydrates matrices, proposal artifacts, experiment runs, tasks, task snapshots, and graph edge summaries.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
@@ -164,7 +165,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -185,6 +186,12 @@ POST /research/gaps/{gap_id}/ideas
 POST /research/ideas/{idea_id}/novelty-check
 POST /research/ideas/{idea_id}/review
 POST /research/ideas/{idea_id}/experiment-plan
+GET  /research/ideas/{idea_id}/experiment-runs
+POST /research/experiment-plans/{plan_id}/runs
+GET  /research/experiment-plans/{plan_id}/runs
+GET  /research/experiment-runs/{run_id}
+PATCH /research/experiment-runs/{run_id}
+GET  /research/experiment-runs/{run_id}/export/markdown
 POST /research/ideas/{idea_id}/refine
 POST /research/ideas/{idea_id}/related-work-matrix
 GET  /research/ideas/{idea_id}/related-work-matrices

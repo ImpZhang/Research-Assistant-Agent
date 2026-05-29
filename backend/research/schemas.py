@@ -475,12 +475,61 @@ class TaskBoardSnapshotDetail(TaskBoardSnapshotRead):
     markdown_export: str = ""
 
 
+class ExperimentRunCreate(BaseModel):
+    title: str = ""
+    task_id: str | None = None
+    status: Literal["planned", "running", "completed", "failed", "inconclusive"] = "running"
+    dataset_snapshot: str = ""
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    metric_results: dict[str, Any] = Field(default_factory=dict)
+    artifact_links: list[dict[str, Any]] = Field(default_factory=list)
+    conclusion: str = ""
+    notes: str = ""
+    created_by: str = "system"
+
+
+class ExperimentRunUpdate(BaseModel):
+    status: Literal["planned", "running", "completed", "failed", "inconclusive"] | None = None
+    dataset_snapshot: str | None = None
+    parameters: dict[str, Any] | None = None
+    metric_results: dict[str, Any] | None = None
+    artifact_links: list[dict[str, Any]] | None = None
+    conclusion: str | None = None
+    notes: str | None = None
+    created_by: str = "system"
+
+
+class ExperimentRunRead(BaseModel):
+    id: str
+    experiment_plan_id: str
+    idea_id: str
+    task_id: str | None = None
+    title: str
+    status: str
+    objective_snapshot: str = ""
+    hypothesis_snapshot: str = ""
+    dataset_snapshot: str = ""
+    baseline_snapshot: list[str] = Field(default_factory=list)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    metric_results: dict[str, Any] = Field(default_factory=dict)
+    artifact_links: list[dict[str, Any]] = Field(default_factory=list)
+    conclusion: str = ""
+    notes: str = ""
+    markdown_export: str = ""
+    created_by: str = "system"
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class IdeaLineageResponse(BaseModel):
     idea: IdeaRead
     related_work_matrices: list[RelatedWorkMatrixRead] = Field(default_factory=list)
     proposal_drafts: list[ProposalDraftRead] = Field(default_factory=list)
     proposal_reviews: list[ProposalReviewRead] = Field(default_factory=list)
     proposal_revisions: list[ProposalRevisionRead] = Field(default_factory=list)
+    experiment_runs: list[ExperimentRunRead] = Field(default_factory=list)
     research_tasks: list[ResearchTaskRead] = Field(default_factory=list)
     task_board_snapshots: list[TaskBoardSnapshotRead] = Field(default_factory=list)
     graph_edge_summary: dict[str, int] = Field(default_factory=dict)

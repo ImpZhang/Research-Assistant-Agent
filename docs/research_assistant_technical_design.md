@@ -494,6 +494,32 @@ created_at
 updated_at
 ```
 
+### experiment_runs
+
+```text
+id
+experiment_plan_id
+idea_id
+task_id
+title
+status
+objective_snapshot
+hypothesis_snapshot
+dataset_snapshot
+baseline_snapshot_json
+parameters_json
+metric_results_json
+artifact_links_json
+conclusion
+notes
+markdown_export
+created_by
+started_at
+completed_at
+created_at
+updated_at
+```
+
 ### idea_feedback
 
 ```text
@@ -1005,11 +1031,13 @@ GET  /research/ideas/{idea_id}/feedback
 
 `/tasks/{task_id}/events` 保存任务执行历史。创建 backlog 时自动写入 `created` event；`PATCH /tasks/{task_id}` 会写入 `task_updated` event；研究者或后续 agent 可以追加 `note/progress/blocker/decision/evidence` event，记录为什么任务推进、阻塞或完成。
 
+`/experiment-plans/{plan_id}/runs` 是第一版实验执行记录：它把 experiment plan 的一次执行落成 `ExperimentRun` artifact，保存 task id、dataset snapshot、parameters、metric results、artifact links、conclusion、notes 和 Markdown run report。创建或更新 run 会写入关联 task 的 `experiment_run_created/experiment_run_updated` event，让任务进展和实验结果在同一条执行日志里可追溯。
+
 `/tasks/snapshots` 固化某个 task board 状态，保存 task ids、status/priority summary、blocked tasks、next actions 和 Markdown export。它用于组会汇报、日/周复盘，以及后续自动提醒或 MCP task 工具的输入。
 
-Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_draft`、`proposal_review_reviews_draft`、`proposal_revision_updates_draft`、`proposal_revision_addresses_review`、`proposal_revision_creates_task`、`task_board_snapshot_tracks_task`。这使得后续 context search、MCP tool 或 workflow planner 可以沿着 idea 的演化链路追踪到草案、评审、修订和执行任务。
+Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_draft`、`proposal_review_reviews_draft`、`proposal_revision_updates_draft`、`proposal_revision_addresses_review`、`proposal_revision_creates_task`、`idea_has_experiment_plan`、`experiment_plan_has_run`、`idea_has_experiment_run`、`task_records_experiment_run`、`task_board_snapshot_tracks_task`。这使得后续 context search、MCP tool 或 workflow planner 可以沿着 idea 的演化链路追踪到草案、评审、修订、执行任务和实验运行。
 
-`/ideas/{idea_id}/lineage` 将 idea 的 related-work matrices、proposal drafts、proposal reviews、proposal revisions、research tasks、task board snapshots 与 graph edge summary 聚合为一个响应，并提供 Markdown lineage export，方便前端和 MCP 一次性读取研究演化轨迹。
+`/ideas/{idea_id}/lineage` 将 idea 的 related-work matrices、proposal drafts、proposal reviews、proposal revisions、experiment runs、research tasks、task board snapshots 与 graph edge summary 聚合为一个响应，并提供 Markdown lineage export，方便前端和 MCP 一次性读取研究演化轨迹。
 
 `/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
 
@@ -1033,9 +1061,14 @@ GET  /research/ideas/{idea_id}/reviews
 ## 11.6 Experiments
 
 ```text
-GET  /research/experiment-plans
-GET  /research/experiment-plans/{plan_id}
-POST /research/experiment-plans/{plan_id}/export
+POST /research/ideas/{idea_id}/experiment-plan
+GET  /research/ideas/{idea_id}/experiment-plans
+GET  /research/ideas/{idea_id}/experiment-runs
+POST /research/experiment-plans/{plan_id}/runs
+GET  /research/experiment-plans/{plan_id}/runs
+GET  /research/experiment-runs/{run_id}
+PATCH /research/experiment-runs/{run_id}
+GET  /research/experiment-runs/{run_id}/export/markdown
 ```
 
 ## 11.7 Jobs
@@ -1185,6 +1218,13 @@ FutureWork
 Gap
 Idea
 Evidence
+ProposalDraft
+ProposalReview
+ProposalRevision
+ResearchTask
+ExperimentPlan
+ExperimentRun
+TaskBoardSnapshot
 ```
 
 边：
@@ -1201,6 +1241,9 @@ Gap -> derived_from -> Limitation
 Idea -> addresses -> Gap
 Idea -> supported_by -> Evidence
 Idea -> differs_from -> Paper
+Idea -> has_experiment_plan -> ExperimentPlan
+ExperimentPlan -> has_run -> ExperimentRun
+ResearchTask -> records_experiment_run -> ExperimentRun
 ```
 
 ## 13.4 图查询能力

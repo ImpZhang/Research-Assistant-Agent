@@ -306,6 +306,58 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     event_types = {event["event_type"] for event in task_events}
     if not {"created", "task_updated", "progress"}.issubset(event_types):
         raise RuntimeError(f"research task events were incomplete: {event_types}")
+    experiment_run = require_ok(
+        client.post(
+            f"/research/experiment-plans/{refined_plan['id']}/runs",
+            json_body={
+                "title": "Smoke MVP experiment run",
+                "task_id": updated_task["id"],
+                "status": "running",
+                "dataset_snapshot": "smoke paper fixture",
+                "parameters": {"runner": "smoke_api", "seed": 7},
+                "metric_results": {"primary_metric": {"value": 0.64, "direction": "higher"}},
+                "artifact_links": [{"label": "smoke script", "path": "scripts/smoke_api.py"}],
+                "notes": "Smoke registered the first execution run.",
+                "created_by": "smoke_api",
+            },
+        ),
+        "experiment run",
+    )
+    completed_run = require_ok(
+        client.patch(
+            f"/research/experiment-runs/{experiment_run['id']}",
+            json_body={
+                "status": "completed",
+                "metric_results": {
+                    "primary_metric": {"value": 0.71, "direction": "higher"},
+                    "cost": {"value": 0.4, "unit": "gpu_hours"},
+                },
+                "conclusion": "Smoke run produced a measurable improvement signal.",
+                "notes": "Smoke completed the experiment execution loop.",
+                "created_by": "smoke_api",
+            },
+        ),
+        "experiment run update",
+    )
+    run_markdown = require_ok(
+        client.get(f"/research/experiment-runs/{experiment_run['id']}/export/markdown"),
+        "experiment run markdown",
+    )
+    if "## Conclusion" not in run_markdown:
+        raise RuntimeError("experiment run markdown did not include the conclusion section")
+    plan_runs = require_ok(
+        client.get(f"/research/experiment-plans/{refined_plan['id']}/runs"),
+        "experiment runs for plan",
+    )
+    if not plan_runs or plan_runs[0]["id"] != experiment_run["id"]:
+        raise RuntimeError("experiment plan did not list the new run")
+    task_events_after_run = require_ok(
+        client.get(f"/research/tasks/{updated_task['id']}/events"),
+        "research task events after experiment run",
+    )
+    run_event_types = {event["event_type"] for event in task_events_after_run}
+    if not {"experiment_run_created", "experiment_run_updated"}.issubset(run_event_types):
+        raise RuntimeError(f"experiment run task events were incomplete: {run_event_types}")
     task_snapshot = require_ok(
         client.post(
             "/research/tasks/snapshots",
@@ -336,6 +388,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if proposal_revision["id"] not in lineage["markdown_export"]:
         raise RuntimeError("idea lineage markdown did not include proposal revision")
+    if experiment_run["id"] not in lineage["markdown_export"]:
+        raise RuntimeError("idea lineage markdown did not include experiment run")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -531,7 +585,11 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "task_backlog_count": len(task_backlog["tasks"]),
         "updated_task_status": updated_task["status"],
         "task_event_count": len(task_events),
+        "task_event_count_after_run": len(task_events_after_run),
         "manual_task_event_id": manual_task_event["id"],
+        "experiment_run_id": experiment_run["id"],
+        "experiment_run_status": completed_run["status"],
+        "experiment_run_markdown_chars": len(run_markdown),
         "task_snapshot_id": task_snapshot["id"],
         "task_snapshot_task_count": task_snapshot["summary"]["task_count"],
         "task_snapshot_markdown_chars": len(task_snapshot_markdown),

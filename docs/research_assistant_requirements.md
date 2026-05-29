@@ -699,16 +699,25 @@ proposal revision 之后需要进入 task backlog：
 - 支持 Markdown 导出，用于组会汇报或个人周报。
 - 后续可接提醒、MCP task 工具或自动执行器。
 
-proposal、review、revision、task 和 task snapshot 都需要进入 GraphRAG-lite：
+实验计划之后需要支持 experiment run：
+
+- 将 experiment plan 的一次执行保存为 run artifact。
+- run 需要记录 status、task id、dataset snapshot、parameters、metric results、artifact links、conclusion 和 notes。
+- run 创建和更新时应写入关联 task 的 event log，避免实验结果只存在聊天记录或本地文件名里。
+- run 需要支持 Markdown 导出，用于实验日志、组会和论文复现实验记录。
+
+proposal、review、revision、experiment run、task 和 task snapshot 都需要进入 GraphRAG-lite：
 
 - idea 可以追踪到 proposal draft。
 - proposal draft 可以追踪到 review 和 revision。
 - revision 可以追踪到 research tasks。
+- experiment plan 可以追踪到具体 experiment run。
+- research task 可以追踪到支撑它的 experiment run。
 - task snapshot 可以追踪到当时的任务集合。
 
 系统需要提供 idea lineage：
 
-- 一次性返回 idea 的 related work、proposal、review、revision、task、snapshot。
+- 一次性返回 idea 的 related work、proposal、review、revision、experiment run、task、snapshot。
 - 返回 graph edge summary，说明研究对象之间的演化关系。
 - 支持 Markdown 导出，用于科研日志、导师沟通和 MCP 上下文。
 

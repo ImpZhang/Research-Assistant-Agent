@@ -8,6 +8,7 @@ from backend.research.models import (
     Chunk,
     Evidence,
     ExperimentPlan,
+    ExperimentRun,
     Idea,
     IdeaFeedback,
     IdeaPortfolioSnapshot,
@@ -35,6 +36,9 @@ from backend.research.schemas import (
     EmbeddingRebuildResponse,
     EvidenceRead,
     ExperimentPlanRead,
+    ExperimentRunCreate,
+    ExperimentRunRead,
+    ExperimentRunUpdate,
     GapMiningRequest,
     GapMiningResponse,
     IdeaFeedbackCreate,
@@ -96,6 +100,7 @@ from backend.research.schemas import (
 )
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.embedding_service import EmbeddingService
+from backend.research.services.experiment_run_service import ExperimentRunService
 from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.export_service import ExportService
 from backend.research.services.gap_service import GapService
@@ -168,6 +173,7 @@ def status() -> ProjectStatus:
             "literature_backed_novelty_screening",
             "reviewer_simulation",
             "experiment_planning",
+            "experiment_run_tracking",
             "literature_to_ideas_workflow",
             "async_literature_to_ideas_workflow",
             "workflow_job_trace",
@@ -974,6 +980,13 @@ def get_idea_lineage(
         .limit(50)
         .all()
     )
+    experiment_runs = (
+        session.query(ExperimentRun)
+        .filter(ExperimentRun.idea_id == idea_id)
+        .order_by(ExperimentRun.created_at.desc())
+        .limit(50)
+        .all()
+    )
     tasks = (
         session.query(ResearchTask)
         .filter(ResearchTask.idea_id == idea_id)
@@ -996,6 +1009,8 @@ def get_idea_lineage(
             *[draft.id for draft in drafts],
             *[review.id for review in reviews],
             *[revision.id for revision in revisions],
+            *[run.experiment_plan_id for run in experiment_runs],
+            *[run.id for run in experiment_runs],
             *[task.id for task in tasks],
             *[snapshot.id for snapshot in snapshots],
         ],
@@ -1006,6 +1021,7 @@ def get_idea_lineage(
         drafts=drafts,
         reviews=reviews,
         revisions=revisions,
+        experiment_runs=experiment_runs,
         tasks=tasks,
         snapshots=snapshots,
         graph_edge_summary=graph_edge_summary,
@@ -1016,13 +1032,15 @@ def get_idea_lineage(
         proposal_drafts=[_serialize_proposal_draft(draft) for draft in drafts],
         proposal_reviews=[_serialize_proposal_review(review) for review in reviews],
         proposal_revisions=[_serialize_proposal_revision(revision) for revision in revisions],
+        experiment_runs=[_serialize_experiment_run(run) for run in experiment_runs],
         research_tasks=[_serialize_research_task(task) for task in tasks],
         task_board_snapshots=[_serialize_task_board_snapshot(snapshot) for snapshot in snapshots],
         graph_edge_summary=graph_edge_summary,
         markdown_export=markdown_export,
         message=(
             f"Loaded lineage for idea {idea.id}: {len(drafts)} drafts, "
-            f"{len(reviews)} reviews, {len(revisions)} revisions, {len(tasks)} tasks."
+            f"{len(reviews)} reviews, {len(revisions)} revisions, "
+            f"{len(experiment_runs)} experiment runs, {len(tasks)} tasks."
         ),
     )
 
@@ -1046,6 +1064,10 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "proposal_revision_addresses_review",
         "proposal_revision_creates_task",
         "task_board_snapshot_tracks_task",
+        "idea_has_experiment_plan",
+        "experiment_plan_has_run",
+        "idea_has_experiment_run",
+        "task_records_experiment_run",
     ]
     edges = (
         session.query(ResearchEdge)
@@ -1068,6 +1090,7 @@ def _render_idea_lineage_markdown(
     drafts: list[ProposalDraft],
     reviews: list[ProposalReview],
     revisions: list[ProposalRevision],
+    experiment_runs: list[ExperimentRun],
     tasks: list[ResearchTask],
     snapshots: list[TaskBoardSnapshot],
     graph_edge_summary: dict[str, int],
@@ -1080,6 +1103,7 @@ def _render_idea_lineage_markdown(
         f"- Proposal Drafts: {len(drafts)}",
         f"- Proposal Reviews: {len(reviews)}",
         f"- Proposal Revisions: {len(revisions)}",
+        f"- Experiment Runs: {len(experiment_runs)}",
         f"- Research Tasks: {len(tasks)}",
         f"- Task Board Snapshots: {len(snapshots)}",
         "",
@@ -1100,6 +1124,13 @@ def _render_idea_lineage_markdown(
         lines.append(f"- Review `{review.id}`: {review.decision} score={review.readiness_score}")
     for revision in revisions[:3]:
         lines.append(f"- Revision `{revision.id}`: {revision.status}")
+
+    lines.extend(["", "## Experiment Runs", ""])
+    if experiment_runs:
+        for run in experiment_runs[:5]:
+            lines.append(f"- `{run.id}` `{run.status}` {run.title}")
+    else:
+        lines.append("- No experiment runs recorded yet.")
 
     lines.extend(["", "## Next Tasks", ""])
     next_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}][:10]
@@ -1726,6 +1757,32 @@ def _serialize_experiment_plan(plan) -> ExperimentPlanRead:
     )
 
 
+def _serialize_experiment_run(run: ExperimentRun) -> ExperimentRunRead:
+    return ExperimentRunRead(
+        id=run.id,
+        experiment_plan_id=run.experiment_plan_id,
+        idea_id=run.idea_id,
+        task_id=run.task_id,
+        title=run.title,
+        status=run.status,
+        objective_snapshot=run.objective_snapshot,
+        hypothesis_snapshot=run.hypothesis_snapshot,
+        dataset_snapshot=run.dataset_snapshot,
+        baseline_snapshot=run.baseline_snapshot_json or [],
+        parameters=run.parameters_json or {},
+        metric_results=run.metric_results_json or {},
+        artifact_links=run.artifact_links_json or [],
+        conclusion=run.conclusion,
+        notes=run.notes,
+        markdown_export=run.markdown_export or "",
+        created_by=run.created_by,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        created_at=run.created_at,
+        updated_at=run.updated_at,
+    )
+
+
 @router.post("/ideas/{idea_id}/experiment-plan", response_model=ExperimentPlanRead)
 def create_experiment_plan(
     idea_id: str,
@@ -1749,6 +1806,106 @@ def list_experiment_plans(
         _serialize_experiment_plan(plan)
         for plan in ExperimentService(session).list_plans_for_idea(idea_id)
     ]
+
+
+@router.post("/experiment-plans/{plan_id}/runs", response_model=ExperimentRunRead)
+def create_experiment_run(
+    plan_id: str,
+    payload: ExperimentRunCreate,
+    session: Session = Depends(get_session),
+) -> ExperimentRunRead:
+    try:
+        run = ExperimentRunService(session).create_run(
+            plan_id,
+            title=payload.title,
+            task_id=payload.task_id,
+            status=payload.status,
+            dataset_snapshot=payload.dataset_snapshot,
+            parameters=payload.parameters,
+            metric_results=payload.metric_results,
+            artifact_links=payload.artifact_links,
+            conclusion=payload.conclusion,
+            notes=payload.notes,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return _serialize_experiment_run(run)
+
+
+@router.get("/experiment-plans/{plan_id}/runs", response_model=list[ExperimentRunRead])
+def list_experiment_runs_for_plan(
+    plan_id: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ExperimentRunRead]:
+    try:
+        runs = ExperimentRunService(session).list_for_plan(plan_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_experiment_run(run) for run in runs]
+
+
+@router.get("/ideas/{idea_id}/experiment-runs", response_model=list[ExperimentRunRead])
+def list_experiment_runs_for_idea(
+    idea_id: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ExperimentRunRead]:
+    try:
+        runs = ExperimentRunService(session).list_for_idea(idea_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_experiment_run(run) for run in runs]
+
+
+@router.get("/experiment-runs/{run_id}", response_model=ExperimentRunRead)
+def get_experiment_run(
+    run_id: str,
+    session: Session = Depends(get_session),
+) -> ExperimentRunRead:
+    run = ExperimentRunService(session).get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Experiment run not found")
+    return _serialize_experiment_run(run)
+
+
+@router.patch("/experiment-runs/{run_id}", response_model=ExperimentRunRead)
+def update_experiment_run(
+    run_id: str,
+    payload: ExperimentRunUpdate,
+    session: Session = Depends(get_session),
+) -> ExperimentRunRead:
+    try:
+        run = ExperimentRunService(session).update_run(
+            run_id,
+            status=payload.status,
+            dataset_snapshot=payload.dataset_snapshot,
+            parameters=payload.parameters,
+            metric_results=payload.metric_results,
+            artifact_links=payload.artifact_links,
+            conclusion=payload.conclusion,
+            notes=payload.notes,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_experiment_run(run)
+
+
+@router.get(
+    "/experiment-runs/{run_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_experiment_run_markdown(
+    run_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    run = ExperimentRunService(session).get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Experiment run not found")
+    return PlainTextResponse(run.markdown_export or "", media_type="text/markdown")
 
 
 @router.post(

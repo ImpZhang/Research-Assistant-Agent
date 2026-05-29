@@ -1,4 +1,6 @@
 from backend.research.models import (
+    ExperimentPlan,
+    ExperimentRun,
     ProposalDraft,
     ProposalReview,
     ProposalRevision,
@@ -146,6 +148,65 @@ class ArtifactGraphService:
                 target_node=task_node,
                 edge_type="task_board_snapshot_tracks_task",
                 payload={"source": "task_board_snapshot"},
+            )
+
+    def link_experiment_run(
+        self,
+        plan: ExperimentPlan,
+        run: ExperimentRun,
+        task: ResearchTask | None = None,
+    ) -> None:
+        idea_node = self._idea_node(run.idea_id)
+        plan_node = self.graph.get_or_create_node(
+            node_type="experiment_plan",
+            label=f"Experiment plan {plan.id}",
+            canonical_key=plan.id,
+            payload={
+                "idea_id": plan.idea_id,
+                "objective": plan.objective,
+            },
+        )
+        run_node = self.graph.get_or_create_node(
+            node_type="experiment_run",
+            label=run.title,
+            canonical_key=run.id,
+            payload={
+                "status": run.status,
+                "experiment_plan_id": run.experiment_plan_id,
+                "task_id": run.task_id,
+                "conclusion": run.conclusion,
+            },
+        )
+        self.graph.create_edge(
+            source_node=idea_node,
+            target_node=plan_node,
+            edge_type="idea_has_experiment_plan",
+            payload={"source": "experiment_run"},
+        )
+        self.graph.create_edge(
+            source_node=plan_node,
+            target_node=run_node,
+            edge_type="experiment_plan_has_run",
+            payload={"source": "experiment_run"},
+        )
+        self.graph.create_edge(
+            source_node=idea_node,
+            target_node=run_node,
+            edge_type="idea_has_experiment_run",
+            payload={"source": "experiment_run"},
+        )
+        if task is not None:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={"status": task.status, "priority": task.priority},
+            )
+            self.graph.create_edge(
+                source_node=task_node,
+                target_node=run_node,
+                edge_type="task_records_experiment_run",
+                payload={"source": "experiment_run"},
             )
 
     def _idea_node(self, idea_id: str):
