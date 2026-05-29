@@ -1073,9 +1073,11 @@ GET  /research/ideas/{idea_id}/feedback
 
 `/ideas/{idea_id}/decision-memo` 固化 pursue/revise/park/reject 决策，自动汇总 latest feedback、novelty check、review、proposal review、experiment analysis、related-work matrix 和 open tasks，保存 rationale、evidence ids、risk register、next commitments 与 Markdown export。创建后写入 `idea_has_decision_memo` 图边，让“为什么继续/暂缓/拒绝这个方向”成为可追踪 artifact。
 
+`/ideas/{idea_id}/decision-memos/{memo_id}/tasks` 将 decision memo 的 next commitments 转成 `ResearchTask` backlog，owner type 为 `idea_decision_memo`，并写入 `decision_memo_creates_task` 图边。这样 pursue/revise/park/reject 的判断可以立即变成可执行任务，而不是只停留在备忘录。
+
 `/tasks/snapshots` 固化某个 task board 状态，保存 task ids、status/priority summary、blocked tasks、next actions 和 Markdown export。它用于组会汇报、日/周复盘，以及后续自动提醒或 MCP task 工具的输入。
 
-Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_draft`、`proposal_review_reviews_draft`、`proposal_revision_updates_draft`、`proposal_revision_addresses_review`、`proposal_revision_creates_task`、`idea_has_experiment_plan`、`experiment_plan_has_run`、`idea_has_experiment_run`、`task_records_experiment_run`、`experiment_run_has_analysis`、`idea_has_experiment_analysis`、`task_records_experiment_analysis`、`experiment_analysis_creates_task`、`idea_has_decision_memo`、`task_board_snapshot_tracks_task`。这使得后续 context search、MCP tool 或 workflow planner 可以沿着 idea 的演化链路追踪到草案、评审、修订、执行任务、实验运行、实验结论、决策 memo 和下一轮 follow-up 任务。
+Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_draft`、`proposal_review_reviews_draft`、`proposal_revision_updates_draft`、`proposal_revision_addresses_review`、`proposal_revision_creates_task`、`idea_has_experiment_plan`、`experiment_plan_has_run`、`idea_has_experiment_run`、`task_records_experiment_run`、`experiment_run_has_analysis`、`idea_has_experiment_analysis`、`task_records_experiment_analysis`、`experiment_analysis_creates_task`、`idea_has_decision_memo`、`decision_memo_creates_task`、`task_board_snapshot_tracks_task`。这使得后续 context search、MCP tool 或 workflow planner 可以沿着 idea 的演化链路追踪到草案、评审、修订、执行任务、实验运行、实验结论、决策 memo 和下一轮 follow-up 任务。
 
 `/ideas/{idea_id}/lineage` 将 idea 的 related-work matrices、proposal drafts、proposal reviews、proposal revisions、experiment runs、experiment analyses、decision memos、research tasks、task board snapshots 与 graph edge summary 聚合为一个响应，并提供 Markdown lineage export，方便前端和 MCP 一次性读取研究演化轨迹。
 
@@ -1136,6 +1138,7 @@ POST /research/ideas/{idea_id}/decision-memo
 GET  /research/ideas/{idea_id}/decision-memos
 GET  /research/ideas/{idea_id}/decision-memos/{memo_id}
 GET  /research/ideas/{idea_id}/decision-memos/{memo_id}/export/markdown
+POST /research/ideas/{idea_id}/decision-memos/{memo_id}/tasks
 ```
 
 ## 11.7 Jobs
@@ -1321,6 +1324,7 @@ ExperimentRun -> has_analysis -> ExperimentAnalysis
 ResearchTask -> records_experiment_analysis -> ExperimentAnalysis
 ExperimentAnalysis -> creates_task -> ResearchTask
 Idea -> has_decision_memo -> IdeaDecisionMemo
+IdeaDecisionMemo -> creates_task -> ResearchTask
 ```
 
 ## 13.4 图查询能力

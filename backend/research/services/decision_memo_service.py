@@ -202,7 +202,9 @@ class IdeaDecisionMemoService:
     ) -> list[str]:
         commitments = []
         if tasks:
-            commitments.extend(f"{task.priority}/{task.status}: {task.title}" for task in tasks[:5])
+            commitments.append(
+                f"Review and sequence the current open task queue ({len(tasks)} tasks)."
+            )
         if analysis:
             commitments.extend(str(item) for item in (analysis.next_actions_json or [])[:5])
         if proposal_review:

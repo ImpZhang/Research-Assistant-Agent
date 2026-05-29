@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from backend.research.models import (
     ExperimentAnalysis,
+    IdeaDecisionMemo,
     ProposalRevision,
     ResearchTask,
     ResearchTaskEvent,
@@ -166,6 +167,73 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_idea_decision_memo(
+        self,
+        memo_id: str,
+        *,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        memo = self.session.get(IdeaDecisionMemo, memo_id)
+        if memo is None:
+            raise ValueError("Idea decision memo not found")
+        commitments = self._unique_commitments(
+            memo.next_commitments_json
+            or ["Review the decision memo and define the next concrete research step."]
+        )[:8]
+        priority = self._decision_task_priority(memo.decision)
+        tasks = [
+            ResearchTask(
+                idea_id=memo.idea_id,
+                owner_type="idea_decision_memo",
+                owner_id=memo.id,
+                source_type="decision_commitment",
+                source_id=f"commitment_{idx}",
+                title=self._short_task_title(commitment, idx),
+                description=commitment,
+                priority=priority,
+                status="todo",
+                due_phase="decision_follow_up",
+                metadata_json={
+                    "decision": memo.decision,
+                    "source_artifacts": memo.source_artifacts_json or {},
+                },
+                created_by=created_by or "system",
+            )
+            for idx, commitment in enumerate(commitments, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note=f"Created from idea decision memo {memo.id}.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "decision": memo.decision,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_idea_decision_memo_tasks(
+            memo,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
     def list_tasks(
         self,
         *,
@@ -309,8 +377,28 @@ class ResearchTaskService:
             return "high"
         return "medium"
 
+    def _decision_task_priority(self, decision: str) -> str:
+        if decision in {"pursue", "revise"}:
+            return "high"
+        if decision == "park":
+            return "low"
+        if decision == "reject":
+            return "low"
+        return "medium"
+
     def _short_task_title(self, action: str, idx: int) -> str:
         clean = " ".join(str(action).split())
         if not clean:
             return f"Follow up experiment analysis action {idx}"
         return clean[:96]
+
+    def _unique_commitments(self, commitments: list) -> list[str]:
+        unique = []
+        seen = set()
+        for commitment in commitments:
+            clean = " ".join(str(commitment).split())
+            key = clean.lower()
+            if clean and key not in seen:
+                unique.append(clean)
+                seen.add(key)
+        return unique

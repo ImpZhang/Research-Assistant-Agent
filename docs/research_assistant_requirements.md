@@ -720,6 +720,7 @@ idea 需要支持 decision memo：
 - 记录 pursue、revise、park、reject 等阶段性决策。
 - 自动汇总 latest feedback、novelty check、review、experiment analysis、open tasks 作为 source artifacts。
 - 保存 rationale、evidence ids、risk register 和 next commitments。
+- next commitments 需要能一键生成下一轮 research tasks，让决策进入执行队列。
 - 支持 Markdown 导出，并进入 GraphRAG-lite，避免“为什么选/不选这个方向”只留在聊天记录中。
 
 proposal、review、revision、experiment run、experiment analysis、task 和 task snapshot 都需要进入 GraphRAG-lite：
@@ -733,6 +734,7 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - research task 可以追踪到基于实验结果生成的 analysis。
 - experiment analysis 可以追踪到它生成的 follow-up tasks。
 - idea 可以追踪到 decision memo。
+- decision memo 可以追踪到它生成的 follow-up tasks。
 - task snapshot 可以追踪到当时的任务集合。
 
 系统需要提供 idea lineage：

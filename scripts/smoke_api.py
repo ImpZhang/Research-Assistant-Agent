@@ -113,6 +113,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include job cancel/retry controls")
     if "idea_decision_memos" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision memos")
+    if "idea_decision_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea decision task generation")
     manifest_names = {tool["name"] for tool in tool_manifest["tools"]}
     if "create_advisor_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include advisor brief tool")
@@ -122,6 +124,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include job retry tool")
     if "create_idea_decision_memo" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea decision memo tool")
+    if "create_tasks_from_idea_decision_memo" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea decision task tool")
 
     upload = require_ok(
         client.post(
@@ -444,6 +448,17 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "## Next Commitments" not in decision_memo_markdown:
         raise RuntimeError("idea decision memo markdown did not include next commitments")
+    decision_tasks = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/decision-memos/{decision_memo['id']}/tasks",
+            json_body={"created_by": "smoke_api"},
+        ),
+        "idea decision memo tasks",
+    )
+    if not decision_tasks["tasks"]:
+        raise RuntimeError("idea decision memo task generation returned no tasks")
+    if decision_tasks["tasks"][0]["owner_type"] != "idea_decision_memo":
+        raise RuntimeError("idea decision memo tasks used the wrong owner type")
     proposal_graph_edges = require_ok(
         client.get("/research/graph/edges?edge_type=proposal_revision_creates_task"),
         "proposal task graph edges",
@@ -464,6 +479,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea lineage markdown did not include decision memo")
     if analysis_tasks["tasks"][0]["id"] not in lineage["markdown_export"]:
         raise RuntimeError("idea lineage markdown did not include experiment analysis task")
+    if decision_tasks["tasks"][0]["id"] not in lineage["markdown_export"]:
+        raise RuntimeError("idea lineage markdown did not include decision memo task")
     progress = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/progress"),
         "idea progress",
@@ -472,6 +489,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea progress did not count analysis follow-up tasks")
     if progress["artifact_counts"]["decision_memos"] < 1:
         raise RuntimeError("idea progress did not count decision memos")
+    if progress["artifact_counts"]["decision_follow_up_tasks"] < 1:
+        raise RuntimeError("idea progress did not count decision follow-up tasks")
     if "Idea Progress" not in progress["markdown_export"]:
         raise RuntimeError("idea progress markdown did not include the report title")
     overview = require_ok(client.get("/research/progress/overview"), "research progress overview")
@@ -707,6 +726,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "task_snapshot_markdown_chars": len(task_snapshot_markdown),
         "decision_memo_id": decision_memo["id"],
         "decision_memo_markdown_chars": len(decision_memo_markdown),
+        "decision_memo_task_count": len(decision_tasks["tasks"]),
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
         "lineage_task_count": len(lineage["research_tasks"]),
         "lineage_graph_edge_types": len(lineage["graph_edge_summary"]),

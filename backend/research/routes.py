@@ -179,6 +179,7 @@ def status() -> ProjectStatus:
             "idea_ranking_portfolio",
             "idea_progress_summary",
             "idea_decision_memos",
+            "idea_decision_task_generation",
             "project_progress_overview",
             "advisor_research_briefs",
             "tool_manifest",
@@ -307,6 +308,15 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/ideas/{idea_id}/decision-memo",
             input_model="IdeaDecisionMemoCreate",
             output_model="IdeaDecisionMemoRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_idea_decision_memo",
+            description="Turn decision memo next commitments into research tasks.",
+            method="POST",
+            path="/research/ideas/{idea_id}/decision-memos/{memo_id}/tasks",
+            input_model="ResearchTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -1537,12 +1547,20 @@ def get_idea_progress(
     snapshots = _latest_for_idea(session, TaskBoardSnapshot, idea_id, 20)
 
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
+    latest_memo = decision_memos[0] if decision_memos else None
     analysis_tasks = [
         task
         for task in tasks
         if latest_analysis
         and task.owner_type == "experiment_analysis"
         and task.owner_id == latest_analysis.id
+    ]
+    decision_tasks = [
+        task
+        for task in tasks
+        if latest_memo
+        and task.owner_type == "idea_decision_memo"
+        and task.owner_id == latest_memo.id
     ]
     artifact_counts = {
         "related_work_matrices": len(matrices),
@@ -1556,6 +1574,7 @@ def get_idea_progress(
         "open_tasks": len([task for task in tasks if task.status in {"todo", "doing", "blocked"}]),
         "blocked_tasks": len([task for task in tasks if task.status == "blocked"]),
         "analysis_follow_up_tasks": len(analysis_tasks),
+        "decision_follow_up_tasks": len(decision_tasks),
         "task_board_snapshots": len(snapshots),
     }
     latest_artifacts = _progress_latest_artifacts(
@@ -1762,6 +1781,8 @@ def _progress_recommendation(
         return "Create follow-up tasks from the latest experiment analysis."
     if artifact_counts["experiment_analyses"] and artifact_counts["decision_memos"] == 0:
         return "Create a decision memo to record whether this idea should be pursued, revised, parked, or rejected."
+    if artifact_counts["decision_memos"] and artifact_counts["decision_follow_up_tasks"] == 0:
+        return "Generate follow-up tasks from the latest decision memo commitments."
     if blockers:
         return "Resolve blockers or analysis concerns before expanding the scope."
     next_tasks = task_summary.get("next_tasks") or []
@@ -1881,6 +1902,29 @@ def export_idea_decision_memo_markdown(
     return PlainTextResponse(memo.markdown_export or "", media_type="text/markdown")
 
 
+@router.post(
+    "/ideas/{idea_id}/decision-memos/{memo_id}/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_idea_decision_memo(
+    idea_id: str,
+    memo_id: str,
+    payload: ResearchTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    memo = IdeaDecisionMemoService(session).get_memo(idea_id, memo_id)
+    if memo is None:
+        raise HTTPException(status_code=404, detail="Idea decision memo not found")
+    tasks = ResearchTaskService(session).create_from_idea_decision_memo(
+        memo.id,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} research tasks from idea decision memo {memo.id}.",
+    )
+
+
 def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str, int]:
     if not canonical_keys:
         return {}
@@ -1909,6 +1953,7 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "task_records_experiment_analysis",
         "experiment_analysis_creates_task",
         "idea_has_decision_memo",
+        "decision_memo_creates_task",
     ]
     edges = (
         session.query(ResearchEdge)
@@ -1994,7 +2039,7 @@ def _render_idea_lineage_markdown(
         lines.append("- No decision memos recorded yet.")
 
     lines.extend(["", "## Next Tasks", ""])
-    next_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}][:10]
+    next_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}][:20]
     if next_tasks:
         for task in next_tasks:
             lines.append(f"- `{task.id}` `{task.priority}` `{task.status}` {task.title}")

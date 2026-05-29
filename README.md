@@ -60,11 +60,12 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Experiment result analysis that turns run metrics into a decision, concerns, next actions, task events, and Markdown analysis reports.
 - Follow-up task generation from experiment analysis next actions.
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.
-- GraphRAG-lite links for proposal drafts, reviews, revisions, experiment runs, experiment analyses, decision memos, generated follow-up tasks, and task board snapshots.
+- GraphRAG-lite links for proposal drafts, reviews, revisions, experiment runs, experiment analyses, decision memos, generated follow-up tasks, decision follow-up tasks, and task board snapshots.
 - Idea lineage endpoint that hydrates matrices, proposal artifacts, experiment runs, experiment analyses, decision memos, tasks, task snapshots, and graph edge summaries.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Idea progress summaries that aggregate proposal, experiment, analysis, task, blocker, and recommended-next-step state.
 - Idea decision memos that record pursue/revise/park/reject rationale, risks, evidence, next commitments, and graph links.
+- Follow-up task generation from idea decision memo commitments.
 - Project progress overview that aggregates all ideas, open tasks, blockers, recent analyses, and recommended actions.
 - Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries.
 - MCP/tool-ready manifest for stable research workflow APIs.
@@ -173,7 +174,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the tool manifest, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, idea progress summary, project overview, advisor brief, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the tool manifest, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, idea progress summary, project overview, advisor brief, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -218,6 +219,7 @@ POST /research/ideas/{idea_id}/decision-memo
 GET  /research/ideas/{idea_id}/decision-memos
 GET  /research/ideas/{idea_id}/decision-memos/{memo_id}
 GET  /research/ideas/{idea_id}/decision-memos/{memo_id}/export/markdown
+POST /research/ideas/{idea_id}/decision-memos/{memo_id}/tasks
 POST /research/ideas/{idea_id}/related-work-matrix
 GET  /research/ideas/{idea_id}/related-work-matrices
 GET  /research/ideas/{idea_id}/related-work-matrices/{matrix_id}
