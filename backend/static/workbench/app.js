@@ -274,6 +274,17 @@ function renderList(title, items, mapper) {
   return `<h4>${escapeHtml(title)}</h4><ul class="data-list">${rows}</ul>`;
 }
 
+function renderJobActions(job) {
+  const cancelDisabled = !["pending", "running"].includes(job.status) ? "disabled" : "";
+  const retryDisabled = !["failed", "canceled"].includes(job.status) ? "disabled" : "";
+  return `
+    <div class="job-actions">
+      <button class="compact-button" data-job-action="cancel" data-job-id="${escapeHtml(job.id)}" ${cancelDisabled}>Cancel</button>
+      <button class="compact-button" data-job-action="retry" data-job-id="${escapeHtml(job.id)}" ${retryDisabled}>Retry</button>
+    </div>
+  `;
+}
+
 async function refreshJobs() {
   try {
     const jobs = await api("/research/jobs?limit=10");
@@ -289,16 +300,46 @@ async function refreshJobs() {
           <td>${Math.round((job.progress || 0) * 100)}%</td>
           <td>${escapeHtml(job.input.paper_id || "")}</td>
           <td>${escapeHtml(renderJobOutput(job.output).replace(/<[^>]*>/g, ""))}</td>
+          <td>${renderJobActions(job)}</td>
         </tr>`,
       )
       .join("");
     $("jobsTable").classList.remove("muted");
     $("jobsTable").innerHTML = `<table>
-      <thead><tr><th>Job</th><th>Status</th><th>Progress</th><th>Paper</th><th>Outputs</th></tr></thead>
+      <thead><tr><th>Job</th><th>Status</th><th>Progress</th><th>Paper</th><th>Outputs</th><th>Actions</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
   } catch (error) {
     $("jobsTable").innerHTML = escapeHtml(error.message);
+  }
+}
+
+async function handleJobAction(event) {
+  const button = event.target.closest("button[data-job-action]");
+  if (!button) {
+    return;
+  }
+  const jobId = button.dataset.jobId;
+  const action = button.dataset.jobAction;
+  if (!jobId || !action || button.disabled) {
+    return;
+  }
+  renderResult("workflowResult", `${action === "cancel" ? "Canceling" : "Retrying"} job...`, "warn");
+  try {
+    const body = await api(`/research/jobs/${jobId}/${action}`, { method: "POST" });
+    if (action === "retry") {
+      state.jobId = body.id;
+      if (["pending", "running"].includes(body.status)) {
+        pollJob(body.id);
+      }
+    }
+    renderResult(
+      "workflowResult",
+      `Job <code>${escapeHtml(body.id)}</code> is now <strong>${escapeHtml(body.status)}</strong>.`,
+    );
+    await refreshJobs();
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
   }
 }
 
@@ -901,6 +942,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("contextSearchForm").addEventListener("submit", searchContext);
   $("literatureSearchForm").addEventListener("submit", searchLiterature);
   $("refreshJobsButton").addEventListener("click", refreshJobs);
+  $("jobsTable").addEventListener("click", handleJobAction);
   $("loadDossierButton").addEventListener("click", loadDossier);
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
   $("relatedWorkButton").addEventListener("click", createRelatedWorkMatrix);

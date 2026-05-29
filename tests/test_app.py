@@ -67,6 +67,9 @@ def test_workbench_static_assets_are_served() -> None:
     assert script.status_code == 200
     assert "/research/workflows/literature-to-ideas/async" in script.text
     assert "/research/jobs/${jobId}/artifacts" in script.text
+    assert "/research/jobs/${jobId}/${action}" in script.text
+    assert 'data-job-action="cancel"' in script.text
+    assert 'data-job-action="retry"' in script.text
     assert "/research/ideas/${state.latestIdeaId}/refine" in script.text
     assert "/research/ideas/${state.latestIdeaId}/feedback" in script.text
     assert "/research/ideas/${state.latestIdeaId}/related-work-matrix" in script.text

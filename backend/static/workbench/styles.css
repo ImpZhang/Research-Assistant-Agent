@@ -61,6 +61,18 @@ button:disabled {
   opacity: 0.55;
 }
 
+.compact-button {
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.job-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
