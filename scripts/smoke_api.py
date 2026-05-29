@@ -115,6 +115,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea research packet")
     if "idea_readiness_scoring" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea readiness scoring")
+    if "project_readiness_overview" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project readiness overview")
     if "idea_decision_memos" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision memos")
     if "idea_decision_task_generation" not in status["implemented_capabilities"]:
@@ -132,6 +134,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea research packet tool")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
+    if "get_project_readiness_overview" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project readiness overview tool")
     if "create_idea_decision_memo" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea decision memo tool")
     if "create_tasks_from_idea_decision_memo" not in manifest_names:
@@ -545,6 +549,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research overview did not include ideas")
     if not overview["recommended_actions"]:
         raise RuntimeError("research overview did not include recommended actions")
+    readiness_overview = require_ok(
+        client.get("/research/readiness/overview?limit=50"),
+        "project readiness overview",
+    )
+    if readiness_overview["idea_count"] < 1:
+        raise RuntimeError("project readiness overview did not include ideas")
+    if "Project Readiness Overview" not in readiness_overview["markdown_export"]:
+        raise RuntimeError("project readiness overview markdown did not include title")
     advisor_brief = require_ok(
         client.post(
             "/research/briefs",
@@ -787,6 +799,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "readiness_decision": readiness["decision"],
         "overview_idea_count": overview["idea_count"],
         "overview_open_task_count": overview["task_summary"]["open_task_count"],
+        "readiness_overview_idea_count": readiness_overview["idea_count"],
+        "readiness_overview_average": readiness_overview["average_readiness"],
         "advisor_brief_id": advisor_brief["id"],
         "advisor_brief_markdown_chars": len(advisor_brief_markdown),
         "feedback_decision": feedback["decision"],

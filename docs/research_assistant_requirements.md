@@ -769,6 +769,12 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - 输出总分、决策标签、score breakdown、blockers 和 Markdown report。
 - 用于判断一个 idea 是否 ready_for_execution，还是需要 targeted work、park 或 reject。
 
+系统需要提供 project readiness overview：
+
+- 对最近 idea 逐个计算 readiness summary。
+- 输出 average readiness、decision counts、top ready ideas 和 needs-work ideas。
+- 用于选题组合管理和 dashboard 首页判断哪些方向值得继续投入。
+
 系统需要提供 project progress overview：
 
 - 聚合全部 idea status、open tasks、blocked tasks、recent experiment analyses 和 recommended actions。

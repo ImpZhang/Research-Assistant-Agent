@@ -634,6 +634,26 @@ class IdeaReadinessResponse(BaseModel):
     message: str
 
 
+class IdeaReadinessSummary(BaseModel):
+    idea_id: str
+    title: str
+    status: str
+    readiness_score: float = 0.0
+    decision: str = "needs_work"
+    blocker_count: int = 0
+    top_blockers: list[str] = Field(default_factory=list)
+
+
+class ProjectReadinessOverviewResponse(BaseModel):
+    idea_count: int = 0
+    average_readiness: float = 0.0
+    decision_counts: dict[str, int] = Field(default_factory=dict)
+    top_ready: list[IdeaReadinessSummary] = Field(default_factory=list)
+    needs_work: list[IdeaReadinessSummary] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ResearchOverviewResponse(BaseModel):
     idea_count: int = 0
     status_counts: dict[str, int] = Field(default_factory=dict)

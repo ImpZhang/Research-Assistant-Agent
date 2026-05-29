@@ -61,6 +61,7 @@ from backend.research.schemas import (
     IdeaLineageResponse,
     IdeaProgressResponse,
     IdeaReadinessResponse,
+    IdeaReadinessSummary,
     IdeaResearchPacketResponse,
     IdeaPortfolioComparisonRequest,
     IdeaPortfolioComparisonResponse,
@@ -93,6 +94,7 @@ from backend.research.schemas import (
     ProposalRevisionRead,
     ProposalReviewCreate,
     ProposalReviewRead,
+    ProjectReadinessOverviewResponse,
     ProjectStatus,
     RankedIdeaRead,
     RelatedWorkMatrixCreate,
@@ -191,6 +193,7 @@ def status() -> ProjectStatus:
             "idea_decision_task_generation",
             "idea_assumption_audits",
             "project_progress_overview",
+            "project_readiness_overview",
             "advisor_research_briefs",
             "tool_manifest",
             "human_idea_feedback",
@@ -358,6 +361,13 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/progress/overview",
             output_model="ResearchOverviewResponse",
+        ),
+        ToolManifestItem(
+            name="get_project_readiness_overview",
+            description="Read project-level readiness scores across recent ideas.",
+            method="GET",
+            path="/research/readiness/overview",
+            output_model="ProjectReadinessOverviewResponse",
         ),
         ToolManifestItem(
             name="create_advisor_brief",
@@ -2343,6 +2353,160 @@ def _render_idea_readiness_markdown(
         lines.extend(f"- {blocker}" for blocker in blockers)
     else:
         lines.append("- No blocking readiness gaps found.")
+    return "\n".join(lines).strip() + "\n"
+
+
+@router.get("/readiness/overview", response_model=ProjectReadinessOverviewResponse)
+def get_project_readiness_overview(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> ProjectReadinessOverviewResponse:
+    limit = max(1, min(limit, 200))
+    ideas = session.query(Idea).order_by(Idea.updated_at.desc()).limit(limit).all()
+    summaries = [_readiness_summary_for_idea(session, idea) for idea in ideas]
+    average_readiness = (
+        round(sum(item.readiness_score for item in summaries) / len(summaries), 4)
+        if summaries
+        else 0.0
+    )
+    decision_counts = dict(Counter(item.decision for item in summaries))
+    top_ready = sorted(summaries, key=lambda item: item.readiness_score, reverse=True)[:10]
+    needs_work = sorted(
+        [
+            item
+            for item in summaries
+            if item.decision in {"needs_work", "needs_targeted_work", "park", "reject"}
+        ],
+        key=lambda item: (item.readiness_score, -item.blocker_count),
+    )[:10]
+    markdown_export = _render_project_readiness_overview_markdown(
+        idea_count=len(summaries),
+        average_readiness=average_readiness,
+        decision_counts=decision_counts,
+        top_ready=top_ready,
+        needs_work=needs_work,
+    )
+    return ProjectReadinessOverviewResponse(
+        idea_count=len(summaries),
+        average_readiness=average_readiness,
+        decision_counts=decision_counts,
+        top_ready=top_ready,
+        needs_work=needs_work,
+        markdown_export=markdown_export,
+        message=f"Scored readiness for {len(summaries)} ideas.",
+    )
+
+
+def _readiness_summary_for_idea(session: Session, idea: Idea) -> IdeaReadinessSummary:
+    matrices = _latest_for_idea(session, RelatedWorkMatrix, idea.id, 1)
+    drafts = _latest_for_idea(session, ProposalDraft, idea.id, 1)
+    reviews = _latest_for_idea(session, ProposalReview, idea.id, 1)
+    experiment_plans = _latest_for_idea(session, ExperimentPlan, idea.id, 1)
+    experiment_runs = _latest_for_idea(session, ExperimentRun, idea.id, 1)
+    experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea.id, 1)
+    decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea.id, 1)
+    assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea.id, 1)
+    novelty_checks = _latest_for_idea(session, NoveltyCheck, idea.id, 1)
+    tasks = _latest_for_idea(session, ResearchTask, idea.id, 200)
+
+    latest_matrix = matrices[0] if matrices else None
+    latest_review = reviews[0] if reviews else None
+    latest_analysis = experiment_analyses[0] if experiment_analyses else None
+    latest_memo = decision_memos[0] if decision_memos else None
+    latest_audit = assumption_audits[0] if assumption_audits else None
+    latest_novelty = novelty_checks[0] if novelty_checks else None
+    open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
+    blocked_tasks = [task for task in tasks if task.status == "blocked"]
+    missing_search_count = len(latest_matrix.missing_searches_json or []) if latest_matrix else 0
+    high_risk_assumptions = [
+        item
+        for item in (latest_audit.assumptions_json if latest_audit else [])
+        if item.get("risk_level") == "high"
+    ]
+    breakdown = {
+        "evidence": {"score": _clamp(len(idea.evidence_ids_json or []) / 3), "weight": 0.15},
+        "novelty": {
+            "score": _readiness_novelty_score(latest_matrix, latest_novelty),
+            "weight": 0.15,
+        },
+        "proposal": {
+            "score": latest_review.readiness_score if latest_review else (0.45 if drafts else 0.1),
+            "weight": 0.18,
+        },
+        "experiment": {
+            "score": latest_analysis.confidence
+            if latest_analysis
+            else (0.45 if experiment_runs else (0.3 if experiment_plans else 0.1)),
+            "weight": 0.18,
+        },
+        "decision": {"score": _readiness_decision_score(latest_memo), "weight": 0.14},
+        "assumptions": {"score": _readiness_assumption_score(latest_audit), "weight": 0.12},
+        "task_health": {
+            "score": _readiness_task_score(open_tasks, blocked_tasks),
+            "weight": 0.08,
+        },
+    }
+    readiness_score = round(
+        sum(item["score"] * item["weight"] for item in breakdown.values()),
+        4,
+    )
+    blockers = _readiness_blockers(
+        latest_matrix=latest_matrix,
+        latest_review=latest_review,
+        latest_analysis=latest_analysis,
+        latest_memo=latest_memo,
+        latest_audit=latest_audit,
+        blocked_tasks=blocked_tasks,
+        missing_search_count=missing_search_count,
+        high_risk_assumptions=high_risk_assumptions,
+    )
+    return IdeaReadinessSummary(
+        idea_id=idea.id,
+        title=idea.title,
+        status=idea.status,
+        readiness_score=readiness_score,
+        decision=_readiness_decision(readiness_score, latest_memo, blockers),
+        blocker_count=len(blockers),
+        top_blockers=blockers[:3],
+    )
+
+
+def _render_project_readiness_overview_markdown(
+    *,
+    idea_count: int,
+    average_readiness: float,
+    decision_counts: dict[str, int],
+    top_ready: list[IdeaReadinessSummary],
+    needs_work: list[IdeaReadinessSummary],
+) -> str:
+    lines = [
+        "# Project Readiness Overview",
+        "",
+        f"- Idea Count: {idea_count}",
+        f"- Average Readiness: {average_readiness:.4f}",
+        f"- Decision Counts: {decision_counts}",
+        "",
+        "## Top Ready Ideas",
+        "",
+    ]
+    if top_ready:
+        for item in top_ready:
+            lines.append(
+                f"- `{item.idea_id}` score={item.readiness_score:.4f} "
+                f"`{item.decision}` {item.title}"
+            )
+    else:
+        lines.append("- No ideas scored.")
+    lines.extend(["", "## Needs Work", ""])
+    if needs_work:
+        for item in needs_work:
+            blocker = item.top_blockers[0] if item.top_blockers else "No blocker summary."
+            lines.append(
+                f"- `{item.idea_id}` score={item.readiness_score:.4f} "
+                f"`{item.decision}` {item.title} - {blocker}"
+            )
+    else:
+        lines.append("- No needs-work ideas found.")
     return "\n".join(lines).strip() + "\n"
 
 
