@@ -712,6 +712,7 @@ proposal revision 之后需要进入 task backlog：
 - analysis 需要输出 decision、confidence、metric interpretation、key findings、concerns 和 next actions。
 - analysis 创建时应写入关联 task 的 event log，让“为什么继续/修改/补证据”有记录。
 - analysis 需要支持 Markdown 导出，用于组会决策、导师沟通和后续 proposal revision。
+- analysis 的 next actions 需要能一键生成下一轮 research tasks，让实验结论进入执行队列。
 
 proposal、review、revision、experiment run、experiment analysis、task 和 task snapshot 都需要进入 GraphRAG-lite：
 
@@ -722,6 +723,7 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - experiment run 可以追踪到 experiment analysis。
 - research task 可以追踪到支撑它的 experiment run。
 - research task 可以追踪到基于实验结果生成的 analysis。
+- experiment analysis 可以追踪到它生成的 follow-up tasks。
 - task snapshot 可以追踪到当时的任务集合。
 
 系统需要提供 idea lineage：

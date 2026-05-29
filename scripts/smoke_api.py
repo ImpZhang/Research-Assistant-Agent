@@ -364,6 +364,17 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not run_analyses or run_analyses[0]["id"] != experiment_analysis["id"]:
         raise RuntimeError("experiment run did not list its analysis")
+    analysis_tasks = require_ok(
+        client.post(
+            f"/research/experiment-analyses/{experiment_analysis['id']}/tasks",
+            json_body={"created_by": "smoke_api"},
+        ),
+        "experiment analysis tasks",
+    )
+    if not analysis_tasks["tasks"]:
+        raise RuntimeError("experiment analysis task generation returned no tasks")
+    if analysis_tasks["tasks"][0]["owner_type"] != "experiment_analysis":
+        raise RuntimeError("experiment analysis tasks used the wrong owner type")
     plan_runs = require_ok(
         client.get(f"/research/experiment-plans/{refined_plan['id']}/runs"),
         "experiment runs for plan",
@@ -417,6 +428,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea lineage markdown did not include experiment run")
     if experiment_analysis["id"] not in lineage["markdown_export"]:
         raise RuntimeError("idea lineage markdown did not include experiment analysis")
+    if analysis_tasks["tasks"][0]["id"] not in lineage["markdown_export"]:
+        raise RuntimeError("idea lineage markdown did not include experiment analysis task")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -620,6 +633,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "experiment_analysis_id": experiment_analysis["id"],
         "experiment_analysis_decision": experiment_analysis["decision"],
         "experiment_analysis_markdown_chars": len(analysis_markdown),
+        "experiment_analysis_task_count": len(analysis_tasks["tasks"]),
         "task_snapshot_id": task_snapshot["id"],
         "task_snapshot_task_count": task_snapshot["summary"]["task_count"],
         "task_snapshot_markdown_chars": len(task_snapshot_markdown),

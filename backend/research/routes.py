@@ -179,6 +179,7 @@ def status() -> ProjectStatus:
             "experiment_planning",
             "experiment_run_tracking",
             "experiment_result_analysis",
+            "experiment_analysis_task_generation",
             "literature_to_ideas_workflow",
             "async_literature_to_ideas_workflow",
             "workflow_job_trace",
@@ -1089,6 +1090,7 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "experiment_run_has_analysis",
         "idea_has_experiment_analysis",
         "task_records_experiment_analysis",
+        "experiment_analysis_creates_task",
     ]
     edges = (
         session.query(ResearchEdge)
@@ -1168,7 +1170,7 @@ def _render_idea_lineage_markdown(
     next_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}][:10]
     if next_tasks:
         for task in next_tasks:
-            lines.append(f"- `{task.priority}` `{task.status}` {task.title}")
+            lines.append(f"- `{task.id}` `{task.priority}` `{task.status}` {task.title}")
     else:
         lines.append("- No open tasks found.")
     return "\n".join(lines).strip() + "\n"
@@ -2025,6 +2027,28 @@ def export_experiment_analysis_markdown(
     if analysis is None:
         raise HTTPException(status_code=404, detail="Experiment analysis not found")
     return PlainTextResponse(analysis.markdown_export or "", media_type="text/markdown")
+
+
+@router.post(
+    "/experiment-analyses/{analysis_id}/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_experiment_analysis(
+    analysis_id: str,
+    payload: ResearchTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    try:
+        tasks = ResearchTaskService(session).create_from_experiment_analysis(
+            analysis_id,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} research tasks from experiment analysis {analysis_id}.",
+    )
 
 
 @router.post(

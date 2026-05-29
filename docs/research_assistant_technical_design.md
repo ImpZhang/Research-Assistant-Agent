@@ -1055,9 +1055,11 @@ GET  /research/ideas/{idea_id}/feedback
 
 `/experiment-runs/{run_id}/analysis` 是第一版实验结果分析：它读取 run status、metrics、conclusion、baseline/artifact 完整性，生成 `ExperimentAnalysis` artifact，包括 decision、confidence、metric interpretation、key findings、concerns、next actions 和 Markdown report。创建 analysis 会写入关联 task 的 `experiment_analysis_created` event，后续可替换为更强 judge model 或统计检验模块。
 
+`/experiment-analyses/{analysis_id}/tasks` 将 analysis 的 next actions 转成 `ResearchTask` backlog，owner type 为 `experiment_analysis`，并写入 `experiment_analysis_creates_task` 图边。这样系统可以从“实验结果判断”继续推进到“下一轮执行任务”。
+
 `/tasks/snapshots` 固化某个 task board 状态，保存 task ids、status/priority summary、blocked tasks、next actions 和 Markdown export。它用于组会汇报、日/周复盘，以及后续自动提醒或 MCP task 工具的输入。
 
-Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_draft`、`proposal_review_reviews_draft`、`proposal_revision_updates_draft`、`proposal_revision_addresses_review`、`proposal_revision_creates_task`、`idea_has_experiment_plan`、`experiment_plan_has_run`、`idea_has_experiment_run`、`task_records_experiment_run`、`experiment_run_has_analysis`、`idea_has_experiment_analysis`、`task_records_experiment_analysis`、`task_board_snapshot_tracks_task`。这使得后续 context search、MCP tool 或 workflow planner 可以沿着 idea 的演化链路追踪到草案、评审、修订、执行任务、实验运行和实验结论。
+Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_draft`、`proposal_review_reviews_draft`、`proposal_revision_updates_draft`、`proposal_revision_addresses_review`、`proposal_revision_creates_task`、`idea_has_experiment_plan`、`experiment_plan_has_run`、`idea_has_experiment_run`、`task_records_experiment_run`、`experiment_run_has_analysis`、`idea_has_experiment_analysis`、`task_records_experiment_analysis`、`experiment_analysis_creates_task`、`task_board_snapshot_tracks_task`。这使得后续 context search、MCP tool 或 workflow planner 可以沿着 idea 的演化链路追踪到草案、评审、修订、执行任务、实验运行、实验结论和下一轮 follow-up 任务。
 
 `/ideas/{idea_id}/lineage` 将 idea 的 related-work matrices、proposal drafts、proposal reviews、proposal revisions、experiment runs、experiment analyses、research tasks、task board snapshots 与 graph edge summary 聚合为一个响应，并提供 Markdown lineage export，方便前端和 MCP 一次性读取研究演化轨迹。
 
@@ -1096,6 +1098,7 @@ GET  /research/experiment-runs/{run_id}/analyses
 GET  /research/ideas/{idea_id}/experiment-analyses
 GET  /research/experiment-analyses/{analysis_id}
 GET  /research/experiment-analyses/{analysis_id}/export/markdown
+POST /research/experiment-analyses/{analysis_id}/tasks
 ```
 
 ## 11.7 Jobs
@@ -1274,6 +1277,7 @@ ExperimentPlan -> has_run -> ExperimentRun
 ResearchTask -> records_experiment_run -> ExperimentRun
 ExperimentRun -> has_analysis -> ExperimentAnalysis
 ResearchTask -> records_experiment_analysis -> ExperimentAnalysis
+ExperimentAnalysis -> creates_task -> ResearchTask
 ```
 
 ## 13.4 图查询能力

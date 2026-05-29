@@ -1,6 +1,11 @@
 from sqlalchemy.orm import Session
 
-from backend.research.models import ProposalRevision, ResearchTask, ResearchTaskEvent
+from backend.research.models import (
+    ExperimentAnalysis,
+    ProposalRevision,
+    ResearchTask,
+    ResearchTaskEvent,
+)
 from backend.research.services.artifact_graph_service import ArtifactGraphService
 from backend.research.services.graph_service import GraphService
 
@@ -91,6 +96,73 @@ class ResearchTaskService:
         for task in tasks:
             self.session.refresh(task)
         ArtifactGraphService(GraphService(self.session)).link_research_tasks(revision, tasks)
+        self.session.commit()
+        return tasks
+
+    def create_from_experiment_analysis(
+        self,
+        analysis_id: str,
+        *,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        analysis = self.session.get(ExperimentAnalysis, analysis_id)
+        if analysis is None:
+            raise ValueError("Experiment analysis not found")
+        actions = analysis.next_actions_json or [
+            "Review the experiment analysis and decide the next execution step."
+        ]
+        tasks = [
+            ResearchTask(
+                idea_id=analysis.idea_id,
+                owner_type="experiment_analysis",
+                owner_id=analysis.id,
+                source_type="analysis_next_action",
+                source_id=f"next_action_{idx}",
+                title=self._short_task_title(action, idx),
+                description=action,
+                priority=self._analysis_task_priority(analysis.decision),
+                status="todo",
+                due_phase="next_experiment_cycle",
+                metadata_json={
+                    "experiment_run_id": analysis.experiment_run_id,
+                    "experiment_plan_id": analysis.experiment_plan_id,
+                    "decision": analysis.decision,
+                    "confidence": analysis.confidence,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, action in enumerate(actions, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note=f"Created from experiment analysis {analysis.id}.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "experiment_run_id": analysis.experiment_run_id,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_experiment_analysis_tasks(
+            analysis,
+            tasks,
+        )
         self.session.commit()
         return tasks
 
@@ -229,3 +301,16 @@ class ResearchTaskService:
             },
             created_by=created_by or "system",
         )
+
+    def _analysis_task_priority(self, decision: str) -> str:
+        if decision in {"revise_method", "needs_more_evidence"}:
+            return "critical"
+        if decision == "supports_hypothesis":
+            return "high"
+        return "medium"
+
+    def _short_task_title(self, action: str, idx: int) -> str:
+        clean = " ".join(str(action).split())
+        if not clean:
+            return f"Follow up experiment analysis action {idx}"
+        return clean[:96]

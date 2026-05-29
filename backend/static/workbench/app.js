@@ -588,6 +588,28 @@ async function analyzeExperimentRun() {
   }
 }
 
+async function createAnalysisTasks() {
+  if (!state.latestExperimentAnalysisId) {
+    renderResult("workflowResult", "Analyze an experiment run first.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Creating analysis follow-up tasks...", "warn");
+  try {
+    const body = await api(`/research/experiment-analyses/${state.latestExperimentAnalysisId}/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ created_by: "workbench" }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Analysis tasks", body.tasks, (task) => `${task.priority} ${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadIdeaLineage() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -708,6 +730,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("taskSnapshotButton").addEventListener("click", saveTaskSnapshot);
   $("experimentRunButton").addEventListener("click", createExperimentRun);
   $("experimentAnalysisButton").addEventListener("click", analyzeExperimentRun);
+  $("analysisTasksButton").addEventListener("click", createAnalysisTasks);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);

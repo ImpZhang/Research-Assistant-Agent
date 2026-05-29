@@ -58,8 +58,9 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Research task event logs for created/updated/progress/blocker notes and execution history.
 - Experiment run tracking that links an experiment plan to task events, metrics, conclusions, artifacts, and Markdown run reports.
 - Experiment result analysis that turns run metrics into a decision, concerns, next actions, task events, and Markdown analysis reports.
+- Follow-up task generation from experiment analysis next actions.
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.
-- GraphRAG-lite links for proposal drafts, reviews, revisions, experiment runs, experiment analyses, research tasks, and task board snapshots.
+- GraphRAG-lite links for proposal drafts, reviews, revisions, experiment runs, experiment analyses, generated follow-up tasks, and task board snapshots.
 - Idea lineage endpoint that hydrates matrices, proposal artifacts, experiment runs, experiment analyses, tasks, task snapshots, and graph edge summaries.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
@@ -166,7 +167,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -198,6 +199,7 @@ GET  /research/experiment-runs/{run_id}/analyses
 GET  /research/ideas/{idea_id}/experiment-analyses
 GET  /research/experiment-analyses/{analysis_id}
 GET  /research/experiment-analyses/{analysis_id}/export/markdown
+POST /research/experiment-analyses/{analysis_id}/tasks
 POST /research/ideas/{idea_id}/refine
 POST /research/ideas/{idea_id}/related-work-matrix
 GET  /research/ideas/{idea_id}/related-work-matrices

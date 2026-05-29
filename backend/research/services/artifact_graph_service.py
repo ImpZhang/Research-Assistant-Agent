@@ -264,6 +264,40 @@ class ArtifactGraphService:
                 payload={"source": "experiment_analysis"},
             )
 
+    def link_experiment_analysis_tasks(
+        self,
+        analysis: ExperimentAnalysis,
+        tasks: list[ResearchTask],
+    ) -> None:
+        analysis_node = self.graph.get_or_create_node(
+            node_type="experiment_analysis",
+            label=f"{analysis.decision} ({analysis.confidence:.2f})",
+            canonical_key=analysis.id,
+            payload={
+                "decision": analysis.decision,
+                "confidence": analysis.confidence,
+                "experiment_run_id": analysis.experiment_run_id,
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=analysis_node,
+                target_node=task_node,
+                edge_type="experiment_analysis_creates_task",
+                payload={"source": "experiment_analysis_next_actions"},
+            )
+
     def _idea_node(self, idea_id: str):
         return self.graph.get_or_create_node(
             node_type="idea",
