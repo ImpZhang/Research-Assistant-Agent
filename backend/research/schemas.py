@@ -705,6 +705,24 @@ class ToolManifestResponse(BaseModel):
     message: str
 
 
+class ToolBridgeSpecItem(BaseModel):
+    name: str
+    description: str
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    http: dict[str, Any] = Field(default_factory=dict)
+    output_model: str = ""
+    side_effect: bool = False
+    annotations: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolBridgeSpecResponse(BaseModel):
+    service: str
+    protocol: str = "research-assistant-http-tool-bridge.v1"
+    mcp_enabled: bool
+    tools: list[ToolBridgeSpecItem] = Field(default_factory=list)
+    message: str
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

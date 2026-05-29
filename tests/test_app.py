@@ -32,6 +32,7 @@ def test_research_status() -> None:
     assert "idea_readiness_scoring" in body["implemented_capabilities"]
     assert "project_readiness_overview" in body["implemented_capabilities"]
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
+    assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
 
@@ -47,6 +48,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "upload_paper" in names
     assert "search_research_context" in names
     assert "get_project_progress_overview" in names
+    assert "get_mcp_tool_spec" in names
     assert "get_idea_research_packet" in names
     assert "export_idea_bundle" in names
     assert "get_idea_readiness" in names
@@ -59,6 +61,31 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "cancel_job" in names
     assert "retry_job" in names
     assert any(tool["side_effect"] for tool in body["tools"])
+
+
+def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
+    client = TestClient(create_app())
+    response = client.get("/research/tools/mcp-spec")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["protocol"] == "research-assistant-http-tool-bridge.v1"
+    tools = {tool["name"]: tool for tool in body["tools"]}
+    assert "run_literature_to_ideas_workflow" in tools
+    assert "export_idea_bundle" in tools
+
+    upload = tools["upload_paper"]
+    assert upload["input_schema"]["properties"]["file_path"]["type"] == "string"
+    assert upload["http"]["content_type"] == "multipart/form-data"
+
+    bundle = tools["export_idea_bundle"]
+    assert bundle["input_schema"]["required"] == ["idea_id"]
+    assert bundle["input_schema"]["properties"]["idea_id"]["type"] == "string"
+    assert bundle["annotations"]["readOnlyHint"] is True
+    assert bundle["http"]["path"] == "/research/ideas/{idea_id}/export/bundle"
+
+    cancel = tools["cancel_job"]
+    assert cancel["side_effect"] is True
+    assert cancel["annotations"]["destructiveHint"] is True
 
 
 def test_workbench_static_assets_are_served() -> None:

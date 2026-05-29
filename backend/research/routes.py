@@ -124,6 +124,7 @@ from backend.research.schemas import (
     TaskBoardSnapshotCreate,
     TaskBoardSnapshotDetail,
     TaskBoardSnapshotRead,
+    ToolBridgeSpecResponse,
     ToolManifestItem,
     ToolManifestResponse,
 )
@@ -162,6 +163,7 @@ from backend.research.services.structured_extraction_service import StructuredEx
 from backend.research.services.structured_idea_service import StructuredIdeaService
 from backend.research.services.task_service import ResearchTaskService
 from backend.research.services.task_board_service import TaskBoardService
+from backend.research.services.tool_bridge_service import build_tool_bridge_items
 from backend.research.services.workflow_service import (
     WorkflowService,
     run_literature_to_ideas_job_background,
@@ -202,6 +204,7 @@ def status() -> ProjectStatus:
             "idea_artifact_bundle_export",
             "advisor_research_briefs",
             "tool_manifest",
+            "mcp_tool_bridge_spec",
             "human_idea_feedback",
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",
@@ -271,6 +274,13 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/literature/search",
             input_model="LiteratureSearchRequest",
             output_model="LiteratureSearchResponse",
+        ),
+        ToolManifestItem(
+            name="get_mcp_tool_spec",
+            description="Export an HTTP tool bridge spec for MCP, DeerFlow, or external planner adapters.",
+            method="GET",
+            path="/research/tools/mcp-spec",
+            output_model="ToolBridgeSpecResponse",
         ),
         ToolManifestItem(
             name="run_literature_to_ideas_workflow",
@@ -424,6 +434,18 @@ def tool_manifest() -> ToolManifestResponse:
         mcp_enabled=settings.mcp_enabled,
         tools=tools,
         message=f"Loaded {len(tools)} tool definitions for future MCP/tool bridge use.",
+    )
+
+
+@router.get("/tools/mcp-spec", response_model=ToolBridgeSpecResponse)
+def tool_bridge_spec() -> ToolBridgeSpecResponse:
+    manifest = tool_manifest()
+    tools = build_tool_bridge_items(manifest.tools)
+    return ToolBridgeSpecResponse(
+        service=settings.app_name,
+        mcp_enabled=settings.mcp_enabled,
+        tools=tools,
+        message=f"Generated {len(tools)} HTTP tool bridge specs from the research manifest.",
     )
 
 

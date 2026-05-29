@@ -982,6 +982,8 @@ metric 选择理由
 
 在正式接 MCP server 之前，系统必须先暴露一个轻量 tool manifest，列出稳定 tool name、HTTP method/path、输入/输出 schema 名称、是否有写入副作用。这样 DeerFlow、MCP 或自研 planner 后续可以读取同一份能力契约，而不是把路由和 prompt 写死在外部编排层。
 
+tool manifest 之上需要提供轻量 HTTP tool bridge spec：把 path 参数、JSON body、multipart 上传、输出模型、side effect、read-only/destructive hint 统一成可被 MCP adapter、DeerFlow node 或外部 planner 消费的结构。正式 MCP server 后续只包装这层 spec，不重复维护工具清单。
+
 验收标准：
 
 - 能通过关键词找相关论文。

@@ -74,6 +74,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Project progress overview that aggregates all ideas, open tasks, blockers, recent analyses, and recommended actions.
 - Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries.
 - MCP/tool-ready manifest for stable research workflow APIs.
+- MCP-ready HTTP tool bridge spec generated from the stable tool manifest.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.
@@ -179,7 +180,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the tool manifest, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, readiness score, idea bundle export, project readiness overview, project overview, advisor brief, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the tool manifest and MCP-ready bridge spec, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, readiness score, idea bundle export, project readiness overview, project overview, advisor brief, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -192,6 +193,7 @@ GET  /research/papers/{paper_id}/evidence
 POST /research/literature/search
 POST /research/embeddings/rebuild
 GET  /research/tools/manifest
+GET  /research/tools/mcp-spec
 GET  /research/progress/overview
 POST /research/briefs
 GET  /research/briefs
@@ -291,7 +293,7 @@ GET  /workbench
 - Add external novelty search through OpenAlex/Semantic Scholar/arXiv adapters.
 - Add durable worker queues, richer retry policies, and resumable workflow state.
 - Expand the research workbench into a full review/edit loop.
-- Wrap the tool manifest as MCP tools for paper ingestion, workflow runs, and dossier export.
+- Wrap the HTTP tool bridge spec in a lightweight MCP server for paper ingestion, workflow runs, and bundle export.
 - Introduce LangGraph/DeerFlow-style explicit workflow graphs once the service boundaries stabilize.
 
 ## Design Documents

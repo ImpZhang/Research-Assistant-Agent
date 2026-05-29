@@ -1113,6 +1113,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/ideas/{idea_id}/export/bundle` produces an `application/zip` handoff package for one idea. It includes the dossier, lineage, progress report, research packet, readiness report, artifact Markdown files, and JSON metadata so the workbench, advisor meetings, backups, and later MCP tools can consume the same state without stitching many endpoints together.
 
+`/tools/mcp-spec` turns the stable tool manifest into an HTTP tool bridge spec with JSON-schema-like inputs, path parameters, HTTP method/path metadata, output models, side-effect flags, and read-only/destructive annotations. It is intentionally dependency-light: the project can expose a real MCP server later by wrapping this spec instead of duplicating route knowledge.
+
 ## 11.5 Reviews
 
 ```text
@@ -1132,6 +1134,7 @@ GET  /research/ideas/{idea_id}/export/bundle
 GET  /research/readiness/overview
 GET  /research/progress/overview
 GET  /research/tools/manifest
+GET  /research/tools/mcp-spec
 POST /research/briefs
 GET  /research/briefs
 GET  /research/briefs/{brief_id}
