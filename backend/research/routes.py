@@ -199,6 +199,7 @@ def status() -> ProjectStatus:
             "async_literature_to_ideas_workflow",
             "workflow_job_trace",
             "workflow_job_artifact_snapshot",
+            "workflow_job_cancel_retry_controls",
             "literature_search_adapter",
             "local_embedding_index",
             "embedding_backed_context_retrieval",
@@ -261,6 +262,22 @@ def tool_manifest() -> ToolManifestResponse:
             method="POST",
             path="/research/workflows/literature-to-ideas/async",
             input_model="LiteratureToIdeasWorkflowRequest",
+            output_model="JobRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="cancel_job",
+            description="Cancel a pending or running research workflow job.",
+            method="POST",
+            path="/research/jobs/{job_id}/cancel",
+            output_model="JobRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="retry_job",
+            description="Create and queue a retry for a failed or canceled research workflow job.",
+            method="POST",
+            path="/research/jobs/{job_id}/retry",
             output_model="JobRead",
             side_effect=True,
         ),
@@ -628,6 +645,32 @@ def get_job(job_id: str, session: Session = Depends(get_session)) -> JobRead:
     job = session.get(Job, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    return _serialize_job(job)
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=JobRead)
+def cancel_job(job_id: str, session: Session = Depends(get_session)) -> JobRead:
+    try:
+        job = WorkflowService(session).cancel_job(job_id)
+    except ValueError as exc:
+        status_code = 404 if str(exc) == "Job not found" else 409
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return _serialize_job(job)
+
+
+@router.post("/jobs/{job_id}/retry", response_model=JobRead)
+def retry_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+) -> JobRead:
+    try:
+        job = WorkflowService(session).retry_job(job_id)
+    except ValueError as exc:
+        status_code = 404 if str(exc) == "Job not found" else 409
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    if job.job_type == "literature_to_ideas_workflow":
+        background_tasks.add_task(run_literature_to_ideas_job_background, job.id)
     return _serialize_job(job)
 
 

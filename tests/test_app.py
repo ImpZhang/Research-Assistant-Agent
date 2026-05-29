@@ -4,7 +4,9 @@ from xml.etree import ElementTree
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
+from backend.research.db import SessionLocal
 from backend.research.services.literature_search_service import LiteratureSearchService
+from backend.research.services.workflow_service import WorkflowService
 
 
 def test_health() -> None:
@@ -22,6 +24,7 @@ def test_research_status() -> None:
     assert body["phase"] == "phase_0_foundation"
     assert "sqlalchemy_models" in body["implemented_capabilities"]
     assert "tool_manifest" in body["implemented_capabilities"]
+    assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
 
 
 def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
@@ -37,6 +40,8 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_progress_overview" in names
     assert "create_advisor_brief" in names
     assert "analyze_experiment_run" in names
+    assert "cancel_job" in names
+    assert "retry_job" in names
     assert any(tool["side_effect"] for tool in body["tools"])
 
 
@@ -1262,6 +1267,59 @@ Future work should connect async jobs to a frontend progress view and MCP tools.
     assert job_body["output"]["paper_id"] == paper_id
     assert job_body["output"]["card_id"]
     assert len(job_body["output"]["idea_ids"]) >= 1
+
+
+def test_job_cancel_and_retry_controls() -> None:
+    client = TestClient(create_app())
+    content = b"""Job Controls Test Paper
+
+Abstract
+This paper checks whether queued research workflow jobs can be canceled and retried.
+
+Method
+The workflow should preserve the original input when a canceled job is retried.
+
+Conclusion
+Durable job controls make long-running research workflows easier to operate.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("job_controls_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    session = SessionLocal()
+    try:
+        queued_job = WorkflowService(session).queue_literature_to_ideas(
+            paper_id=paper_id,
+            max_gaps=1,
+            max_ideas_per_gap=1,
+            include_markdown_export=False,
+        )
+        queued_job_id = queued_job.id
+    finally:
+        session.close()
+
+    canceled = client.post(f"/research/jobs/{queued_job_id}/cancel")
+    assert canceled.status_code == 200
+    canceled_body = canceled.json()
+    assert canceled_body["status"] == "canceled"
+    assert canceled_body["error"] == "Job canceled by user"
+
+    retried = client.post(f"/research/jobs/{queued_job_id}/retry")
+    assert retried.status_code == 200
+    retried_body = retried.json()
+    assert retried_body["id"] != queued_job_id
+    assert retried_body["job_type"] == "literature_to_ideas_workflow"
+    assert retried_body["input"]["paper_id"] == paper_id
+    assert retried_body["status"] in {"pending", "running", "completed", "failed"}
+
+    job = client.get(f"/research/jobs/{retried_body['id']}")
+    assert job.status_code == 200
+    job_body = job.json()
+    assert job_body["status"] in {"pending", "running", "completed", "failed"}
+    assert job_body["input"]["paper_id"] == paper_id
 
 
 def test_context_search_returns_evidence_and_graph_context() -> None:

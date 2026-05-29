@@ -417,6 +417,7 @@ general_chat
 - 普通聊天不强行走复杂 RAG。
 - 文献问题走 evidence 检索。
 - gap/idea/review 类问题进入对应工作流。
+- 长流程必须以 job 形式暴露状态，并支持取消 pending/running job、重试 failed/canceled job，避免研究工作台或外部 agent 只能盲等。
 
 ### 6.2.2 Evidence-first 检索
 

@@ -83,6 +83,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Synchronous workflow job trace with input, output, status, progress, and errors.
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
 - Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.
+- Job cancellation and retry controls for failed or interrupted workflow runs.
 - Browser workbench for upload, workflow launch, job tracking, search, and dossier preview.
 - End-to-end smoke test covering the current research workflow.
 
@@ -258,6 +259,8 @@ GET  /research/graph/edges
 POST /research/workflows/literature-to-ideas
 POST /research/workflows/literature-to-ideas/async
 GET  /research/jobs/{job_id}
+POST /research/jobs/{job_id}/cancel
+POST /research/jobs/{job_id}/retry
 GET  /research/jobs/{job_id}/artifacts
 GET  /workbench
 ```
@@ -266,7 +269,7 @@ GET  /workbench
 
 - Add external embedding providers and learned reranking.
 - Add external novelty search through OpenAlex/Semantic Scholar/arXiv adapters.
-- Add richer job cancellation and retry controls.
+- Add richer job scheduling, retry policies, and cancellation UI.
 - Expand the research workbench into a full review/edit loop.
 - Wrap the tool manifest as MCP tools for paper ingestion, workflow runs, and dossier export.
 - Introduce LangGraph/DeerFlow-style explicit workflow graphs once the service boundaries stabilize.

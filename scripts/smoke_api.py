@@ -109,11 +109,15 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     status = require_ok(client.get("/research/status"), "research status")
     tool_manifest = require_ok(client.get("/research/tools/manifest"), "tool manifest")
     workbench = require_ok(client.get("/workbench"), "workbench")
+    if "workflow_job_cancel_retry_controls" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include job cancel/retry controls")
     manifest_names = {tool["name"] for tool in tool_manifest["tools"]}
     if "create_advisor_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include advisor brief tool")
     if "get_project_progress_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project progress overview tool")
+    if "retry_job" not in manifest_names:
+        raise RuntimeError("tool manifest did not include job retry tool")
 
     upload = require_ok(
         client.post(

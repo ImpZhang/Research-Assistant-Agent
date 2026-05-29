@@ -35,6 +35,10 @@ class LiteratureToIdeasResult:
     job: Job
 
 
+class JobCanceledError(RuntimeError):
+    pass
+
+
 class WorkflowService:
     def __init__(self, session: Session):
         self.session = session
@@ -110,9 +114,44 @@ class WorkflowService:
                 run_experiment_plan=payload.get("run_experiment_plan", True),
                 include_markdown_export=payload.get("include_markdown_export", True),
             )
+        except JobCanceledError:
+            self._mark_job_canceled(job.id, "Job canceled during execution")
+            raise
         except Exception as exc:
             self._fail_job(job.id, str(exc))
             raise
+
+    def cancel_job(self, job_id: str) -> Job:
+        job = self.session.get(Job, job_id)
+        if job is None:
+            raise ValueError("Job not found")
+        if job.status in {"completed", "failed"}:
+            raise ValueError(f"Cannot cancel a {job.status} job")
+        if job.status != "canceled":
+            job.status = "canceled"
+            job.error = "Job canceled by user"
+            job.finished_at = utc_now()
+            self.session.commit()
+            self.session.refresh(job)
+        return job
+
+    def retry_job(self, job_id: str) -> Job:
+        source = self.session.get(Job, job_id)
+        if source is None:
+            raise ValueError("Job not found")
+        if source.status not in {"failed", "canceled"}:
+            raise ValueError("Only failed or canceled jobs can be retried")
+        retry = Job(
+            job_type=source.job_type,
+            status="pending",
+            input_json=dict(source.input_json or {}),
+            output_json={"retry_of_job_id": source.id},
+            progress=0.0,
+        )
+        self.session.add(retry)
+        self.session.commit()
+        self.session.refresh(retry)
+        return retry
 
     def _run_literature_to_ideas(
         self,
@@ -133,10 +172,13 @@ class WorkflowService:
         max_gaps = max(1, min(max_gaps, 20))
         max_ideas_per_gap = max(1, min(max_ideas_per_gap, 5))
 
+        self._raise_if_canceled(job.id)
         card = StructuredExtractionService(self.session).extract_paper_card(paper.id)
         self._update_job(job.id, progress=0.2, output={"paper_id": paper.id, "card_id": card.id})
+        self._raise_if_canceled(job.id)
         gaps = GapService(self.session).mine_gaps([paper.id], max_gaps)
         self._update_job(job.id, progress=0.4, output={"gap_ids": [gap.id for gap in gaps]})
+        self._raise_if_canceled(job.id)
         ideas = StructuredIdeaService(self.session).generate_from_gaps(
             [gap.id for gap in gaps],
             max_ideas_per_gap,
@@ -150,6 +192,7 @@ class WorkflowService:
         review_service = ReviewService(self.session)
         experiment_service = ExperimentService(self.session)
         for idea in ideas:
+            self._raise_if_canceled(job.id)
             if run_novelty_check:
                 novelty_checks.append(novelty_service.create_check(idea.id))
             if run_review:
@@ -168,6 +211,7 @@ class WorkflowService:
 
         markdown_export = ""
         if include_markdown_export:
+            self._raise_if_canceled(job.id)
             markdown_export = self._render_markdown_bundle(ideas)
 
         self._complete_job(
@@ -223,6 +267,9 @@ class WorkflowService:
         job = self.session.get(Job, job_id)
         if job is None:
             return
+        self.session.refresh(job)
+        if job.status == "canceled":
+            raise JobCanceledError("Job canceled before execution")
         job.status = "running"
         job.progress = 0.05
         job.started_at = utc_now()
@@ -232,6 +279,9 @@ class WorkflowService:
         job = self.session.get(Job, job_id)
         if job is None:
             return
+        self.session.refresh(job)
+        if job.status == "canceled":
+            raise JobCanceledError("Job canceled during execution")
         job.progress = progress
         job.output_json = {**(job.output_json or {}), **output}
         self.session.commit()
@@ -240,10 +290,31 @@ class WorkflowService:
         job = self.session.get(Job, job_id)
         if job is None:
             return
+        self.session.refresh(job)
+        if job.status == "canceled":
+            raise JobCanceledError("Job canceled before completion")
         job.status = "completed"
         job.progress = 1.0
         job.output_json = output
         job.finished_at = utc_now()
+        self.session.commit()
+
+    def _raise_if_canceled(self, job_id: str) -> None:
+        job = self.session.get(Job, job_id)
+        if job is None:
+            return
+        self.session.refresh(job)
+        if job.status == "canceled":
+            raise JobCanceledError("Job canceled during execution")
+
+    def _mark_job_canceled(self, job_id: str, error: str) -> None:
+        self.session.rollback()
+        job = self.session.get(Job, job_id)
+        if job is None:
+            return
+        job.status = "canceled"
+        job.error = job.error or error
+        job.finished_at = job.finished_at or utc_now()
         self.session.commit()
 
     def _fail_job(self, job_id: str, error: str) -> None:
@@ -261,10 +332,7 @@ class WorkflowService:
             return ""
 
         export_service = ExportService(self.session)
-        sections = [
-            export_service.render_idea_markdown(idea.id)
-            for idea in ideas
-        ]
+        sections = [export_service.render_idea_markdown(idea.id) for idea in ideas]
         return "\n---\n\n".join(section.strip() for section in sections) + "\n"
 
 
@@ -274,5 +342,7 @@ def run_literature_to_ideas_job_background(job_id: str) -> None:
     session = SessionLocal()
     try:
         WorkflowService(session).run_literature_to_ideas_job(job_id)
+    except JobCanceledError:
+        return
     finally:
         session.close()

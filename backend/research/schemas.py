@@ -832,7 +832,7 @@ class EmbeddingRebuildResponse(BaseModel):
 class JobRead(BaseModel):
     id: str
     job_type: str
-    status: Literal["pending", "running", "completed", "failed"]
+    status: Literal["pending", "running", "completed", "failed", "canceled"]
     progress: float = 0.0
     input: dict[str, Any] = Field(default_factory=dict)
     output: dict[str, Any] = Field(default_factory=dict)

@@ -1138,9 +1138,13 @@ POST /research/experiment-analyses/{analysis_id}/tasks
 GET /research/jobs/{job_id}
 GET /research/jobs/{job_id}/artifacts
 GET /research/jobs
+POST /research/jobs/{job_id}/cancel
+POST /research/jobs/{job_id}/retry
 ```
 
 `/artifacts` 根据 job output 中保存的产物 id 重新水合完整结果，返回 paper、paper card、gaps、ideas、novelty checks、reviews、experiment plans 和按 idea 重新渲染的 Markdown dossier。它是前端工作台和后续 MCP tool 的主要读取入口，避免客户端逐个调用多个资源接口后再自己拼装状态。
+
+`/cancel` 将 pending/running job 标记为 `canceled`，workflow service 在每个主要阶段重新读取 job 状态，尽量停止后续生成。`/retry` 只允许 failed/canceled job，复制原始 input 并排队新 job，适合前端工作台、MCP tool 或自动 planner 对失败工作流进行可追踪重跑。
 
 ## 12. Model Layer 设计
 
