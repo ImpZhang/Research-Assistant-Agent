@@ -732,6 +732,12 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - 返回 graph edge summary，说明研究对象之间的演化关系。
 - 支持 Markdown 导出，用于科研日志、导师沟通和 MCP 上下文。
 
+系统需要提供 idea progress summary：
+
+- 聚合 artifact counts、latest artifacts、task summary、experiment summary、blockers 和 recommended next step。
+- 用于前端 dashboard、MCP tool 和自动 planner 判断一个研究方向当前卡在哪里。
+- Markdown 导出必须包含可追踪 task id，方便组会和周报直接引用。
+
 ### 6.5.4 Idea 输出模板
 
 ```text

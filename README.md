@@ -63,6 +63,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - GraphRAG-lite links for proposal drafts, reviews, revisions, experiment runs, experiment analyses, generated follow-up tasks, and task board snapshots.
 - Idea lineage endpoint that hydrates matrices, proposal artifacts, experiment runs, experiment analyses, tasks, task snapshots, and graph edge summaries.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
+- Idea progress summaries that aggregate proposal, experiment, analysis, task, blocker, and recommended-next-step state.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.
@@ -167,7 +168,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, progress summary, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -201,6 +202,7 @@ GET  /research/experiment-analyses/{analysis_id}
 GET  /research/experiment-analyses/{analysis_id}/export/markdown
 POST /research/experiment-analyses/{analysis_id}/tasks
 POST /research/ideas/{idea_id}/refine
+GET  /research/ideas/{idea_id}/progress
 POST /research/ideas/{idea_id}/related-work-matrix
 GET  /research/ideas/{idea_id}/related-work-matrices
 GET  /research/ideas/{idea_id}/related-work-matrices/{matrix_id}

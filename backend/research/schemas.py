@@ -560,6 +560,18 @@ class IdeaLineageResponse(BaseModel):
     message: str
 
 
+class IdeaProgressResponse(BaseModel):
+    idea: IdeaRead
+    artifact_counts: dict[str, int] = Field(default_factory=dict)
+    latest_artifacts: dict[str, Any] = Field(default_factory=dict)
+    task_summary: dict[str, Any] = Field(default_factory=dict)
+    experiment_summary: dict[str, Any] = Field(default_factory=dict)
+    blockers: list[dict[str, Any]] = Field(default_factory=list)
+    recommended_next_step: str = ""
+    markdown_export: str = ""
+    message: str
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

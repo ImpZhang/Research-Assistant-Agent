@@ -1,3 +1,5 @@
+from collections import Counter
+
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
@@ -49,6 +51,7 @@ from backend.research.schemas import (
     IdeaGenerationRequest,
     IdeaGenerationResponse,
     IdeaLineageResponse,
+    IdeaProgressResponse,
     IdeaPortfolioComparisonRequest,
     IdeaPortfolioComparisonResponse,
     IdeaPortfolioExportRequest,
@@ -162,6 +165,7 @@ def status() -> ProjectStatus:
             "structured_idea_generation_adapter",
             "idea_refinement_loop",
             "idea_ranking_portfolio",
+            "idea_progress_summary",
             "human_idea_feedback",
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",
@@ -1062,6 +1066,299 @@ def get_idea_lineage(
             f"{len(experiment_analyses)} analyses, {len(tasks)} tasks."
         ),
     )
+
+
+@router.get("/ideas/{idea_id}/progress", response_model=IdeaProgressResponse)
+def get_idea_progress(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> IdeaProgressResponse:
+    idea = IdeaService(session).get_idea(idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    matrices = _latest_for_idea(session, RelatedWorkMatrix, idea_id, 20)
+    drafts = _latest_for_idea(session, ProposalDraft, idea_id, 20)
+    reviews = _latest_for_idea(session, ProposalReview, idea_id, 50)
+    revisions = _latest_for_idea(session, ProposalRevision, idea_id, 50)
+    experiment_runs = _latest_for_idea(session, ExperimentRun, idea_id, 50)
+    experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 50)
+    tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
+    snapshots = _latest_for_idea(session, TaskBoardSnapshot, idea_id, 20)
+
+    latest_analysis = experiment_analyses[0] if experiment_analyses else None
+    analysis_tasks = [
+        task
+        for task in tasks
+        if latest_analysis
+        and task.owner_type == "experiment_analysis"
+        and task.owner_id == latest_analysis.id
+    ]
+    artifact_counts = {
+        "related_work_matrices": len(matrices),
+        "proposal_drafts": len(drafts),
+        "proposal_reviews": len(reviews),
+        "proposal_revisions": len(revisions),
+        "experiment_runs": len(experiment_runs),
+        "experiment_analyses": len(experiment_analyses),
+        "research_tasks": len(tasks),
+        "open_tasks": len([task for task in tasks if task.status in {"todo", "doing", "blocked"}]),
+        "blocked_tasks": len([task for task in tasks if task.status == "blocked"]),
+        "analysis_follow_up_tasks": len(analysis_tasks),
+        "task_board_snapshots": len(snapshots),
+    }
+    latest_artifacts = _progress_latest_artifacts(
+        matrices,
+        drafts,
+        reviews,
+        revisions,
+        experiment_runs,
+        experiment_analyses,
+        snapshots,
+    )
+    task_summary = _progress_task_summary(tasks)
+    experiment_summary = _progress_experiment_summary(experiment_runs, experiment_analyses)
+    blockers = _progress_blockers(tasks, latest_analysis)
+    recommended_next_step = _progress_recommendation(
+        artifact_counts=artifact_counts,
+        latest_artifacts=latest_artifacts,
+        task_summary=task_summary,
+        blockers=blockers,
+    )
+    markdown_export = _render_idea_progress_markdown(
+        idea=idea,
+        artifact_counts=artifact_counts,
+        latest_artifacts=latest_artifacts,
+        task_summary=task_summary,
+        experiment_summary=experiment_summary,
+        blockers=blockers,
+        recommended_next_step=recommended_next_step,
+    )
+    return IdeaProgressResponse(
+        idea=_serialize_idea(idea),
+        artifact_counts=artifact_counts,
+        latest_artifacts=latest_artifacts,
+        task_summary=task_summary,
+        experiment_summary=experiment_summary,
+        blockers=blockers,
+        recommended_next_step=recommended_next_step,
+        markdown_export=markdown_export,
+        message=f"Loaded progress summary for idea {idea.id}.",
+    )
+
+
+def _latest_for_idea(session: Session, model, idea_id: str, limit: int) -> list:
+    return (
+        session.query(model)
+        .filter(model.idea_id == idea_id)
+        .order_by(model.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def _progress_latest_artifacts(
+    matrices: list[RelatedWorkMatrix],
+    drafts: list[ProposalDraft],
+    reviews: list[ProposalReview],
+    revisions: list[ProposalRevision],
+    experiment_runs: list[ExperimentRun],
+    experiment_analyses: list[ExperimentAnalysis],
+    snapshots: list[TaskBoardSnapshot],
+) -> dict[str, dict | None]:
+    latest_run = experiment_runs[0] if experiment_runs else None
+    latest_analysis = experiment_analyses[0] if experiment_analyses else None
+    return {
+        "related_work_matrix": {"id": matrices[0].id, "status": matrices[0].status}
+        if matrices
+        else None,
+        "proposal_draft": {"id": drafts[0].id, "status": drafts[0].status} if drafts else None,
+        "proposal_review": {
+            "id": reviews[0].id,
+            "decision": reviews[0].decision,
+            "readiness_score": reviews[0].readiness_score,
+        }
+        if reviews
+        else None,
+        "proposal_revision": {"id": revisions[0].id, "status": revisions[0].status}
+        if revisions
+        else None,
+        "experiment_run": {"id": latest_run.id, "status": latest_run.status}
+        if latest_run
+        else None,
+        "experiment_analysis": {
+            "id": latest_analysis.id,
+            "decision": latest_analysis.decision,
+            "confidence": latest_analysis.confidence,
+        }
+        if latest_analysis
+        else None,
+        "task_board_snapshot": {"id": snapshots[0].id, "title": snapshots[0].title}
+        if snapshots
+        else None,
+    }
+
+
+def _progress_task_summary(tasks: list[ResearchTask]) -> dict:
+    by_status = Counter(task.status for task in tasks)
+    by_priority = Counter(task.priority for task in tasks)
+    next_tasks = sorted(
+        [task for task in tasks if task.status in {"todo", "doing", "blocked"}],
+        key=_progress_task_order,
+    )[:8]
+    return {
+        "by_status": dict(by_status),
+        "by_priority": dict(by_priority),
+        "next_tasks": [
+            {
+                "id": task.id,
+                "title": task.title,
+                "priority": task.priority,
+                "status": task.status,
+                "owner_type": task.owner_type,
+            }
+            for task in next_tasks
+        ],
+    }
+
+
+def _progress_task_order(task: ResearchTask) -> tuple[int, int, str]:
+    priority_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    status_rank = {"blocked": 0, "doing": 1, "todo": 2, "done": 3, "archived": 4}
+    return (
+        priority_rank.get(task.priority, 9),
+        status_rank.get(task.status, 9),
+        task.created_at.isoformat(),
+    )
+
+
+def _progress_experiment_summary(
+    experiment_runs: list[ExperimentRun],
+    experiment_analyses: list[ExperimentAnalysis],
+) -> dict:
+    latest_run = experiment_runs[0] if experiment_runs else None
+    latest_analysis = experiment_analyses[0] if experiment_analyses else None
+    return {
+        "latest_run_status": latest_run.status if latest_run else "",
+        "latest_run_id": latest_run.id if latest_run else "",
+        "latest_analysis_decision": latest_analysis.decision if latest_analysis else "",
+        "latest_analysis_confidence": latest_analysis.confidence if latest_analysis else 0.0,
+        "latest_analysis_next_actions": latest_analysis.next_actions_json
+        if latest_analysis
+        else [],
+        "latest_analysis_concerns": latest_analysis.concerns_json if latest_analysis else [],
+    }
+
+
+def _progress_blockers(
+    tasks: list[ResearchTask],
+    latest_analysis: ExperimentAnalysis | None,
+) -> list[dict[str, str]]:
+    blockers = [
+        {
+            "type": "task",
+            "id": task.id,
+            "title": task.title,
+            "reason": task.description,
+        }
+        for task in tasks
+        if task.status == "blocked"
+    ]
+    if latest_analysis:
+        blockers.extend(
+            {
+                "type": "analysis_concern",
+                "id": latest_analysis.id,
+                "title": latest_analysis.decision,
+                "reason": concern,
+            }
+            for concern in latest_analysis.concerns_json or []
+        )
+    return blockers[:20]
+
+
+def _progress_recommendation(
+    *,
+    artifact_counts: dict[str, int],
+    latest_artifacts: dict[str, dict | None],
+    task_summary: dict,
+    blockers: list[dict[str, str]],
+) -> str:
+    if artifact_counts["related_work_matrices"] == 0:
+        return "Build a related-work matrix before investing more execution effort."
+    if artifact_counts["proposal_drafts"] == 0:
+        return "Draft a proposal to make the idea reviewable."
+    if artifact_counts["proposal_reviews"] == 0:
+        return "Run a proposal readiness review."
+    if artifact_counts["proposal_revisions"] == 0:
+        return "Create a proposal revision from the latest review."
+    if artifact_counts["research_tasks"] == 0:
+        return "Generate a task backlog from the latest proposal revision."
+    if artifact_counts["experiment_runs"] == 0:
+        return "Record the first experiment run for the latest experiment plan."
+    if artifact_counts["experiment_analyses"] == 0:
+        return "Analyze the latest experiment run to decide the next research move."
+    if (
+        latest_artifacts.get("experiment_analysis")
+        and artifact_counts["analysis_follow_up_tasks"] == 0
+    ):
+        return "Create follow-up tasks from the latest experiment analysis."
+    if blockers:
+        return "Resolve blockers or analysis concerns before expanding the scope."
+    next_tasks = task_summary.get("next_tasks") or []
+    if next_tasks:
+        return f"Work the highest-priority open task: {next_tasks[0]['title']}"
+    return "Archive this iteration or ingest new literature to refresh the portfolio."
+
+
+def _render_idea_progress_markdown(
+    *,
+    idea: Idea,
+    artifact_counts: dict[str, int],
+    latest_artifacts: dict[str, dict | None],
+    task_summary: dict,
+    experiment_summary: dict,
+    blockers: list[dict[str, str]],
+    recommended_next_step: str,
+) -> str:
+    lines = [
+        f"# Idea Progress: {idea.title}",
+        "",
+        f"- Idea ID: `{idea.id}`",
+        f"- Status: {idea.status}",
+        "",
+        "## Artifact Counts",
+        "",
+    ]
+    lines.extend([f"- {key}: {value}" for key, value in artifact_counts.items()])
+    lines.extend(["", "## Latest Artifacts", ""])
+    for key, value in latest_artifacts.items():
+        lines.append(f"- {key}: {value if value else 'none'}")
+    lines.extend(["", "## Task Summary", ""])
+    lines.append(f"- By Status: {task_summary.get('by_status', {})}")
+    lines.append(f"- By Priority: {task_summary.get('by_priority', {})}")
+    lines.extend(["", "## Next Tasks", ""])
+    next_tasks = task_summary.get("next_tasks") or []
+    if next_tasks:
+        for task in next_tasks:
+            lines.append(
+                f"- `{task['id']}` `{task['priority']}` `{task['status']}` {task['title']}"
+            )
+    else:
+        lines.append("- No open tasks.")
+    lines.extend(["", "## Experiment Summary", ""])
+    for key, value in experiment_summary.items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Blockers And Concerns", ""])
+    if blockers:
+        for blocker in blockers:
+            lines.append(
+                f"- `{blocker['type']}` `{blocker['id']}` {blocker['title']}: {blocker['reason']}"
+            )
+    else:
+        lines.append("- No blockers or analysis concerns.")
+    lines.extend(["", "## Recommended Next Step", "", recommended_next_step])
+    return "\n".join(lines).strip() + "\n"
 
 
 def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str, int]:

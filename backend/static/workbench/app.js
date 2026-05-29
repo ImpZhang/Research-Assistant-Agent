@@ -628,6 +628,24 @@ async function loadIdeaLineage() {
   }
 }
 
+async function loadIdeaProgress() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Loading idea progress...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/progress`);
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)} Next: ${escapeHtml(body.recommended_next_step)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function rankIdeas() {
   renderResult("workflowResult", "Ranking idea portfolio...", "warn");
   try {
@@ -732,6 +750,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("experimentAnalysisButton").addEventListener("click", analyzeExperimentRun);
   $("analysisTasksButton").addEventListener("click", createAnalysisTasks);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
+  $("progressButton").addEventListener("click", loadIdeaProgress);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);

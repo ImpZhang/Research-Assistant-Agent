@@ -1063,6 +1063,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/ideas/{idea_id}/lineage` 将 idea 的 related-work matrices、proposal drafts、proposal reviews、proposal revisions、experiment runs、experiment analyses、research tasks、task board snapshots 与 graph edge summary 聚合为一个响应，并提供 Markdown lineage export，方便前端和 MCP 一次性读取研究演化轨迹。
 
+`/ideas/{idea_id}/progress` 将同一 idea 的 proposal、experiment、analysis、task、blocker 和 snapshot 状态聚合为进度总览，返回 artifact counts、latest artifacts、task summary、experiment summary、blockers、recommended next step 和 Markdown report。它面向 dashboard 和 MCP planner，不替代 lineage，而是回答“下一步该干什么”。
+
 `/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
 
 `/rank/export/markdown` 使用同一套 ranking 参数导出选题组合报告，包含 rank、score breakdown、rationale、parent lineage、research question、hypothesis 和 method sketch，用于组会讨论、导师 review 或手动归档。
@@ -1087,6 +1089,7 @@ GET  /research/ideas/{idea_id}/reviews
 ```text
 POST /research/ideas/{idea_id}/experiment-plan
 GET  /research/ideas/{idea_id}/experiment-plans
+GET  /research/ideas/{idea_id}/progress
 GET  /research/ideas/{idea_id}/experiment-runs
 POST /research/experiment-plans/{plan_id}/runs
 GET  /research/experiment-plans/{plan_id}/runs

@@ -44,6 +44,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/experiment-runs/${state.latestExperimentRunId}/analysis" in script.text
     assert "/research/experiment-analyses/${state.latestExperimentAnalysisId}/tasks" in script.text
     assert "/research/ideas/${state.latestIdeaId}/lineage" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/progress" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
     assert "/research/ideas/portfolios" in script.text
@@ -716,6 +717,18 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "# Idea Lineage:" in lineage_body["markdown_export"]
     assert "## Experiment Runs" in lineage_body["markdown_export"]
     assert "## Experiment Analyses" in lineage_body["markdown_export"]
+
+    progress = client.get(f"/research/ideas/{idea_id}/progress")
+    assert progress.status_code == 200
+    progress_body = progress.json()
+    assert progress_body["idea"]["id"] == idea_id
+    assert progress_body["artifact_counts"]["experiment_runs"] >= 1
+    assert progress_body["artifact_counts"]["experiment_analyses"] >= 1
+    assert progress_body["artifact_counts"]["analysis_follow_up_tasks"] >= 1
+    assert progress_body["task_summary"]["next_tasks"]
+    assert progress_body["experiment_summary"]["latest_analysis_decision"] == "supports_hypothesis"
+    assert progress_body["recommended_next_step"]
+    assert "# Idea Progress:" in progress_body["markdown_export"]
 
 
 def test_refine_idea_creates_traceable_revision() -> None:
