@@ -757,6 +757,12 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - 用于前端 dashboard、MCP tool 和自动 planner 判断一个研究方向当前卡在哪里。
 - Markdown 导出必须包含可追踪 task id，方便组会和周报直接引用。
 
+系统需要提供 idea research packet：
+
+- 聚合 latest artifacts、open tasks、graph edge summary 和 Markdown context。
+- 必须包含 latest decision memo 与 assumption audit 的摘要入口。
+- 用于导师讨论、MCP tool 或外部 planner 的第一段上下文，而不是让调用方自己拼多个端点。
+
 系统需要提供 project progress overview：
 
 - 聚合全部 idea status、open tasks、blocked tasks、recent experiment analyses 和 recommended actions。

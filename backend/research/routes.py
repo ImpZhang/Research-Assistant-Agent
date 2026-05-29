@@ -1,4 +1,5 @@
 from collections import Counter
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import PlainTextResponse
@@ -59,6 +60,7 @@ from backend.research.schemas import (
     IdeaDecisionMemoRead,
     IdeaLineageResponse,
     IdeaProgressResponse,
+    IdeaResearchPacketResponse,
     IdeaPortfolioComparisonRequest,
     IdeaPortfolioComparisonResponse,
     IdeaPortfolioExportRequest,
@@ -182,6 +184,7 @@ def status() -> ProjectStatus:
             "idea_refinement_loop",
             "idea_ranking_portfolio",
             "idea_progress_summary",
+            "idea_research_packet",
             "idea_decision_memos",
             "idea_decision_task_generation",
             "idea_assumption_audits",
@@ -305,6 +308,13 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/ideas/{idea_id}/progress",
             output_model="IdeaProgressResponse",
+        ),
+        ToolManifestItem(
+            name="get_idea_research_packet",
+            description="Load a Markdown-ready research packet for one idea.",
+            method="GET",
+            path="/research/ideas/{idea_id}/research-packet",
+            output_model="IdeaResearchPacketResponse",
         ),
         ToolManifestItem(
             name="create_idea_decision_memo",
@@ -1890,6 +1900,189 @@ def _render_idea_progress_markdown(
     else:
         lines.append("- No blockers or analysis concerns.")
     lines.extend(["", "## Recommended Next Step", "", recommended_next_step])
+    return "\n".join(lines).strip() + "\n"
+
+
+@router.get("/ideas/{idea_id}/research-packet", response_model=IdeaResearchPacketResponse)
+def get_idea_research_packet(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> IdeaResearchPacketResponse:
+    idea = IdeaService(session).get_idea(idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    matrices = _latest_for_idea(session, RelatedWorkMatrix, idea_id, 20)
+    drafts = _latest_for_idea(session, ProposalDraft, idea_id, 20)
+    reviews = _latest_for_idea(session, ProposalReview, idea_id, 50)
+    revisions = _latest_for_idea(session, ProposalRevision, idea_id, 50)
+    experiment_runs = _latest_for_idea(session, ExperimentRun, idea_id, 50)
+    experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 50)
+    decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea_id, 20)
+    assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea_id, 20)
+    tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
+    open_tasks = sorted(
+        [task for task in tasks if task.status in {"todo", "doing", "blocked"}],
+        key=_progress_task_order,
+    )[:20]
+    graph_edge_summary = _graph_edge_summary(
+        session,
+        [
+            idea_id,
+            *[matrix.id for matrix in matrices],
+            *[draft.id for draft in drafts],
+            *[review.id for review in reviews],
+            *[revision.id for revision in revisions],
+            *[run.experiment_plan_id for run in experiment_runs],
+            *[run.id for run in experiment_runs],
+            *[analysis.id for analysis in experiment_analyses],
+            *[memo.id for memo in decision_memos],
+            *[audit.id for audit in assumption_audits],
+            *[task.id for task in open_tasks],
+        ],
+    )
+    latest_artifacts = _research_packet_latest_artifacts(
+        matrices=matrices,
+        drafts=drafts,
+        reviews=reviews,
+        revisions=revisions,
+        experiment_runs=experiment_runs,
+        experiment_analyses=experiment_analyses,
+        decision_memos=decision_memos,
+        assumption_audits=assumption_audits,
+    )
+    markdown_export = _render_idea_research_packet_markdown(
+        idea=idea,
+        latest_artifacts=latest_artifacts,
+        open_tasks=open_tasks,
+        graph_edge_summary=graph_edge_summary,
+    )
+    return IdeaResearchPacketResponse(
+        idea=_serialize_idea(idea),
+        latest_artifacts=latest_artifacts,
+        open_tasks=[_serialize_research_task(task) for task in open_tasks],
+        graph_edge_summary=graph_edge_summary,
+        markdown_export=markdown_export,
+        message=f"Loaded research packet for idea {idea.id}.",
+    )
+
+
+def _research_packet_latest_artifacts(
+    *,
+    matrices: list[RelatedWorkMatrix],
+    drafts: list[ProposalDraft],
+    reviews: list[ProposalReview],
+    revisions: list[ProposalRevision],
+    experiment_runs: list[ExperimentRun],
+    experiment_analyses: list[ExperimentAnalysis],
+    decision_memos: list[IdeaDecisionMemo],
+    assumption_audits: list[IdeaAssumptionAudit],
+) -> dict[str, Any]:
+    latest_analysis = experiment_analyses[0] if experiment_analyses else None
+    latest_memo = decision_memos[0] if decision_memos else None
+    latest_audit = assumption_audits[0] if assumption_audits else None
+    return {
+        "related_work_matrix": {
+            "id": matrices[0].id,
+            "status": matrices[0].status,
+            "item_count": len(matrices[0].items_json or []),
+            "missing_search_count": len(matrices[0].missing_searches_json or []),
+        }
+        if matrices
+        else None,
+        "proposal_draft": {"id": drafts[0].id, "title": drafts[0].title} if drafts else None,
+        "proposal_review": {
+            "id": reviews[0].id,
+            "decision": reviews[0].decision,
+            "readiness_score": reviews[0].readiness_score,
+            "concerns": (reviews[0].concerns_json or [])[:5],
+        }
+        if reviews
+        else None,
+        "proposal_revision": {"id": revisions[0].id, "status": revisions[0].status}
+        if revisions
+        else None,
+        "experiment_run": {
+            "id": experiment_runs[0].id,
+            "status": experiment_runs[0].status,
+            "title": experiment_runs[0].title,
+        }
+        if experiment_runs
+        else None,
+        "experiment_analysis": {
+            "id": latest_analysis.id,
+            "decision": latest_analysis.decision,
+            "confidence": latest_analysis.confidence,
+            "next_actions": (latest_analysis.next_actions_json or [])[:5],
+        }
+        if latest_analysis
+        else None,
+        "decision_memo": {
+            "id": latest_memo.id,
+            "decision": latest_memo.decision,
+            "rationale": (latest_memo.rationale_json or [])[:5],
+            "next_commitments": (latest_memo.next_commitments_json or [])[:5],
+        }
+        if latest_memo
+        else None,
+        "assumption_audit": {
+            "id": latest_audit.id,
+            "assumption_count": len(latest_audit.assumptions_json or []),
+            "high_risk_assumptions": [
+                item
+                for item in (latest_audit.assumptions_json or [])
+                if item.get("risk_level") == "high"
+            ][:5],
+        }
+        if latest_audit
+        else None,
+    }
+
+
+def _render_idea_research_packet_markdown(
+    *,
+    idea: Idea,
+    latest_artifacts: dict[str, Any],
+    open_tasks: list[ResearchTask],
+    graph_edge_summary: dict[str, int],
+) -> str:
+    lines = [
+        f"# Idea Research Packet: {idea.title}",
+        "",
+        f"- Idea ID: `{idea.id}`",
+        f"- Status: {idea.status}",
+        "",
+        "## Research Question",
+        "",
+        idea.research_question or "No research question recorded.",
+        "",
+        "## Core Hypothesis",
+        "",
+        idea.core_hypothesis or "No core hypothesis recorded.",
+        "",
+        "## Latest Artifacts",
+        "",
+    ]
+    for key, value in latest_artifacts.items():
+        lines.append(f"- {key}: {value if value else 'none'}")
+    lines.extend(["", "## Open Tasks", ""])
+    if open_tasks:
+        for task in open_tasks:
+            lines.append(f"- `{task.id}` `{task.priority}` `{task.status}` {task.title}")
+    else:
+        lines.append("- No open tasks.")
+    lines.extend(["", "## Graph Edge Summary", ""])
+    if graph_edge_summary:
+        lines.extend(
+            [f"- `{edge_type}`: {count}" for edge_type, count in graph_edge_summary.items()]
+        )
+    else:
+        lines.append("- No graph edges found.")
+    lines.extend(["", "## Packet Use", ""])
+    lines.append(
+        "Use this packet as the first context block for advisor discussion, MCP tools, "
+        "or an external planning agent."
+    )
     return "\n".join(lines).strip() + "\n"
 
 

@@ -25,6 +25,7 @@ def test_research_status() -> None:
     assert "sqlalchemy_models" in body["implemented_capabilities"]
     assert "tool_manifest" in body["implemented_capabilities"]
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
+    assert "idea_research_packet" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
 
@@ -40,6 +41,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "upload_paper" in names
     assert "search_research_context" in names
     assert "get_project_progress_overview" in names
+    assert "get_idea_research_packet" in names
     assert "create_idea_decision_memo" in names
     assert "create_tasks_from_idea_decision_memo" in names
     assert "create_idea_assumption_audit" in names
@@ -865,6 +867,17 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert progress_body["experiment_summary"]["latest_analysis_decision"] == "supports_hypothesis"
     assert progress_body["recommended_next_step"]
     assert "# Idea Progress:" in progress_body["markdown_export"]
+
+    research_packet = client.get(f"/research/ideas/{idea_id}/research-packet")
+    assert research_packet.status_code == 200
+    packet_body = research_packet.json()
+    assert packet_body["idea"]["id"] == idea_id
+    assert packet_body["latest_artifacts"]["decision_memo"]["id"] == decision_memo_body["id"]
+    assert packet_body["latest_artifacts"]["assumption_audit"]["id"] == assumption_audit_body["id"]
+    assert any(task["id"] == decision_task_id for task in packet_body["open_tasks"])
+    assert "idea_has_assumption_audit" in packet_body["graph_edge_summary"]
+    assert "# Idea Research Packet:" in packet_body["markdown_export"]
+    assert "## Packet Use" in packet_body["markdown_export"]
 
     overview = client.get("/research/progress/overview")
     assert overview.status_code == 200

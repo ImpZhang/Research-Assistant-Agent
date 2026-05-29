@@ -615,6 +615,15 @@ class IdeaProgressResponse(BaseModel):
     message: str
 
 
+class IdeaResearchPacketResponse(BaseModel):
+    idea: IdeaRead
+    latest_artifacts: dict[str, Any] = Field(default_factory=dict)
+    open_tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    graph_edge_summary: dict[str, int] = Field(default_factory=dict)
+    markdown_export: str = ""
+    message: str
+
+
 class ResearchOverviewResponse(BaseModel):
     idea_count: int = 0
     status_counts: dict[str, int] = Field(default_factory=dict)

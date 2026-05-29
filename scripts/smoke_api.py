@@ -111,6 +111,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     workbench = require_ok(client.get("/workbench"), "workbench")
     if "workflow_job_cancel_retry_controls" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include job cancel/retry controls")
+    if "idea_research_packet" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea research packet")
     if "idea_decision_memos" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision memos")
     if "idea_decision_task_generation" not in status["implemented_capabilities"]:
@@ -124,6 +126,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project progress overview tool")
     if "retry_job" not in manifest_names:
         raise RuntimeError("tool manifest did not include job retry tool")
+    if "get_idea_research_packet" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea research packet tool")
     if "create_idea_decision_memo" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea decision memo tool")
     if "create_tasks_from_idea_decision_memo" not in manifest_names:
@@ -516,6 +520,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea progress did not count assumption audits")
     if "Idea Progress" not in progress["markdown_export"]:
         raise RuntimeError("idea progress markdown did not include the report title")
+    research_packet = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/research-packet"),
+        "idea research packet",
+    )
+    if decision_memo["id"] not in research_packet["markdown_export"]:
+        raise RuntimeError("idea research packet markdown did not include decision memo")
+    if assumption_audit["id"] not in research_packet["markdown_export"]:
+        raise RuntimeError("idea research packet markdown did not include assumption audit")
     overview = require_ok(client.get("/research/progress/overview"), "research progress overview")
     if overview["idea_count"] < 1:
         raise RuntimeError("research overview did not include ideas")
@@ -758,6 +770,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "lineage_graph_edge_types": len(lineage["graph_edge_summary"]),
         "progress_open_task_count": progress["artifact_counts"]["open_tasks"],
         "progress_recommended_next_step": progress["recommended_next_step"],
+        "research_packet_markdown_chars": len(research_packet["markdown_export"]),
         "overview_idea_count": overview["idea_count"],
         "overview_open_task_count": overview["task_summary"]["open_task_count"],
         "advisor_brief_id": advisor_brief["id"],
