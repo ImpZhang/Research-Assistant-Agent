@@ -569,6 +569,20 @@ created_at
 updated_at
 ```
 
+### research_briefs
+
+```text
+id
+title
+scope
+idea_ids_json
+summary_json
+markdown_export
+created_by
+created_at
+updated_at
+```
+
 ### research_nodes
 
 GraphRAG-lite 节点表：
@@ -1067,6 +1081,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/progress/overview` 聚合项目级进度：idea status counts、open task summary、blocked tasks、recent experiment analyses、recommended actions 和 Markdown overview。它用于 dashboard 首页和后续 MCP/agent planner 的第一跳入口。
 
+`/briefs` 将项目级或 idea-set 状态保存为 `ResearchBrief` artifact，包含 idea list、recent experiment decisions、highest-priority open tasks、discussion prompts 和 Markdown export。它是组会、导师沟通和后续 MCP 报告导出的稳定快照。
+
 `/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
 
 `/rank/export/markdown` 使用同一套 ranking 参数导出选题组合报告，包含 rank、score breakdown、rationale、parent lineage、research question、hypothesis 和 method sketch，用于组会讨论、导师 review 或手动归档。
@@ -1093,6 +1109,10 @@ POST /research/ideas/{idea_id}/experiment-plan
 GET  /research/ideas/{idea_id}/experiment-plans
 GET  /research/ideas/{idea_id}/progress
 GET  /research/progress/overview
+POST /research/briefs
+GET  /research/briefs
+GET  /research/briefs/{brief_id}
+GET  /research/briefs/{brief_id}/export/markdown
 GET  /research/ideas/{idea_id}/experiment-runs
 POST /research/experiment-plans/{plan_id}/runs
 GET  /research/experiment-plans/{plan_id}/runs

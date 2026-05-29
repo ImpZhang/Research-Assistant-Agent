@@ -411,6 +411,18 @@ class IdeaPortfolioSnapshot(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="researcher")
 
 
+class ResearchBrief(Base, TimestampMixin):
+    __tablename__ = "research_briefs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    title: Mapped[str] = mapped_column(String(512), default="Advisor Research Brief")
+    scope: Mapped[str] = mapped_column(String(128), default="project", index=True)
+    idea_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    summary_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="researcher")
+
+
 class ResearchNode(Base, TimestampMixin):
     __tablename__ = "research_nodes"
 

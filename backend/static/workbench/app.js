@@ -660,6 +660,29 @@ async function loadProjectOverview() {
   }
 }
 
+async function createAdvisorBrief() {
+  renderResult("workflowResult", "Creating advisor brief...", "warn");
+  try {
+    const body = await api("/research/briefs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Workbench Advisor Research Brief",
+        scope: state.latestIdeaId ? "idea_set" : "project",
+        idea_ids: state.latestIdeaId ? [state.latestIdeaId] : [],
+        created_by: "workbench",
+      }),
+    });
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Saved advisor brief <code>${escapeHtml(body.id)}</code> for ${body.idea_ids.length} ideas.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function rankIdeas() {
   renderResult("workflowResult", "Ranking idea portfolio...", "warn");
   try {
@@ -766,6 +789,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("progressButton").addEventListener("click", loadIdeaProgress);
   $("overviewButton").addEventListener("click", loadProjectOverview);
+  $("advisorBriefButton").addEventListener("click", createAdvisorBrief);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);

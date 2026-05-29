@@ -443,6 +443,24 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research overview did not include ideas")
     if not overview["recommended_actions"]:
         raise RuntimeError("research overview did not include recommended actions")
+    advisor_brief = require_ok(
+        client.post(
+            "/research/briefs",
+            json_body={
+                "title": "Smoke Advisor Research Brief",
+                "scope": "idea_set",
+                "idea_ids": [refined_idea["id"]],
+                "created_by": "smoke_api",
+            },
+        ),
+        "advisor research brief",
+    )
+    advisor_brief_markdown = require_ok(
+        client.get(f"/research/briefs/{advisor_brief['id']}/export/markdown"),
+        "advisor research brief markdown",
+    )
+    if "## Discussion Prompts" not in advisor_brief_markdown:
+        raise RuntimeError("advisor brief markdown did not include discussion prompts")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -657,6 +675,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "progress_recommended_next_step": progress["recommended_next_step"],
         "overview_idea_count": overview["idea_count"],
         "overview_open_task_count": overview["task_summary"]["open_task_count"],
+        "advisor_brief_id": advisor_brief["id"],
+        "advisor_brief_markdown_chars": len(advisor_brief_markdown),
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),

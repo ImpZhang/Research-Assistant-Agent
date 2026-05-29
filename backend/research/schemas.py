@@ -583,6 +583,29 @@ class ResearchOverviewResponse(BaseModel):
     message: str
 
 
+class ResearchBriefCreate(BaseModel):
+    title: str = "Advisor Research Brief"
+    scope: Literal["project", "idea_set"] = "project"
+    idea_ids: list[str] = Field(default_factory=list)
+    created_by: str = "researcher"
+
+
+class ResearchBriefRead(BaseModel):
+    id: str
+    title: str
+    scope: str = "project"
+    idea_ids: list[str] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+    markdown_export_chars: int = 0
+    created_by: str = "researcher"
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResearchBriefDetail(ResearchBriefRead):
+    markdown_export: str = ""
+
+
 class IdeaFeedbackCreate(BaseModel):
     decision: Literal["shortlist", "accept", "revise", "reject", "archive"] = "revise"
     rating: float | None = None

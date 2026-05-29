@@ -46,6 +46,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/lineage" in script.text
     assert "/research/ideas/${state.latestIdeaId}/progress" in script.text
     assert "/research/progress/overview" in script.text
+    assert "/research/briefs" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
     assert "/research/ideas/portfolios" in script.text
@@ -739,6 +740,34 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert overview_body["recent_experiment_analyses"]
     assert overview_body["recommended_actions"]
     assert "# Research Progress Overview" in overview_body["markdown_export"]
+
+    brief = client.post(
+        "/research/briefs",
+        json={
+            "title": "Pytest Advisor Brief",
+            "scope": "idea_set",
+            "idea_ids": [idea_id],
+            "created_by": "pytest",
+        },
+    )
+    assert brief.status_code == 200
+    brief_body = brief.json()
+    assert brief_body["idea_ids"] == [idea_id]
+    assert brief_body["summary"]["idea_count"] == 1
+    assert "# Pytest Advisor Brief" in brief_body["markdown_export"]
+    assert "## Discussion Prompts" in brief_body["markdown_export"]
+
+    briefs = client.get("/research/briefs")
+    assert briefs.status_code == 200
+    assert briefs.json()[0]["id"] == brief_body["id"]
+
+    fetched_brief = client.get(f"/research/briefs/{brief_body['id']}")
+    assert fetched_brief.status_code == 200
+    assert fetched_brief.json()["id"] == brief_body["id"]
+
+    brief_export = client.get(f"/research/briefs/{brief_body['id']}/export/markdown")
+    assert brief_export.status_code == 200
+    assert "## Highest Priority Open Tasks" in brief_export.text
 
 
 def test_refine_idea_creates_traceable_revision() -> None:

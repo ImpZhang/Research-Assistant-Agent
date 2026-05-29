@@ -65,6 +65,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Idea progress summaries that aggregate proposal, experiment, analysis, task, blocker, and recommended-next-step state.
 - Project progress overview that aggregates all ideas, open tasks, blockers, recent analyses, and recommended actions.
+- Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries.
 - Research idea portfolio ranking with lineage deduplication and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.
@@ -169,7 +170,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, idea progress summary, project overview, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, idea progress summary, project overview, advisor brief, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -182,6 +183,10 @@ GET  /research/papers/{paper_id}/evidence
 POST /research/literature/search
 POST /research/embeddings/rebuild
 GET  /research/progress/overview
+POST /research/briefs
+GET  /research/briefs
+GET  /research/briefs/{brief_id}
+GET  /research/briefs/{brief_id}/export/markdown
 
 POST /research/papers/{paper_id}/card/extract-structured
 GET  /research/papers/{paper_id}/card/export/markdown

@@ -744,6 +744,12 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - 用于快速判断整个科研项目今天应该推进什么，而不是逐个点开 idea。
 - 后续 MCP/agent planner 应优先读取 overview，再进入具体 idea progress。
 
+系统需要提供 advisor brief：
+
+- 将选定 idea 或项目级状态固化成 Markdown brief。
+- brief 需要包含 idea 列表、最近实验判断、高优先级开放任务和 discussion prompts。
+- brief 需要持久化，避免组会/导师沟通时报告内容被后续任务状态改变。
+
 ### 6.5.4 Idea 输出模板
 
 ```text

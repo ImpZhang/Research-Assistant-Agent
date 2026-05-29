@@ -24,6 +24,7 @@ from backend.research.models import (
     ProposalReview,
     ProposalRevision,
     RelatedWorkMatrix,
+    ResearchBrief,
     ResearchEdge,
     ResearchGap,
     ResearchNode,
@@ -87,6 +88,9 @@ from backend.research.schemas import (
     RankedIdeaRead,
     RelatedWorkMatrixCreate,
     RelatedWorkMatrixRead,
+    ResearchBriefCreate,
+    ResearchBriefDetail,
+    ResearchBriefRead,
     ResearchEdgeRead,
     ResearchGapRead,
     ResearchNodeRead,
@@ -105,6 +109,7 @@ from backend.research.schemas import (
     TaskBoardSnapshotDetail,
     TaskBoardSnapshotRead,
 )
+from backend.research.services.brief_service import ResearchBriefService
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.embedding_service import EmbeddingService
 from backend.research.services.experiment_analysis_service import ExperimentAnalysisService
@@ -168,6 +173,7 @@ def status() -> ProjectStatus:
             "idea_ranking_portfolio",
             "idea_progress_summary",
             "project_progress_overview",
+            "advisor_research_briefs",
             "human_idea_feedback",
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",
@@ -373,6 +379,81 @@ def _render_research_overview_markdown(
     lines.extend(["", "## Recommended Actions", ""])
     lines.extend(f"- {action}" for action in recommended_actions)
     return "\n".join(lines).strip() + "\n"
+
+
+def _serialize_research_brief(
+    brief: ResearchBrief,
+    *,
+    include_markdown: bool = False,
+) -> ResearchBriefRead | ResearchBriefDetail:
+    payload = {
+        "id": brief.id,
+        "title": brief.title,
+        "scope": brief.scope,
+        "idea_ids": brief.idea_ids_json or [],
+        "summary": brief.summary_json or {},
+        "markdown_export_chars": len(brief.markdown_export or ""),
+        "created_by": brief.created_by,
+        "created_at": brief.created_at,
+        "updated_at": brief.updated_at,
+    }
+    if include_markdown:
+        return ResearchBriefDetail(
+            **payload,
+            markdown_export=brief.markdown_export or "",
+        )
+    return ResearchBriefRead(**payload)
+
+
+@router.post("/briefs", response_model=ResearchBriefDetail)
+def create_research_brief(
+    payload: ResearchBriefCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    try:
+        brief = ResearchBriefService(session).create_brief(
+            title=payload.title,
+            scope=payload.scope,
+            idea_ids=payload.idea_ids,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get("/briefs", response_model=list[ResearchBriefRead])
+def list_research_briefs(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    briefs = ResearchBriefService(session).list_briefs(limit)
+    return [_serialize_research_brief(brief) for brief in briefs]
+
+
+@router.get("/briefs/{brief_id}", response_model=ResearchBriefDetail)
+def get_research_brief(
+    brief_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    brief = ResearchBriefService(session).get_brief(brief_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="Research brief not found")
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get(
+    "/briefs/{brief_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_research_brief_markdown(
+    brief_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    brief = ResearchBriefService(session).get_brief(brief_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="Research brief not found")
+    return PlainTextResponse(brief.markdown_export or "", media_type="text/markdown")
 
 
 def _serialize_job(job: Job) -> JobRead:
