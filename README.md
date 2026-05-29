@@ -65,6 +65,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Idea progress summaries that aggregate proposal, experiment, analysis, task, blocker, and recommended-next-step state.
 - Idea research packets that bundle the latest artifacts, open tasks, graph edge summary, and Markdown context for a single idea.
+- Idea readiness scoring that explains whether an idea is ready for deeper execution.
 - Idea decision memos that record pursue/revise/park/reject rationale, risks, evidence, next commitments, and graph links.
 - Follow-up task generation from idea decision memo commitments.
 - Idea assumption audits that expose falsifiable assumptions, validation signals, risk levels, and source artifacts.
@@ -176,7 +177,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the tool manifest, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, project overview, advisor brief, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the tool manifest, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, readiness score, project overview, advisor brief, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -218,6 +219,7 @@ POST /research/experiment-analyses/{analysis_id}/tasks
 POST /research/ideas/{idea_id}/refine
 GET  /research/ideas/{idea_id}/progress
 GET  /research/ideas/{idea_id}/research-packet
+GET  /research/ideas/{idea_id}/readiness
 POST /research/ideas/{idea_id}/decision-memo
 GET  /research/ideas/{idea_id}/decision-memos
 GET  /research/ideas/{idea_id}/decision-memos/{memo_id}

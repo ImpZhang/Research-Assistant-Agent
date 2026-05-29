@@ -60,6 +60,7 @@ from backend.research.schemas import (
     IdeaDecisionMemoRead,
     IdeaLineageResponse,
     IdeaProgressResponse,
+    IdeaReadinessResponse,
     IdeaResearchPacketResponse,
     IdeaPortfolioComparisonRequest,
     IdeaPortfolioComparisonResponse,
@@ -185,6 +186,7 @@ def status() -> ProjectStatus:
             "idea_ranking_portfolio",
             "idea_progress_summary",
             "idea_research_packet",
+            "idea_readiness_scoring",
             "idea_decision_memos",
             "idea_decision_task_generation",
             "idea_assumption_audits",
@@ -315,6 +317,13 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/ideas/{idea_id}/research-packet",
             output_model="IdeaResearchPacketResponse",
+        ),
+        ToolManifestItem(
+            name="get_idea_readiness",
+            description="Score whether an idea is ready for deeper execution.",
+            method="GET",
+            path="/research/ideas/{idea_id}/readiness",
+            output_model="IdeaReadinessResponse",
         ),
         ToolManifestItem(
             name="create_idea_decision_memo",
@@ -2083,6 +2092,257 @@ def _render_idea_research_packet_markdown(
         "Use this packet as the first context block for advisor discussion, MCP tools, "
         "or an external planning agent."
     )
+    return "\n".join(lines).strip() + "\n"
+
+
+@router.get("/ideas/{idea_id}/readiness", response_model=IdeaReadinessResponse)
+def get_idea_readiness(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> IdeaReadinessResponse:
+    idea = IdeaService(session).get_idea(idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    matrices = _latest_for_idea(session, RelatedWorkMatrix, idea_id, 5)
+    drafts = _latest_for_idea(session, ProposalDraft, idea_id, 5)
+    reviews = _latest_for_idea(session, ProposalReview, idea_id, 5)
+    experiment_plans = _latest_for_idea(session, ExperimentPlan, idea_id, 5)
+    experiment_runs = _latest_for_idea(session, ExperimentRun, idea_id, 5)
+    experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 5)
+    decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea_id, 5)
+    assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea_id, 5)
+    novelty_checks = _latest_for_idea(session, NoveltyCheck, idea_id, 5)
+    tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
+
+    latest_matrix = matrices[0] if matrices else None
+    latest_review = reviews[0] if reviews else None
+    latest_analysis = experiment_analyses[0] if experiment_analyses else None
+    latest_memo = decision_memos[0] if decision_memos else None
+    latest_audit = assumption_audits[0] if assumption_audits else None
+    latest_novelty = novelty_checks[0] if novelty_checks else None
+
+    evidence_count = len(idea.evidence_ids_json or [])
+    missing_search_count = len(latest_matrix.missing_searches_json or []) if latest_matrix else 0
+    high_risk_assumptions = [
+        item
+        for item in (latest_audit.assumptions_json if latest_audit else [])
+        if item.get("risk_level") == "high"
+    ]
+    open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
+    blocked_tasks = [task for task in tasks if task.status == "blocked"]
+
+    breakdown = {
+        "evidence": {
+            "score": _clamp(evidence_count / 3),
+            "signal": f"{evidence_count} linked evidence records",
+            "weight": 0.15,
+        },
+        "novelty": {
+            "score": _readiness_novelty_score(latest_matrix, latest_novelty),
+            "signal": _readiness_novelty_signal(latest_matrix, latest_novelty),
+            "weight": 0.15,
+        },
+        "proposal": {
+            "score": latest_review.readiness_score if latest_review else (0.45 if drafts else 0.1),
+            "signal": latest_review.decision if latest_review else "no proposal review",
+            "weight": 0.18,
+        },
+        "experiment": {
+            "score": latest_analysis.confidence
+            if latest_analysis
+            else (0.45 if experiment_runs else (0.3 if experiment_plans else 0.1)),
+            "signal": latest_analysis.decision if latest_analysis else "no experiment analysis",
+            "weight": 0.18,
+        },
+        "decision": {
+            "score": _readiness_decision_score(latest_memo),
+            "signal": latest_memo.decision if latest_memo else "no decision memo",
+            "weight": 0.14,
+        },
+        "assumptions": {
+            "score": _readiness_assumption_score(latest_audit),
+            "signal": f"{len(high_risk_assumptions)} high-risk assumptions",
+            "weight": 0.12,
+        },
+        "task_health": {
+            "score": _readiness_task_score(open_tasks, blocked_tasks),
+            "signal": f"{len(blocked_tasks)} blocked of {len(open_tasks)} open tasks",
+            "weight": 0.08,
+        },
+    }
+    readiness_score = round(
+        sum(item["score"] * item["weight"] for item in breakdown.values()),
+        4,
+    )
+    blockers = _readiness_blockers(
+        latest_matrix=latest_matrix,
+        latest_review=latest_review,
+        latest_analysis=latest_analysis,
+        latest_memo=latest_memo,
+        latest_audit=latest_audit,
+        blocked_tasks=blocked_tasks,
+        missing_search_count=missing_search_count,
+        high_risk_assumptions=high_risk_assumptions,
+    )
+    decision = _readiness_decision(readiness_score, latest_memo, blockers)
+    markdown_export = _render_idea_readiness_markdown(
+        idea=idea,
+        readiness_score=readiness_score,
+        decision=decision,
+        breakdown=breakdown,
+        blockers=blockers,
+    )
+    return IdeaReadinessResponse(
+        idea=_serialize_idea(idea),
+        readiness_score=readiness_score,
+        decision=decision,
+        score_breakdown=breakdown,
+        blockers=blockers,
+        markdown_export=markdown_export,
+        message=f"Scored readiness for idea {idea.id}.",
+    )
+
+
+def _clamp(value: float) -> float:
+    return round(max(0.0, min(float(value), 1.0)), 4)
+
+
+def _readiness_novelty_score(
+    matrix: RelatedWorkMatrix | None,
+    novelty: NoveltyCheck | None,
+) -> float:
+    if matrix is None and novelty is None:
+        return 0.15
+    score = 0.75
+    if matrix:
+        score += 0.2
+        score -= min(len(matrix.missing_searches_json or []) * 0.04, 0.35)
+    if novelty:
+        risk_penalty = {"low": 0.0, "medium": 0.15, "high": 0.35, "unknown": 0.2}
+        score -= risk_penalty.get(novelty.risk_level, 0.15)
+    return _clamp(score)
+
+
+def _readiness_novelty_signal(
+    matrix: RelatedWorkMatrix | None,
+    novelty: NoveltyCheck | None,
+) -> str:
+    pieces = []
+    if matrix:
+        pieces.append(
+            f"{len(matrix.items_json or [])} related rows; "
+            f"{len(matrix.missing_searches_json or [])} missing searches"
+        )
+    if novelty:
+        pieces.append(f"novelty risk={novelty.risk_level}")
+    return "; ".join(pieces) if pieces else "no novelty screen"
+
+
+def _readiness_decision_score(memo: IdeaDecisionMemo | None) -> float:
+    if memo is None:
+        return 0.25
+    return {"pursue": 1.0, "revise": 0.65, "park": 0.25, "reject": 0.0}.get(
+        memo.decision,
+        0.5,
+    )
+
+
+def _readiness_assumption_score(audit: IdeaAssumptionAudit | None) -> float:
+    if audit is None:
+        return 0.25
+    assumptions = audit.assumptions_json or []
+    if not assumptions:
+        return 0.35
+    high = len([item for item in assumptions if item.get("risk_level") == "high"])
+    medium = len([item for item in assumptions if item.get("risk_level") == "medium"])
+    penalty = min((high * 0.16) + (medium * 0.04), 0.8)
+    return _clamp(1.0 - penalty)
+
+
+def _readiness_task_score(
+    open_tasks: list[ResearchTask],
+    blocked_tasks: list[ResearchTask],
+) -> float:
+    if not open_tasks:
+        return 0.45
+    return _clamp(1.0 - (len(blocked_tasks) / len(open_tasks)))
+
+
+def _readiness_blockers(
+    *,
+    latest_matrix: RelatedWorkMatrix | None,
+    latest_review: ProposalReview | None,
+    latest_analysis: ExperimentAnalysis | None,
+    latest_memo: IdeaDecisionMemo | None,
+    latest_audit: IdeaAssumptionAudit | None,
+    blocked_tasks: list[ResearchTask],
+    missing_search_count: int,
+    high_risk_assumptions: list[dict],
+) -> list[str]:
+    blockers = []
+    if latest_matrix is None:
+        blockers.append("No related-work matrix has been generated.")
+    elif missing_search_count:
+        blockers.append(f"{missing_search_count} related-work searches are still missing.")
+    if latest_review is None:
+        blockers.append("No proposal readiness review has been recorded.")
+    if latest_analysis is None:
+        blockers.append("No experiment analysis has tested the latest execution signal.")
+    if latest_memo is None:
+        blockers.append("No decision memo records whether to pursue, revise, park, or reject.")
+    elif latest_memo.decision in {"park", "reject"}:
+        blockers.append(f"Latest decision memo says to {latest_memo.decision}.")
+    if latest_audit is None:
+        blockers.append("No assumption audit has exposed falsification conditions.")
+    if high_risk_assumptions:
+        blockers.append(f"{len(high_risk_assumptions)} high-risk assumptions remain open.")
+    for task in blocked_tasks[:5]:
+        blockers.append(f"Blocked task: {task.title}")
+    return blockers[:12]
+
+
+def _readiness_decision(
+    readiness_score: float,
+    memo: IdeaDecisionMemo | None,
+    blockers: list[str],
+) -> str:
+    if memo and memo.decision in {"reject", "park"}:
+        return memo.decision
+    if readiness_score >= 0.75 and len(blockers) <= 2:
+        return "ready_for_execution"
+    if readiness_score >= 0.55:
+        return "needs_targeted_work"
+    return "needs_work"
+
+
+def _render_idea_readiness_markdown(
+    *,
+    idea: Idea,
+    readiness_score: float,
+    decision: str,
+    breakdown: dict[str, Any],
+    blockers: list[str],
+) -> str:
+    lines = [
+        f"# Idea Readiness: {idea.title}",
+        "",
+        f"- Idea ID: `{idea.id}`",
+        f"- Readiness Score: {readiness_score:.4f}",
+        f"- Decision: `{decision}`",
+        "",
+        "## Score Breakdown",
+        "",
+    ]
+    for key, item in breakdown.items():
+        lines.append(
+            f"- {key}: score={item['score']:.4f} weight={item['weight']} signal={item['signal']}"
+        )
+    lines.extend(["", "## Blockers", ""])
+    if blockers:
+        lines.extend(f"- {blocker}" for blocker in blockers)
+    else:
+        lines.append("- No blocking readiness gaps found.")
     return "\n".join(lines).strip() + "\n"
 
 

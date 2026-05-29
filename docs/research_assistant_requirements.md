@@ -763,6 +763,12 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - 必须包含 latest decision memo 与 assumption audit 的摘要入口。
 - 用于导师讨论、MCP tool 或外部 planner 的第一段上下文，而不是让调用方自己拼多个端点。
 
+系统需要提供 idea readiness scoring：
+
+- 综合 evidence、novelty、proposal review、experiment analysis、decision memo、assumption audit 和 task health。
+- 输出总分、决策标签、score breakdown、blockers 和 Markdown report。
+- 用于判断一个 idea 是否 ready_for_execution，还是需要 targeted work、park 或 reject。
+
 系统需要提供 project progress overview：
 
 - 聚合全部 idea status、open tasks、blocked tasks、recent experiment analyses 和 recommended actions。

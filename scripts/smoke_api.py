@@ -113,6 +113,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include job cancel/retry controls")
     if "idea_research_packet" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea research packet")
+    if "idea_readiness_scoring" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea readiness scoring")
     if "idea_decision_memos" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision memos")
     if "idea_decision_task_generation" not in status["implemented_capabilities"]:
@@ -128,6 +130,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include job retry tool")
     if "get_idea_research_packet" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea research packet tool")
+    if "get_idea_readiness" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea readiness tool")
     if "create_idea_decision_memo" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea decision memo tool")
     if "create_tasks_from_idea_decision_memo" not in manifest_names:
@@ -528,6 +532,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea research packet markdown did not include decision memo")
     if assumption_audit["id"] not in research_packet["markdown_export"]:
         raise RuntimeError("idea research packet markdown did not include assumption audit")
+    readiness = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/readiness"),
+        "idea readiness",
+    )
+    if readiness["readiness_score"] <= 0:
+        raise RuntimeError("idea readiness did not return a positive score")
+    if "## Score Breakdown" not in readiness["markdown_export"]:
+        raise RuntimeError("idea readiness markdown did not include score breakdown")
     overview = require_ok(client.get("/research/progress/overview"), "research progress overview")
     if overview["idea_count"] < 1:
         raise RuntimeError("research overview did not include ideas")
@@ -771,6 +783,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "progress_open_task_count": progress["artifact_counts"]["open_tasks"],
         "progress_recommended_next_step": progress["recommended_next_step"],
         "research_packet_markdown_chars": len(research_packet["markdown_export"]),
+        "readiness_score": readiness["readiness_score"],
+        "readiness_decision": readiness["decision"],
         "overview_idea_count": overview["idea_count"],
         "overview_open_task_count": overview["task_summary"]["open_task_count"],
         "advisor_brief_id": advisor_brief["id"],

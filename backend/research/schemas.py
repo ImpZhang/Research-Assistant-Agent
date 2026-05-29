@@ -624,6 +624,16 @@ class IdeaResearchPacketResponse(BaseModel):
     message: str
 
 
+class IdeaReadinessResponse(BaseModel):
+    idea: IdeaRead
+    readiness_score: float = 0.0
+    decision: str = "needs_work"
+    score_breakdown: dict[str, Any] = Field(default_factory=dict)
+    blockers: list[str] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ResearchOverviewResponse(BaseModel):
     idea_count: int = 0
     status_counts: dict[str, int] = Field(default_factory=dict)

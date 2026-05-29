@@ -1087,6 +1087,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/ideas/{idea_id}/research-packet` 面向导师讨论、MCP tool 和外部 planner，聚合 latest artifacts、open tasks、graph edge summary 和 Markdown context。它不替代 lineage/progress，而是提供一个“拿来就能作为上下文”的单 idea packet，避免调用方每次自行拼接多个端点。
 
+`/ideas/{idea_id}/readiness` 将 evidence、novelty、proposal review、experiment analysis、decision memo、assumption audit 和 task health 转成解释型 readiness score。响应包含总分、决策标签、score breakdown、blockers 和 Markdown report，用于判断是否可以继续深入执行，或者需要 targeted work、park、reject。
+
 `/progress/overview` 聚合项目级进度：idea status counts、open task summary、blocked tasks、recent experiment analyses、recommended actions 和 Markdown overview。它用于 dashboard 首页和后续 MCP/agent planner 的第一跳入口。
 
 `/briefs` 将项目级或 idea-set 状态保存为 `ResearchBrief` artifact，包含 idea list、recent experiment decisions、highest-priority open tasks、discussion prompts 和 Markdown export。它是组会、导师沟通和后续 MCP 报告导出的稳定快照。
@@ -1121,6 +1123,7 @@ POST /research/ideas/{idea_id}/experiment-plan
 GET  /research/ideas/{idea_id}/experiment-plans
 GET  /research/ideas/{idea_id}/progress
 GET  /research/ideas/{idea_id}/research-packet
+GET  /research/ideas/{idea_id}/readiness
 GET  /research/progress/overview
 GET  /research/tools/manifest
 POST /research/briefs

@@ -26,6 +26,7 @@ def test_research_status() -> None:
     assert "tool_manifest" in body["implemented_capabilities"]
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
     assert "idea_research_packet" in body["implemented_capabilities"]
+    assert "idea_readiness_scoring" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
 
@@ -42,6 +43,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "search_research_context" in names
     assert "get_project_progress_overview" in names
     assert "get_idea_research_packet" in names
+    assert "get_idea_readiness" in names
     assert "create_idea_decision_memo" in names
     assert "create_tasks_from_idea_decision_memo" in names
     assert "create_idea_assumption_audit" in names
@@ -878,6 +880,21 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "idea_has_assumption_audit" in packet_body["graph_edge_summary"]
     assert "# Idea Research Packet:" in packet_body["markdown_export"]
     assert "## Packet Use" in packet_body["markdown_export"]
+
+    readiness = client.get(f"/research/ideas/{idea_id}/readiness")
+    assert readiness.status_code == 200
+    readiness_body = readiness.json()
+    assert readiness_body["idea"]["id"] == idea_id
+    assert readiness_body["readiness_score"] > 0
+    assert readiness_body["decision"] in {
+        "ready_for_execution",
+        "needs_targeted_work",
+        "needs_work",
+        "park",
+        "reject",
+    }
+    assert "proposal" in readiness_body["score_breakdown"]
+    assert "# Idea Readiness:" in readiness_body["markdown_export"]
 
     overview = client.get("/research/progress/overview")
     assert overview.status_code == 200
