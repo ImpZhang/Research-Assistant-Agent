@@ -147,6 +147,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     workbench = require_ok(client.get("/workbench"), "workbench")
     if "workflow_job_cancel_retry_controls" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include job cancel/retry controls")
+    if "task_execution_controls" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include task execution controls")
+    if "workbench_task_board_controls" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include workbench task board controls")
     if "idea_research_packet" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea research packet")
     if "idea_readiness_scoring" not in status["implemented_capabilities"]:
@@ -204,6 +208,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea decision task tool")
     if "create_tasks_from_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness task tool")
+    if "list_research_tasks" not in manifest_names:
+        raise RuntimeError("tool manifest did not include task listing tool")
+    if "update_research_task" not in manifest_names:
+        raise RuntimeError("tool manifest did not include task update tool")
     if "create_idea_assumption_audit" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea assumption audit tool")
     bridge_names = {tool["name"] for tool in tool_bridge["tools"]}

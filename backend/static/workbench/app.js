@@ -12,6 +12,7 @@ const state = {
   latestDecisionMemoId: "",
   latestAssumptionAuditId: "",
   latestTaskIds: [],
+  taskBoardItems: [],
   latestTaskSnapshotId: "",
   latestResearchPlanId: "",
   researchProfile: null,
@@ -675,6 +676,82 @@ async function saveTaskSnapshot() {
   }
 }
 
+function fillTaskSelect(tasks) {
+  const select = $("taskSelect");
+  select.innerHTML = "";
+  for (const task of tasks) {
+    const option = document.createElement("option");
+    option.value = task.id;
+    option.textContent = `${task.priority}/${task.status} ${task.title}`.slice(0, 96);
+    select.appendChild(option);
+  }
+}
+
+function renderTaskBoardMarkdown(tasks) {
+  const lines = ["# Workbench Task Board", ""];
+  if (!tasks.length) {
+    lines.push("- No tasks found.");
+    return lines.join("\n");
+  }
+  for (const task of tasks) {
+    lines.push(
+      `- \`${task.id}\` \`${task.priority}\` \`${task.status}\` owner=\`${task.owner_type}\` ${task.title}`,
+    );
+    if (task.due_phase) {
+      lines.push(`  - due_phase: ${task.due_phase}`);
+    }
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+async function loadTaskBoard() {
+  renderResult("workflowResult", "Loading task board...", "warn");
+  try {
+    const params = new URLSearchParams({ limit: "50" });
+    if (state.latestIdeaId) {
+      params.set("idea_id", state.latestIdeaId);
+    }
+    if ($("taskStatusFilter").value) {
+      params.set("status", $("taskStatusFilter").value);
+    }
+    const tasks = await api(`/research/tasks?${params.toString()}`);
+    state.taskBoardItems = tasks;
+    state.latestTaskIds = tasks.map((task) => task.id);
+    fillTaskSelect(tasks);
+    $("dossierPreview").textContent = renderTaskBoardMarkdown(tasks);
+    renderResult("workflowResult", `Loaded ${tasks.length} tasks into the workbench task board.`);
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function updateSelectedTask(status) {
+  const taskId = $("taskSelect").value || state.latestTaskIds[0];
+  if (!taskId) {
+    renderResult("workflowResult", "Load a task board before updating a task.", "warn");
+    return;
+  }
+  renderResult("workflowResult", `Updating task <code>${escapeHtml(taskId)}</code>...`, "warn");
+  try {
+    const task = await api(`/research/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status,
+        note: `Marked ${status} from the workbench task board.`,
+        created_by: "workbench",
+      }),
+    });
+    renderResult(
+      "workflowResult",
+      `Updated task <code>${escapeHtml(task.id)}</code> to <strong>${escapeHtml(task.status)}</strong>.`,
+    );
+    await loadTaskBoard();
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function createExperimentRun() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -1148,6 +1225,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("proposalRevisionButton").addEventListener("click", reviseProposalDraft);
   $("taskBacklogButton").addEventListener("click", createTaskBacklog);
   $("taskSnapshotButton").addEventListener("click", saveTaskSnapshot);
+  $("taskBoardButton").addEventListener("click", loadTaskBoard);
+  $("startTaskButton").addEventListener("click", () => updateSelectedTask("doing"));
+  $("completeTaskButton").addEventListener("click", () => updateSelectedTask("done"));
+  $("blockTaskButton").addEventListener("click", () => updateSelectedTask("blocked"));
   $("experimentRunButton").addEventListener("click", createExperimentRun);
   $("experimentAnalysisButton").addEventListener("click", analyzeExperimentRun);
   $("analysisTasksButton").addEventListener("click", createAnalysisTasks);

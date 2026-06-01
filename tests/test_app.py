@@ -32,6 +32,8 @@ def test_research_status() -> None:
     assert "research_plan_progress_integration" in body["implemented_capabilities"]
     assert "tool_manifest" in body["implemented_capabilities"]
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
+    assert "task_execution_controls" in body["implemented_capabilities"]
+    assert "workbench_task_board_controls" in body["implemented_capabilities"]
     assert "idea_research_packet" in body["implemented_capabilities"]
     assert "idea_readiness_scoring" in body["implemented_capabilities"]
     assert "idea_readiness_task_generation" in body["implemented_capabilities"]
@@ -62,6 +64,8 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "export_idea_bundle" in names
     assert "get_idea_readiness" in names
     assert "create_tasks_from_idea_readiness" in names
+    assert "list_research_tasks" in names
+    assert "update_research_task" in names
     assert "get_project_readiness_overview" in names
     assert "create_idea_decision_memo" in names
     assert "create_tasks_from_idea_decision_memo" in names
@@ -291,6 +295,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "researchPlanButton" in response.text
     assert "researchPlanTasksButton" in response.text
     assert "readinessTasksButton" in response.text
+    assert "taskBoardButton" in response.text
+    assert "taskSelect" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -312,6 +318,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/proposal-drafts/${state.latestProposalDraftId}/revise" in script.text
     assert "/revisions/${state.latestProposalRevisionId}/tasks" in script.text
     assert "/research/tasks/snapshots" in script.text
+    assert "/research/tasks?${params.toString()}" in script.text
+    assert "/research/tasks/${taskId}" in script.text
     assert "/research/experiment-plans/${state.latestExperimentPlanId}/runs" in script.text
     assert "/research/experiment-runs/${state.latestExperimentRunId}/analysis" in script.text
     assert "/research/experiment-analyses/${state.latestExperimentAnalysisId}/tasks" in script.text

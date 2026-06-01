@@ -783,6 +783,8 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 
 系统需要支持 readiness blocker task generation：readiness 评分产出的 blockers 不能只停留在报告里，应能一键转成 task board 任务，并带上 readiness_score、decision、owner_type=idea_readiness、due_phase=readiness_follow_up 和图边 `idea_readiness_creates_task`，保证“评分 -> 阻塞项 -> 可执行任务”闭环。
 
+Workbench 需要提供最小可用 task board：能按当前 idea 和状态读取任务，选择任务，并把任务更新为 doing、done 或 blocked。所有操作必须走同一套 `/research/tasks` API，避免前端维护第二份任务状态。
+
 系统需要提供 advisor brief：
 
 - 将选定 idea 或项目级状态固化成 Markdown brief。

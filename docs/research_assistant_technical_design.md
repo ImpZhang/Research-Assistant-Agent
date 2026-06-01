@@ -1065,6 +1065,8 @@ GET  /research/ideas/{idea_id}/feedback
 
 `/tasks/{task_id}/events` 保存任务执行历史。创建 backlog 时自动写入 `created` event；`PATCH /tasks/{task_id}` 会写入 `task_updated` event；研究者或后续 agent 可以追加 `note/progress/blocker/decision/evidence` event，记录为什么任务推进、阻塞或完成。
 
+Workbench task board 使用同一组 task API：`GET /tasks` 读取当前 idea 或全局任务，`PATCH /tasks/{task_id}` 将选中任务推进为 doing/done/blocked。它不复制 task 状态逻辑，只是给研究者一个最短路径，把自动生成的任务真正推进起来。
+
 `/experiment-plans/{plan_id}/runs` 是第一版实验执行记录：它把 experiment plan 的一次执行落成 `ExperimentRun` artifact，保存 task id、dataset snapshot、parameters、metric results、artifact links、conclusion、notes 和 Markdown run report。创建或更新 run 会写入关联 task 的 `experiment_run_created/experiment_run_updated` event，让任务进展和实验结果在同一条执行日志里可追溯。
 
 `/experiment-runs/{run_id}/analysis` 是第一版实验结果分析：它读取 run status、metrics、conclusion、baseline/artifact 完整性，生成 `ExperimentAnalysis` artifact，包括 decision、confidence、metric interpretation、key findings、concerns、next actions 和 Markdown report。创建 analysis 会写入关联 task 的 `experiment_analysis_created` event，后续可替换为更强 judge model 或统计检验模块。
