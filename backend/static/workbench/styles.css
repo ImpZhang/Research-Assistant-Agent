@@ -31,6 +31,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -237,6 +238,8 @@ button:disabled {
 
 input[type="file"],
 input[type="number"],
+input[type="text"],
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
@@ -256,6 +259,24 @@ textarea {
   grid-template-columns: 120px 140px 170px auto;
   gap: 12px;
   align-items: end;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.wide-field {
+  grid-column: span 2;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .controls-grid label {
@@ -388,8 +409,13 @@ code {
   .tool-row,
   .dossier-actions,
   .controls-grid,
+  .profile-grid,
   .two-column {
     grid-template-columns: 1fr;
+  }
+
+  .wide-field {
+    grid-column: auto;
   }
 
   .topbar {

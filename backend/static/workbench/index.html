@@ -20,6 +20,7 @@
         <nav class="nav-list" aria-label="Workbench sections">
           <a href="#ingest">Ingest</a>
           <a href="#workflow">Workflow</a>
+          <a href="#profile">Profile</a>
           <a href="#search">Search</a>
           <a href="#jobs">Jobs</a>
           <a href="#dossier">Dossier</a>
@@ -79,6 +80,69 @@
             <div id="jobProgressBar" class="job-meter-fill"></div>
           </div>
           <div id="workflowResult" class="result-block muted">No workflow job yet.</div>
+        </section>
+
+        <section id="profile" class="band">
+          <div class="section-heading">
+            <h3>Research Profile</h3>
+            <p>Keep ranking, briefs, and planning aligned with your goals and constraints.</p>
+          </div>
+          <form id="profileForm" class="profile-grid">
+            <label>
+              Name
+              <input id="profileName" type="text" value="Default Research Profile" />
+            </label>
+            <label>
+              Domains
+              <input id="profileDomains" type="text" placeholder="geolocation, VLM, RAG" />
+            </label>
+            <label>
+              Target venues
+              <input id="profileVenues" type="text" placeholder="NeurIPS, CVPR, ACL" />
+            </label>
+            <label>
+              Risk tolerance
+              <select id="profileRisk">
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <label class="wide-field">
+              Active questions
+              <textarea id="profileQuestions" rows="2">evidence grounded workflow, diagnostic benchmark</textarea>
+            </label>
+            <label class="wide-field">
+              Method preferences
+              <textarea id="profileMethods" rows="2">diagnostic benchmark, graph context, lightweight evaluation</textarea>
+            </label>
+            <label class="wide-field">
+              Resource constraints
+              <textarea id="profileConstraints" rows="2">limited GPU budget, reproducible local experiments</textarea>
+            </label>
+            <label>
+              Timeline
+              <input id="profileTimeline" type="text" placeholder="90 days" />
+            </label>
+            <label>
+              Avoid
+              <input id="profileAvoid" type="text" placeholder="large proprietary dataset" />
+            </label>
+            <label>
+              Weights
+              <input id="profileWeights" type="text" placeholder="publication_potential=0.5, resource_efficiency=0.4" />
+            </label>
+            <label class="wide-field">
+              Notes
+              <textarea id="profileNotes" rows="2"></textarea>
+            </label>
+            <div class="profile-actions">
+              <button id="loadProfileButton" type="button">Load Profile</button>
+              <button id="saveProfileButton" type="submit">Save Profile</button>
+              <button id="previewProfileButton" type="button">Preview Markdown</button>
+            </div>
+          </form>
+          <div id="profileResult" class="result-block muted">No research profile loaded.</div>
         </section>
 
         <section id="search" class="band two-column">

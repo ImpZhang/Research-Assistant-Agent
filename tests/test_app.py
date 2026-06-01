@@ -208,9 +208,14 @@ def test_workbench_static_assets_are_served() -> None:
     assert "Research Assistant Workbench" in response.text
     assert "/workbench-assets/app.js" in response.text
     assert "ideaBundleButton" in response.text
+    assert "profileForm" in response.text
+    assert "profileRisk" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
+    assert "/research/profile" in script.text
+    assert "/research/profile/export/markdown" in script.text
+    assert "saveResearchProfile" in script.text
     assert "/research/workflows/literature-to-ideas/async" in script.text
     assert "/research/jobs/${jobId}/artifacts" in script.text
     assert "/research/jobs/${jobId}/${action}" in script.text

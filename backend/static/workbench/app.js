@@ -13,6 +13,7 @@ const state = {
   latestAssumptionAuditId: "",
   latestTaskIds: [],
   latestTaskSnapshotId: "",
+  researchProfile: null,
   pollTimer: null,
 };
 
@@ -49,6 +50,32 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+function parseCsv(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatCsv(items) {
+  return (items || []).join(", ");
+}
+
+function parseWeights(value) {
+  return Object.fromEntries(
+    parseCsv(value)
+      .map((item) => item.split("=").map((part) => part.trim()))
+      .filter(([key, raw]) => key && raw && !Number.isNaN(Number(raw)))
+      .map(([key, raw]) => [key, Number(raw)]),
+  );
+}
+
+function formatWeights(weights) {
+  return Object.entries(weights || {})
+    .map(([key, value]) => `${key}=${value}`)
+    .join(", ");
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, options);
   const text = await response.text();
@@ -71,6 +98,85 @@ async function checkHealth() {
     setConnection(true, `${body.service} ready`);
   } catch (error) {
     setConnection(false, error.message);
+  }
+}
+
+function fillProfileForm(profile) {
+  $("profileName").value = profile.name || "Default Research Profile";
+  $("profileDomains").value = formatCsv(profile.primary_domains);
+  $("profileQuestions").value = formatCsv(profile.active_questions);
+  $("profileVenues").value = formatCsv(profile.target_venues);
+  $("profileMethods").value = formatCsv(profile.methodological_preferences);
+  $("profileConstraints").value = formatCsv(profile.resource_constraints);
+  $("profileRisk").value = profile.risk_tolerance || "medium";
+  $("profileTimeline").value = profile.timeline_horizon || "";
+  $("profileAvoid").value = formatCsv(profile.negative_preferences);
+  $("profileWeights").value = formatWeights(profile.evaluation_weights);
+  $("profileNotes").value = profile.notes || "";
+}
+
+function profilePayload() {
+  return {
+    name: $("profileName").value.trim() || "Default Research Profile",
+    primary_domains: parseCsv($("profileDomains").value),
+    active_questions: parseCsv($("profileQuestions").value),
+    target_venues: parseCsv($("profileVenues").value),
+    methodological_preferences: parseCsv($("profileMethods").value),
+    resource_constraints: parseCsv($("profileConstraints").value),
+    risk_tolerance: $("profileRisk").value || "medium",
+    timeline_horizon: $("profileTimeline").value.trim(),
+    negative_preferences: parseCsv($("profileAvoid").value),
+    evaluation_weights: parseWeights($("profileWeights").value),
+    notes: $("profileNotes").value.trim(),
+    created_by: "workbench",
+  };
+}
+
+async function loadResearchProfile() {
+  renderResult("profileResult", "Loading research profile...", "warn");
+  try {
+    const body = await api("/research/profile");
+    state.researchProfile = body;
+    fillProfileForm(body);
+    $("dossierPreview").textContent = body.markdown_export || "No profile markdown yet.";
+    renderResult(
+      "profileResult",
+      `Loaded profile <code>${escapeHtml(body.name)}</code> with ${body.primary_domains.length} domains and ${body.resource_constraints.length} constraints.`,
+    );
+  } catch (error) {
+    renderResult("profileResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function saveResearchProfile(event) {
+  event.preventDefault();
+  renderResult("profileResult", "Saving research profile...", "warn");
+  try {
+    const body = await api("/research/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profilePayload()),
+    });
+    state.researchProfile = body;
+    fillProfileForm(body);
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "profileResult",
+      `Saved profile <code>${escapeHtml(body.name)}</code>. Ranking and briefs will use these constraints.`,
+    );
+  } catch (error) {
+    renderResult("profileResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function previewResearchProfile() {
+  renderResult("profileResult", "Loading profile markdown...", "warn");
+  try {
+    const markdown = await api("/research/profile/export/markdown");
+    $("dossierPreview").textContent = markdown;
+    renderResult("profileResult", "Loaded profile Markdown preview.");
+  } catch (error) {
+    renderResult("profileResult", escapeHtml(error.message), "error");
   }
 }
 
@@ -957,6 +1063,9 @@ async function savePortfolio() {
 document.addEventListener("DOMContentLoaded", () => {
   $("uploadForm").addEventListener("submit", uploadPaper);
   $("runWorkflowButton").addEventListener("click", runWorkflow);
+  $("profileForm").addEventListener("submit", saveResearchProfile);
+  $("loadProfileButton").addEventListener("click", loadResearchProfile);
+  $("previewProfileButton").addEventListener("click", previewResearchProfile);
   $("contextSearchForm").addEventListener("submit", searchContext);
   $("literatureSearchForm").addEventListener("submit", searchLiterature);
   $("refreshJobsButton").addEventListener("click", refreshJobs);
@@ -987,5 +1096,6 @@ document.addEventListener("DOMContentLoaded", () => {
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);
   checkHealth();
+  loadResearchProfile();
   refreshJobs();
 });
