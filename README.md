@@ -74,6 +74,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Idea assumption audits that expose falsifiable assumptions, validation signals, risk levels, and source artifacts.
 - Project progress overview that aggregates all ideas, open tasks, blockers, recent analyses, and recommended actions.
 - Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries.
+- Persisted research execution plans that turn profile, ranked ideas, and open tasks into 7/14+ day action plans.
 - MCP/tool-ready manifest for stable research workflow APIs.
 - MCP-ready HTTP tool bridge spec generated from the stable tool manifest.
 - Research idea portfolio ranking with profile-aware weighting, lineage deduplication, and weighted score breakdowns.
@@ -181,7 +182,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the research profile, tool manifest, and MCP-ready bridge spec, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, readiness score, idea bundle export, project readiness overview, project overview, advisor brief, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the research profile, tool manifest, and MCP-ready bridge spec, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, readiness score, idea bundle export, project readiness overview, project overview, advisor brief, research execution plan, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -203,6 +204,10 @@ POST /research/briefs
 GET  /research/briefs
 GET  /research/briefs/{brief_id}
 GET  /research/briefs/{brief_id}/export/markdown
+POST /research/plans
+GET  /research/plans
+GET  /research/plans/{plan_id}
+GET  /research/plans/{plan_id}/export/markdown
 
 POST /research/papers/{paper_id}/card/extract-structured
 GET  /research/papers/{paper_id}/card/export/markdown

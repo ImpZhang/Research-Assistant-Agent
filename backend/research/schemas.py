@@ -722,6 +722,31 @@ class ResearchBriefDetail(ResearchBriefRead):
     markdown_export: str = ""
 
 
+class ResearchPlanCreate(BaseModel):
+    title: str = "Research Execution Plan"
+    horizon_days: int = 14
+    idea_ids: list[str] = Field(default_factory=list)
+    created_by: str = "researcher"
+
+
+class ResearchPlanRead(BaseModel):
+    id: str
+    title: str
+    horizon_days: int = 14
+    idea_ids: list[str] = Field(default_factory=list)
+    profile_summary: dict[str, Any] = Field(default_factory=dict)
+    plan_items: list[dict[str, Any]] = Field(default_factory=list)
+    source_ids: dict[str, Any] = Field(default_factory=dict)
+    markdown_export_chars: int = 0
+    created_by: str = "researcher"
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResearchPlanDetail(ResearchPlanRead):
+    markdown_export: str = ""
+
+
 class ToolManifestItem(BaseModel):
     name: str
     description: str

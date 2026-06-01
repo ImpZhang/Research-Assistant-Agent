@@ -1117,6 +1117,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/profile` stores durable researcher/project context: domains, active questions, target venues, methodological preferences, resource constraints, risk tolerance, negative preferences, and ranking weights. Ranking reads this profile by default, while advisor briefs include profile constraints so shortlist decisions are grounded in the user's actual research situation rather than only intrinsic idea scores.
 
+`/plans` creates persisted research execution plan snapshots. Each plan combines the current research profile, profile-aware ranked ideas, and open/blocked tasks into a 7/14+ day action plan with phases, task ids, success checks, source ids, and Markdown export. It is the planning artifact between "idea is promising" and "what should I do this week".
+
 ## 11.5 Reviews
 
 ```text
@@ -1144,6 +1146,10 @@ POST /research/briefs
 GET  /research/briefs
 GET  /research/briefs/{brief_id}
 GET  /research/briefs/{brief_id}/export/markdown
+POST /research/plans
+GET  /research/plans
+GET  /research/plans/{plan_id}
+GET  /research/plans/{plan_id}/export/markdown
 GET  /research/ideas/{idea_id}/experiment-runs
 POST /research/experiment-plans/{plan_id}/runs
 GET  /research/experiment-plans/{plan_id}/runs

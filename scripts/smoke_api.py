@@ -159,6 +159,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include MCP tool bridge spec")
     if "research_profile_constraints" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research profile constraints")
+    if "research_plan_snapshots" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include research plan snapshots")
     if "idea_decision_memos" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision memos")
     if "idea_decision_task_generation" not in status["implemented_capabilities"]:
@@ -174,6 +176,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include research profile reader")
     if "update_research_profile" not in manifest_names:
         raise RuntimeError("tool manifest did not include research profile updater")
+    if "create_research_plan" not in manifest_names:
+        raise RuntimeError("tool manifest did not include research plan creator")
     if "get_project_progress_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project progress overview tool")
     if "retry_job" not in manifest_names:
@@ -660,6 +664,24 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "## Discussion Prompts" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include discussion prompts")
+    research_plan = require_ok(
+        client.post(
+            "/research/plans",
+            json_body={
+                "title": "Smoke Research Execution Plan",
+                "horizon_days": 14,
+                "idea_ids": [refined_idea["id"]],
+                "created_by": "smoke_api",
+            },
+        ),
+        "research execution plan",
+    )
+    research_plan_markdown = require_ok(
+        client.get(f"/research/plans/{research_plan['id']}/export/markdown"),
+        "research execution plan markdown",
+    )
+    if "## Plan Items" not in research_plan_markdown:
+        raise RuntimeError("research execution plan markdown did not include plan items")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -892,6 +914,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "readiness_overview_average": readiness_overview["average_readiness"],
         "advisor_brief_id": advisor_brief["id"],
         "advisor_brief_markdown_chars": len(advisor_brief_markdown),
+        "research_plan_id": research_plan["id"],
+        "research_plan_item_count": len(research_plan["plan_items"]),
+        "research_plan_markdown_chars": len(research_plan_markdown),
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],
         "ranked_idea_count": len(ranking["ranked_ideas"]),

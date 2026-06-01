@@ -27,6 +27,7 @@ def test_research_status() -> None:
     assert body["phase"] == "phase_0_foundation"
     assert "sqlalchemy_models" in body["implemented_capabilities"]
     assert "research_profile_constraints" in body["implemented_capabilities"]
+    assert "research_plan_snapshots" in body["implemented_capabilities"]
     assert "tool_manifest" in body["implemented_capabilities"]
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
     assert "idea_research_packet" in body["implemented_capabilities"]
@@ -50,6 +51,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "search_research_context" in names
     assert "get_research_profile" in names
     assert "update_research_profile" in names
+    assert "create_research_plan" in names
     assert "get_project_progress_overview" in names
     assert "get_mcp_tool_spec" in names
     assert "get_idea_research_packet" in names
@@ -180,6 +182,36 @@ Future work should preserve researcher goals as durable project context.
     assert "## Research Profile" in brief_body["markdown_export"]
     assert "limited GPU budget" in brief_body["markdown_export"]
 
+    plan = client.post(
+        "/research/plans",
+        json={
+            "title": "Profile-Aware Execution Plan",
+            "horizon_days": 14,
+            "idea_ids": [idea_id],
+            "created_by": "pytest",
+        },
+    )
+    assert plan.status_code == 200
+    plan_body = plan.json()
+    assert plan_body["title"] == "Profile-Aware Execution Plan"
+    assert plan_body["profile_summary"]["name"] == "Pytest Research Profile"
+    assert idea_id in plan_body["idea_ids"]
+    assert plan_body["plan_items"]
+    assert "# Profile-Aware Execution Plan" in plan_body["markdown_export"]
+    assert "## Plan Items" in plan_body["markdown_export"]
+
+    listed_plans = client.get("/research/plans?limit=5")
+    assert listed_plans.status_code == 200
+    assert listed_plans.json()[0]["id"] == plan_body["id"]
+
+    fetched_plan = client.get(f"/research/plans/{plan_body['id']}")
+    assert fetched_plan.status_code == 200
+    assert fetched_plan.json()["id"] == plan_body["id"]
+
+    plan_export = client.get(f"/research/plans/{plan_body['id']}/export/markdown")
+    assert plan_export.status_code == 200
+    assert "## Source IDs" in plan_export.text
+
     reset = client.put(
         "/research/profile",
         json={
@@ -210,12 +242,14 @@ def test_workbench_static_assets_are_served() -> None:
     assert "ideaBundleButton" in response.text
     assert "profileForm" in response.text
     assert "profileRisk" in response.text
+    assert "researchPlanButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
     assert "/research/profile" in script.text
     assert "/research/profile/export/markdown" in script.text
     assert "saveResearchProfile" in script.text
+    assert "/research/plans" in script.text
     assert "/research/workflows/literature-to-ideas/async" in script.text
     assert "/research/jobs/${jobId}/artifacts" in script.text
     assert "/research/jobs/${jobId}/${action}" in script.text

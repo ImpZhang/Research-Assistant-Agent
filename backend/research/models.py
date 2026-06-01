@@ -469,6 +469,20 @@ class ResearchBrief(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="researcher")
 
 
+class ResearchPlanSnapshot(Base, TimestampMixin):
+    __tablename__ = "research_plan_snapshots"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    title: Mapped[str] = mapped_column(String(512), default="Research Execution Plan")
+    horizon_days: Mapped[int] = mapped_column(Integer, default=14)
+    idea_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    profile_summary_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    plan_items_json: Mapped[list] = mapped_column(JSON, default=list)
+    source_ids_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="researcher")
+
+
 class ResearchNode(Base, TimestampMixin):
     __tablename__ = "research_nodes"
 

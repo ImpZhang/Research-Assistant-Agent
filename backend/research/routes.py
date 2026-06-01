@@ -36,6 +36,7 @@ from backend.research.models import (
     ResearchEdge,
     ResearchGap,
     ResearchNode,
+    ResearchPlanSnapshot,
     ResearchProfile,
     Review,
     ResearchTask,
@@ -112,6 +113,9 @@ from backend.research.schemas import (
     ResearchGapRead,
     ResearchNodeRead,
     ResearchOverviewResponse,
+    ResearchPlanCreate,
+    ResearchPlanDetail,
+    ResearchPlanRead,
     ResearchProfileRead,
     ResearchProfileUpdate,
     ResearchTaskGenerateRequest,
@@ -160,6 +164,7 @@ from backend.research.services.proposal_service import ProposalDraftService
 from backend.research.services.proposal_review_service import ProposalReviewService
 from backend.research.services.proposal_revision_service import ProposalRevisionService
 from backend.research.services.related_work_service import RelatedWorkService
+from backend.research.services.research_plan_service import ResearchPlanService
 from backend.research.services.research_profile_service import (
     ResearchProfileService,
     default_research_profile_markdown,
@@ -192,6 +197,7 @@ def status() -> ProjectStatus:
             "fastapi_app",
             "sqlalchemy_models",
             "research_profile_constraints",
+            "research_plan_snapshots",
             "paper_registry_api",
             "document_ingestion_api",
             "evidence_extraction",
@@ -298,6 +304,15 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/profile",
             input_model="ResearchProfileUpdate",
             output_model="ResearchProfileRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_research_plan",
+            description="Generate a profile-aware execution plan from ranked ideas and open tasks.",
+            method="POST",
+            path="/research/plans",
+            input_model="ResearchPlanCreate",
+            output_model="ResearchPlanDetail",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -773,6 +788,77 @@ def export_research_brief_markdown(
     if brief is None:
         raise HTTPException(status_code=404, detail="Research brief not found")
     return PlainTextResponse(brief.markdown_export or "", media_type="text/markdown")
+
+
+def _serialize_research_plan(
+    plan: ResearchPlanSnapshot,
+    *,
+    include_markdown: bool = False,
+) -> ResearchPlanRead | ResearchPlanDetail:
+    payload = {
+        "id": plan.id,
+        "title": plan.title,
+        "horizon_days": plan.horizon_days,
+        "idea_ids": plan.idea_ids_json or [],
+        "profile_summary": plan.profile_summary_json or {},
+        "plan_items": plan.plan_items_json or [],
+        "source_ids": plan.source_ids_json or {},
+        "markdown_export_chars": len(plan.markdown_export or ""),
+        "created_by": plan.created_by,
+        "created_at": plan.created_at,
+        "updated_at": plan.updated_at,
+    }
+    if include_markdown:
+        return ResearchPlanDetail(**payload, markdown_export=plan.markdown_export or "")
+    return ResearchPlanRead(**payload)
+
+
+@router.post("/plans", response_model=ResearchPlanDetail)
+def create_research_plan(
+    payload: ResearchPlanCreate,
+    session: Session = Depends(get_session),
+) -> ResearchPlanDetail:
+    plan = ResearchPlanService(session).create_plan(
+        title=payload.title,
+        horizon_days=payload.horizon_days,
+        idea_ids=payload.idea_ids,
+        created_by=payload.created_by,
+    )
+    return _serialize_research_plan(plan, include_markdown=True)
+
+
+@router.get("/plans", response_model=list[ResearchPlanRead])
+def list_research_plans(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchPlanRead]:
+    plans = ResearchPlanService(session).list_plans(limit)
+    return [_serialize_research_plan(plan) for plan in plans]
+
+
+@router.get("/plans/{plan_id}", response_model=ResearchPlanDetail)
+def get_research_plan(
+    plan_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchPlanDetail:
+    plan = ResearchPlanService(session).get_plan(plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Research plan not found")
+    return _serialize_research_plan(plan, include_markdown=True)
+
+
+@router.get(
+    "/plans/{plan_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_research_plan_markdown(
+    plan_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    plan = ResearchPlanService(session).get_plan(plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Research plan not found")
+    return PlainTextResponse(plan.markdown_export or "", media_type="text/markdown")
 
 
 def _serialize_job(job: Job) -> JobRead:
