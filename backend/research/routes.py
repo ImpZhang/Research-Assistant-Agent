@@ -91,6 +91,7 @@ from backend.research.schemas import (
     LiteratureToIdeasWorkflowRequest,
     LiteratureToIdeasWorkflowResponse,
     NoveltyCheckRead,
+    NoveltyRefreshRequest,
     OpportunityRadarTaskGenerateRequest,
     PaperCreate,
     PaperCardPayload,
@@ -263,6 +264,7 @@ def status() -> ProjectStatus:
             "workflow_job_artifact_snapshot",
             "workflow_job_cancel_retry_controls",
             "literature_search_adapter",
+            "external_novelty_refresh",
             "local_embedding_index",
             "embedding_backed_context_retrieval",
             "lexical_context_retrieval",
@@ -275,7 +277,7 @@ def status() -> ProjectStatus:
         next_capabilities=[
             "external_embedding_provider",
             "learned_reranking",
-            "external_novelty_search",
+            "external_novelty_monitoring",
             "managed_mcp_server",
         ],
     )
@@ -490,6 +492,15 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/ideas/{idea_id}/assumption-audit",
             input_model="IdeaAssumptionAuditCreate",
             output_model="IdeaAssumptionAuditRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="refresh_idea_novelty_search",
+            description="Run a configurable novelty refresh using local and optional external literature search.",
+            method="POST",
+            path="/research/ideas/{idea_id}/novelty-refresh",
+            input_model="NoveltyRefreshRequest",
+            output_model="NoveltyCheckRead",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -4343,6 +4354,25 @@ def create_idea_novelty_check(
         check = NoveltyService(session).create_check(
             idea_id,
             include_external_literature=include_external,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_novelty_check(check)
+
+
+@router.post("/ideas/{idea_id}/novelty-refresh", response_model=NoveltyCheckRead)
+def refresh_idea_novelty_search(
+    idea_id: str,
+    payload: NoveltyRefreshRequest,
+    session: Session = Depends(get_session),
+) -> NoveltyCheckRead:
+    try:
+        check = NoveltyService(session).create_check(
+            idea_id,
+            include_external_literature=payload.include_external,
+            limit=payload.limit,
+            query_override=payload.query_override,
+            mode="external_refresh",
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

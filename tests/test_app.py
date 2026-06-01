@@ -50,6 +50,7 @@ def test_research_status() -> None:
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
+    assert "external_novelty_refresh" in body["implemented_capabilities"]
 
 
 def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
@@ -83,6 +84,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_idea_decision_memo" in names
     assert "create_tasks_from_idea_decision_memo" in names
     assert "create_idea_assumption_audit" in names
+    assert "refresh_idea_novelty_search" in names
     assert "create_advisor_brief" in names
     assert "analyze_experiment_run" in names
     assert "cancel_job" in names
@@ -353,6 +355,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert 'data-job-action="retry"' in script.text
     assert "/research/ideas/${state.latestIdeaId}/refine" in script.text
     assert "/research/ideas/${state.latestIdeaId}/feedback" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/novelty-refresh" in script.text
     assert "/research/ideas/${state.latestIdeaId}/related-work-matrix" in script.text
     assert "/research/ideas/${state.latestIdeaId}/proposal-draft" in script.text
     assert "/proposal-drafts/${state.latestProposalDraftId}/review" in script.text
@@ -692,6 +695,21 @@ Future work should compare generated ideas against recent preprints.
     checks = client.get(f"/research/ideas/{idea_id}/novelty-checks")
     assert checks.status_code == 200
     assert checks.json()[0]["id"] == body["id"]
+
+    refresh = client.post(
+        f"/research/ideas/{idea_id}/novelty-refresh",
+        json={
+            "include_external": True,
+            "limit": 5,
+            "query_override": "recent preprint novelty collision screening",
+        },
+    )
+    assert refresh.status_code == 200
+    refresh_body = refresh.json()
+    assert refresh_body["status"] == "completed_external_novelty_refresh"
+    assert "query_override:True" in refresh_body["checked_sources"]
+    assert "novelty_mode:external_refresh" in refresh_body["checked_sources"]
+    assert "external_literature_search_disabled" in refresh_body["missing_searches"]
 
 
 def test_related_work_matrix_persists_overlap_rows_and_markdown() -> None:

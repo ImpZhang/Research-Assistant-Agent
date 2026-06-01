@@ -1097,6 +1097,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/ideas/{idea_id}/readiness/tasks` 将 readiness blockers 转成 `ResearchTask` 记录，使用 `owner_type=idea_readiness`、`due_phase=readiness_follow_up`，并写入 `idea_readiness_creates_task` 图边。它让 readiness score 不只是评分报告，而能直接进入 task board、idea progress 和 research packet。
 
+`/ideas/{idea_id}/novelty-refresh` 复用 `NoveltyService` 与 `LiteratureSearchService`，允许传入 query override、limit 和 include_external，保存 `completed_external_novelty_refresh` 状态的 `NoveltyCheck`。它用于在 proposal、advisor brief 或 execution plan 前刷新“是否撞车”的证据，而不是只依赖 workflow 初次生成时的 novelty screen。
+
 `/readiness/overview` 对最近 ideas 批量计算 readiness summary，返回 average readiness、decision counts、top ready ideas、needs-work ideas 和 Markdown overview。它面向 dashboard 首页和选题组合管理，帮助快速判断当前项目最值得推进的方向。
 
 `/progress/overview` 聚合项目级进度：idea status counts、open task summary、blocked tasks、recent experiment analyses、recommended actions 和 Markdown overview。它用于 dashboard 首页和后续 MCP/agent planner 的第一跳入口。
@@ -1155,6 +1157,7 @@ GET  /research/ideas/{idea_id}/progress
 GET  /research/ideas/{idea_id}/research-packet
 GET  /research/ideas/{idea_id}/timeline
 GET  /research/ideas/{idea_id}/readiness
+POST /research/ideas/{idea_id}/novelty-refresh
 POST /research/ideas/{idea_id}/readiness/tasks
 GET  /research/ideas/{idea_id}/export/bundle
 GET  /research/readiness/overview

@@ -18,21 +18,30 @@ class NoveltyService:
             .all()
         )
 
-    def create_check(self, idea_id: str, include_external_literature: bool = True) -> NoveltyCheck:
+    def create_check(
+        self,
+        idea_id: str,
+        include_external_literature: bool = True,
+        *,
+        limit: int = 8,
+        query_override: str = "",
+        mode: str = "screening",
+    ) -> NoveltyCheck:
         idea = self.session.get(Idea, idea_id)
         if idea is None:
             raise ValueError("Idea not found")
 
-        query = self._build_query(idea)
+        query = " ".join(query_override.split()) or self._build_query(idea)
+        limit = max(1, min(limit, 25))
         context = RetrievalService(self.session).search_context(
             query=query,
             paper_ids=[],
-            limit=8,
+            limit=limit,
             include_graph=False,
         )
         literature = LiteratureSearchService(self.session).search(
             query=query,
-            limit=8,
+            limit=limit,
             include_external=include_external_literature,
         )
         idea_hits = [hit for hit in context.ideas if hit.item.id != idea.id]
@@ -48,7 +57,11 @@ class NoveltyService:
 
         check = NoveltyCheck(
             idea_id=idea.id,
-            status="completed_literature_screening",
+            status=(
+                "completed_external_novelty_refresh"
+                if mode == "external_refresh"
+                else "completed_literature_screening"
+            ),
             risk_level=risk_level,
             summary=self._summary(risk_level, local_overlap_score, collision_signals, literature),
             local_overlap_score=local_overlap_score,
@@ -62,6 +75,8 @@ class NoveltyService:
                 "local_idea_index",
                 "local_literature_search",
                 f"external_literature_search:{literature.external_status}",
+                f"query_override:{bool(query_override.strip())}",
+                f"novelty_mode:{mode}",
             ],
         )
         self.session.add(check)

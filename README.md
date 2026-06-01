@@ -69,6 +69,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Idea research packets that bundle the latest artifacts, open tasks, graph edge summary, and Markdown context for a single idea.
 - Idea readiness scoring that explains whether an idea is ready for deeper execution.
 - Task generation from idea readiness blockers so readiness gaps become trackable follow-up work.
+- Configurable novelty refresh for rerunning local and optional external literature collision checks on an idea.
 - Project readiness overview for comparing recent ideas by readiness decision and blockers.
 - Zip bundle export for a single idea's dossier, lineage, progress, packet, readiness, artifact Markdown, and JSON metadata.
 - Idea decision memos that record pursue/revise/park/reject rationale, risks, evidence, next commitments, and graph links.
@@ -229,6 +230,7 @@ GET  /research/papers/{paper_id}/card/export/markdown
 POST /research/gaps/mine
 POST /research/gaps/{gap_id}/ideas
 POST /research/ideas/{idea_id}/novelty-check
+POST /research/ideas/{idea_id}/novelty-refresh
 POST /research/ideas/{idea_id}/review
 POST /research/ideas/{idea_id}/experiment-plan
 GET  /research/ideas/{idea_id}/experiment-runs

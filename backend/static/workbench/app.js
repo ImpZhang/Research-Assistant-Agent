@@ -508,6 +508,31 @@ async function refineLatestIdea() {
   }
 }
 
+async function refreshNoveltySearch() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Refreshing novelty search...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/novelty-refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        include_external: true,
+        limit: 8,
+        query_override: $("refineFocus").value.trim(),
+      }),
+    });
+    renderResult(
+      "workflowResult",
+      `Novelty refresh <code>${escapeHtml(body.id)}</code>: ${escapeHtml(body.risk_level)} risk with ${body.collision_signals.length} signals.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function createRelatedWorkMatrix() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -1305,6 +1330,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("jobsTable").addEventListener("click", handleJobAction);
   $("loadDossierButton").addEventListener("click", loadDossier);
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
+  $("noveltyRefreshButton").addEventListener("click", refreshNoveltySearch);
   $("relatedWorkButton").addEventListener("click", createRelatedWorkMatrix);
   $("proposalDraftButton").addEventListener("click", createProposalDraft);
   $("proposalReviewButton").addEventListener("click", reviewProposalDraft);

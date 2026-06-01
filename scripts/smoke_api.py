@@ -193,6 +193,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea readiness task generation")
     if "idea_assumption_audits" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea assumption audits")
+    if "external_novelty_refresh" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include external novelty refresh")
     manifest_names = {tool["name"] for tool in tool_manifest["tools"]}
     if "create_advisor_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include advisor brief tool")
@@ -240,6 +242,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include task update tool")
     if "create_idea_assumption_audit" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea assumption audit tool")
+    if "refresh_idea_novelty_search" not in manifest_names:
+        raise RuntimeError("tool manifest did not include novelty refresh tool")
     bridge_names = {tool["name"] for tool in tool_bridge["tools"]}
     if "export_idea_bundle" not in bridge_names:
         raise RuntimeError("tool bridge spec did not include idea bundle export")
@@ -316,6 +320,21 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if f"- Parent Idea ID: `{source_idea_id}`" not in refined_markdown:
         raise RuntimeError("refined idea markdown did not include parent lineage")
+    novelty_refresh = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/novelty-refresh",
+            json_body={
+                "include_external": True,
+                "limit": 5,
+                "query_override": "recent preprint collision search",
+            },
+        ),
+        "idea novelty refresh",
+    )
+    if novelty_refresh["status"] != "completed_external_novelty_refresh":
+        raise RuntimeError("novelty refresh did not use refresh status")
+    if "novelty_mode:external_refresh" not in novelty_refresh["checked_sources"]:
+        raise RuntimeError("novelty refresh did not record refresh mode")
     related_work_matrix = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/related-work-matrix",
@@ -1154,6 +1173,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "idea_count": len(workflow["ideas"]),
         "novelty_check_count": len(workflow["novelty_checks"]),
         "novelty_check_status": first_novelty_check["status"],
+        "novelty_refresh_status": novelty_refresh["status"],
+        "novelty_refresh_signal_count": len(novelty_refresh["collision_signals"]),
         "novelty_literature_signal_count": len(
             [
                 signal

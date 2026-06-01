@@ -899,6 +899,12 @@ class NoveltyCheckRead(BaseModel):
     updated_at: datetime
 
 
+class NoveltyRefreshRequest(BaseModel):
+    include_external: bool = True
+    limit: int = 8
+    query_override: str = ""
+
+
 class ExperimentPlanRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
