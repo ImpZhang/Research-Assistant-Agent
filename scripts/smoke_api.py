@@ -161,6 +161,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea quality gate")
     if "project_readiness_overview" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project readiness overview")
+    if "project_quality_gate_overview" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project quality gate overview")
     if "research_opportunity_radar" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research opportunity radar")
     if "opportunity_radar_task_generation" not in status["implemented_capabilities"]:
@@ -232,6 +234,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea quality gate tool")
     if "get_project_readiness_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project readiness overview tool")
+    if "get_project_quality_gate_overview" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project quality gate overview tool")
     if "get_research_opportunity_radar" not in manifest_names:
         raise RuntimeError("tool manifest did not include research opportunity radar tool")
     if "create_tasks_from_research_opportunity_radar" not in manifest_names:
@@ -776,6 +780,16 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project readiness overview did not include ideas")
     if "Project Readiness Overview" not in readiness_overview["markdown_export"]:
         raise RuntimeError("project readiness overview markdown did not include title")
+    quality_overview = require_ok(
+        client.get("/research/quality/overview?limit=50"),
+        "project quality gate overview",
+    )
+    if quality_overview["idea_count"] < 1:
+        raise RuntimeError("project quality gate overview did not include ideas")
+    if not quality_overview["decision_counts"]:
+        raise RuntimeError("project quality gate overview did not include decision counts")
+    if "Project Quality Gate Overview" not in quality_overview["markdown_export"]:
+        raise RuntimeError("project quality gate overview markdown did not include title")
     radar = require_ok(
         client.get("/research/opportunities/radar?limit=5"),
         "research opportunity radar",
@@ -888,7 +902,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "02-readiness-overview.md",
             "03-task-board.md",
             "04-opportunity-radar.md",
+            "05-quality-gate-overview.md",
             "metadata/manifest.json",
+            "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
         }
         missing_project_files = required_project_files - project_bundle_files
@@ -899,6 +915,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle manifest did not include ideas")
     if project_bundle_manifest["research_plan_count"] < 1:
         raise RuntimeError("project bundle manifest did not include research plans")
+    if project_bundle_manifest["quality_gate_idea_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include quality gate ideas")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     post_plan_progress = require_ok(
@@ -1156,6 +1174,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "readiness_decision": readiness["decision"],
         "quality_gate_score": quality_gate["gate_score"],
         "quality_gate_decision": quality_gate["decision"],
+        "quality_overview_idea_count": quality_overview["idea_count"],
+        "quality_overview_average": quality_overview["average_gate_score"],
         "readiness_task_count": len(readiness_tasks["tasks"]),
         "readiness_progress_task_count": progress_after_readiness_tasks["artifact_counts"][
             "readiness_follow_up_tasks"

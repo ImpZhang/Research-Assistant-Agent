@@ -41,6 +41,7 @@ def test_research_status() -> None:
     assert "idea_quality_gate" in body["implemented_capabilities"]
     assert "idea_readiness_task_generation" in body["implemented_capabilities"]
     assert "project_readiness_overview" in body["implemented_capabilities"]
+    assert "project_quality_gate_overview" in body["implemented_capabilities"]
     assert "research_opportunity_radar" in body["implemented_capabilities"]
     assert "opportunity_radar_task_generation" in body["implemented_capabilities"]
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
@@ -82,6 +83,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "list_research_tasks" in names
     assert "update_research_task" in names
     assert "get_project_readiness_overview" in names
+    assert "get_project_quality_gate_overview" in names
     assert "get_research_opportunity_radar" in names
     assert "create_tasks_from_research_opportunity_radar" in names
     assert "create_idea_decision_memo" in names
@@ -390,6 +392,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/assumption-audit" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/readiness/overview" in script.text
+    assert "/research/quality/overview" in script.text
     assert "/research/opportunities/radar?limit=8" in script.text
     assert "/research/opportunities/radar/tasks" in script.text
     assert "/research/briefs" in script.text
@@ -1271,6 +1274,14 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert quality_gate_body["recommended_actions"]
     assert "# Idea Quality Gate:" in quality_gate_body["markdown_export"]
 
+    quality_overview = client.get("/research/quality/overview?limit=20")
+    assert quality_overview.status_code == 200
+    quality_overview_body = quality_overview.json()
+    assert quality_overview_body["idea_count"] >= 1
+    assert quality_overview_body["average_gate_score"] >= 0
+    assert quality_overview_body["decision_counts"]
+    assert "# Project Quality Gate Overview" in quality_overview_body["markdown_export"]
+
     readiness_tasks = client.post(
         f"/research/ideas/{idea_id}/readiness/tasks",
         json={"created_by": "pytest"},
@@ -1407,10 +1418,15 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "02-readiness-overview.md" in names
         assert "03-task-board.md" in names
         assert "04-opportunity-radar.md" in names
+        assert "05-quality-gate-overview.md" in names
         assert "metadata/manifest.json" in names
+        assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         assert project_manifest["idea_count"] >= 1
+        assert project_manifest["quality_gate_idea_count"] >= 1
+        assert project_manifest["average_quality_gate_score"] >= 0
+        assert project_manifest["quality_gate_decision_counts"]
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["recent_task_count"] >= 1
 

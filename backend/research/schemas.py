@@ -705,6 +705,30 @@ class IdeaQualityGateResponse(BaseModel):
     message: str
 
 
+class IdeaQualityGateSummary(BaseModel):
+    idea_id: str
+    title: str
+    status: str
+    gate_score: float = 0.0
+    decision: str = "needs_targeted_revision"
+    missing_evidence_count: int = 0
+    blocking_risk_count: int = 0
+    top_risks: list[str] = Field(default_factory=list)
+    top_actions: list[str] = Field(default_factory=list)
+
+
+class ProjectQualityGateOverviewResponse(BaseModel):
+    idea_count: int = 0
+    average_gate_score: float = 0.0
+    decision_counts: dict[str, int] = Field(default_factory=dict)
+    advance_candidates: list[IdeaQualityGateSummary] = Field(default_factory=list)
+    de_risk_candidates: list[IdeaQualityGateSummary] = Field(default_factory=list)
+    revision_candidates: list[IdeaQualityGateSummary] = Field(default_factory=list)
+    parked_or_rejected: list[IdeaQualityGateSummary] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class IdeaReadinessSummary(BaseModel):
     idea_id: str
     title: str

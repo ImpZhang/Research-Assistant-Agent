@@ -1105,13 +1105,15 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/readiness/overview` 对最近 ideas 批量计算 readiness summary，返回 average readiness、decision counts、top ready ideas、needs-work ideas 和 Markdown overview。它面向 dashboard 首页和选题组合管理，帮助快速判断当前项目最值得推进的方向。
 
+`/quality/overview` 对最近 ideas 批量运行 idea quality gate summary，返回 average gate score、decision counts、advance candidates、de-risk candidates、revision candidates、parked/rejected ideas 和 Markdown overview。它面向 portfolio 级 go/no-go 判断：不是只问“准备度高不高”，而是直接判断哪些 idea 该继续投入，哪些要先补 novelty/evidence/experiment/decision 证据。
+
 `/progress/overview` 聚合项目级进度：idea status counts、open task summary、blocked tasks、recent experiment analyses、recommended actions 和 Markdown overview。它用于 dashboard 首页和后续 MCP/agent planner 的第一跳入口。
 
 `/opportunities/radar` 聚合 profile-aware ranking、readiness summary、open/blocked tasks 和 blockers，输出 top opportunities、risk watchlist、recommended sequence 与 Markdown report。它不是替代 ranking 或 readiness，而是把“想法是否好”和“今天该做什么”合成一个可行动视图。
 
 `/opportunities/radar/tasks` 将 radar top opportunities 的 next actions 写入 `ResearchTask`，使用 `owner_type=opportunity_radar`、`due_phase=opportunity_follow_up`，并写入 `idea_has_opportunity_radar` 与 `opportunity_radar_creates_task` 图边。它让项目级优先级不只是报告，而能进入 task board、idea progress、lineage 和后续 agent handoff。
 
-`/export/project-bundle` produces an `application/zip` handoff package for the whole project. It includes project progress overview, readiness overview, opportunity radar, recent task board state, persisted advisor briefs, research execution plans, plan progress reports, and JSON metadata. It is the project-level counterpart to idea bundle export, meant for backups, advisor meetings, and downstream MCP/agent handoff.
+`/export/project-bundle` produces an `application/zip` handoff package for the whole project. It includes project progress overview, readiness overview, quality gate overview, opportunity radar, recent task board state, persisted advisor briefs, research execution plans, plan progress reports, and JSON metadata. It is the project-level counterpart to idea bundle export, meant for backups, advisor meetings, and downstream MCP/agent handoff.
 
 `/briefs` 将项目级或 idea-set 状态保存为 `ResearchBrief` artifact，包含 idea list、recent experiment decisions、highest-priority open tasks、discussion prompts 和 Markdown export。它还会读取包含这些 ideas 的 research execution plans，汇总 plan task count/open/blocked/completion ratio，并加入 latest proposal review / decision memo signals。它是组会、导师沟通和后续 MCP 报告导出的稳定快照。
 
@@ -1167,6 +1169,7 @@ POST /research/ideas/{idea_id}/novelty-checks/{check_id}/tasks
 POST /research/ideas/{idea_id}/readiness/tasks
 GET  /research/ideas/{idea_id}/export/bundle
 GET  /research/readiness/overview
+GET  /research/quality/overview
 GET  /research/progress/overview
 GET  /research/opportunities/radar
 POST /research/opportunities/radar/tasks

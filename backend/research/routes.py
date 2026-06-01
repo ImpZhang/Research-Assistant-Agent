@@ -68,6 +68,7 @@ from backend.research.schemas import (
     IdeaLineageResponse,
     IdeaProgressResponse,
     IdeaQualityGateResponse,
+    IdeaQualityGateSummary,
     IdeaReadinessResponse,
     IdeaReadinessSummary,
     IdeaResearchPacketResponse,
@@ -106,6 +107,7 @@ from backend.research.schemas import (
     ProposalRevisionRead,
     ProposalReviewCreate,
     ProposalReviewRead,
+    ProjectQualityGateOverviewResponse,
     ProjectReadinessOverviewResponse,
     ProjectStatus,
     RankedIdeaRead,
@@ -230,6 +232,7 @@ def status() -> ProjectStatus:
             "idea_assumption_audits",
             "project_progress_overview",
             "project_readiness_overview",
+            "project_quality_gate_overview",
             "research_opportunity_radar",
             "opportunity_radar_task_generation",
             "idea_artifact_bundle_export",
@@ -535,6 +538,13 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/readiness/overview",
             output_model="ProjectReadinessOverviewResponse",
+        ),
+        ToolManifestItem(
+            name="get_project_quality_gate_overview",
+            description="Compare recent ideas by quality-gate decision and next de-risking action.",
+            method="GET",
+            path="/research/quality/overview",
+            output_model="ProjectQualityGateOverviewResponse",
         ),
         ToolManifestItem(
             name="get_research_opportunity_radar",
@@ -3431,6 +3441,135 @@ def _render_idea_quality_gate_markdown(
     return "\n".join(lines).strip() + "\n"
 
 
+@router.get("/quality/overview", response_model=ProjectQualityGateOverviewResponse)
+def get_project_quality_gate_overview(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> ProjectQualityGateOverviewResponse:
+    limit = max(1, min(limit, 200))
+    ideas = session.query(Idea).order_by(Idea.updated_at.desc()).limit(limit).all()
+    summaries = [_quality_gate_summary_for_idea(session, idea) for idea in ideas]
+    average_gate_score = (
+        round(sum(item.gate_score for item in summaries) / len(summaries), 4) if summaries else 0.0
+    )
+    decision_counts = dict(Counter(item.decision for item in summaries))
+    advance_candidates = _quality_gate_candidates(
+        summaries,
+        decisions={"advance_to_execution"},
+        reverse=True,
+    )
+    de_risk_candidates = _quality_gate_candidates(
+        summaries,
+        decisions={"de_risk_novelty"},
+        reverse=False,
+    )
+    revision_candidates = _quality_gate_candidates(
+        summaries,
+        decisions={"needs_targeted_revision", "revise_before_investment"},
+        reverse=False,
+    )
+    parked_or_rejected = _quality_gate_candidates(
+        summaries,
+        decisions={"park", "reject"},
+        reverse=False,
+    )
+    markdown_export = _render_project_quality_gate_overview_markdown(
+        idea_count=len(summaries),
+        average_gate_score=average_gate_score,
+        decision_counts=decision_counts,
+        advance_candidates=advance_candidates,
+        de_risk_candidates=de_risk_candidates,
+        revision_candidates=revision_candidates,
+        parked_or_rejected=parked_or_rejected,
+    )
+    return ProjectQualityGateOverviewResponse(
+        idea_count=len(summaries),
+        average_gate_score=average_gate_score,
+        decision_counts=decision_counts,
+        advance_candidates=advance_candidates,
+        de_risk_candidates=de_risk_candidates,
+        revision_candidates=revision_candidates,
+        parked_or_rejected=parked_or_rejected,
+        markdown_export=markdown_export,
+        message=f"Ran project quality gate overview for {len(summaries)} ideas.",
+    )
+
+
+def _quality_gate_summary_for_idea(session: Session, idea: Idea) -> IdeaQualityGateSummary:
+    quality_gate = get_idea_quality_gate(idea.id, session=session)
+    missing_evidence = [
+        item for item in quality_gate.required_evidence if not item.get("satisfied")
+    ]
+    return IdeaQualityGateSummary(
+        idea_id=idea.id,
+        title=idea.title,
+        status=idea.status,
+        gate_score=quality_gate.gate_score,
+        decision=quality_gate.decision,
+        missing_evidence_count=len(missing_evidence),
+        blocking_risk_count=len(quality_gate.blocking_risks),
+        top_risks=quality_gate.blocking_risks[:3],
+        top_actions=quality_gate.recommended_actions[:3],
+    )
+
+
+def _quality_gate_candidates(
+    summaries: list[IdeaQualityGateSummary],
+    *,
+    decisions: set[str],
+    reverse: bool,
+) -> list[IdeaQualityGateSummary]:
+    items = [item for item in summaries if item.decision in decisions]
+    return sorted(
+        items,
+        key=lambda item: (item.gate_score, -item.blocking_risk_count),
+        reverse=reverse,
+    )[:10]
+
+
+def _render_project_quality_gate_overview_markdown(
+    *,
+    idea_count: int,
+    average_gate_score: float,
+    decision_counts: dict[str, int],
+    advance_candidates: list[IdeaQualityGateSummary],
+    de_risk_candidates: list[IdeaQualityGateSummary],
+    revision_candidates: list[IdeaQualityGateSummary],
+    parked_or_rejected: list[IdeaQualityGateSummary],
+) -> str:
+    lines = [
+        "# Project Quality Gate Overview",
+        "",
+        f"- Idea Count: {idea_count}",
+        f"- Average Gate Score: {average_gate_score:.4f}",
+        f"- Decision Counts: {decision_counts}",
+        "",
+    ]
+    _append_quality_gate_section(lines, "Advance Candidates", advance_candidates)
+    _append_quality_gate_section(lines, "De-risk Candidates", de_risk_candidates)
+    _append_quality_gate_section(lines, "Revision Candidates", revision_candidates)
+    _append_quality_gate_section(lines, "Parked Or Rejected", parked_or_rejected)
+    return "\n".join(lines).strip() + "\n"
+
+
+def _append_quality_gate_section(
+    lines: list[str],
+    title: str,
+    items: list[IdeaQualityGateSummary],
+) -> None:
+    lines.extend([f"## {title}", ""])
+    if not items:
+        lines.append("- No ideas in this bucket.")
+    for item in items:
+        top_action = item.top_actions[0] if item.top_actions else "No action generated."
+        lines.append(
+            f"- `{item.idea_id}` score={item.gate_score:.4f} `{item.decision}` "
+            f"missing={item.missing_evidence_count} risks={item.blocking_risk_count} "
+            f"{item.title} - {top_action}"
+        )
+    lines.append("")
+
+
 @router.get("/readiness/overview", response_model=ProjectReadinessOverviewResponse)
 def get_project_readiness_overview(
     limit: int = 50,
@@ -4908,6 +5047,7 @@ def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
 def _build_project_bundle_zip(session: Session) -> bytes:
     overview = get_research_progress_overview(session=session)
     readiness_overview = get_project_readiness_overview(session=session)
+    quality_overview = get_project_quality_gate_overview(session=session)
     opportunity_radar = get_research_opportunity_radar(session=session)
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
@@ -4916,6 +5056,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     manifest = _project_bundle_manifest(
         overview=overview,
         readiness_overview=readiness_overview,
+        quality_overview=quality_overview,
         opportunity_radar=opportunity_radar,
         briefs=briefs,
         plans=plans,
@@ -4929,11 +5070,13 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         archive.writestr("metadata/manifest.json", _json_dump(manifest))
         archive.writestr("metadata/progress-overview.json", _json_dump(overview))
         archive.writestr("metadata/readiness-overview.json", _json_dump(readiness_overview))
+        archive.writestr("metadata/quality-gate-overview.json", _json_dump(quality_overview))
         archive.writestr("metadata/opportunity-radar.json", _json_dump(opportunity_radar))
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
         _write_markdown(archive, "03-task-board.md", _render_project_task_board_markdown(tasks))
         _write_markdown(archive, "04-opportunity-radar.md", opportunity_radar.markdown_export)
+        _write_markdown(archive, "05-quality-gate-overview.md", quality_overview.markdown_export)
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -4961,6 +5104,7 @@ def _project_bundle_manifest(
     *,
     overview: ResearchOverviewResponse,
     readiness_overview: ProjectReadinessOverviewResponse,
+    quality_overview: ProjectQualityGateOverviewResponse,
     opportunity_radar: ResearchOpportunityRadarResponse,
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
@@ -4974,6 +5118,9 @@ def _project_bundle_manifest(
         "open_task_count": overview.task_summary.get("open_task_count", 0),
         "blocked_task_count": len(overview.blocked_tasks),
         "average_readiness": readiness_overview.average_readiness,
+        "quality_gate_idea_count": quality_overview.idea_count,
+        "average_quality_gate_score": quality_overview.average_gate_score,
+        "quality_gate_decision_counts": quality_overview.decision_counts,
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
             opportunity_radar.top_opportunities[0].radar_score
@@ -5015,6 +5162,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         "- `02-readiness-overview.md`: project-level readiness comparison.",
         "- `03-task-board.md`: recent task board state.",
         "- `04-opportunity-radar.md`: ranked next opportunities and risk watchlist.",
+        "- `05-quality-gate-overview.md`: go/no-go quality gate comparison across ideas.",
         "- `artifacts/briefs/`: persisted advisor or group-meeting briefs.",
         "- `artifacts/plans/`: execution plans and plan progress reports.",
         "- `metadata/`: JSON payloads for downstream tools or backup.",

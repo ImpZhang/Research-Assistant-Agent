@@ -1147,6 +1147,20 @@ async function loadProjectReadinessOverview() {
   }
 }
 
+async function loadProjectQualityOverview() {
+  renderResult("workflowResult", "Loading project quality gate overview...", "warn");
+  try {
+    const body = await api("/research/quality/overview");
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)} Average gate score: ${body.average_gate_score}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadOpportunityRadar() {
   renderResult("workflowResult", "Loading research opportunity radar...", "warn");
   try {
@@ -1405,6 +1419,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("readinessTasksButton").addEventListener("click", createReadinessTasks);
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
+  $("qualityOverviewButton").addEventListener("click", loadProjectQualityOverview);
   $("opportunityRadarButton").addEventListener("click", loadOpportunityRadar);
   $("opportunityRadarTasksButton").addEventListener("click", createOpportunityRadarTasks);
   $("advisorBriefButton").addEventListener("click", createAdvisorBrief);
