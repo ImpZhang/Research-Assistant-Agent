@@ -12,16 +12,25 @@ import argparse
 import base64
 import json
 import mimetypes
+import os
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 
 JSON = dict[str, Any]
+
+
+@dataclass(frozen=True)
+class BridgePolicy:
+    allow_tools: frozenset[str] = frozenset()
+    deny_tools: frozenset[str] = frozenset()
+    read_only: bool = False
 
 
 def load_tool_spec(base_url: str, timeout: float = 30.0) -> JSON:
@@ -35,6 +44,45 @@ def load_tool_spec(base_url: str, timeout: float = 30.0) -> JSON:
 
 def index_tools(spec: JSON) -> dict[str, JSON]:
     return {tool["name"]: tool for tool in spec.get("tools", [])}
+
+
+def filter_spec_tools(spec: JSON, policy: BridgePolicy) -> JSON:
+    filtered = dict(spec)
+    filtered["tools"] = [tool for tool in spec.get("tools", []) if tool_allowed(tool, policy)]
+    return filtered
+
+
+def tool_allowed(tool: JSON, policy: BridgePolicy) -> bool:
+    name = tool.get("name", "")
+    if policy.allow_tools and name not in policy.allow_tools:
+        return False
+    if name in policy.deny_tools:
+        return False
+    if policy.read_only and not tool.get("annotations", {}).get("readOnlyHint", False):
+        return False
+    return True
+
+
+def bridge_health(spec: JSON, policy: BridgePolicy) -> JSON:
+    filtered = filter_spec_tools(spec, policy)
+    all_names = sorted(tool.get("name", "") for tool in spec.get("tools", []) if tool.get("name"))
+    exposed_names = sorted(
+        tool.get("name", "") for tool in filtered.get("tools", []) if tool.get("name")
+    )
+    blocked_names = sorted(set(all_names) - set(exposed_names))
+    return {
+        "status": "ok",
+        "total_tools": len(all_names),
+        "exposed_tools": len(exposed_names),
+        "blocked_tools": len(blocked_names),
+        "policy": {
+            "read_only": policy.read_only,
+            "allow_tools": sorted(policy.allow_tools),
+            "deny_tools": sorted(policy.deny_tools),
+        },
+        "tools": exposed_names,
+        "blocked": blocked_names,
+    }
 
 
 def tool_list_result(spec: JSON) -> JSON:
@@ -121,8 +169,8 @@ def handle_request(message: JSON, *, base_url: str, spec: JSON, timeout: float) 
         return _error(request_id, str(exc))
 
 
-def serve_stdio(base_url: str, timeout: float) -> None:
-    spec = load_tool_spec(base_url, timeout=timeout)
+def serve_stdio(base_url: str, timeout: float, policy: BridgePolicy) -> None:
+    spec = filter_spec_tools(load_tool_spec(base_url, timeout=timeout), policy)
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -177,12 +225,60 @@ def _error(request_id: Any, message: str) -> JSON:
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": message}}
 
 
+def _build_policy(args: argparse.Namespace) -> BridgePolicy:
+    return BridgePolicy(
+        allow_tools=_parse_tool_names(args.allow_tool, os.environ.get("MCP_BRIDGE_ALLOW_TOOLS")),
+        deny_tools=_parse_tool_names(args.deny_tool, os.environ.get("MCP_BRIDGE_DENY_TOOLS")),
+        read_only=args.read_only or _env_flag("MCP_BRIDGE_READ_ONLY"),
+    )
+
+
+def _parse_tool_names(values: list[str], env_value: str | None) -> frozenset[str]:
+    names: list[str] = []
+    for raw in [*(values or []), env_value or ""]:
+        names.extend(part.strip() for part in raw.split(",") if part.strip())
+    return frozenset(names)
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Research Assistant MCP HTTP bridge.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--timeout", type=float, default=60.0)
+    parser.add_argument(
+        "--allow-tool",
+        action="append",
+        default=[],
+        help="Expose only this tool name. Repeat or pass comma-separated names.",
+    )
+    parser.add_argument(
+        "--deny-tool",
+        action="append",
+        default=[],
+        help="Hide this tool name. Repeat or pass comma-separated names.",
+    )
+    parser.add_argument(
+        "--read-only",
+        action="store_true",
+        help="Expose only tools marked with readOnlyHint in the bridge spec.",
+    )
+    parser.add_argument(
+        "--health-check",
+        action="store_true",
+        help="Load the bridge spec, print filtered tool counts as JSON, and exit.",
+    )
     args = parser.parse_args()
-    serve_stdio(args.base_url, args.timeout)
+    policy = _build_policy(args)
+    if args.health_check:
+        spec = load_tool_spec(args.base_url, timeout=args.timeout)
+        sys.stdout.write(
+            json.dumps(bridge_health(spec, policy), ensure_ascii=False, indent=2) + "\n"
+        )
+        return
+    serve_stdio(args.base_url, args.timeout, policy)
 
 
 if __name__ == "__main__":

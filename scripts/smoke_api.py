@@ -169,6 +169,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include MCP tool bridge spec")
     if "mcp_stdio_http_bridge" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include MCP stdio HTTP bridge")
+    if "mcp_bridge_policy_controls" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include MCP bridge policy controls")
     if "research_profile_constraints" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research profile constraints")
     if "research_plan_snapshots" not in status["implemented_capabilities"]:

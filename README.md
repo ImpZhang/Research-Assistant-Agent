@@ -83,6 +83,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - MCP/tool-ready manifest for stable research workflow APIs.
 - MCP-ready HTTP tool bridge spec generated from the stable tool manifest.
 - Lightweight stdio MCP-to-HTTP bridge script for exposing the stable HTTP tools to MCP clients without extra SDK dependencies.
+- MCP bridge policy controls for read-only mode, allow/deny tool filters, and deployment health checks.
 - Research idea portfolio ranking with profile-aware weighting, lineage deduplication, and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.
@@ -316,6 +317,15 @@ uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000
 ```
 
 The bridge loads `/research/tools/mcp-spec`, exposes `tools/list` and `tools/call`, and forwards tool calls to the FastAPI routes.
+For safer client onboarding, narrow the exposed tools before connecting a client:
+
+```bash
+uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000 --read-only
+uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000 --allow-tool get_project_progress --allow-tool get_idea_progress
+uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000 --health-check
+```
+
+The same policy can be configured with `MCP_BRIDGE_READ_ONLY`, `MCP_BRIDGE_ALLOW_TOOLS`, and `MCP_BRIDGE_DENY_TOOLS`.
 
 ## Near-Term Roadmap
 
