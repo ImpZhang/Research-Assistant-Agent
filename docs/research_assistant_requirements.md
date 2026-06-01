@@ -789,6 +789,8 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - 输出 average gate score、decision counts、advance candidates、de-risk candidates、revision candidates 和 parked/rejected ideas。
 - 用于回答“当前组合里哪些 idea 可以继续投入、哪些必须先补 novelty/evidence/experiment/decision 证据”，比 readiness overview 更接近 portfolio 级 go/no-go 判断。
 
+project quality gate overview 需要能一键转成 task board 任务：从 de-risk/revision/指定 decision candidates 的 top actions 创建 `owner_type=idea_quality_gate`、`due_phase=quality_gate_follow_up` 的任务。这样 portfolio 级判断可以直接落到多个 idea 的行动队列。
+
 系统需要提供 project progress overview：
 
 - 聚合全部 idea status、open tasks、blocked tasks、recent experiment analyses 和 recommended actions。

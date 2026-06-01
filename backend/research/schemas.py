@@ -729,6 +729,19 @@ class ProjectQualityGateOverviewResponse(BaseModel):
     message: str
 
 
+class ProjectQualityGateTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=5, ge=1, le=20)
+    actions_per_idea: int = Field(default=2, ge=1, le=5)
+    decisions: list[str] = Field(
+        default_factory=lambda: [
+            "de_risk_novelty",
+            "needs_targeted_revision",
+            "revise_before_investment",
+        ]
+    )
+    created_by: str = "system"
+
+
 class IdeaReadinessSummary(BaseModel):
     idea_id: str
     title: str

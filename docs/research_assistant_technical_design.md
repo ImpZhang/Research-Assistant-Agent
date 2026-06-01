@@ -1109,6 +1109,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/quality/overview` 对最近 ideas 批量运行 idea quality gate summary，返回 average gate score、decision counts、advance candidates、de-risk candidates、revision candidates、parked/rejected ideas 和 Markdown overview。它面向 portfolio 级 go/no-go 判断：不是只问“准备度高不高”，而是直接判断哪些 idea 该继续投入，哪些要先补 novelty/evidence/experiment/decision 证据。
 
+`/quality/overview/tasks` 从 project quality gate overview 中选择指定 decision buckets（默认 de-risk/revision candidates），并复用 `ResearchTaskService.create_from_idea_quality_gate` 为多个 ideas 批量创建 `idea_quality_gate` follow-up tasks。它是导师会前或每日 triage 后的批量行动入口，避免只看 portfolio 报告而没有落地任务。
+
 `/progress/overview` 聚合项目级进度：idea status counts、open task summary、blocked tasks、recent experiment analyses、recommended actions 和 Markdown overview。它用于 dashboard 首页和后续 MCP/agent planner 的第一跳入口。
 
 `/opportunities/radar` 聚合 profile-aware ranking、readiness summary、open/blocked tasks 和 blockers，输出 top opportunities、risk watchlist、recommended sequence 与 Markdown report。它不是替代 ranking 或 readiness，而是把“想法是否好”和“今天该做什么”合成一个可行动视图。
@@ -1173,6 +1175,7 @@ POST /research/ideas/{idea_id}/readiness/tasks
 GET  /research/ideas/{idea_id}/export/bundle
 GET  /research/readiness/overview
 GET  /research/quality/overview
+POST /research/quality/overview/tasks
 GET  /research/progress/overview
 GET  /research/opportunities/radar
 POST /research/opportunities/radar/tasks

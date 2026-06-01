@@ -165,6 +165,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project readiness overview")
     if "project_quality_gate_overview" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project quality gate overview")
+    if "project_quality_gate_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project quality gate task generation")
     if "research_opportunity_radar" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research opportunity radar")
     if "opportunity_radar_task_generation" not in status["implemented_capabilities"]:
@@ -240,6 +242,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project readiness overview tool")
     if "get_project_quality_gate_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project quality gate overview tool")
+    if "create_tasks_from_project_quality_gate" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project quality gate task tool")
     if "get_research_opportunity_radar" not in manifest_names:
         raise RuntimeError("tool manifest did not include research opportunity radar tool")
     if "create_tasks_from_research_opportunity_radar" not in manifest_names:
@@ -829,6 +833,29 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project quality gate overview did not include decision counts")
     if "Project Quality Gate Overview" not in quality_overview["markdown_export"]:
         raise RuntimeError("project quality gate overview markdown did not include title")
+    project_quality_tasks = require_ok(
+        client.post(
+            "/research/quality/overview/tasks",
+            json_body={
+                "limit": 3,
+                "actions_per_idea": 1,
+                "decisions": [
+                    "de_risk_novelty",
+                    "needs_targeted_revision",
+                    "revise_before_investment",
+                    "advance_to_execution",
+                    "park",
+                    "reject",
+                ],
+                "created_by": "smoke_api",
+            },
+        ),
+        "project quality gate tasks",
+    )
+    if not project_quality_tasks["tasks"]:
+        raise RuntimeError("project quality gate task generation returned no tasks")
+    if project_quality_tasks["tasks"][0]["owner_type"] != "idea_quality_gate":
+        raise RuntimeError("project quality gate tasks used the wrong owner type")
     radar = require_ok(
         client.get("/research/opportunities/radar?limit=5"),
         "research opportunity radar",
@@ -1219,6 +1246,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         ],
         "quality_overview_idea_count": quality_overview["idea_count"],
         "quality_overview_average": quality_overview["average_gate_score"],
+        "project_quality_task_count": len(project_quality_tasks["tasks"]),
         "readiness_task_count": len(readiness_tasks["tasks"]),
         "readiness_progress_task_count": progress_after_readiness_tasks["artifact_counts"][
             "readiness_follow_up_tasks"

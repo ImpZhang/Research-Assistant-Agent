@@ -1183,6 +1183,28 @@ async function loadProjectQualityOverview() {
   }
 }
 
+async function createProjectQualityTasks() {
+  renderResult("workflowResult", "Creating project quality-gate tasks...", "warn");
+  try {
+    const body = await api("/research/quality/overview/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        limit: 5,
+        actions_per_idea: 1,
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Project gate tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadOpportunityRadar() {
   renderResult("workflowResult", "Loading research opportunity radar...", "warn");
   try {
@@ -1443,6 +1465,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
   $("qualityOverviewButton").addEventListener("click", loadProjectQualityOverview);
+  $("projectQualityTasksButton").addEventListener("click", createProjectQualityTasks);
   $("opportunityRadarButton").addEventListener("click", loadOpportunityRadar);
   $("opportunityRadarTasksButton").addEventListener("click", createOpportunityRadarTasks);
   $("advisorBriefButton").addEventListener("click", createAdvisorBrief);

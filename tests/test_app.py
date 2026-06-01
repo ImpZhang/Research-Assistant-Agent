@@ -43,6 +43,7 @@ def test_research_status() -> None:
     assert "idea_readiness_task_generation" in body["implemented_capabilities"]
     assert "project_readiness_overview" in body["implemented_capabilities"]
     assert "project_quality_gate_overview" in body["implemented_capabilities"]
+    assert "project_quality_gate_task_generation" in body["implemented_capabilities"]
     assert "research_opportunity_radar" in body["implemented_capabilities"]
     assert "opportunity_radar_task_generation" in body["implemented_capabilities"]
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
@@ -86,6 +87,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "update_research_task" in names
     assert "get_project_readiness_overview" in names
     assert "get_project_quality_gate_overview" in names
+    assert "create_tasks_from_project_quality_gate" in names
     assert "get_research_opportunity_radar" in names
     assert "create_tasks_from_research_opportunity_radar" in names
     assert "create_idea_decision_memo" in names
@@ -396,6 +398,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/progress/overview" in script.text
     assert "/research/readiness/overview" in script.text
     assert "/research/quality/overview" in script.text
+    assert "/research/quality/overview/tasks" in script.text
     assert "/research/opportunities/radar?limit=8" in script.text
     assert "/research/opportunities/radar/tasks" in script.text
     assert "/research/briefs" in script.text
@@ -1311,6 +1314,17 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert packet_after_quality_gate_tasks.status_code == 200
     packet_after_quality_body = packet_after_quality_gate_tasks.json()
     assert packet_after_quality_body["graph_edge_summary"]["quality_gate_creates_task"] >= 1
+
+    project_quality_tasks = client.post(
+        "/research/quality/overview/tasks",
+        json={"limit": 3, "actions_per_idea": 1, "created_by": "pytest"},
+    )
+    assert project_quality_tasks.status_code == 200
+    project_quality_task_body = project_quality_tasks.json()
+    assert project_quality_task_body["tasks"]
+    assert all(
+        task["owner_type"] == "idea_quality_gate" for task in project_quality_task_body["tasks"]
+    )
 
     readiness_tasks = client.post(
         f"/research/ideas/{idea_id}/readiness/tasks",

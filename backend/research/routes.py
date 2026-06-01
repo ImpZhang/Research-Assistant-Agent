@@ -108,6 +108,7 @@ from backend.research.schemas import (
     ProposalReviewCreate,
     ProposalReviewRead,
     ProjectQualityGateOverviewResponse,
+    ProjectQualityGateTaskGenerateRequest,
     ProjectReadinessOverviewResponse,
     ProjectStatus,
     RankedIdeaRead,
@@ -234,6 +235,7 @@ def status() -> ProjectStatus:
             "project_progress_overview",
             "project_readiness_overview",
             "project_quality_gate_overview",
+            "project_quality_gate_task_generation",
             "research_opportunity_radar",
             "opportunity_radar_task_generation",
             "idea_artifact_bundle_export",
@@ -555,6 +557,15 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/quality/overview",
             output_model="ProjectQualityGateOverviewResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_quality_gate",
+            description="Create quality-gate follow-up tasks for portfolio-level de-risk or revision candidates.",
+            method="POST",
+            path="/research/quality/overview/tasks",
+            input_model="ProjectQualityGateTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_research_opportunity_radar",
@@ -3533,6 +3544,72 @@ def get_project_quality_gate_overview(
         markdown_export=markdown_export,
         message=f"Ran project quality gate overview for {len(summaries)} ideas.",
     )
+
+
+@router.post("/quality/overview/tasks", response_model=ResearchTaskGenerationResponse)
+def create_tasks_from_project_quality_gate(
+    payload: ProjectQualityGateTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    overview_limit = max(payload.limit * 5, payload.limit)
+    overview = get_project_quality_gate_overview(limit=overview_limit, session=session)
+    target_decisions = set(
+        payload.decisions
+        or [
+            "de_risk_novelty",
+            "needs_targeted_revision",
+            "revise_before_investment",
+        ]
+    )
+    candidates = _project_quality_gate_task_candidates(overview, target_decisions, payload.limit)
+    service = ResearchTaskService(session)
+    tasks: list[ResearchTask] = []
+    for candidate in candidates:
+        quality_gate = get_idea_quality_gate(candidate.idea_id, session=session)
+        missing_evidence_count = len(
+            [item for item in quality_gate.required_evidence if not item.get("satisfied")]
+        )
+        tasks.extend(
+            service.create_from_idea_quality_gate(
+                candidate.idea_id,
+                gate_score=quality_gate.gate_score,
+                decision=quality_gate.decision,
+                recommended_actions=quality_gate.recommended_actions[: payload.actions_per_idea],
+                blocking_risks=quality_gate.blocking_risks,
+                missing_evidence_count=missing_evidence_count,
+                created_by=payload.created_by,
+            )
+        )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} quality-gate follow-up tasks "
+            f"from {len(candidates)} project candidates."
+        ),
+    )
+
+
+def _project_quality_gate_task_candidates(
+    overview: ProjectQualityGateOverviewResponse,
+    target_decisions: set[str],
+    limit: int,
+) -> list[IdeaQualityGateSummary]:
+    ordered = [
+        *overview.de_risk_candidates,
+        *overview.revision_candidates,
+        *overview.parked_or_rejected,
+        *overview.advance_candidates,
+    ]
+    candidates: list[IdeaQualityGateSummary] = []
+    seen: set[str] = set()
+    for item in ordered:
+        if item.idea_id in seen or item.decision not in target_decisions:
+            continue
+        candidates.append(item)
+        seen.add(item.idea_id)
+        if len(candidates) >= limit:
+            break
+    return candidates
 
 
 def _quality_gate_summary_for_idea(session: Session, idea: Idea) -> IdeaQualityGateSummary:
