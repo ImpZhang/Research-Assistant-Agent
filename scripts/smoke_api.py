@@ -161,6 +161,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project readiness overview")
     if "idea_artifact_bundle_export" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea artifact bundle export")
+    if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include advisor brief execution context")
     if "mcp_tool_bridge_spec" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include MCP tool bridge spec")
     if "research_profile_constraints" not in status["implemented_capabilities"]:
@@ -765,6 +767,22 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research plan progress did not count generated plan tasks")
     if "Research Plan Progress" not in research_plan_progress["markdown_export"]:
         raise RuntimeError("research plan progress markdown did not include title")
+    plan_advisor_brief = require_ok(
+        client.post(
+            "/research/briefs",
+            json_body={
+                "title": "Smoke Plan-Aware Advisor Brief",
+                "scope": "idea_set",
+                "idea_ids": [refined_idea["id"]],
+                "created_by": "smoke_api",
+            },
+        ),
+        "plan-aware advisor research brief",
+    )
+    if plan_advisor_brief["summary"].get("research_plan_count", 0) < 1:
+        raise RuntimeError("advisor brief did not include research plan count")
+    if "## Execution Plans" not in plan_advisor_brief["markdown_export"]:
+        raise RuntimeError("advisor brief markdown did not include execution plans")
     post_plan_progress = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/progress"),
         "idea progress after research plan tasks",
@@ -1030,6 +1048,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "readiness_overview_average": readiness_overview["average_readiness"],
         "advisor_brief_id": advisor_brief["id"],
         "advisor_brief_markdown_chars": len(advisor_brief_markdown),
+        "plan_advisor_brief_id": plan_advisor_brief["id"],
+        "plan_advisor_brief_plan_count": plan_advisor_brief["summary"]["research_plan_count"],
         "research_plan_id": research_plan["id"],
         "research_plan_item_count": len(research_plan["plan_items"]),
         "research_plan_task_count": len(research_plan_tasks["tasks"]),

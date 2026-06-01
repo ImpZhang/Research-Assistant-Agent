@@ -5,7 +5,10 @@ from sqlalchemy.orm import Session
 from backend.research.models import (
     ExperimentAnalysis,
     Idea,
+    IdeaDecisionMemo,
+    ProposalReview,
     ResearchBrief,
+    ResearchPlanSnapshot,
     ResearchProfile,
     ResearchTask,
 )
@@ -29,7 +32,9 @@ class ResearchBriefService:
         profile = self.session.get(ResearchProfile, "default")
         tasks = self._load_tasks([idea.id for idea in ideas])
         analyses = self._load_analyses([idea.id for idea in ideas])
-        summary = self._summary(ideas, tasks, analyses, profile)
+        plan_summaries = self._load_plan_summaries([idea.id for idea in ideas])
+        readiness_signals = self._load_readiness_signals([idea.id for idea in ideas])
+        summary = self._summary(ideas, tasks, analyses, profile, plan_summaries, readiness_signals)
         brief = ResearchBrief(
             title=title or "Advisor Research Brief",
             scope=scope or "project",
@@ -39,7 +44,15 @@ class ResearchBriefService:
         )
         self.session.add(brief)
         self.session.flush()
-        brief.markdown_export = self._render_markdown(brief, ideas, tasks, analyses, profile)
+        brief.markdown_export = self._render_markdown(
+            brief,
+            ideas,
+            tasks,
+            analyses,
+            profile,
+            plan_summaries,
+            readiness_signals,
+        )
         self.session.commit()
         self.session.refresh(brief)
         return brief
@@ -85,12 +98,97 @@ class ResearchBriefService:
             .all()
         )
 
+    def _load_plan_summaries(self, idea_ids: list[str]) -> list[dict]:
+        if not idea_ids:
+            return []
+        plans = (
+            self.session.query(ResearchPlanSnapshot)
+            .order_by(ResearchPlanSnapshot.created_at.desc())
+            .limit(50)
+            .all()
+        )
+        relevant_plans = [
+            plan for plan in plans if set(plan.idea_ids_json or []).intersection(idea_ids)
+        ][:8]
+        if not relevant_plans:
+            return []
+
+        plan_ids = [plan.id for plan in relevant_plans]
+        plan_tasks = (
+            self.session.query(ResearchTask)
+            .filter(
+                ResearchTask.owner_type == "research_plan",
+                ResearchTask.owner_id.in_(plan_ids),
+            )
+            .order_by(ResearchTask.created_at.desc())
+            .limit(300)
+            .all()
+        )
+        tasks_by_plan: dict[str, list[ResearchTask]] = {plan_id: [] for plan_id in plan_ids}
+        for task in plan_tasks:
+            tasks_by_plan.setdefault(task.owner_id, []).append(task)
+
+        summaries = []
+        for plan in relevant_plans:
+            tasks = tasks_by_plan.get(plan.id, [])
+            done_count = len([task for task in tasks if task.status in {"done", "archived"}])
+            open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
+            summaries.append(
+                {
+                    "id": plan.id,
+                    "title": plan.title,
+                    "horizon_days": plan.horizon_days,
+                    "plan_item_count": len(plan.plan_items_json or []),
+                    "task_count": len(tasks),
+                    "open_task_count": len(open_tasks),
+                    "blocked_task_count": len([task for task in tasks if task.status == "blocked"]),
+                    "completion_ratio": round(done_count / len(tasks), 4) if tasks else 0.0,
+                }
+            )
+        return summaries
+
+    def _load_readiness_signals(self, idea_ids: list[str]) -> list[dict]:
+        if not idea_ids:
+            return []
+        reviews = (
+            self.session.query(ProposalReview)
+            .filter(ProposalReview.idea_id.in_(idea_ids))
+            .order_by(ProposalReview.created_at.desc())
+            .limit(200)
+            .all()
+        )
+        memos = (
+            self.session.query(IdeaDecisionMemo)
+            .filter(IdeaDecisionMemo.idea_id.in_(idea_ids))
+            .order_by(IdeaDecisionMemo.created_at.desc())
+            .limit(200)
+            .all()
+        )
+        latest_review_by_idea = _first_by_idea(reviews)
+        latest_memo_by_idea = _first_by_idea(memos)
+        signals = []
+        for idea_id in idea_ids:
+            review = latest_review_by_idea.get(idea_id)
+            memo = latest_memo_by_idea.get(idea_id)
+            signals.append(
+                {
+                    "idea_id": idea_id,
+                    "proposal_review_decision": review.decision if review else "",
+                    "proposal_readiness_score": review.readiness_score if review else 0.0,
+                    "decision_memo": memo.decision if memo else "",
+                    "next_commitment_count": len(memo.next_commitments_json or []) if memo else 0,
+                }
+            )
+        return signals
+
     def _summary(
         self,
         ideas: list[Idea],
         tasks: list[ResearchTask],
         analyses: list[ExperimentAnalysis],
         profile: ResearchProfile | None,
+        plan_summaries: list[dict],
+        readiness_signals: list[dict],
     ) -> dict:
         open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
         blocked_tasks = [task for task in tasks if task.status == "blocked"]
@@ -105,6 +203,14 @@ class ResearchBriefService:
             "profile_name": profile.name if profile else "",
             "profile_domains": profile.primary_domains_json if profile else [],
             "profile_constraints": profile.resource_constraints_json if profile else [],
+            "research_plan_count": len(plan_summaries),
+            "research_plan_open_task_count": sum(
+                item.get("open_task_count", 0) for item in plan_summaries
+            ),
+            "research_plan_blocked_task_count": sum(
+                item.get("blocked_task_count", 0) for item in plan_summaries
+            ),
+            "readiness_signals": readiness_signals,
         }
 
     def _render_markdown(
@@ -114,6 +220,8 @@ class ResearchBriefService:
         tasks: list[ResearchTask],
         analyses: list[ExperimentAnalysis],
         profile: ResearchProfile | None,
+        plan_summaries: list[dict],
+        readiness_signals: list[dict],
     ) -> str:
         summary = brief.summary_json or {}
         lines = [
@@ -125,6 +233,8 @@ class ResearchBriefService:
             f"- Idea Count: {summary.get('idea_count', 0)}",
             f"- Open Tasks: {summary.get('open_task_count', 0)}",
             f"- Blocked Tasks: {summary.get('blocked_task_count', 0)}",
+            f"- Research Plans: {summary.get('research_plan_count', 0)}",
+            f"- Research Plan Open Tasks: {summary.get('research_plan_open_task_count', 0)}",
             "",
             "## Research Profile",
             "",
@@ -163,6 +273,30 @@ class ResearchBriefService:
                 )
         else:
             lines.append("- No experiment analyses recorded.")
+
+        lines.extend(["", "## Execution Plans", ""])
+        if plan_summaries:
+            for plan in plan_summaries[:6]:
+                lines.append(
+                    f"- `{plan['id']}` {plan['title']} "
+                    f"horizon={plan['horizon_days']}d tasks={plan['task_count']} "
+                    f"open={plan['open_task_count']} blocked={plan['blocked_task_count']} "
+                    f"completion={plan['completion_ratio']}"
+                )
+        else:
+            lines.append("- No research execution plans include these ideas.")
+
+        lines.extend(["", "## Readiness Signals", ""])
+        if readiness_signals:
+            for signal in readiness_signals:
+                lines.append(
+                    f"- idea=`{signal['idea_id']}` review=`{signal['proposal_review_decision'] or 'none'}` "
+                    f"score={signal['proposal_readiness_score']:.2f} "
+                    f"decision=`{signal['decision_memo'] or 'none'}` "
+                    f"commitments={signal['next_commitment_count']}"
+                )
+        else:
+            lines.append("- No readiness signals recorded.")
 
         lines.extend(["", "## Highest Priority Open Tasks", ""])
         open_tasks = sorted(
@@ -208,3 +342,11 @@ class ResearchBriefService:
 
 def _join_profile_items(items: list | None) -> str:
     return ", ".join(str(item) for item in (items or [])) or "none"
+
+
+def _first_by_idea(records: list) -> dict[str, object]:
+    by_idea = {}
+    for record in records:
+        if record.idea_id not in by_idea:
+            by_idea[record.idea_id] = record
+    return by_idea

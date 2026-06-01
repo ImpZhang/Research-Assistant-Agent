@@ -226,6 +226,7 @@ def status() -> ProjectStatus:
             "project_readiness_overview",
             "idea_artifact_bundle_export",
             "advisor_research_briefs",
+            "advisor_brief_execution_context",
             "tool_manifest",
             "mcp_tool_bridge_spec",
             "human_idea_feedback",

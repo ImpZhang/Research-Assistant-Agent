@@ -41,6 +41,7 @@ def test_research_status() -> None:
     assert "idea_readiness_task_generation" in body["implemented_capabilities"]
     assert "project_readiness_overview" in body["implemented_capabilities"]
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
+    assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
@@ -246,6 +247,22 @@ Future work should preserve researcher goals as durable project context.
     plan_task_edges = client.get("/research/graph/edges?edge_type=research_plan_creates_task")
     assert plan_task_edges.status_code == 200
     assert plan_task_edges.json()
+
+    plan_brief = client.post(
+        "/research/briefs",
+        json={
+            "title": "Plan-Aware Brief",
+            "scope": "idea_set",
+            "idea_ids": [idea_id],
+            "created_by": "pytest",
+        },
+    )
+    assert plan_brief.status_code == 200
+    plan_brief_body = plan_brief.json()
+    assert plan_brief_body["summary"]["research_plan_count"] >= 1
+    assert plan_brief_body["summary"]["research_plan_open_task_count"] >= 1
+    assert "## Execution Plans" in plan_brief_body["markdown_export"]
+    assert "## Readiness Signals" in plan_brief_body["markdown_export"]
 
     progress = client.get(f"/research/ideas/{idea_id}/progress")
     assert progress.status_code == 200
