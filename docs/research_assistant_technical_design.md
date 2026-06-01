@@ -1097,6 +1097,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/ideas/{idea_id}/readiness/tasks` 将 readiness blockers 转成 `ResearchTask` 记录，使用 `owner_type=idea_readiness`、`due_phase=readiness_follow_up`，并写入 `idea_readiness_creates_task` 图边。它让 readiness score 不只是评分报告，而能直接进入 task board、idea progress 和 research packet。
 
+`/ideas/{idea_id}/quality-gate` 是 idea 级 go/no-go 质量门控。它读取 latest novelty check/refresh、readiness、proposal review、experiment analysis、decision memo、assumption audit 和 task health，输出 gate score、required evidence、blocking risks、recommended actions 和 Markdown report。它与 readiness 的区别是：readiness 解释“准备度”，quality gate 决策“是否继续投入资源，或先 de-risk/revise/park/reject”。
+
 `/ideas/{idea_id}/novelty-refresh` 复用 `NoveltyService` 与 `LiteratureSearchService`，允许传入 query override、limit 和 include_external，保存 `completed_external_novelty_refresh` 状态的 `NoveltyCheck`。它用于在 proposal、advisor brief 或 execution plan 前刷新“是否撞车”的证据，而不是只依赖 workflow 初次生成时的 novelty screen。
 
 `/ideas/{idea_id}/novelty-checks/{check_id}/tasks` 将 novelty check 的 recommended actions 写入 `ResearchTask`，使用 `owner_type=novelty_check`、`due_phase=novelty_follow_up`，并写入 `idea_has_novelty_check` 与 `novelty_check_creates_task` 图边。它把 collision signals、missing searches 和 novelty claim 修改建议变成可追踪任务。
@@ -1159,6 +1161,7 @@ GET  /research/ideas/{idea_id}/progress
 GET  /research/ideas/{idea_id}/research-packet
 GET  /research/ideas/{idea_id}/timeline
 GET  /research/ideas/{idea_id}/readiness
+GET  /research/ideas/{idea_id}/quality-gate
 POST /research/ideas/{idea_id}/novelty-refresh
 POST /research/ideas/{idea_id}/novelty-checks/{check_id}/tasks
 POST /research/ideas/{idea_id}/readiness/tasks

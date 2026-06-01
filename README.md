@@ -68,6 +68,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Idea progress summaries that aggregate proposal, experiment, analysis, task, blocker, and recommended-next-step state.
 - Idea research packets that bundle the latest artifacts, open tasks, graph edge summary, and Markdown context for a single idea.
 - Idea readiness scoring that explains whether an idea is ready for deeper execution.
+- Idea quality gate that combines novelty, readiness, proposal review, experiment evidence, decision memo, and task health into a go/no-go decision.
 - Task generation from idea readiness blockers so readiness gaps become trackable follow-up work.
 - Configurable novelty refresh for rerunning local and optional external literature collision checks on an idea.
 - Task generation from novelty check recommended actions so collision-screening concerns become follow-up work.
@@ -252,6 +253,7 @@ GET  /research/ideas/{idea_id}/progress
 GET  /research/ideas/{idea_id}/research-packet
 GET  /research/ideas/{idea_id}/timeline
 GET  /research/ideas/{idea_id}/readiness
+GET  /research/ideas/{idea_id}/quality-gate
 POST /research/ideas/{idea_id}/readiness/tasks
 GET  /research/ideas/{idea_id}/export/bundle
 GET  /research/readiness/overview

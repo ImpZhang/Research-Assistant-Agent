@@ -38,6 +38,7 @@ def test_research_status() -> None:
     assert "idea_activity_timeline" in body["implemented_capabilities"]
     assert "idea_research_packet" in body["implemented_capabilities"]
     assert "idea_readiness_scoring" in body["implemented_capabilities"]
+    assert "idea_quality_gate" in body["implemented_capabilities"]
     assert "idea_readiness_task_generation" in body["implemented_capabilities"]
     assert "project_readiness_overview" in body["implemented_capabilities"]
     assert "research_opportunity_radar" in body["implemented_capabilities"]
@@ -76,6 +77,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "export_idea_bundle" in names
     assert "export_project_bundle" in names
     assert "get_idea_readiness" in names
+    assert "get_idea_quality_gate" in names
     assert "create_tasks_from_idea_readiness" in names
     assert "list_research_tasks" in names
     assert "update_research_task" in names
@@ -379,6 +381,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${encodeURIComponent(state.latestIdeaId)}/export/bundle" in script.text
     assert "/research/export/project-bundle" in script.text
     assert "/research/ideas/${state.latestIdeaId}/readiness" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/quality-gate" in script.text
     assert "/research/ideas/${state.latestIdeaId}/readiness/tasks" in script.text
     assert "/research/ideas/${state.latestIdeaId}/decision-memo" in script.text
     assert (
@@ -1249,6 +1252,24 @@ Future work should preserve proposal drafts as reviewable artifacts.
     }
     assert "proposal" in readiness_body["score_breakdown"]
     assert "# Idea Readiness:" in readiness_body["markdown_export"]
+
+    quality_gate = client.get(f"/research/ideas/{idea_id}/quality-gate")
+    assert quality_gate.status_code == 200
+    quality_gate_body = quality_gate.json()
+    assert quality_gate_body["idea"]["id"] == idea_id
+    assert quality_gate_body["gate_score"] >= 0
+    assert quality_gate_body["decision"] in {
+        "advance_to_execution",
+        "needs_targeted_revision",
+        "de_risk_novelty",
+        "revise_before_investment",
+        "park",
+        "reject",
+    }
+    assert "novelty" in quality_gate_body["score_breakdown"]
+    assert quality_gate_body["required_evidence"]
+    assert quality_gate_body["recommended_actions"]
+    assert "# Idea Quality Gate:" in quality_gate_body["markdown_export"]
 
     readiness_tasks = client.post(
         f"/research/ideas/{idea_id}/readiness/tasks",

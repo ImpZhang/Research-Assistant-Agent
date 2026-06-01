@@ -769,6 +769,12 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - 输出总分、决策标签、score breakdown、blockers 和 Markdown report。
 - 用于判断一个 idea 是否 ready_for_execution，还是需要 targeted work、park 或 reject。
 
+系统需要提供 idea quality gate：
+
+- 综合 novelty refresh、readiness、proposal review、experiment analysis、decision memo、assumption audit 和 task health。
+- 输出 gate score、advance/revise/de-risk/park/reject 决策、required evidence、blocking risks、recommended actions 和 Markdown report。
+- 用于回答“这个 idea 现在是否值得继续投入实验/写作资源”，比 readiness 更接近 go/no-go 决策。
+
 系统需要提供 project readiness overview：
 
 - 对最近 idea 逐个计算 readiness summary。

@@ -67,6 +67,7 @@ from backend.research.schemas import (
     IdeaDecisionMemoRead,
     IdeaLineageResponse,
     IdeaProgressResponse,
+    IdeaQualityGateResponse,
     IdeaReadinessResponse,
     IdeaReadinessSummary,
     IdeaResearchPacketResponse,
@@ -222,6 +223,7 @@ def status() -> ProjectStatus:
             "idea_research_packet",
             "idea_activity_timeline",
             "idea_readiness_scoring",
+            "idea_quality_gate",
             "idea_readiness_task_generation",
             "idea_decision_memos",
             "idea_decision_task_generation",
@@ -442,6 +444,13 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/ideas/{idea_id}/readiness",
             output_model="IdeaReadinessResponse",
+        ),
+        ToolManifestItem(
+            name="get_idea_quality_gate",
+            description="Run a go/no-go quality gate across novelty, readiness, proposal, experiments, and task health.",
+            method="GET",
+            path="/research/ideas/{idea_id}/quality-gate",
+            output_model="IdeaQualityGateResponse",
         ),
         ToolManifestItem(
             name="create_tasks_from_idea_readiness",
@@ -3104,6 +3113,321 @@ def _render_idea_readiness_markdown(
         lines.extend(f"- {blocker}" for blocker in blockers)
     else:
         lines.append("- No blocking readiness gaps found.")
+    return "\n".join(lines).strip() + "\n"
+
+
+@router.get("/ideas/{idea_id}/quality-gate", response_model=IdeaQualityGateResponse)
+def get_idea_quality_gate(
+    idea_id: str,
+    session: Session = Depends(get_session),
+) -> IdeaQualityGateResponse:
+    idea = IdeaService(session).get_idea(idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    readiness = get_idea_readiness(idea_id, session=session)
+    progress = get_idea_progress(idea_id, session=session)
+    novelty_checks = _latest_for_idea(session, NoveltyCheck, idea_id, 5)
+    reviews = _latest_for_idea(session, ProposalReview, idea_id, 5)
+    experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 5)
+    decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea_id, 5)
+    assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea_id, 5)
+    tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
+
+    latest_novelty = novelty_checks[0] if novelty_checks else None
+    latest_review = reviews[0] if reviews else None
+    latest_analysis = experiment_analyses[0] if experiment_analyses else None
+    latest_memo = decision_memos[0] if decision_memos else None
+    latest_audit = assumption_audits[0] if assumption_audits else None
+    open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
+    blocked_tasks = [task for task in tasks if task.status == "blocked"]
+    high_risk_assumptions = [
+        item
+        for item in (latest_audit.assumptions_json if latest_audit else [])
+        if item.get("risk_level") == "high"
+    ]
+
+    score_breakdown = _quality_gate_breakdown(
+        readiness=readiness,
+        latest_novelty=latest_novelty,
+        latest_review=latest_review,
+        latest_analysis=latest_analysis,
+        latest_memo=latest_memo,
+        open_tasks=open_tasks,
+        blocked_tasks=blocked_tasks,
+    )
+    gate_score = round(
+        sum(item["score"] * item["weight"] for item in score_breakdown.values()),
+        4,
+    )
+    required_evidence = _quality_gate_required_evidence(
+        latest_novelty=latest_novelty,
+        latest_review=latest_review,
+        latest_analysis=latest_analysis,
+        latest_memo=latest_memo,
+        latest_audit=latest_audit,
+    )
+    blocking_risks = _quality_gate_blocking_risks(
+        readiness=readiness,
+        latest_novelty=latest_novelty,
+        latest_memo=latest_memo,
+        high_risk_assumptions=high_risk_assumptions,
+        blocked_tasks=blocked_tasks,
+        required_evidence=required_evidence,
+    )
+    decision = _quality_gate_decision(
+        gate_score=gate_score,
+        latest_novelty=latest_novelty,
+        latest_memo=latest_memo,
+        blocking_risks=blocking_risks,
+    )
+    recommended_actions = _quality_gate_recommended_actions(
+        decision=decision,
+        readiness=readiness,
+        latest_novelty=latest_novelty,
+        required_evidence=required_evidence,
+        blocked_tasks=blocked_tasks,
+    )
+    latest_artifacts = {
+        "novelty_check": _quality_artifact(latest_novelty, ["status", "risk_level"]),
+        "proposal_review": _quality_artifact(latest_review, ["decision", "readiness_score"]),
+        "experiment_analysis": _quality_artifact(latest_analysis, ["decision", "confidence"]),
+        "decision_memo": _quality_artifact(latest_memo, ["decision"]),
+        "assumption_audit": _quality_artifact(latest_audit, ["status"]),
+        "progress": {
+            "recommended_next_step": progress.recommended_next_step,
+            "open_tasks": progress.artifact_counts.get("open_tasks", 0),
+            "blocked_tasks": progress.artifact_counts.get("blocked_tasks", 0),
+        },
+    }
+    markdown_export = _render_idea_quality_gate_markdown(
+        idea=idea,
+        gate_score=gate_score,
+        decision=decision,
+        score_breakdown=score_breakdown,
+        required_evidence=required_evidence,
+        blocking_risks=blocking_risks,
+        recommended_actions=recommended_actions,
+        latest_artifacts=latest_artifacts,
+    )
+    return IdeaQualityGateResponse(
+        idea=_serialize_idea(idea),
+        gate_score=gate_score,
+        decision=decision,
+        score_breakdown=score_breakdown,
+        required_evidence=required_evidence,
+        blocking_risks=blocking_risks,
+        recommended_actions=recommended_actions,
+        latest_artifacts=latest_artifacts,
+        markdown_export=markdown_export,
+        message=f"Ran idea quality gate for idea {idea.id}.",
+    )
+
+
+def _quality_gate_breakdown(
+    *,
+    readiness: IdeaReadinessResponse,
+    latest_novelty: NoveltyCheck | None,
+    latest_review: ProposalReview | None,
+    latest_analysis: ExperimentAnalysis | None,
+    latest_memo: IdeaDecisionMemo | None,
+    open_tasks: list[ResearchTask],
+    blocked_tasks: list[ResearchTask],
+) -> dict[str, dict[str, Any]]:
+    return {
+        "readiness": {
+            "score": readiness.readiness_score,
+            "weight": 0.32,
+            "signal": readiness.decision,
+        },
+        "novelty": {
+            "score": _quality_novelty_score(latest_novelty),
+            "weight": 0.2,
+            "signal": latest_novelty.risk_level if latest_novelty else "no novelty check",
+        },
+        "proposal": {
+            "score": latest_review.readiness_score if latest_review else 0.15,
+            "weight": 0.16,
+            "signal": latest_review.decision if latest_review else "no proposal review",
+        },
+        "experiment": {
+            "score": latest_analysis.confidence if latest_analysis else 0.2,
+            "weight": 0.14,
+            "signal": latest_analysis.decision if latest_analysis else "no experiment analysis",
+        },
+        "decision": {
+            "score": _readiness_decision_score(latest_memo),
+            "weight": 0.1,
+            "signal": latest_memo.decision if latest_memo else "no decision memo",
+        },
+        "task_health": {
+            "score": _readiness_task_score(open_tasks, blocked_tasks),
+            "weight": 0.08,
+            "signal": f"{len(blocked_tasks)} blocked of {len(open_tasks)} open tasks",
+        },
+    }
+
+
+def _quality_novelty_score(novelty: NoveltyCheck | None) -> float:
+    if novelty is None:
+        return 0.15
+    base = {"low": 0.95, "medium": 0.55, "high": 0.2, "unknown": 0.35}.get(
+        novelty.risk_level,
+        0.35,
+    )
+    if novelty.status == "completed_external_novelty_refresh":
+        base += 0.05
+    if novelty.missing_searches_json:
+        base -= min(len(novelty.missing_searches_json) * 0.03, 0.18)
+    return _clamp(base)
+
+
+def _quality_gate_required_evidence(
+    *,
+    latest_novelty: NoveltyCheck | None,
+    latest_review: ProposalReview | None,
+    latest_analysis: ExperimentAnalysis | None,
+    latest_memo: IdeaDecisionMemo | None,
+    latest_audit: IdeaAssumptionAudit | None,
+) -> list[dict[str, Any]]:
+    checks = [
+        ("novelty_refresh", latest_novelty is not None, "Refresh novelty/collision signals."),
+        ("proposal_review", latest_review is not None, "Run proposal readiness review."),
+        (
+            "experiment_analysis",
+            latest_analysis is not None,
+            "Analyze at least one experiment run.",
+        ),
+        ("decision_memo", latest_memo is not None, "Record pursue/revise/park/reject decision."),
+        ("assumption_audit", latest_audit is not None, "Audit falsifiable assumptions."),
+    ]
+    return [
+        {"name": name, "satisfied": satisfied, "action": action}
+        for name, satisfied, action in checks
+    ]
+
+
+def _quality_gate_blocking_risks(
+    *,
+    readiness: IdeaReadinessResponse,
+    latest_novelty: NoveltyCheck | None,
+    latest_memo: IdeaDecisionMemo | None,
+    high_risk_assumptions: list[dict],
+    blocked_tasks: list[ResearchTask],
+    required_evidence: list[dict[str, Any]],
+) -> list[str]:
+    risks = []
+    if latest_novelty is None:
+        risks.append("No novelty refresh or collision screen is available.")
+    elif latest_novelty.risk_level == "high":
+        risks.append("Latest novelty screen reports high collision risk.")
+    elif latest_novelty.missing_searches_json:
+        risks.append(
+            f"{len(latest_novelty.missing_searches_json)} novelty searches remain missing."
+        )
+    if latest_memo and latest_memo.decision in {"park", "reject"}:
+        risks.append(f"Latest decision memo says to {latest_memo.decision}.")
+    if high_risk_assumptions:
+        risks.append(f"{len(high_risk_assumptions)} high-risk assumptions remain open.")
+    for blocker in readiness.blockers[:3]:
+        risks.append(blocker)
+    for task in blocked_tasks[:3]:
+        risks.append(f"Blocked task: {task.title}")
+    for item in required_evidence:
+        if not item["satisfied"]:
+            risks.append(f"Missing gate evidence: {item['name']}.")
+    return list(dict.fromkeys(risks))[:12]
+
+
+def _quality_gate_decision(
+    *,
+    gate_score: float,
+    latest_novelty: NoveltyCheck | None,
+    latest_memo: IdeaDecisionMemo | None,
+    blocking_risks: list[str],
+) -> str:
+    if latest_memo and latest_memo.decision in {"reject", "park"}:
+        return latest_memo.decision
+    if latest_novelty and latest_novelty.risk_level == "high":
+        return "de_risk_novelty"
+    if gate_score >= 0.76 and len(blocking_risks) <= 2:
+        return "advance_to_execution"
+    if gate_score >= 0.58:
+        return "needs_targeted_revision"
+    return "revise_before_investment"
+
+
+def _quality_gate_recommended_actions(
+    *,
+    decision: str,
+    readiness: IdeaReadinessResponse,
+    latest_novelty: NoveltyCheck | None,
+    required_evidence: list[dict[str, Any]],
+    blocked_tasks: list[ResearchTask],
+) -> list[str]:
+    actions = []
+    for item in required_evidence:
+        if not item["satisfied"]:
+            actions.append(item["action"])
+    if latest_novelty and latest_novelty.risk_level in {"medium", "high", "unknown"}:
+        actions.extend(latest_novelty.recommended_actions_json[:3])
+    actions.extend(f"Clear readiness blocker: {blocker}" for blocker in readiness.blockers[:3])
+    actions.extend(f"Unblock task `{task.id}`: {task.title}" for task in blocked_tasks[:3])
+    if decision == "advance_to_execution":
+        actions.insert(0, "Create or refresh a 14-day execution plan for this idea.")
+    if not actions:
+        actions.append("Create an advisor brief and lock the next experimental commitment.")
+    return list(dict.fromkeys(actions))[:8]
+
+
+def _quality_artifact(artifact: Any, fields: list[str]) -> dict[str, Any] | None:
+    if artifact is None:
+        return None
+    payload = {"id": artifact.id}
+    for field in fields:
+        payload[field] = getattr(artifact, field, None)
+    return payload
+
+
+def _render_idea_quality_gate_markdown(
+    *,
+    idea: Idea,
+    gate_score: float,
+    decision: str,
+    score_breakdown: dict[str, Any],
+    required_evidence: list[dict[str, Any]],
+    blocking_risks: list[str],
+    recommended_actions: list[str],
+    latest_artifacts: dict[str, Any],
+) -> str:
+    lines = [
+        f"# Idea Quality Gate: {idea.title}",
+        "",
+        f"- Idea ID: `{idea.id}`",
+        f"- Gate Score: {gate_score:.4f}",
+        f"- Decision: `{decision}`",
+        "",
+        "## Score Breakdown",
+        "",
+    ]
+    for name, item in score_breakdown.items():
+        lines.append(
+            f"- {name}: score={item['score']:.4f} weight={item['weight']} signal={item['signal']}"
+        )
+    lines.extend(["", "## Required Evidence", ""])
+    for item in required_evidence:
+        mark = "yes" if item["satisfied"] else "no"
+        lines.append(f"- `{mark}` {item['name']}: {item['action']}")
+    lines.extend(["", "## Blocking Risks", ""])
+    if blocking_risks:
+        lines.extend(f"- {risk}" for risk in blocking_risks)
+    else:
+        lines.append("- No blocking risks detected by the gate.")
+    lines.extend(["", "## Recommended Actions", ""])
+    lines.extend(f"- {action}" for action in recommended_actions)
+    lines.extend(["", "## Latest Artifacts", ""])
+    for name, artifact in latest_artifacts.items():
+        lines.append(f"- {name}: `{artifact or 'missing'}`")
     return "\n".join(lines).strip() + "\n"
 
 

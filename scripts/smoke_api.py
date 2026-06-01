@@ -157,6 +157,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea activity timeline")
     if "idea_readiness_scoring" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea readiness scoring")
+    if "idea_quality_gate" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea quality gate")
     if "project_readiness_overview" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project readiness overview")
     if "research_opportunity_radar" not in status["implemented_capabilities"]:
@@ -226,6 +228,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project bundle export tool")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
+    if "get_idea_quality_gate" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea quality gate tool")
     if "get_project_readiness_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project readiness overview tool")
     if "get_research_opportunity_radar" not in manifest_names:
@@ -697,6 +701,16 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea readiness did not return a positive score")
     if "## Score Breakdown" not in readiness["markdown_export"]:
         raise RuntimeError("idea readiness markdown did not include score breakdown")
+    quality_gate = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/quality-gate"),
+        "idea quality gate",
+    )
+    if quality_gate["gate_score"] < 0:
+        raise RuntimeError("idea quality gate returned an invalid score")
+    if not quality_gate["recommended_actions"]:
+        raise RuntimeError("idea quality gate did not include recommended actions")
+    if "Idea Quality Gate" not in quality_gate["markdown_export"]:
+        raise RuntimeError("idea quality gate markdown did not include title")
     readiness_tasks = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/readiness/tasks",
@@ -1140,6 +1154,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "timeline_markdown_chars": len(timeline["markdown_export"]),
         "readiness_score": readiness["readiness_score"],
         "readiness_decision": readiness["decision"],
+        "quality_gate_score": quality_gate["gate_score"],
+        "quality_gate_decision": quality_gate["decision"],
         "readiness_task_count": len(readiness_tasks["tasks"]),
         "readiness_progress_task_count": progress_after_readiness_tasks["artifact_counts"][
             "readiness_follow_up_tasks"

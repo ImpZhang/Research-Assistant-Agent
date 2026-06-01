@@ -692,6 +692,19 @@ class IdeaReadinessResponse(BaseModel):
     message: str
 
 
+class IdeaQualityGateResponse(BaseModel):
+    idea: IdeaRead
+    gate_score: float = 0.0
+    decision: str = "needs_targeted_revision"
+    score_breakdown: dict[str, Any] = Field(default_factory=dict)
+    required_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    blocking_risks: list[str] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+    latest_artifacts: dict[str, Any] = Field(default_factory=dict)
+    markdown_export: str = ""
+    message: str
+
+
 class IdeaReadinessSummary(BaseModel):
     idea_id: str
     title: str
