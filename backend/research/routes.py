@@ -213,6 +213,7 @@ def status() -> ProjectStatus:
             "idea_progress_summary",
             "idea_research_packet",
             "idea_readiness_scoring",
+            "idea_readiness_task_generation",
             "idea_decision_memos",
             "idea_decision_task_generation",
             "idea_assumption_audits",
@@ -401,6 +402,15 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/ideas/{idea_id}/readiness",
             output_model="IdeaReadinessResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_idea_readiness",
+            description="Turn readiness blockers into concrete follow-up research tasks.",
+            method="POST",
+            path="/research/ideas/{idea_id}/readiness/tasks",
+            input_model="ResearchTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="create_idea_decision_memo",
@@ -1879,6 +1889,7 @@ def get_idea_progress(
         and task.owner_id == latest_memo.id
     ]
     research_plan_tasks = [task for task in tasks if task.owner_type == "research_plan"]
+    readiness_tasks = [task for task in tasks if task.owner_type == "idea_readiness"]
     artifact_counts = {
         "related_work_matrices": len(matrices),
         "proposal_drafts": len(drafts),
@@ -1893,6 +1904,7 @@ def get_idea_progress(
         "open_tasks": len([task for task in tasks if task.status in {"todo", "doing", "blocked"}]),
         "blocked_tasks": len([task for task in tasks if task.status == "blocked"]),
         "research_plan_tasks": len(research_plan_tasks),
+        "readiness_follow_up_tasks": len(readiness_tasks),
         "analysis_follow_up_tasks": len(analysis_tasks),
         "decision_follow_up_tasks": len(decision_tasks),
         "task_board_snapshots": len(snapshots),
@@ -2511,6 +2523,29 @@ def get_idea_readiness(
     )
 
 
+@router.post("/ideas/{idea_id}/readiness/tasks", response_model=ResearchTaskGenerationResponse)
+def create_tasks_from_idea_readiness(
+    idea_id: str,
+    payload: ResearchTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    readiness = get_idea_readiness(idea_id, session=session)
+    try:
+        tasks = ResearchTaskService(session).create_from_idea_readiness(
+            idea_id,
+            blockers=readiness.blockers,
+            readiness_score=readiness.readiness_score,
+            decision=readiness.decision,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} readiness follow-up tasks for idea {idea_id}.",
+    )
+
+
 def _clamp(value: float) -> float:
     return round(max(0.0, min(float(value), 1.0)), 4)
 
@@ -2979,6 +3014,8 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "decision_memo_creates_task",
         "idea_has_assumption_audit",
         "research_plan_creates_task",
+        "idea_has_readiness_assessment",
+        "idea_readiness_creates_task",
     ]
     edges = (
         session.query(ResearchEdge)

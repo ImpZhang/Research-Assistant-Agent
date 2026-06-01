@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from backend.research.models import (
     ExperimentAnalysis,
+    Idea,
     IdeaDecisionMemo,
     ProposalRevision,
     ResearchPlanSnapshot,
@@ -302,6 +303,75 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_idea_readiness(
+        self,
+        idea_id: str,
+        *,
+        blockers: list[str],
+        readiness_score: float,
+        decision: str,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        idea = self.session.get(Idea, idea_id)
+        if idea is None:
+            raise ValueError("Idea not found")
+
+        blocker_actions = self._unique_commitments(
+            blockers or ["Prepare an execution handoff for this ready idea."]
+        )[:8]
+        tasks = [
+            ResearchTask(
+                idea_id=idea.id,
+                owner_type="idea_readiness",
+                owner_id=idea.id,
+                source_type="readiness_blocker" if blockers else "readiness_handoff",
+                source_id=f"blocker_{idx}" if blockers else "execution_handoff",
+                title=self._readiness_task_title(blocker, idx),
+                description=blocker,
+                priority=self._readiness_task_priority(blocker, decision),
+                status="todo",
+                due_phase="readiness_follow_up",
+                metadata_json={
+                    "readiness_score": readiness_score,
+                    "readiness_decision": decision,
+                    "blocker": blocker,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, blocker in enumerate(blocker_actions, start=1)
+        ]
+        tasks = self._deduplicate_readiness_tasks(tasks)[:8]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note=f"Created from readiness blockers for idea {idea.id}.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "readiness_score": readiness_score,
+                        "readiness_decision": decision,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_idea_readiness_tasks(idea, tasks)
+        self.session.commit()
+        return tasks
+
     def list_tasks(
         self,
         *,
@@ -467,6 +537,40 @@ class ResearchTaskService:
             return f"Follow up experiment analysis action {idx}"
         return clean[:96]
 
+    def _readiness_task_title(self, blocker: str, idx: int) -> str:
+        clean = " ".join(str(blocker).split())
+        lower = clean.lower()
+        if "related-work matrix" in lower:
+            return "Create related-work matrix"
+        if "proposal readiness review" in lower:
+            return "Run proposal readiness review"
+        if "experiment analysis" in lower:
+            return "Analyze latest experiment signal"
+        if "decision memo" in lower:
+            return "Create idea decision memo"
+        if "assumption audit" in lower:
+            return "Create assumption audit"
+        if "high-risk assumptions" in lower:
+            return "Validate high-risk assumptions"
+        if lower.startswith("blocked task:"):
+            return self._short_task_title(
+                "Unblock " + clean.removeprefix("Blocked task:").strip(), idx
+            )
+        return self._short_task_title(f"Resolve readiness blocker {idx}: {clean}", idx)
+
+    def _readiness_task_priority(self, blocker: str, decision: str) -> str:
+        lower = str(blocker).lower()
+        if "blocked task" in lower or "high-risk" in lower or decision in {"park", "reject"}:
+            return "critical"
+        if (
+            "no " in lower
+            or "missing" in lower
+            or "assumption" in lower
+            or decision == "needs_work"
+        ):
+            return "high"
+        return "medium"
+
     def _unique_commitments(self, commitments: list) -> list[str]:
         unique = []
         seen = set()
@@ -483,6 +587,16 @@ class ResearchTaskService:
         seen = set()
         for task in tasks:
             key = (task.idea_id or "", task.title.lower(), task.owner_id)
+            if key not in seen:
+                unique.append(task)
+                seen.add(key)
+        return unique
+
+    def _deduplicate_readiness_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
+        unique = []
+        seen = set()
+        for task in tasks:
+            key = (task.idea_id or "", task.title.lower(), task.description.lower())
             if key not in seen:
                 unique.append(task)
                 seen.add(key)

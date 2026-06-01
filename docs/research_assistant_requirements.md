@@ -781,6 +781,8 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - 用于快速判断整个科研项目今天应该推进什么，而不是逐个点开 idea。
 - 后续 MCP/agent planner 应优先读取 overview，再进入具体 idea progress。
 
+系统需要支持 readiness blocker task generation：readiness 评分产出的 blockers 不能只停留在报告里，应能一键转成 task board 任务，并带上 readiness_score、decision、owner_type=idea_readiness、due_phase=readiness_follow_up 和图边 `idea_readiness_creates_task`，保证“评分 -> 阻塞项 -> 可执行任务”闭环。
+
 系统需要提供 advisor brief：
 
 - 将选定 idea 或项目级状态固化成 Markdown brief。

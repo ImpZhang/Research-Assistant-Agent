@@ -34,6 +34,7 @@ def test_research_status() -> None:
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
     assert "idea_research_packet" in body["implemented_capabilities"]
     assert "idea_readiness_scoring" in body["implemented_capabilities"]
+    assert "idea_readiness_task_generation" in body["implemented_capabilities"]
     assert "project_readiness_overview" in body["implemented_capabilities"]
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
@@ -60,6 +61,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_idea_research_packet" in names
     assert "export_idea_bundle" in names
     assert "get_idea_readiness" in names
+    assert "create_tasks_from_idea_readiness" in names
     assert "get_project_readiness_overview" in names
     assert "create_idea_decision_memo" in names
     assert "create_tasks_from_idea_decision_memo" in names
@@ -288,6 +290,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "profileRisk" in response.text
     assert "researchPlanButton" in response.text
     assert "researchPlanTasksButton" in response.text
+    assert "readinessTasksButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -317,6 +320,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/research-packet" in script.text
     assert "/research/ideas/${encodeURIComponent(state.latestIdeaId)}/export/bundle" in script.text
     assert "/research/ideas/${state.latestIdeaId}/readiness" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/readiness/tasks" in script.text
     assert "/research/ideas/${state.latestIdeaId}/decision-memo" in script.text
     assert (
         "/research/ideas/${state.latestIdeaId}/decision-memos/${state.latestDecisionMemoId}/tasks"
@@ -1140,6 +1144,33 @@ Future work should preserve proposal drafts as reviewable artifacts.
     }
     assert "proposal" in readiness_body["score_breakdown"]
     assert "# Idea Readiness:" in readiness_body["markdown_export"]
+
+    readiness_tasks = client.post(
+        f"/research/ideas/{idea_id}/readiness/tasks",
+        json={"created_by": "pytest"},
+    )
+    assert readiness_tasks.status_code == 200
+    readiness_task_body = readiness_tasks.json()
+    assert readiness_task_body["tasks"]
+    readiness_task_id = readiness_task_body["tasks"][0]["id"]
+    assert readiness_task_body["tasks"][0]["owner_type"] == "idea_readiness"
+    assert readiness_task_body["tasks"][0]["owner_id"] == idea_id
+
+    readiness_task_edges = client.get("/research/graph/edges?edge_type=idea_readiness_creates_task")
+    assert readiness_task_edges.status_code == 200
+    assert readiness_task_edges.json()
+
+    progress_after_readiness_tasks = client.get(f"/research/ideas/{idea_id}/progress")
+    assert progress_after_readiness_tasks.status_code == 200
+    progress_after_body = progress_after_readiness_tasks.json()
+    assert progress_after_body["artifact_counts"]["readiness_follow_up_tasks"] >= 1
+    assert progress_after_body["task_summary"]["by_owner_type"]["idea_readiness"] >= 1
+
+    packet_after_readiness_tasks = client.get(f"/research/ideas/{idea_id}/research-packet")
+    assert packet_after_readiness_tasks.status_code == 200
+    packet_after_body = packet_after_readiness_tasks.json()
+    assert packet_after_body["graph_edge_summary"]["idea_readiness_creates_task"] >= 1
+    assert any(task["id"] == readiness_task_id for task in packet_after_body["open_tasks"])
 
     bundle = client.get(f"/research/ideas/{idea_id}/export/bundle")
     assert bundle.status_code == 200

@@ -169,6 +169,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea decision memos")
     if "idea_decision_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision task generation")
+    if "idea_readiness_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea readiness task generation")
     if "idea_assumption_audits" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea assumption audits")
     manifest_names = {tool["name"] for tool in tool_manifest["tools"]}
@@ -200,6 +202,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea decision memo tool")
     if "create_tasks_from_idea_decision_memo" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea decision task tool")
+    if "create_tasks_from_idea_readiness" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea readiness task tool")
     if "create_idea_assumption_audit" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea assumption audit tool")
     bridge_names = {tool["name"] for tool in tool_bridge["tools"]}
@@ -614,6 +618,29 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea readiness did not return a positive score")
     if "## Score Breakdown" not in readiness["markdown_export"]:
         raise RuntimeError("idea readiness markdown did not include score breakdown")
+    readiness_tasks = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/readiness/tasks",
+            json_body={"created_by": "smoke_api"},
+        ),
+        "idea readiness tasks",
+    )
+    if not readiness_tasks["tasks"]:
+        raise RuntimeError("idea readiness task generation returned no tasks")
+    if readiness_tasks["tasks"][0]["owner_type"] != "idea_readiness":
+        raise RuntimeError("idea readiness tasks used the wrong owner type")
+    progress_after_readiness_tasks = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/progress"),
+        "idea progress after readiness tasks",
+    )
+    if progress_after_readiness_tasks["artifact_counts"].get("readiness_follow_up_tasks", 0) < 1:
+        raise RuntimeError("idea progress did not count readiness follow-up tasks")
+    packet_after_readiness_tasks = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/research-packet"),
+        "idea research packet after readiness tasks",
+    )
+    if packet_after_readiness_tasks["graph_edge_summary"].get("idea_readiness_creates_task", 0) < 1:
+        raise RuntimeError("research packet did not summarize readiness task edges")
     bundle_response = client.get(f"/research/ideas/{refined_idea['id']}/export/bundle")
     if bundle_response.status_code != 200:
         raise RuntimeError(
@@ -950,6 +977,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "research_packet_markdown_chars": len(research_packet["markdown_export"]),
         "readiness_score": readiness["readiness_score"],
         "readiness_decision": readiness["decision"],
+        "readiness_task_count": len(readiness_tasks["tasks"]),
+        "readiness_progress_task_count": progress_after_readiness_tasks["artifact_counts"][
+            "readiness_follow_up_tasks"
+        ],
         "idea_bundle_file_count": len(bundle_files),
         "idea_bundle_manifest_decision": bundle_manifest["readiness"]["decision"],
         "overview_idea_count": overview["idea_count"],

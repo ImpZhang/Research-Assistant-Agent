@@ -2,6 +2,7 @@ from backend.research.models import (
     ExperimentAnalysis,
     ExperimentPlan,
     ExperimentRun,
+    Idea,
     IdeaAssumptionAudit,
     IdeaDecisionMemo,
     ProposalDraft,
@@ -382,6 +383,46 @@ class ArtifactGraphService:
                 target_node=task_node,
                 edge_type="research_plan_creates_task",
                 payload={"source": "research_plan_snapshot"},
+            )
+
+    def link_idea_readiness_tasks(
+        self,
+        idea: Idea,
+        tasks: list[ResearchTask],
+    ) -> None:
+        idea_node = self._idea_node(idea.id)
+        readiness_node = self.graph.get_or_create_node(
+            node_type="idea_readiness",
+            label=f"Readiness follow-up: {idea.title}",
+            canonical_key=f"{idea.id}:readiness",
+            payload={
+                "idea_id": idea.id,
+                "task_count": len(tasks),
+            },
+        )
+        self.graph.create_edge(
+            source_node=idea_node,
+            target_node=readiness_node,
+            edge_type="idea_has_readiness_assessment",
+            payload={"source": "idea_readiness_task_generation"},
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=readiness_node,
+                target_node=task_node,
+                edge_type="idea_readiness_creates_task",
+                payload={"source": "idea_readiness_blocker"},
             )
 
     def link_idea_assumption_audit(self, audit: IdeaAssumptionAudit) -> None:
