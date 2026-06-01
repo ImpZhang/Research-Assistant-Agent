@@ -225,6 +225,7 @@ def status() -> ProjectStatus:
             "project_progress_overview",
             "project_readiness_overview",
             "idea_artifact_bundle_export",
+            "project_handoff_bundle_export",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "tool_manifest",
@@ -416,6 +417,13 @@ def tool_manifest() -> ToolManifestResponse:
             description="Download a zip bundle with one idea's dossier, lineage, readiness, tasks, and artifact Markdown.",
             method="GET",
             path="/research/ideas/{idea_id}/export/bundle",
+            output_model="application/zip",
+        ),
+        ToolManifestItem(
+            name="export_project_bundle",
+            description="Download a project-level handoff bundle with overviews, briefs, plans, and task state.",
+            method="GET",
+            path="/research/export/project-bundle",
             output_model="application/zip",
         ),
         ToolManifestItem(
@@ -4073,6 +4081,18 @@ def export_idea_bundle(
     )
 
 
+@router.get("/export/project-bundle")
+def export_project_bundle(
+    session: Session = Depends(get_session),
+) -> Response:
+    content = _build_project_bundle_zip(session)
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="research-project-bundle.zip"'},
+    )
+
+
 def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
     idea = IdeaService(session).get_idea(idea_id)
     if idea is None:
@@ -4174,6 +4194,130 @@ def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
                     persisted.markdown_export,
                 )
     return buffer.getvalue()
+
+
+def _build_project_bundle_zip(session: Session) -> bytes:
+    overview = get_research_progress_overview(session=session)
+    readiness_overview = get_project_readiness_overview(session=session)
+    briefs = ResearchBriefService(session).list_briefs(limit=12)
+    plans = ResearchPlanService(session).list_plans(limit=12)
+    tasks = ResearchTaskService(session).list_tasks(limit=200)
+    plan_progress_items = [get_research_plan_progress(plan.id, session=session) for plan in plans]
+    manifest = _project_bundle_manifest(
+        overview=overview,
+        readiness_overview=readiness_overview,
+        briefs=briefs,
+        plans=plans,
+        tasks=tasks,
+        plan_progress_items=plan_progress_items,
+    )
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("README.md", _render_project_bundle_readme(manifest))
+        archive.writestr("metadata/manifest.json", _json_dump(manifest))
+        archive.writestr("metadata/progress-overview.json", _json_dump(overview))
+        archive.writestr("metadata/readiness-overview.json", _json_dump(readiness_overview))
+        _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
+        _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
+        _write_markdown(archive, "03-task-board.md", _render_project_task_board_markdown(tasks))
+        for brief in briefs:
+            if brief.markdown_export:
+                _write_markdown(
+                    archive,
+                    f"artifacts/briefs/research-brief-{brief.id}.md",
+                    brief.markdown_export,
+                )
+        for plan in plans:
+            if plan.markdown_export:
+                _write_markdown(
+                    archive,
+                    f"artifacts/plans/research-plan-{plan.id}.md",
+                    plan.markdown_export,
+                )
+        for plan_progress in plan_progress_items:
+            _write_markdown(
+                archive,
+                f"artifacts/plans/research-plan-progress-{plan_progress.plan.id}.md",
+                plan_progress.markdown_export,
+            )
+    return buffer.getvalue()
+
+
+def _project_bundle_manifest(
+    *,
+    overview: ResearchOverviewResponse,
+    readiness_overview: ProjectReadinessOverviewResponse,
+    briefs: list[ResearchBrief],
+    plans: list[ResearchPlanSnapshot],
+    tasks: list[ResearchTask],
+    plan_progress_items: list[ResearchPlanProgressResponse],
+) -> dict[str, Any]:
+    return {
+        "bundle_type": "research_project_bundle",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "idea_count": overview.idea_count,
+        "open_task_count": overview.task_summary.get("open_task_count", 0),
+        "blocked_task_count": len(overview.blocked_tasks),
+        "average_readiness": readiness_overview.average_readiness,
+        "brief_count": len(briefs),
+        "research_plan_count": len(plans),
+        "recent_task_count": len(tasks),
+        "plan_progress": [
+            {
+                "plan_id": item.plan.id,
+                "title": item.plan.title,
+                "task_count": item.task_summary.get("task_count", 0),
+                "open_task_count": item.task_summary.get("open_task_count", 0),
+                "completion_ratio": item.task_summary.get("completion_ratio", 0.0),
+            }
+            for item in plan_progress_items
+        ],
+    }
+
+
+def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
+    lines = [
+        "# Research Project Bundle",
+        "",
+        f"- Generated At: `{manifest['generated_at']}`",
+        f"- Idea Count: {manifest['idea_count']}",
+        f"- Open Tasks: {manifest['open_task_count']}",
+        f"- Blocked Tasks: {manifest['blocked_task_count']}",
+        f"- Average Readiness: {manifest['average_readiness']}",
+        f"- Research Plans: {manifest['research_plan_count']}",
+        f"- Briefs: {manifest['brief_count']}",
+        "",
+        "## Start Here",
+        "",
+        "- `01-progress-overview.md`: project-level task and experiment overview.",
+        "- `02-readiness-overview.md`: project-level readiness comparison.",
+        "- `03-task-board.md`: recent task board state.",
+        "- `artifacts/briefs/`: persisted advisor or group-meeting briefs.",
+        "- `artifacts/plans/`: execution plans and plan progress reports.",
+        "- `metadata/`: JSON payloads for downstream tools or backup.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _render_project_task_board_markdown(tasks: list[ResearchTask]) -> str:
+    lines = [
+        "# Project Task Board",
+        "",
+        f"- Recent Task Count: {len(tasks)}",
+        "",
+        "## Tasks",
+        "",
+    ]
+    if not tasks:
+        lines.append("- No recent tasks.")
+    for task in sorted(tasks, key=_progress_task_order)[:200]:
+        lines.append(
+            f"- `{task.id}` `{task.priority}` `{task.status}` "
+            f"idea=`{task.idea_id or 'none'}` owner=`{task.owner_type}` {task.title}"
+        )
+    return "\n".join(lines).strip() + "\n"
 
 
 def _idea_bundle_manifest(

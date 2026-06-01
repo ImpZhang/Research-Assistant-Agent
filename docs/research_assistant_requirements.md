@@ -781,6 +781,8 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - 用于快速判断整个科研项目今天应该推进什么，而不是逐个点开 idea。
 - 后续 MCP/agent planner 应优先读取 overview，再进入具体 idea progress。
 
+系统需要提供 project handoff bundle export：把 progress overview、readiness overview、recent task board、advisor briefs、research plans、plan progress reports 和 JSON metadata 打包成 zip，用于项目级备份、导师沟通和外部 agent/MCP 接手。
+
 系统需要支持 readiness blocker task generation：readiness 评分产出的 blockers 不能只停留在报告里，应能一键转成 task board 任务，并带上 readiness_score、decision、owner_type=idea_readiness、due_phase=readiness_follow_up 和图边 `idea_readiness_creates_task`，保证“评分 -> 阻塞项 -> 可执行任务”闭环。
 
 Workbench 需要提供最小可用 task board：能按当前 idea 和状态读取任务，选择任务，并把任务更新为 doing、done 或 blocked。所有操作必须走同一套 `/research/tasks` API，避免前端维护第二份任务状态。

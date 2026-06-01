@@ -41,6 +41,7 @@ def test_research_status() -> None:
     assert "idea_readiness_task_generation" in body["implemented_capabilities"]
     assert "project_readiness_overview" in body["implemented_capabilities"]
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
+    assert "project_handoff_bundle_export" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
@@ -67,6 +68,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_idea_research_packet" in names
     assert "get_idea_timeline" in names
     assert "export_idea_bundle" in names
+    assert "export_project_bundle" in names
     assert "get_idea_readiness" in names
     assert "create_tasks_from_idea_readiness" in names
     assert "list_research_tasks" in names
@@ -328,6 +330,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "taskBoardButton" in response.text
     assert "taskSelect" in response.text
     assert "timelineButton" in response.text
+    assert "projectBundleButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -360,6 +363,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/progress" in script.text
     assert "/research/ideas/${state.latestIdeaId}/research-packet" in script.text
     assert "/research/ideas/${encodeURIComponent(state.latestIdeaId)}/export/bundle" in script.text
+    assert "/research/export/project-bundle" in script.text
     assert "/research/ideas/${state.latestIdeaId}/readiness" in script.text
     assert "/research/ideas/${state.latestIdeaId}/readiness/tasks" in script.text
     assert "/research/ideas/${state.latestIdeaId}/decision-memo" in script.text
@@ -1291,6 +1295,20 @@ Future work should preserve proposal drafts as reviewable artifacts.
     brief_export = client.get(f"/research/briefs/{brief_body['id']}/export/markdown")
     assert brief_export.status_code == 200
     assert "## Highest Priority Open Tasks" in brief_export.text
+
+    project_bundle = client.get("/research/export/project-bundle")
+    assert project_bundle.status_code == 200
+    assert project_bundle.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(project_bundle.content)) as archive:
+        names = set(archive.namelist())
+        assert "README.md" in names
+        assert "01-progress-overview.md" in names
+        assert "02-readiness-overview.md" in names
+        assert "03-task-board.md" in names
+        assert "metadata/manifest.json" in names
+        project_manifest = json.loads(archive.read("metadata/manifest.json"))
+        assert project_manifest["idea_count"] >= 1
+        assert project_manifest["recent_task_count"] >= 1
 
 
 def test_refine_idea_creates_traceable_revision() -> None:

@@ -998,6 +998,16 @@ function downloadIdeaBundle() {
   );
 }
 
+function downloadProjectBundle() {
+  const link = document.createElement("a");
+  link.href = "/research/export/project-bundle";
+  link.download = "research-project-bundle.zip";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  renderResult("workflowResult", "Started project bundle export.");
+}
+
 async function loadIdeaReadiness() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -1274,6 +1284,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("progressButton").addEventListener("click", loadIdeaProgress);
   $("researchPacketButton").addEventListener("click", loadResearchPacket);
   $("ideaBundleButton").addEventListener("click", downloadIdeaBundle);
+  $("projectBundleButton").addEventListener("click", downloadProjectBundle);
   $("readinessButton").addEventListener("click", loadIdeaReadiness);
   $("readinessTasksButton").addEventListener("click", createReadinessTasks);
   $("overviewButton").addEventListener("click", loadProjectOverview);

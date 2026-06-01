@@ -75,6 +75,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Follow-up task generation from idea decision memo commitments.
 - Idea assumption audits that expose falsifiable assumptions, validation signals, risk levels, and source artifacts.
 - Project progress overview that aggregates all ideas, open tasks, blockers, recent analyses, and recommended actions.
+- Project handoff bundle export that packages project overviews, readiness, task board state, briefs, and research plans.
 - Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries, including profile, tasks, experiment decisions, plan progress, and readiness signals.
 - Persisted research execution plans that turn profile, ranked ideas, and open tasks into 7/14+ day action plans.
 - Task generation from research execution plans so plan actions enter the task board, idea progress, lineage, research packets, and bundle exports.
@@ -186,7 +187,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, idea timeline, readiness score, readiness follow-up tasks, idea bundle export, project readiness overview, project overview, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, idea timeline, readiness score, readiness follow-up tasks, idea bundle export, project readiness overview, project overview, project bundle export, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -204,6 +205,7 @@ GET  /research/profile
 PUT  /research/profile
 GET  /research/profile/export/markdown
 GET  /research/progress/overview
+GET  /research/export/project-bundle
 POST /research/briefs
 GET  /research/briefs
 GET  /research/briefs/{brief_id}

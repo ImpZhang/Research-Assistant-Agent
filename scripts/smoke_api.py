@@ -161,6 +161,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project readiness overview")
     if "idea_artifact_bundle_export" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea artifact bundle export")
+    if "project_handoff_bundle_export" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project handoff bundle export")
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "mcp_tool_bridge_spec" not in status["implemented_capabilities"]:
@@ -208,6 +210,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea timeline tool")
     if "export_idea_bundle" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea bundle export tool")
+    if "export_project_bundle" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle export tool")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_project_readiness_overview" not in manifest_names:
@@ -783,6 +787,31 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("advisor brief did not include research plan count")
     if "## Execution Plans" not in plan_advisor_brief["markdown_export"]:
         raise RuntimeError("advisor brief markdown did not include execution plans")
+    project_bundle_response = client.get("/research/export/project-bundle")
+    if project_bundle_response.status_code != 200:
+        raise RuntimeError(
+            f"project bundle export failed: {project_bundle_response.status_code} "
+            f"{project_bundle_response.text}"
+        )
+    if project_bundle_response.headers.get("content-type") != "application/zip":
+        raise RuntimeError("project bundle export did not return an application/zip response")
+    with zipfile.ZipFile(io.BytesIO(project_bundle_response.content)) as archive:
+        project_bundle_files = set(archive.namelist())
+        required_project_files = {
+            "README.md",
+            "01-progress-overview.md",
+            "02-readiness-overview.md",
+            "03-task-board.md",
+            "metadata/manifest.json",
+        }
+        missing_project_files = required_project_files - project_bundle_files
+        if missing_project_files:
+            raise RuntimeError(f"project bundle export missed files: {missing_project_files}")
+        project_bundle_manifest = json.loads(archive.read("metadata/manifest.json"))
+    if project_bundle_manifest["idea_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include ideas")
+    if project_bundle_manifest["research_plan_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include research plans")
     post_plan_progress = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/progress"),
         "idea progress after research plan tasks",
@@ -1050,6 +1079,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "advisor_brief_markdown_chars": len(advisor_brief_markdown),
         "plan_advisor_brief_id": plan_advisor_brief["id"],
         "plan_advisor_brief_plan_count": plan_advisor_brief["summary"]["research_plan_count"],
+        "project_bundle_file_count": len(project_bundle_files),
+        "project_bundle_plan_count": project_bundle_manifest["research_plan_count"],
         "research_plan_id": research_plan["id"],
         "research_plan_item_count": len(research_plan["plan_items"]),
         "research_plan_task_count": len(research_plan_tasks["tasks"]),
