@@ -201,6 +201,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea readiness task generation")
     if "idea_assumption_audits" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea assumption audits")
+    if "project_triage_brief" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project triage brief")
     if "external_novelty_refresh" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include external novelty refresh")
     if "novelty_check_task_generation" not in status["implemented_capabilities"]:
@@ -222,6 +224,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include research plan progress tool")
     if "get_project_progress_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project progress overview tool")
+    if "get_project_triage_brief" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project triage brief tool")
     if "retry_job" not in manifest_names:
         raise RuntimeError("tool manifest did not include job retry tool")
     if "get_idea_research_packet" not in manifest_names:
@@ -833,6 +837,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project quality gate overview did not include decision counts")
     if "Project Quality Gate Overview" not in quality_overview["markdown_export"]:
         raise RuntimeError("project quality gate overview markdown did not include title")
+    triage_brief = require_ok(
+        client.get("/research/triage/brief?idea_limit=50&opportunity_limit=5"),
+        "project triage brief",
+    )
+    if not triage_brief["next_actions"]:
+        raise RuntimeError("project triage brief did not include next actions")
+    if "Project Triage Brief" not in triage_brief["markdown_export"]:
+        raise RuntimeError("project triage brief markdown did not include title")
     project_quality_tasks = require_ok(
         client.post(
             "/research/quality/overview/tasks",
@@ -964,12 +976,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         project_bundle_files = set(archive.namelist())
         required_project_files = {
             "README.md",
+            "00-project-triage-brief.md",
             "01-progress-overview.md",
             "02-readiness-overview.md",
             "03-task-board.md",
             "04-opportunity-radar.md",
             "05-quality-gate-overview.md",
             "metadata/manifest.json",
+            "metadata/triage-brief.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
         }
@@ -983,6 +997,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle manifest did not include research plans")
     if project_bundle_manifest["quality_gate_idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include quality gate ideas")
+    if project_bundle_manifest["triage_next_action_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include triage next actions")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     post_plan_progress = require_ok(
@@ -1246,6 +1262,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         ],
         "quality_overview_idea_count": quality_overview["idea_count"],
         "quality_overview_average": quality_overview["average_gate_score"],
+        "triage_next_action_count": len(triage_brief["next_actions"]),
         "project_quality_task_count": len(project_quality_tasks["tasks"]),
         "readiness_task_count": len(readiness_tasks["tasks"]),
         "readiness_progress_task_count": progress_after_readiness_tasks["artifact_counts"][

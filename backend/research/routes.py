@@ -111,6 +111,7 @@ from backend.research.schemas import (
     ProjectQualityGateTaskGenerateRequest,
     ProjectReadinessOverviewResponse,
     ProjectStatus,
+    ProjectTriageBriefResponse,
     RankedIdeaRead,
     RelatedWorkMatrixCreate,
     RelatedWorkMatrixRead,
@@ -233,6 +234,7 @@ def status() -> ProjectStatus:
             "idea_decision_task_generation",
             "idea_assumption_audits",
             "project_progress_overview",
+            "project_triage_brief",
             "project_readiness_overview",
             "project_quality_gate_overview",
             "project_quality_gate_task_generation",
@@ -543,6 +545,13 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/progress/overview",
             output_model="ResearchOverviewResponse",
+        ),
+        ToolManifestItem(
+            name="get_project_triage_brief",
+            description="Synthesize progress, readiness, quality gates, and opportunities into a daily research triage brief.",
+            method="GET",
+            path="/research/triage/brief",
+            output_model="ProjectTriageBriefResponse",
         ),
         ToolManifestItem(
             name="get_project_readiness_overview",
@@ -869,6 +878,160 @@ def _render_research_overview_markdown(
     lines.extend(["", "## Recommended Actions", ""])
     lines.extend(f"- {action}" for action in recommended_actions)
     return "\n".join(lines).strip() + "\n"
+
+
+@router.get("/triage/brief", response_model=ProjectTriageBriefResponse)
+def get_project_triage_brief(
+    idea_limit: int = 50,
+    opportunity_limit: int = 8,
+    session: Session = Depends(get_session),
+) -> ProjectTriageBriefResponse:
+    idea_limit = max(1, min(idea_limit, 200))
+    opportunity_limit = max(1, min(opportunity_limit, 20))
+    overview = get_research_progress_overview(idea_limit=idea_limit, session=session)
+    readiness = get_project_readiness_overview(limit=idea_limit, session=session)
+    quality = get_project_quality_gate_overview(limit=idea_limit, session=session)
+    radar = get_research_opportunity_radar(limit=opportunity_limit, session=session)
+    generated_at = datetime.now(timezone.utc)
+    recommended_focus = _triage_recommended_focus(readiness, quality, radar)
+    risk_focus = _triage_risk_focus(overview, readiness, quality)
+    next_actions = _triage_next_actions(overview, quality, radar)
+    markdown_export = _render_project_triage_brief_markdown(
+        generated_at=generated_at,
+        overview=overview,
+        readiness=readiness,
+        quality=quality,
+        radar=radar,
+        recommended_focus=recommended_focus,
+        risk_focus=risk_focus,
+        next_actions=next_actions,
+    )
+    return ProjectTriageBriefResponse(
+        generated_at=generated_at,
+        idea_count=overview.idea_count,
+        open_task_count=overview.task_summary.get("open_task_count", 0),
+        blocked_task_count=len(overview.blocked_tasks),
+        average_readiness=readiness.average_readiness,
+        average_quality_gate_score=quality.average_gate_score,
+        opportunity_count=radar.opportunity_count,
+        recommended_focus=recommended_focus,
+        risk_focus=risk_focus,
+        next_actions=next_actions,
+        markdown_export=markdown_export,
+        message=(
+            "Built project triage brief from progress, readiness, "
+            "quality gates, and opportunity radar."
+        ),
+    )
+
+
+def _triage_recommended_focus(
+    readiness: ProjectReadinessOverviewResponse,
+    quality: ProjectQualityGateOverviewResponse,
+    radar: ResearchOpportunityRadarResponse,
+) -> list[str]:
+    focus = []
+    for item in quality.advance_candidates[:3]:
+        focus.append(f"Advance `{item.idea_id}`: {item.title} ({item.gate_score:.4f}).")
+    for item in radar.top_opportunities[:3]:
+        focus.append(
+            f"Opportunity #{item.rank} `{item.idea_id}`: {item.title} "
+            f"(radar={item.radar_score:.4f})."
+        )
+    for item in readiness.top_ready[:3]:
+        focus.append(
+            f"Ready candidate `{item.idea_id}`: {item.title} "
+            f"(readiness={item.readiness_score:.4f})."
+        )
+    return _dedupe_strings(focus)[:8]
+
+
+def _triage_risk_focus(
+    overview: ResearchOverviewResponse,
+    readiness: ProjectReadinessOverviewResponse,
+    quality: ProjectQualityGateOverviewResponse,
+) -> list[str]:
+    risks = []
+    for task in overview.blocked_tasks[:3]:
+        risks.append(f"Blocked task `{task['id']}`: {task['title']}.")
+    for item in quality.de_risk_candidates[:5]:
+        risk = (
+            item.top_risks[0]
+            if item.top_risks
+            else (item.top_actions[0] if item.top_actions else "No risk summary.")
+        )
+        risks.append(f"De-risk `{item.idea_id}`: {risk}")
+    for item in readiness.needs_work[:3]:
+        blocker = item.top_blockers[0] if item.top_blockers else "No blocker summary."
+        risks.append(f"Readiness gap `{item.idea_id}`: {blocker}")
+    return _dedupe_strings(risks)[:10]
+
+
+def _triage_next_actions(
+    overview: ResearchOverviewResponse,
+    quality: ProjectQualityGateOverviewResponse,
+    radar: ResearchOpportunityRadarResponse,
+) -> list[str]:
+    actions = [*overview.recommended_actions[:3]]
+    for item in [*quality.de_risk_candidates[:3], *quality.revision_candidates[:3]]:
+        if item.top_actions:
+            actions.append(f"{item.title}: {item.top_actions[0]}")
+    actions.extend(radar.recommended_sequence[:5])
+    return _dedupe_strings(actions)[:10]
+
+
+def _render_project_triage_brief_markdown(
+    *,
+    generated_at: datetime,
+    overview: ResearchOverviewResponse,
+    readiness: ProjectReadinessOverviewResponse,
+    quality: ProjectQualityGateOverviewResponse,
+    radar: ResearchOpportunityRadarResponse,
+    recommended_focus: list[str],
+    risk_focus: list[str],
+    next_actions: list[str],
+) -> str:
+    lines = [
+        "# Project Triage Brief",
+        "",
+        f"- Generated At: `{generated_at.isoformat()}`",
+        f"- Idea Count: {overview.idea_count}",
+        f"- Open Tasks: {overview.task_summary.get('open_task_count', 0)}",
+        f"- Blocked Tasks: {len(overview.blocked_tasks)}",
+        f"- Average Readiness: {readiness.average_readiness:.4f}",
+        f"- Average Quality Gate Score: {quality.average_gate_score:.4f}",
+        f"- Opportunity Count: {radar.opportunity_count}",
+        "",
+        "## Recommended Focus",
+        "",
+    ]
+    if recommended_focus:
+        lines.extend(f"- {item}" for item in recommended_focus)
+    else:
+        lines.append("- No focus candidates available yet.")
+    lines.extend(["", "## Risk Focus", ""])
+    if risk_focus:
+        lines.extend(f"- {item}" for item in risk_focus)
+    else:
+        lines.append("- No major risk focus found.")
+    lines.extend(["", "## Next Actions", ""])
+    if next_actions:
+        lines.extend(f"- {item}" for item in next_actions)
+    else:
+        lines.append("- Ingest papers or generate ideas to create the first action queue.")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _dedupe_strings(items: list[str]) -> list[str]:
+    unique = []
+    seen = set()
+    for item in items:
+        clean = " ".join(str(item).split())
+        key = clean.lower()
+        if clean and key not in seen:
+            unique.append(clean)
+            seen.add(key)
+    return unique
 
 
 def _serialize_research_brief(
@@ -5168,6 +5331,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     readiness_overview = get_project_readiness_overview(session=session)
     quality_overview = get_project_quality_gate_overview(session=session)
     opportunity_radar = get_research_opportunity_radar(session=session)
+    triage_brief = get_project_triage_brief(session=session)
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -5177,6 +5341,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         readiness_overview=readiness_overview,
         quality_overview=quality_overview,
         opportunity_radar=opportunity_radar,
+        triage_brief=triage_brief,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -5191,6 +5356,8 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         archive.writestr("metadata/readiness-overview.json", _json_dump(readiness_overview))
         archive.writestr("metadata/quality-gate-overview.json", _json_dump(quality_overview))
         archive.writestr("metadata/opportunity-radar.json", _json_dump(opportunity_radar))
+        archive.writestr("metadata/triage-brief.json", _json_dump(triage_brief))
+        _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
         _write_markdown(archive, "03-task-board.md", _render_project_task_board_markdown(tasks))
@@ -5225,6 +5392,7 @@ def _project_bundle_manifest(
     readiness_overview: ProjectReadinessOverviewResponse,
     quality_overview: ProjectQualityGateOverviewResponse,
     opportunity_radar: ResearchOpportunityRadarResponse,
+    triage_brief: ProjectTriageBriefResponse,
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -5240,6 +5408,8 @@ def _project_bundle_manifest(
         "quality_gate_idea_count": quality_overview.idea_count,
         "average_quality_gate_score": quality_overview.average_gate_score,
         "quality_gate_decision_counts": quality_overview.decision_counts,
+        "triage_next_action_count": len(triage_brief.next_actions),
+        "triage_risk_focus_count": len(triage_brief.risk_focus),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
             opportunity_radar.top_opportunities[0].radar_score
@@ -5277,6 +5447,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         "",
         "## Start Here",
         "",
+        "- `00-project-triage-brief.md`: daily decision view across progress, readiness, quality gates, and opportunity radar.",
         "- `01-progress-overview.md`: project-level task and experiment overview.",
         "- `02-readiness-overview.md`: project-level readiness comparison.",
         "- `03-task-board.md`: recent task board state.",

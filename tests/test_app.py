@@ -54,6 +54,7 @@ def test_research_status() -> None:
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
+    assert "project_triage_brief" in body["implemented_capabilities"]
     assert "external_novelty_refresh" in body["implemented_capabilities"]
     assert "novelty_check_task_generation" in body["implemented_capabilities"]
 
@@ -74,6 +75,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_tasks_from_research_plan" in names
     assert "get_research_plan_progress" in names
     assert "get_project_progress_overview" in names
+    assert "get_project_triage_brief" in names
     assert "get_mcp_tool_spec" in names
     assert "get_idea_research_packet" in names
     assert "get_idea_timeline" in names
@@ -396,6 +398,7 @@ def test_workbench_static_assets_are_served() -> None:
     ) in script.text
     assert "/research/ideas/${state.latestIdeaId}/assumption-audit" in script.text
     assert "/research/progress/overview" in script.text
+    assert "/research/triage/brief" in script.text
     assert "/research/readiness/overview" in script.text
     assert "/research/quality/overview" in script.text
     assert "/research/quality/overview/tasks" in script.text
@@ -1288,6 +1291,13 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert quality_overview_body["decision_counts"]
     assert "# Project Quality Gate Overview" in quality_overview_body["markdown_export"]
 
+    triage_brief = client.get("/research/triage/brief?idea_limit=20&opportunity_limit=5")
+    assert triage_brief.status_code == 200
+    triage_body = triage_brief.json()
+    assert triage_body["idea_count"] >= 1
+    assert triage_body["next_actions"]
+    assert "# Project Triage Brief" in triage_body["markdown_export"]
+
     quality_gate_tasks = client.post(
         f"/research/ideas/{idea_id}/quality-gate/tasks",
         json={"created_by": "pytest"},
@@ -1456,12 +1466,14 @@ Future work should preserve proposal drafts as reviewable artifacts.
     with zipfile.ZipFile(io.BytesIO(project_bundle.content)) as archive:
         names = set(archive.namelist())
         assert "README.md" in names
+        assert "00-project-triage-brief.md" in names
         assert "01-progress-overview.md" in names
         assert "02-readiness-overview.md" in names
         assert "03-task-board.md" in names
         assert "04-opportunity-radar.md" in names
         assert "05-quality-gate-overview.md" in names
         assert "metadata/manifest.json" in names
+        assert "metadata/triage-brief.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
@@ -1469,6 +1481,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert project_manifest["quality_gate_idea_count"] >= 1
         assert project_manifest["average_quality_gate_score"] >= 0
         assert project_manifest["quality_gate_decision_counts"]
+        assert project_manifest["triage_next_action_count"] >= 1
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["recent_task_count"] >= 1
 

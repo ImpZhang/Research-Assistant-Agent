@@ -802,6 +802,21 @@ class ResearchOverviewResponse(BaseModel):
     message: str
 
 
+class ProjectTriageBriefResponse(BaseModel):
+    generated_at: datetime
+    idea_count: int = 0
+    open_task_count: int = 0
+    blocked_task_count: int = 0
+    average_readiness: float = 0.0
+    average_quality_gate_score: float = 0.0
+    opportunity_count: int = 0
+    recommended_focus: list[str] = Field(default_factory=list)
+    risk_focus: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ResearchBriefCreate(BaseModel):
     title: str = "Advisor Research Brief"
     scope: Literal["project", "idea_set"] = "project"

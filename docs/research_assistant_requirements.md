@@ -797,6 +797,12 @@ project quality gate overview 需要能一键转成 task board 任务：从 de-r
 - 用于快速判断整个科研项目今天应该推进什么，而不是逐个点开 idea。
 - 后续 MCP/agent planner 应优先读取 overview，再进入具体 idea progress。
 
+系统需要提供 project triage brief：
+
+- 聚合 progress overview、project readiness overview、project quality gate overview 和 opportunity radar。
+- 输出 recommended focus、risk focus、next actions 和 Markdown brief。
+- 用于回答“今天/本轮到底先做哪几件事”，作为人类工作台和外部 agent/MCP planner 的第一跳入口。
+
 系统需要提供 research opportunity radar：
 
 - 聚合 profile-aware ranking、idea readiness、open/blocked tasks 和 readiness blockers。
@@ -805,7 +811,7 @@ project quality gate overview 需要能一键转成 task board 任务：从 de-r
 
 opportunity radar 需要能一键转成 task board 任务：从 top opportunities 的 next actions 创建 `owner_type=opportunity_radar`、`due_phase=opportunity_follow_up` 的任务，并写入 `opportunity_radar_creates_task` 图边。这样“机会判断 -> 行动建议 -> 任务推进”形成闭环。
 
-系统需要提供 project handoff bundle export：把 progress overview、readiness overview、quality gate overview、opportunity radar、recent task board、advisor briefs、research plans、plan progress reports 和 JSON metadata 打包成 zip，用于项目级备份、导师沟通和外部 agent/MCP 接手。
+系统需要提供 project handoff bundle export：把 triage brief、progress overview、readiness overview、quality gate overview、opportunity radar、recent task board、advisor briefs、research plans、plan progress reports 和 JSON metadata 打包成 zip，用于项目级备份、导师沟通和外部 agent/MCP 接手。
 
 系统需要支持 readiness blocker task generation：readiness 评分产出的 blockers 不能只停留在报告里，应能一键转成 task board 任务，并带上 readiness_score、decision、owner_type=idea_readiness、due_phase=readiness_follow_up 和图边 `idea_readiness_creates_task`，保证“评分 -> 阻塞项 -> 可执行任务”闭环。
 
