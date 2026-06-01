@@ -159,6 +159,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea readiness scoring")
     if "project_readiness_overview" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project readiness overview")
+    if "research_opportunity_radar" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include research opportunity radar")
     if "idea_artifact_bundle_export" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea artifact bundle export")
     if "project_handoff_bundle_export" not in status["implemented_capabilities"]:
@@ -220,6 +222,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_project_readiness_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project readiness overview tool")
+    if "get_research_opportunity_radar" not in manifest_names:
+        raise RuntimeError("tool manifest did not include research opportunity radar tool")
     if "create_idea_decision_memo" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea decision memo tool")
     if "create_tasks_from_idea_decision_memo" not in manifest_names:
@@ -720,6 +724,16 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project readiness overview did not include ideas")
     if "Project Readiness Overview" not in readiness_overview["markdown_export"]:
         raise RuntimeError("project readiness overview markdown did not include title")
+    radar = require_ok(
+        client.get("/research/opportunities/radar?limit=5"),
+        "research opportunity radar",
+    )
+    if not radar["top_opportunities"]:
+        raise RuntimeError("research opportunity radar did not include opportunities")
+    if not radar["recommended_sequence"]:
+        raise RuntimeError("research opportunity radar did not include recommended sequence")
+    if "Research Opportunity Radar" not in radar["markdown_export"]:
+        raise RuntimeError("research opportunity radar markdown did not include title")
     advisor_brief = require_ok(
         client.post(
             "/research/briefs",
@@ -806,7 +820,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "01-progress-overview.md",
             "02-readiness-overview.md",
             "03-task-board.md",
+            "04-opportunity-radar.md",
             "metadata/manifest.json",
+            "metadata/opportunity-radar.json",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -816,6 +832,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle manifest did not include ideas")
     if project_bundle_manifest["research_plan_count"] < 1:
         raise RuntimeError("project bundle manifest did not include research plans")
+    if project_bundle_manifest["opportunity_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include opportunities")
     post_plan_progress = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/progress"),
         "idea progress after research plan tasks",
@@ -1079,12 +1097,16 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "overview_open_task_count": overview["task_summary"]["open_task_count"],
         "readiness_overview_idea_count": readiness_overview["idea_count"],
         "readiness_overview_average": readiness_overview["average_readiness"],
+        "opportunity_radar_count": len(radar["top_opportunities"]),
+        "opportunity_radar_top_score": radar["top_opportunities"][0]["radar_score"],
+        "opportunity_radar_sequence_count": len(radar["recommended_sequence"]),
         "advisor_brief_id": advisor_brief["id"],
         "advisor_brief_markdown_chars": len(advisor_brief_markdown),
         "plan_advisor_brief_id": plan_advisor_brief["id"],
         "plan_advisor_brief_plan_count": plan_advisor_brief["summary"]["research_plan_count"],
         "project_bundle_file_count": len(project_bundle_files),
         "project_bundle_plan_count": project_bundle_manifest["research_plan_count"],
+        "project_bundle_opportunity_count": project_bundle_manifest["opportunity_count"],
         "research_plan_id": research_plan["id"],
         "research_plan_item_count": len(research_plan["plan_items"]),
         "research_plan_task_count": len(research_plan_tasks["tasks"]),

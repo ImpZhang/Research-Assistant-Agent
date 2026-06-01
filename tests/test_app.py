@@ -40,6 +40,7 @@ def test_research_status() -> None:
     assert "idea_readiness_scoring" in body["implemented_capabilities"]
     assert "idea_readiness_task_generation" in body["implemented_capabilities"]
     assert "project_readiness_overview" in body["implemented_capabilities"]
+    assert "research_opportunity_radar" in body["implemented_capabilities"]
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
     assert "project_handoff_bundle_export" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
@@ -76,6 +77,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "list_research_tasks" in names
     assert "update_research_task" in names
     assert "get_project_readiness_overview" in names
+    assert "get_research_opportunity_radar" in names
     assert "create_idea_decision_memo" in names
     assert "create_tasks_from_idea_decision_memo" in names
     assert "create_idea_assumption_audit" in names
@@ -375,6 +377,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/assumption-audit" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/readiness/overview" in script.text
+    assert "/research/opportunities/radar?limit=8" in script.text
     assert "/research/briefs" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
@@ -1270,6 +1273,16 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert overview_body["recommended_actions"]
     assert "# Research Progress Overview" in overview_body["markdown_export"]
 
+    radar = client.get("/research/opportunities/radar?limit=5")
+    assert radar.status_code == 200
+    radar_body = radar.json()
+    assert radar_body["idea_count"] >= 1
+    assert radar_body["top_opportunities"]
+    assert radar_body["top_opportunities"][0]["idea_id"]
+    assert radar_body["top_opportunities"][0]["next_actions"]
+    assert radar_body["recommended_sequence"]
+    assert "# Research Opportunity Radar" in radar_body["markdown_export"]
+
     brief = client.post(
         "/research/briefs",
         json={
@@ -1307,9 +1320,12 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "01-progress-overview.md" in names
         assert "02-readiness-overview.md" in names
         assert "03-task-board.md" in names
+        assert "04-opportunity-radar.md" in names
         assert "metadata/manifest.json" in names
+        assert "metadata/opportunity-radar.json" in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         assert project_manifest["idea_count"] >= 1
+        assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["recent_task_count"] >= 1
 
 

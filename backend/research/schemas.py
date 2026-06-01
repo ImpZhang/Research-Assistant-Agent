@@ -706,6 +706,35 @@ class ProjectReadinessOverviewResponse(BaseModel):
     message: str
 
 
+class ResearchOpportunityItem(BaseModel):
+    idea_id: str
+    title: str
+    status: str
+    rank: int = 0
+    opportunity_type: str = "incubate"
+    priority: str = "medium"
+    radar_score: float = 0.0
+    weighted_score: float = 0.0
+    readiness_score: float = 0.0
+    readiness_decision: str = "needs_work"
+    why_now: str = ""
+    blocking_risks: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+    evidence_signals: list[str] = Field(default_factory=list)
+    task_signals: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResearchOpportunityRadarResponse(BaseModel):
+    profile_name: str = "Default Research Profile"
+    idea_count: int = 0
+    opportunity_count: int = 0
+    top_opportunities: list[ResearchOpportunityItem] = Field(default_factory=list)
+    risk_watchlist: list[ResearchOpportunityItem] = Field(default_factory=list)
+    recommended_sequence: list[str] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ResearchOverviewResponse(BaseModel):
     idea_count: int = 0
     status_counts: dict[str, int] = Field(default_factory=dict)

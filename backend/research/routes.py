@@ -114,6 +114,8 @@ from backend.research.schemas import (
     ResearchEdgeRead,
     ResearchGapRead,
     ResearchNodeRead,
+    ResearchOpportunityItem,
+    ResearchOpportunityRadarResponse,
     ResearchOverviewResponse,
     ResearchPlanCreate,
     ResearchPlanDetail,
@@ -224,6 +226,7 @@ def status() -> ProjectStatus:
             "idea_assumption_audits",
             "project_progress_overview",
             "project_readiness_overview",
+            "research_opportunity_radar",
             "idea_artifact_bundle_export",
             "project_handoff_bundle_export",
             "advisor_research_briefs",
@@ -500,6 +503,13 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/readiness/overview",
             output_model="ProjectReadinessOverviewResponse",
+        ),
+        ToolManifestItem(
+            name="get_research_opportunity_radar",
+            description="Prioritize project opportunities from ranking, readiness, tasks, and blockers.",
+            method="GET",
+            path="/research/opportunities/radar",
+            output_model="ResearchOpportunityRadarResponse",
         ),
         ToolManifestItem(
             name="create_advisor_brief",
@@ -3215,6 +3225,274 @@ def _render_project_readiness_overview_markdown(
     return "\n".join(lines).strip() + "\n"
 
 
+@router.get("/opportunities/radar", response_model=ResearchOpportunityRadarResponse)
+def get_research_opportunity_radar(
+    limit: int = 10,
+    session: Session = Depends(get_session),
+) -> ResearchOpportunityRadarResponse:
+    limit = max(1, min(limit, 50))
+    profile = ResearchProfileService(session).get_profile()
+    ranked = IdeaRankingService(session).rank_ideas(
+        limit=max(limit * 2, limit),
+        deduplicate_lineage=True,
+    )
+    items = []
+    for ranked_item in ranked:
+        readiness = _readiness_summary_for_idea(session, ranked_item.idea)
+        task_signals = _radar_task_signals(session, ranked_item.idea.id)
+        items.append(_build_research_opportunity_item(ranked_item, readiness, task_signals))
+
+    items.sort(key=lambda item: item.radar_score, reverse=True)
+    top_opportunities = items[:limit]
+    risk_watchlist = [
+        item
+        for item in top_opportunities
+        if item.blocking_risks
+        or item.readiness_decision in {"needs_work", "park", "reject"}
+        or item.task_signals.get("blocked_count", 0) > 0
+    ][:limit]
+    recommended_sequence = _radar_recommended_sequence(top_opportunities)
+    profile_name = profile.name if profile else "Default Research Profile"
+    markdown_export = _render_research_opportunity_radar_markdown(
+        profile_name=profile_name,
+        top_opportunities=top_opportunities,
+        risk_watchlist=risk_watchlist,
+        recommended_sequence=recommended_sequence,
+    )
+    return ResearchOpportunityRadarResponse(
+        profile_name=profile_name,
+        idea_count=len(ranked),
+        opportunity_count=len(top_opportunities),
+        top_opportunities=top_opportunities,
+        risk_watchlist=risk_watchlist,
+        recommended_sequence=recommended_sequence,
+        markdown_export=markdown_export,
+        message=(
+            f"Built research opportunity radar for {len(top_opportunities)} "
+            f"opportunities from {len(ranked)} ranked ideas."
+        ),
+    )
+
+
+def _build_research_opportunity_item(
+    ranked_item: Any,
+    readiness: IdeaReadinessSummary,
+    task_signals: dict[str, Any],
+) -> ResearchOpportunityItem:
+    blocker_count = readiness.blocker_count
+    task_health = _radar_task_health(task_signals)
+    radar_score = round(
+        _clamp(
+            (_clamp(ranked_item.weighted_score / 5.0) * 0.55)
+            + (readiness.readiness_score * 0.35)
+            + (task_health * 0.10)
+            - min(blocker_count * 0.025, 0.2)
+        ),
+        4,
+    )
+    next_actions = _radar_next_actions(readiness, task_signals)
+    return ResearchOpportunityItem(
+        idea_id=ranked_item.idea.id,
+        title=ranked_item.idea.title,
+        status=ranked_item.idea.status,
+        rank=ranked_item.rank,
+        opportunity_type=_radar_opportunity_type(ranked_item.weighted_score, readiness),
+        priority=_radar_priority(radar_score, readiness),
+        radar_score=radar_score,
+        weighted_score=round(ranked_item.weighted_score, 4),
+        readiness_score=readiness.readiness_score,
+        readiness_decision=readiness.decision,
+        why_now=_radar_why_now(ranked_item, readiness),
+        blocking_risks=readiness.top_blockers,
+        next_actions=next_actions,
+        evidence_signals=_radar_evidence_signals(ranked_item),
+        task_signals=task_signals,
+    )
+
+
+def _radar_task_signals(session: Session, idea_id: str) -> dict[str, Any]:
+    tasks = (
+        session.query(ResearchTask)
+        .filter(ResearchTask.idea_id == idea_id)
+        .order_by(ResearchTask.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    counts = Counter(task.status for task in tasks)
+    open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
+    top_open_task = sorted(open_tasks, key=_progress_task_order)[:1]
+    return {
+        "total_task_count": len(tasks),
+        "open_count": len(open_tasks),
+        "doing_count": counts.get("doing", 0),
+        "blocked_count": counts.get("blocked", 0),
+        "done_count": counts.get("done", 0),
+        "top_open_task": _task_signal_payload(top_open_task[0]) if top_open_task else {},
+    }
+
+
+def _task_signal_payload(task: ResearchTask) -> dict[str, Any]:
+    return {
+        "id": task.id,
+        "title": task.title,
+        "status": task.status,
+        "priority": task.priority,
+        "owner_type": task.owner_type,
+    }
+
+
+def _radar_task_health(task_signals: dict[str, Any]) -> float:
+    open_count = int(task_signals.get("open_count") or 0)
+    blocked_count = int(task_signals.get("blocked_count") or 0)
+    if open_count == 0:
+        return 0.45
+    return _clamp(1.0 - (blocked_count / open_count))
+
+
+def _radar_opportunity_type(
+    weighted_score: float,
+    readiness: IdeaReadinessSummary,
+) -> str:
+    if readiness.decision == "ready_for_execution":
+        return "ready_to_execute"
+    if readiness.decision == "needs_targeted_work":
+        return "targeted_validation"
+    if readiness.decision in {"park", "reject"}:
+        return "risk_watch"
+    if weighted_score >= 3.0:
+        return "high_potential_needs_de_risking"
+    return "incubate"
+
+
+def _radar_priority(radar_score: float, readiness: IdeaReadinessSummary) -> str:
+    if readiness.decision == "ready_for_execution" and radar_score >= 0.7:
+        return "critical"
+    if radar_score >= 0.62:
+        return "high"
+    if radar_score >= 0.45:
+        return "medium"
+    return "low"
+
+
+def _radar_why_now(ranked_item: Any, readiness: IdeaReadinessSummary) -> str:
+    rationale = (
+        ranked_item.rationale[0] if ranked_item.rationale else "Portfolio score is available."
+    )
+    blocker = (
+        f" Top blocker: {readiness.top_blockers[0]}"
+        if readiness.top_blockers
+        else " No top blocker remains."
+    )
+    return (
+        f"Rank #{ranked_item.rank} with portfolio score {ranked_item.weighted_score:.4f}; "
+        f"readiness {readiness.readiness_score:.4f} ({readiness.decision}). "
+        f"{rationale}{blocker}"
+    )
+
+
+def _radar_evidence_signals(ranked_item: Any) -> list[str]:
+    idea = ranked_item.idea
+    signals = [
+        f"{len(idea.evidence_ids_json or [])} evidence ids",
+        f"{len(idea.related_paper_ids_json or [])} related papers",
+    ]
+    if idea.datasets_json:
+        signals.append(f"datasets: {', '.join(idea.datasets_json[:3])}")
+    if idea.metrics_json:
+        signals.append(f"metrics: {', '.join(idea.metrics_json[:3])}")
+    if ranked_item.score_breakdown:
+        top_dimensions = sorted(
+            ranked_item.score_breakdown.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )[:3]
+        signals.append(
+            "score strengths: " + ", ".join(f"{name}={score:.3f}" for name, score in top_dimensions)
+        )
+    return signals
+
+
+def _radar_next_actions(
+    readiness: IdeaReadinessSummary,
+    task_signals: dict[str, Any],
+) -> list[str]:
+    actions = []
+    top_task = task_signals.get("top_open_task") or {}
+    if top_task:
+        actions.append(f"Work task `{top_task['id']}`: {top_task['title']}")
+    for blocker in readiness.top_blockers[:2]:
+        actions.append(f"Clear blocker: {blocker}")
+    if readiness.decision == "ready_for_execution":
+        actions.append("Create or refresh a 14-day research execution plan.")
+    elif not top_task and readiness.top_blockers:
+        actions.append("Generate follow-up tasks from readiness blockers.")
+    elif not top_task:
+        actions.append("Create an advisor brief or decision memo to lock the next commitment.")
+    return actions[:4]
+
+
+def _radar_recommended_sequence(items: list[ResearchOpportunityItem]) -> list[str]:
+    if not items:
+        return ["Ingest literature and run the literature-to-ideas workflow."]
+    sequence = []
+    for item in items[:5]:
+        action = item.next_actions[0] if item.next_actions else "Review idea progress."
+        sequence.append(f"{item.priority}: {item.title} -> {action}")
+    return sequence
+
+
+def _render_research_opportunity_radar_markdown(
+    *,
+    profile_name: str,
+    top_opportunities: list[ResearchOpportunityItem],
+    risk_watchlist: list[ResearchOpportunityItem],
+    recommended_sequence: list[str],
+) -> str:
+    lines = [
+        "# Research Opportunity Radar",
+        "",
+        f"- Profile: {profile_name}",
+        f"- Opportunity Count: {len(top_opportunities)}",
+        f"- Risk Watchlist Count: {len(risk_watchlist)}",
+        "",
+        "## Top Opportunities",
+        "",
+    ]
+    if top_opportunities:
+        for item in top_opportunities:
+            lines.extend(
+                [
+                    f"### {item.rank}. {item.title}",
+                    "",
+                    f"- Idea ID: `{item.idea_id}`",
+                    f"- Priority: `{item.priority}`",
+                    f"- Type: `{item.opportunity_type}`",
+                    f"- Radar Score: {item.radar_score:.4f}",
+                    f"- Readiness: {item.readiness_score:.4f} `{item.readiness_decision}`",
+                    f"- Why Now: {item.why_now}",
+                    f"- Evidence Signals: {'; '.join(item.evidence_signals)}",
+                    "",
+                    "Next actions:",
+                    *[f"- {action}" for action in item.next_actions],
+                    "",
+                ]
+            )
+    else:
+        lines.append("- No ranked opportunities yet.")
+
+    lines.extend(["", "## Risk Watchlist", ""])
+    if risk_watchlist:
+        for item in risk_watchlist:
+            risks = "; ".join(item.blocking_risks) if item.blocking_risks else "No blocker text."
+            lines.append(f"- `{item.idea_id}` {item.title}: {risks}")
+    else:
+        lines.append("- No high-priority risks detected.")
+
+    lines.extend(["", "## Recommended Sequence", ""])
+    lines.extend(f"- {action}" for action in recommended_sequence)
+    return "\n".join(lines).strip() + "\n"
+
+
 @router.post("/ideas/{idea_id}/decision-memo", response_model=IdeaDecisionMemoRead)
 def create_idea_decision_memo(
     idea_id: str,
@@ -4201,6 +4479,7 @@ def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
 def _build_project_bundle_zip(session: Session) -> bytes:
     overview = get_research_progress_overview(session=session)
     readiness_overview = get_project_readiness_overview(session=session)
+    opportunity_radar = get_research_opportunity_radar(session=session)
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -4208,6 +4487,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     manifest = _project_bundle_manifest(
         overview=overview,
         readiness_overview=readiness_overview,
+        opportunity_radar=opportunity_radar,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -4220,9 +4500,11 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         archive.writestr("metadata/manifest.json", _json_dump(manifest))
         archive.writestr("metadata/progress-overview.json", _json_dump(overview))
         archive.writestr("metadata/readiness-overview.json", _json_dump(readiness_overview))
+        archive.writestr("metadata/opportunity-radar.json", _json_dump(opportunity_radar))
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
         _write_markdown(archive, "03-task-board.md", _render_project_task_board_markdown(tasks))
+        _write_markdown(archive, "04-opportunity-radar.md", opportunity_radar.markdown_export)
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -4250,6 +4532,7 @@ def _project_bundle_manifest(
     *,
     overview: ResearchOverviewResponse,
     readiness_overview: ProjectReadinessOverviewResponse,
+    opportunity_radar: ResearchOpportunityRadarResponse,
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -4262,6 +4545,12 @@ def _project_bundle_manifest(
         "open_task_count": overview.task_summary.get("open_task_count", 0),
         "blocked_task_count": len(overview.blocked_tasks),
         "average_readiness": readiness_overview.average_readiness,
+        "opportunity_count": opportunity_radar.opportunity_count,
+        "top_opportunity_score": (
+            opportunity_radar.top_opportunities[0].radar_score
+            if opportunity_radar.top_opportunities
+            else 0.0
+        ),
         "brief_count": len(briefs),
         "research_plan_count": len(plans),
         "recent_task_count": len(tasks),
@@ -4287,6 +4576,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         f"- Open Tasks: {manifest['open_task_count']}",
         f"- Blocked Tasks: {manifest['blocked_task_count']}",
         f"- Average Readiness: {manifest['average_readiness']}",
+        f"- Opportunities: {manifest['opportunity_count']}",
         f"- Research Plans: {manifest['research_plan_count']}",
         f"- Briefs: {manifest['brief_count']}",
         "",
@@ -4295,6 +4585,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         "- `01-progress-overview.md`: project-level task and experiment overview.",
         "- `02-readiness-overview.md`: project-level readiness comparison.",
         "- `03-task-board.md`: recent task board state.",
+        "- `04-opportunity-radar.md`: ranked next opportunities and risk watchlist.",
         "- `artifacts/briefs/`: persisted advisor or group-meeting briefs.",
         "- `artifacts/plans/`: execution plans and plan progress reports.",
         "- `metadata/`: JSON payloads for downstream tools or backup.",

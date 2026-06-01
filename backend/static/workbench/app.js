@@ -1076,6 +1076,23 @@ async function loadProjectReadinessOverview() {
   }
 }
 
+async function loadOpportunityRadar() {
+  renderResult("workflowResult", "Loading research opportunity radar...", "warn");
+  try {
+    const body = await api("/research/opportunities/radar?limit=8");
+    if (body.top_opportunities.length) {
+      state.latestIdeaId = body.top_opportunities[0].idea_id;
+    }
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)} Top opportunities: ${body.top_opportunities.length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function createAdvisorBrief() {
   renderResult("workflowResult", "Creating advisor brief...", "warn");
   try {
@@ -1289,6 +1306,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("readinessTasksButton").addEventListener("click", createReadinessTasks);
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
+  $("opportunityRadarButton").addEventListener("click", loadOpportunityRadar);
   $("advisorBriefButton").addEventListener("click", createAdvisorBrief);
   $("researchPlanButton").addEventListener("click", createResearchPlan);
   $("researchPlanProgressButton").addEventListener("click", loadResearchPlanProgress);
