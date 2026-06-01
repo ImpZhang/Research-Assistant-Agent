@@ -36,6 +36,7 @@ from backend.research.models import (
     ResearchEdge,
     ResearchGap,
     ResearchNode,
+    ResearchProfile,
     Review,
     ResearchTask,
     ResearchTaskEvent,
@@ -111,6 +112,8 @@ from backend.research.schemas import (
     ResearchGapRead,
     ResearchNodeRead,
     ResearchOverviewResponse,
+    ResearchProfileRead,
+    ResearchProfileUpdate,
     ResearchTaskGenerateRequest,
     ResearchTaskGenerationResponse,
     ResearchTaskEventCreate,
@@ -157,6 +160,11 @@ from backend.research.services.proposal_service import ProposalDraftService
 from backend.research.services.proposal_review_service import ProposalReviewService
 from backend.research.services.proposal_revision_service import ProposalRevisionService
 from backend.research.services.related_work_service import RelatedWorkService
+from backend.research.services.research_profile_service import (
+    ResearchProfileService,
+    default_research_profile_markdown,
+    render_research_profile_markdown,
+)
 from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
@@ -183,6 +191,7 @@ def status() -> ProjectStatus:
         implemented_capabilities=[
             "fastapi_app",
             "sqlalchemy_models",
+            "research_profile_constraints",
             "paper_registry_api",
             "document_ingestion_api",
             "evidence_extraction",
@@ -274,6 +283,22 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/literature/search",
             input_model="LiteratureSearchRequest",
             output_model="LiteratureSearchResponse",
+        ),
+        ToolManifestItem(
+            name="get_research_profile",
+            description="Read researcher goals, preferences, constraints, and ranking weights.",
+            method="GET",
+            path="/research/profile",
+            output_model="ResearchProfileRead",
+        ),
+        ToolManifestItem(
+            name="update_research_profile",
+            description="Persist researcher goals, preferences, constraints, and ranking weights.",
+            method="PUT",
+            path="/research/profile",
+            input_model="ResearchProfileUpdate",
+            output_model="ResearchProfileRead",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_mcp_tool_spec",
@@ -446,6 +471,66 @@ def tool_bridge_spec() -> ToolBridgeSpecResponse:
         mcp_enabled=settings.mcp_enabled,
         tools=tools,
         message=f"Generated {len(tools)} HTTP tool bridge specs from the research manifest.",
+    )
+
+
+@router.get("/profile", response_model=ResearchProfileRead)
+def get_research_profile(
+    session: Session = Depends(get_session),
+) -> ResearchProfileRead:
+    profile = ResearchProfileService(session).get_profile()
+    if profile is None:
+        return _default_research_profile_response()
+    return _serialize_research_profile(profile)
+
+
+@router.put("/profile", response_model=ResearchProfileRead)
+def update_research_profile(
+    payload: ResearchProfileUpdate,
+    session: Session = Depends(get_session),
+) -> ResearchProfileRead:
+    profile = ResearchProfileService(session).update_profile(payload)
+    return _serialize_research_profile(profile)
+
+
+@router.get(
+    "/profile/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_research_profile_markdown(
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    profile = ResearchProfileService(session).get_profile()
+    markdown = (
+        render_research_profile_markdown(profile)
+        if profile
+        else default_research_profile_markdown()
+    )
+    return PlainTextResponse(markdown, media_type="text/markdown")
+
+
+def _default_research_profile_response() -> ResearchProfileRead:
+    return ResearchProfileRead(markdown_export=default_research_profile_markdown())
+
+
+def _serialize_research_profile(profile: ResearchProfile) -> ResearchProfileRead:
+    return ResearchProfileRead(
+        id=profile.id,
+        name=profile.name,
+        primary_domains=profile.primary_domains_json or [],
+        active_questions=profile.active_questions_json or [],
+        target_venues=profile.target_venues_json or [],
+        methodological_preferences=profile.methodological_preferences_json or [],
+        resource_constraints=profile.resource_constraints_json or [],
+        risk_tolerance=profile.risk_tolerance,
+        timeline_horizon=profile.timeline_horizon,
+        negative_preferences=profile.negative_preferences_json or [],
+        evaluation_weights=profile.evaluation_weights_json or {},
+        notes=profile.notes,
+        markdown_export=profile.markdown_export or render_research_profile_markdown(profile),
+        created_by=profile.created_by,
+        created_at=profile.created_at,
+        updated_at=profile.updated_at,
     )
 
 

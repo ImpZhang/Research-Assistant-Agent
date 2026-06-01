@@ -143,6 +143,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     status = require_ok(client.get("/research/status"), "research status")
     tool_manifest = require_ok(client.get("/research/tools/manifest"), "tool manifest")
     tool_bridge = require_ok(client.get("/research/tools/mcp-spec"), "tool bridge spec")
+    research_profile = require_ok(client.get("/research/profile"), "research profile")
     workbench = require_ok(client.get("/workbench"), "workbench")
     if "workflow_job_cancel_retry_controls" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include job cancel/retry controls")
@@ -156,6 +157,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea artifact bundle export")
     if "mcp_tool_bridge_spec" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include MCP tool bridge spec")
+    if "research_profile_constraints" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include research profile constraints")
     if "idea_decision_memos" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision memos")
     if "idea_decision_task_generation" not in status["implemented_capabilities"]:
@@ -167,6 +170,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include advisor brief tool")
     if "get_mcp_tool_spec" not in manifest_names:
         raise RuntimeError("tool manifest did not include MCP tool bridge spec")
+    if "get_research_profile" not in manifest_names:
+        raise RuntimeError("tool manifest did not include research profile reader")
+    if "update_research_profile" not in manifest_names:
+        raise RuntimeError("tool manifest did not include research profile updater")
     if "get_project_progress_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project progress overview tool")
     if "retry_job" not in manifest_names:
@@ -188,6 +195,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     bridge_names = {tool["name"] for tool in tool_bridge["tools"]}
     if "export_idea_bundle" not in bridge_names:
         raise RuntimeError("tool bridge spec did not include idea bundle export")
+    if research_profile["id"] != "default":
+        raise RuntimeError("research profile endpoint did not return the default profile")
     bundle_bridge = next(
         tool for tool in tool_bridge["tools"] if tool["name"] == "export_idea_bundle"
     )
@@ -824,6 +833,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "phase": status["phase"],
         "tool_manifest_count": len(tool_manifest["tools"]),
         "tool_bridge_count": len(tool_bridge["tools"]),
+        "research_profile_name": research_profile["name"],
         "workbench_available": "Research Assistant Workbench" in workbench,
         "paper_id": paper_id,
         "literature_result_count": len(literature["items"]),

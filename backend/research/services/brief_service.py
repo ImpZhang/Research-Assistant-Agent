@@ -2,7 +2,13 @@ from collections import Counter
 
 from sqlalchemy.orm import Session
 
-from backend.research.models import ExperimentAnalysis, Idea, ResearchBrief, ResearchTask
+from backend.research.models import (
+    ExperimentAnalysis,
+    Idea,
+    ResearchBrief,
+    ResearchProfile,
+    ResearchTask,
+)
 
 
 class ResearchBriefService:
@@ -20,9 +26,10 @@ class ResearchBriefService:
         ideas = self._load_ideas(idea_ids or [])
         if idea_ids and len(ideas) != len(set(idea_ids)):
             raise ValueError("One or more ideas were not found")
+        profile = self.session.get(ResearchProfile, "default")
         tasks = self._load_tasks([idea.id for idea in ideas])
         analyses = self._load_analyses([idea.id for idea in ideas])
-        summary = self._summary(ideas, tasks, analyses)
+        summary = self._summary(ideas, tasks, analyses, profile)
         brief = ResearchBrief(
             title=title or "Advisor Research Brief",
             scope=scope or "project",
@@ -32,7 +39,7 @@ class ResearchBriefService:
         )
         self.session.add(brief)
         self.session.flush()
-        brief.markdown_export = self._render_markdown(brief, ideas, tasks, analyses)
+        brief.markdown_export = self._render_markdown(brief, ideas, tasks, analyses, profile)
         self.session.commit()
         self.session.refresh(brief)
         return brief
@@ -83,6 +90,7 @@ class ResearchBriefService:
         ideas: list[Idea],
         tasks: list[ResearchTask],
         analyses: list[ExperimentAnalysis],
+        profile: ResearchProfile | None,
     ) -> dict:
         open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
         blocked_tasks = [task for task in tasks if task.status == "blocked"]
@@ -94,6 +102,9 @@ class ResearchBriefService:
             "blocked_task_count": len(blocked_tasks),
             "experiment_analysis_count": len(analyses),
             "latest_decisions": [analysis.decision for analysis in analyses[:5]],
+            "profile_name": profile.name if profile else "",
+            "profile_domains": profile.primary_domains_json if profile else [],
+            "profile_constraints": profile.resource_constraints_json if profile else [],
         }
 
     def _render_markdown(
@@ -102,6 +113,7 @@ class ResearchBriefService:
         ideas: list[Idea],
         tasks: list[ResearchTask],
         analyses: list[ExperimentAnalysis],
+        profile: ResearchProfile | None,
     ) -> str:
         summary = brief.summary_json or {}
         lines = [
@@ -114,9 +126,28 @@ class ResearchBriefService:
             f"- Open Tasks: {summary.get('open_task_count', 0)}",
             f"- Blocked Tasks: {summary.get('blocked_task_count', 0)}",
             "",
-            "## Ideas",
+            "## Research Profile",
             "",
         ]
+        if profile:
+            lines.extend(
+                [
+                    f"- Name: {profile.name}",
+                    f"- Domains: {_join_profile_items(profile.primary_domains_json)}",
+                    f"- Target Venues: {_join_profile_items(profile.target_venues_json)}",
+                    f"- Risk Tolerance: {profile.risk_tolerance}",
+                    f"- Resource Constraints: {_join_profile_items(profile.resource_constraints_json)}",
+                    "",
+                ]
+            )
+        else:
+            lines.extend(["- No research profile saved.", ""])
+        lines.extend(
+            [
+                "## Ideas",
+                "",
+            ]
+        )
         if ideas:
             for idea in ideas:
                 lines.append(f"- `{idea.id}` `{idea.status}` {idea.title}")
@@ -173,3 +204,7 @@ class ResearchBriefService:
                 "- What new literature should be ingested before the next ideation round?"
             )
         return prompts
+
+
+def _join_profile_items(items: list | None) -> str:
+    return ", ".join(str(item) for item in (items or [])) or "none"

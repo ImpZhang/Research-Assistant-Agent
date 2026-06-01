@@ -3,7 +3,14 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.research.models import ExperimentPlan, Idea, IdeaFeedback, NoveltyCheck, Review
+from backend.research.models import (
+    ExperimentPlan,
+    Idea,
+    IdeaFeedback,
+    NoveltyCheck,
+    ResearchProfile,
+    Review,
+)
 
 
 DEFAULT_WEIGHTS = {
@@ -46,8 +53,9 @@ class IdeaRankingService:
         if deduplicate_lineage:
             ideas = self._deduplicate_lineage(ideas)
 
-        normalized_weights = self._weights(weights or {})
-        ranked = [self._score_idea(idea, normalized_weights) for idea in ideas]
+        profile = self.session.get(ResearchProfile, "default")
+        normalized_weights = self._weights(weights or {}, profile)
+        ranked = [self._score_idea(idea, normalized_weights, profile) for idea in ideas]
         ranked.sort(key=lambda item: item.weighted_score, reverse=True)
         ranked = ranked[: max(1, min(limit, 100))]
         for index, item in enumerate(ranked, start=1):
@@ -88,7 +96,12 @@ class IdeaRankingService:
         parent_ids = {idea.parent_idea_id for idea in ideas if idea.parent_idea_id}
         return [idea for idea in ideas if idea.id not in parent_ids]
 
-    def _score_idea(self, idea: Idea, weights: dict[str, float]) -> RankedIdea:
+    def _score_idea(
+        self,
+        idea: Idea,
+        weights: dict[str, float],
+        profile: ResearchProfile | None,
+    ) -> RankedIdea:
         score = idea.score_json or {}
         components = {
             "novelty": self._score_value(score.get("novelty")),
@@ -104,7 +117,7 @@ class IdeaRankingService:
         weighted = sum(components[key] * weights[key] for key in weights)
         weighted = weighted / sum(weights.values())
 
-        adjustment, rationale = self._adjustments(idea)
+        adjustment, rationale = self._adjustments(idea, profile)
         weighted_score = round(max(0.0, min(5.0, weighted + adjustment)), 3)
         breakdown = {key: round(value, 3) for key, value in components.items()}
         breakdown["adjustment"] = round(adjustment, 3)
@@ -116,7 +129,11 @@ class IdeaRankingService:
             rationale=rationale,
         )
 
-    def _adjustments(self, idea: Idea) -> tuple[float, list[str]]:
+    def _adjustments(
+        self,
+        idea: Idea,
+        profile: ResearchProfile | None,
+    ) -> tuple[float, list[str]]:
         adjustment = 0.0
         rationale = []
         check = self._latest_for_idea_or_parent(NoveltyCheck, idea)
@@ -157,10 +174,77 @@ class IdeaRankingService:
             feedback_adjustment, feedback_rationale = self._feedback_adjustment(feedback_items)
             adjustment += feedback_adjustment
             rationale.extend(feedback_rationale)
+        if profile:
+            profile_adjustment, profile_rationale = self._profile_adjustment(idea, profile)
+            adjustment += profile_adjustment
+            rationale.extend(profile_rationale)
         if not rationale:
             rationale.append(
                 "Ranked from intrinsic idea score only; add review and novelty checks."
             )
+        return adjustment, rationale
+
+    def _profile_adjustment(
+        self,
+        idea: Idea,
+        profile: ResearchProfile,
+    ) -> tuple[float, list[str]]:
+        adjustment = 0.0
+        rationale = []
+        idea_text = " ".join(
+            [
+                idea.title,
+                idea.research_question,
+                idea.core_hypothesis,
+                idea.method_sketch,
+                idea.expected_contribution,
+                idea.novelty_argument,
+                " ".join(str(item) for item in (idea.datasets_json or [])),
+                " ".join(str(item) for item in (idea.metrics_json or [])),
+                " ".join(str(item) for item in (idea.risks_json or [])),
+                idea.resource_requirements,
+            ]
+        ).lower()
+
+        positive_terms = [
+            *profile.primary_domains_json,
+            *profile.active_questions_json,
+            *profile.methodological_preferences_json,
+        ]
+        matches = [term for term in positive_terms if term and term.lower() in idea_text]
+        if matches:
+            adjustment += min(len(matches), 4) * 0.04
+            rationale.append(
+                "Matches research profile terms: " + ", ".join(dict.fromkeys(matches[:4])) + "."
+            )
+
+        venue_overlap = set(profile.target_venues_json or []) & set(idea.target_venues_json or [])
+        if venue_overlap:
+            adjustment += 0.08
+            rationale.append("Matches target venue preference.")
+
+        negative_matches = [
+            term for term in profile.negative_preferences_json if term and term.lower() in idea_text
+        ]
+        if negative_matches:
+            adjustment -= 0.25
+            rationale.append(
+                "Conflicts with negative profile preferences: "
+                + ", ".join(dict.fromkeys(negative_matches[:3]))
+                + "."
+            )
+
+        resource_text = " ".join(
+            [idea.resource_requirements, " ".join(profile.resource_constraints_json or [])]
+        ).lower()
+        if profile.risk_tolerance == "low" and any(
+            token in resource_text for token in ["gpu", "large", "expensive", "costly"]
+        ):
+            adjustment -= 0.12
+            rationale.append("Low risk tolerance penalizes compute-heavy requirements.")
+        elif profile.risk_tolerance == "high":
+            adjustment += 0.05
+            rationale.append("High risk tolerance allows more speculative ideas.")
         return adjustment, rationale
 
     def _latest_for_idea_or_parent(self, model, idea: Idea):
@@ -207,8 +291,16 @@ class IdeaRankingService:
             rationale.append(f"Feedback tags: {', '.join(latest.tags_json[:4])}.")
         return adjustment, rationale
 
-    def _weights(self, weights: dict[str, float]) -> dict[str, float]:
+    def _weights(
+        self,
+        weights: dict[str, float],
+        profile: ResearchProfile | None,
+    ) -> dict[str, float]:
         merged = dict(DEFAULT_WEIGHTS)
+        if profile:
+            for key, value in (profile.evaluation_weights_json or {}).items():
+                if key in merged and value > 0:
+                    merged[key] = float(value)
         for key, value in weights.items():
             if key in merged and value > 0:
                 merged[key] = float(value)

@@ -26,6 +26,7 @@ def test_research_status() -> None:
     body = response.json()
     assert body["phase"] == "phase_0_foundation"
     assert "sqlalchemy_models" in body["implemented_capabilities"]
+    assert "research_profile_constraints" in body["implemented_capabilities"]
     assert "tool_manifest" in body["implemented_capabilities"]
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
     assert "idea_research_packet" in body["implemented_capabilities"]
@@ -47,6 +48,8 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     names = {tool["name"] for tool in body["tools"]}
     assert "upload_paper" in names
     assert "search_research_context" in names
+    assert "get_research_profile" in names
+    assert "update_research_profile" in names
     assert "get_project_progress_overview" in names
     assert "get_mcp_tool_spec" in names
     assert "get_idea_research_packet" in names
@@ -86,6 +89,116 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     cancel = tools["cancel_job"]
     assert cancel["side_effect"] is True
     assert cancel["annotations"]["destructiveHint"] is True
+
+    update_profile = tools["update_research_profile"]
+    assert update_profile["http"]["method"] == "PUT"
+    assert update_profile["input_schema"]["required"] == ["body"]
+    assert update_profile["annotations"]["sideEffectHint"] is True
+
+
+def test_research_profile_guides_ranking_and_advisor_briefs() -> None:
+    client = TestClient(create_app())
+    default_profile = client.get("/research/profile")
+    assert default_profile.status_code == 200
+    assert default_profile.json()["id"] == "default"
+
+    updated = client.put(
+        "/research/profile",
+        json={
+            "name": "Pytest Research Profile",
+            "primary_domains": ["geolocation"],
+            "active_questions": ["research", "evidence grounded workflow"],
+            "target_venues": ["NeurIPS"],
+            "methodological_preferences": ["diagnostic benchmark"],
+            "resource_constraints": ["limited GPU budget"],
+            "risk_tolerance": "low",
+            "timeline_horizon": "90 days",
+            "negative_preferences": ["large proprietary dataset"],
+            "evaluation_weights": {"publication_potential": 0.5, "resource_efficiency": 0.4},
+            "notes": "Prefer publishable, evidence-backed MVPs.",
+            "created_by": "pytest",
+        },
+    )
+    assert updated.status_code == 200
+    profile = updated.json()
+    assert profile["name"] == "Pytest Research Profile"
+    assert profile["primary_domains"] == ["geolocation"]
+    assert profile["evaluation_weights"]["publication_potential"] == 0.5
+    assert "# Research Profile: Pytest Research Profile" in profile["markdown_export"]
+
+    profile_export = client.get("/research/profile/export/markdown")
+    assert profile_export.status_code == 200
+    assert "## Resource Constraints" in profile_export.text
+
+    content = b"""Research Profile Ranking Test Paper
+
+Abstract
+This paper checks whether researcher constraints can shape idea ranking and brief context.
+
+Introduction
+Geolocation researchers need evidence grounded workflow tools and diagnostic benchmark ideas.
+
+Method
+The assistant should prefer publishable experiments that fit limited GPU budgets.
+
+Conclusion
+Future work should preserve researcher goals as durable project context.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("research_profile_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+    gaps = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 1})
+    assert gaps.status_code == 200
+    ideas = client.post(f"/research/gaps/{gaps.json()['gaps'][0]['id']}/ideas")
+    assert ideas.status_code == 200
+    idea_id = ideas.json()["ideas"][0]["id"]
+
+    ranking = client.post(
+        "/research/ideas/rank",
+        json={"idea_ids": [idea_id], "deduplicate_lineage": False},
+    )
+    assert ranking.status_code == 200
+    ranked = ranking.json()["ranked_ideas"][0]
+    assert ranked["idea"]["id"] == idea_id
+    assert any("research profile" in item.lower() for item in ranked["rationale"])
+
+    brief = client.post(
+        "/research/briefs",
+        json={
+            "title": "Profile-Aware Brief",
+            "scope": "idea_set",
+            "idea_ids": [idea_id],
+            "created_by": "pytest",
+        },
+    )
+    assert brief.status_code == 200
+    brief_body = brief.json()
+    assert brief_body["summary"]["profile_name"] == "Pytest Research Profile"
+    assert "## Research Profile" in brief_body["markdown_export"]
+    assert "limited GPU budget" in brief_body["markdown_export"]
+
+    reset = client.put(
+        "/research/profile",
+        json={
+            "name": "Default Research Profile",
+            "primary_domains": [],
+            "active_questions": [],
+            "target_venues": [],
+            "methodological_preferences": [],
+            "resource_constraints": [],
+            "risk_tolerance": "medium",
+            "timeline_horizon": "",
+            "negative_preferences": [],
+            "evaluation_weights": {},
+            "notes": "",
+            "created_by": "pytest",
+        },
+    )
+    assert reset.status_code == 200
+    assert reset.json()["name"] == "Default Research Profile"
 
 
 def test_workbench_static_assets_are_served() -> None:

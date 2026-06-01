@@ -1115,6 +1115,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/tools/mcp-spec` turns the stable tool manifest into an HTTP tool bridge spec with JSON-schema-like inputs, path parameters, HTTP method/path metadata, output models, side-effect flags, and read-only/destructive annotations. It is intentionally dependency-light: the project can expose a real MCP server later by wrapping this spec instead of duplicating route knowledge.
 
+`/profile` stores durable researcher/project context: domains, active questions, target venues, methodological preferences, resource constraints, risk tolerance, negative preferences, and ranking weights. Ranking reads this profile by default, while advisor briefs include profile constraints so shortlist decisions are grounded in the user's actual research situation rather than only intrinsic idea scores.
+
 ## 11.5 Reviews
 
 ```text
@@ -1135,6 +1137,9 @@ GET  /research/readiness/overview
 GET  /research/progress/overview
 GET  /research/tools/manifest
 GET  /research/tools/mcp-spec
+GET  /research/profile
+PUT  /research/profile
+GET  /research/profile/export/markdown
 POST /research/briefs
 GET  /research/briefs
 GET  /research/briefs/{brief_id}

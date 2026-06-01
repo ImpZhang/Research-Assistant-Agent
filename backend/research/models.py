@@ -24,6 +24,25 @@ class TimestampMixin:
     )
 
 
+class ResearchProfile(Base, TimestampMixin):
+    __tablename__ = "research_profiles"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: "default")
+    name: Mapped[str] = mapped_column(String(255), default="Default Research Profile")
+    primary_domains_json: Mapped[list] = mapped_column(JSON, default=list)
+    active_questions_json: Mapped[list] = mapped_column(JSON, default=list)
+    target_venues_json: Mapped[list] = mapped_column(JSON, default=list)
+    methodological_preferences_json: Mapped[list] = mapped_column(JSON, default=list)
+    resource_constraints_json: Mapped[list] = mapped_column(JSON, default=list)
+    risk_tolerance: Mapped[str] = mapped_column(String(64), default="medium")
+    timeline_horizon: Mapped[str] = mapped_column(String(255), default="")
+    negative_preferences_json: Mapped[list] = mapped_column(JSON, default=list)
+    evaluation_weights_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="researcher")
+
+
 class Paper(Base, TimestampMixin):
     __tablename__ = "papers"
 

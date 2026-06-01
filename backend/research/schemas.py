@@ -9,6 +9,40 @@ class HealthResponse(BaseModel):
     service: str
 
 
+class ResearchProfileUpdate(BaseModel):
+    name: str = "Default Research Profile"
+    primary_domains: list[str] = Field(default_factory=list)
+    active_questions: list[str] = Field(default_factory=list)
+    target_venues: list[str] = Field(default_factory=list)
+    methodological_preferences: list[str] = Field(default_factory=list)
+    resource_constraints: list[str] = Field(default_factory=list)
+    risk_tolerance: Literal["low", "medium", "high"] = "medium"
+    timeline_horizon: str = ""
+    negative_preferences: list[str] = Field(default_factory=list)
+    evaluation_weights: dict[str, float] = Field(default_factory=dict)
+    notes: str = ""
+    created_by: str = "researcher"
+
+
+class ResearchProfileRead(BaseModel):
+    id: str = "default"
+    name: str = "Default Research Profile"
+    primary_domains: list[str] = Field(default_factory=list)
+    active_questions: list[str] = Field(default_factory=list)
+    target_venues: list[str] = Field(default_factory=list)
+    methodological_preferences: list[str] = Field(default_factory=list)
+    resource_constraints: list[str] = Field(default_factory=list)
+    risk_tolerance: str = "medium"
+    timeline_horizon: str = ""
+    negative_preferences: list[str] = Field(default_factory=list)
+    evaluation_weights: dict[str, float] = Field(default_factory=dict)
+    notes: str = ""
+    markdown_export: str = ""
+    created_by: str = "researcher"
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class PaperCreate(BaseModel):
     title: str = ""
     authors: list[str] = Field(default_factory=list)

@@ -984,6 +984,8 @@ metric 选择理由
 
 tool manifest 之上需要提供轻量 HTTP tool bridge spec：把 path 参数、JSON body、multipart 上传、输出模型、side effect、read-only/destructive hint 统一成可被 MCP adapter、DeerFlow node 或外部 planner 消费的结构。正式 MCP server 后续只包装这层 spec，不重复维护工具清单。
 
+系统需要保存研究者画像/项目约束：包括 primary domains、active research questions、target venues、methodological preferences、resource constraints、risk tolerance、negative preferences 和 ranking weights。ranking、advisor brief、后续 planner 应优先读取这份画像，避免生成“看起来不错但不适合当前资源和投稿目标”的 idea。
+
 验收标准：
 
 - 能通过关键词找相关论文。
