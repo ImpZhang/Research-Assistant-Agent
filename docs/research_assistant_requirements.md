@@ -795,6 +795,8 @@ opportunity radar 需要能一键转成 task board 任务：从 top opportunitie
 
 系统需要支持 novelty refresh：研究者应能对任意 idea 重新运行 local/external literature collision search，指定 query override 和 limit，并把结果保存为 `completed_external_novelty_refresh` 类型的 novelty check。这样 idea 进入 proposal 或执行计划前，可以按最新问题表述重新检查撞车风险。
 
+novelty check 需要能一键转成 task board 任务：把 recommended actions 写入 `owner_type=novelty_check`、`due_phase=novelty_follow_up` 的任务，并通过 `novelty_check_creates_task` 图边连接。这样撞车风险、外部搜索缺口和 novelty claim 修改不会只停留在报告里。
+
 Workbench 需要提供最小可用 task board：能按当前 idea 和状态读取任务，选择任务，并把任务更新为 doing、done 或 blocked。所有操作必须走同一套 `/research/tasks` API，避免前端维护第二份任务状态。
 
 系统需要提供 idea activity timeline：按时间聚合 proposal、experiment、decision、assumption audit、research plan 和 task event，返回结构化 events 与 Markdown 日志，用于导师汇报、handoff 和后续 agent 接手时快速理解一个 idea 的历史。

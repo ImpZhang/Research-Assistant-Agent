@@ -4,6 +4,7 @@ from backend.research.models import (
     ExperimentAnalysis,
     Idea,
     IdeaDecisionMemo,
+    NoveltyCheck,
     ProposalRevision,
     ResearchPlanSnapshot,
     ResearchTask,
@@ -448,6 +449,73 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_novelty_check(
+        self,
+        check_id: str,
+        *,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        check = self.session.get(NoveltyCheck, check_id)
+        if check is None:
+            raise ValueError("Novelty check not found")
+        actions = self._unique_commitments(
+            check.recommended_actions_json
+            or ["Review novelty signals and update the idea novelty claim."]
+        )[:8]
+        tasks = [
+            ResearchTask(
+                idea_id=check.idea_id,
+                owner_type="novelty_check",
+                owner_id=check.id,
+                source_type="novelty_recommended_action",
+                source_id=f"recommended_action_{idx}",
+                title=self._novelty_task_title(action, idx),
+                description=action,
+                priority=self._novelty_task_priority(check.risk_level),
+                status="todo",
+                due_phase="novelty_follow_up",
+                metadata_json={
+                    "novelty_check_id": check.id,
+                    "risk_level": check.risk_level,
+                    "local_overlap_score": check.local_overlap_score,
+                    "external_overlap_score": check.external_overlap_score,
+                    "status": check.status,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, action in enumerate(actions, start=1)
+        ]
+        tasks = self._deduplicate_novelty_tasks(tasks)[:8]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note=f"Created from novelty check {check.id}.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "risk_level": check.risk_level,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_novelty_check_tasks(check, tasks)
+        self.session.commit()
+        return tasks
+
     def list_tasks(
         self,
         *,
@@ -664,6 +732,26 @@ class ResearchTaskService:
             return "low"
         return "medium"
 
+    def _novelty_task_title(self, action: str, idx: int) -> str:
+        clean = " ".join(str(action).split())
+        lower = clean.lower()
+        if "external literature search" in lower:
+            return "Run external novelty search"
+        if "novelty claim" in lower:
+            return "Rewrite novelty claim"
+        if "collision signals" in lower:
+            return "Review novelty collision signals"
+        return self._short_task_title(clean or f"Follow up novelty action {idx}", idx)
+
+    def _novelty_task_priority(self, risk_level: str) -> str:
+        if risk_level == "high":
+            return "critical"
+        if risk_level == "medium":
+            return "high"
+        if risk_level == "low":
+            return "medium"
+        return "medium"
+
     def _unique_commitments(self, commitments: list) -> list[str]:
         unique = []
         seen = set()
@@ -696,6 +784,16 @@ class ResearchTaskService:
         return unique
 
     def _deduplicate_opportunity_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
+        unique = []
+        seen = set()
+        for task in tasks:
+            key = (task.idea_id or "", task.title.lower(), task.description.lower())
+            if key not in seen:
+                unique.append(task)
+                seen.add(key)
+        return unique
+
+    def _deduplicate_novelty_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
         unique = []
         seen = set()
         for task in tasks:

@@ -265,6 +265,7 @@ def status() -> ProjectStatus:
             "workflow_job_cancel_retry_controls",
             "literature_search_adapter",
             "external_novelty_refresh",
+            "novelty_check_task_generation",
             "local_embedding_index",
             "embedding_backed_context_retrieval",
             "lexical_context_retrieval",
@@ -501,6 +502,15 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/ideas/{idea_id}/novelty-refresh",
             input_model="NoveltyRefreshRequest",
             output_model="NoveltyCheckRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_idea_novelty_check",
+            description="Turn novelty check recommended actions into task-board tasks.",
+            method="POST",
+            path="/research/ideas/{idea_id}/novelty-checks/{check_id}/tasks",
+            input_model="ResearchTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -2080,6 +2090,7 @@ def get_idea_progress(
     research_plan_tasks = [task for task in tasks if task.owner_type == "research_plan"]
     readiness_tasks = [task for task in tasks if task.owner_type == "idea_readiness"]
     opportunity_tasks = [task for task in tasks if task.owner_type == "opportunity_radar"]
+    novelty_tasks = [task for task in tasks if task.owner_type == "novelty_check"]
     artifact_counts = {
         "related_work_matrices": len(matrices),
         "proposal_drafts": len(drafts),
@@ -2096,6 +2107,7 @@ def get_idea_progress(
         "research_plan_tasks": len(research_plan_tasks),
         "readiness_follow_up_tasks": len(readiness_tasks),
         "opportunity_follow_up_tasks": len(opportunity_tasks),
+        "novelty_follow_up_tasks": len(novelty_tasks),
         "analysis_follow_up_tasks": len(analysis_tasks),
         "decision_follow_up_tasks": len(decision_tasks),
         "task_board_snapshots": len(snapshots),
@@ -3692,6 +3704,8 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         return {}
     edge_types = [
         "idea_has_proposal_draft",
+        "idea_has_novelty_check",
+        "novelty_check_creates_task",
         "proposal_review_reviews_draft",
         "proposal_revision_updates_draft",
         "proposal_revision_addresses_review",
@@ -4377,6 +4391,32 @@ def refresh_idea_novelty_search(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _serialize_novelty_check(check)
+
+
+@router.post(
+    "/ideas/{idea_id}/novelty-checks/{check_id}/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_idea_novelty_check(
+    idea_id: str,
+    check_id: str,
+    payload: ResearchTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    check = session.get(NoveltyCheck, check_id)
+    if check is None or check.idea_id != idea_id:
+        raise HTTPException(status_code=404, detail="Novelty check not found")
+    try:
+        tasks = ResearchTaskService(session).create_from_novelty_check(
+            check_id,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} novelty follow-up tasks from novelty check {check_id}.",
+    )
 
 
 @router.get("/ideas/{idea_id}/novelty-checks", response_model=list[NoveltyCheckRead])

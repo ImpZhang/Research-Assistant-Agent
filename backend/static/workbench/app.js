@@ -9,6 +9,7 @@ const state = {
   latestProposalDraftId: "",
   latestProposalReviewId: "",
   latestProposalRevisionId: "",
+  latestNoveltyCheckId: "",
   latestDecisionMemoId: "",
   latestAssumptionAuditId: "",
   latestTaskIds: [],
@@ -496,6 +497,7 @@ async function refineLatestIdea() {
     state.latestProposalDraftId = "";
     state.latestProposalReviewId = "";
     state.latestProposalRevisionId = "";
+    state.latestNoveltyCheckId = "";
     state.latestTaskIds = [];
     state.latestTaskSnapshotId = "";
     renderResult(
@@ -524,9 +526,35 @@ async function refreshNoveltySearch() {
         query_override: $("refineFocus").value.trim(),
       }),
     });
+    state.latestNoveltyCheckId = body.id;
     renderResult(
       "workflowResult",
       `Novelty refresh <code>${escapeHtml(body.id)}</code>: ${escapeHtml(body.risk_level)} risk with ${body.collision_signals.length} signals.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createNoveltyTasks() {
+  if (!state.latestIdeaId || !state.latestNoveltyCheckId) {
+    renderResult("workflowResult", "Refresh novelty before creating novelty tasks.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Creating novelty follow-up tasks...", "warn");
+  try {
+    const body = await api(
+      `/research/ideas/${state.latestIdeaId}/novelty-checks/${state.latestNoveltyCheckId}/tasks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ created_by: "workbench" }),
+      },
+    );
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Novelty tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
@@ -1331,6 +1359,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("loadDossierButton").addEventListener("click", loadDossier);
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
   $("noveltyRefreshButton").addEventListener("click", refreshNoveltySearch);
+  $("noveltyTasksButton").addEventListener("click", createNoveltyTasks);
   $("relatedWorkButton").addEventListener("click", createRelatedWorkMatrix);
   $("proposalDraftButton").addEventListener("click", createProposalDraft);
   $("proposalReviewButton").addEventListener("click", reviewProposalDraft);

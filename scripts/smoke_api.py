@@ -195,6 +195,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea assumption audits")
     if "external_novelty_refresh" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include external novelty refresh")
+    if "novelty_check_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include novelty check task generation")
     manifest_names = {tool["name"] for tool in tool_manifest["tools"]}
     if "create_advisor_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include advisor brief tool")
@@ -244,6 +246,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea assumption audit tool")
     if "refresh_idea_novelty_search" not in manifest_names:
         raise RuntimeError("tool manifest did not include novelty refresh tool")
+    if "create_tasks_from_idea_novelty_check" not in manifest_names:
+        raise RuntimeError("tool manifest did not include novelty check task tool")
     bridge_names = {tool["name"] for tool in tool_bridge["tools"]}
     if "export_idea_bundle" not in bridge_names:
         raise RuntimeError("tool bridge spec did not include idea bundle export")
@@ -335,6 +339,17 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("novelty refresh did not use refresh status")
     if "novelty_mode:external_refresh" not in novelty_refresh["checked_sources"]:
         raise RuntimeError("novelty refresh did not record refresh mode")
+    novelty_tasks = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/novelty-checks/{novelty_refresh['id']}/tasks",
+            json_body={"created_by": "smoke_api"},
+        ),
+        "novelty check tasks",
+    )
+    if not novelty_tasks["tasks"]:
+        raise RuntimeError("novelty refresh did not create follow-up tasks")
+    if novelty_tasks["tasks"][0]["owner_type"] != "novelty_check":
+        raise RuntimeError("novelty task used the wrong owner type")
     related_work_matrix = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/related-work-matrix",
@@ -1175,6 +1190,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "novelty_check_status": first_novelty_check["status"],
         "novelty_refresh_status": novelty_refresh["status"],
         "novelty_refresh_signal_count": len(novelty_refresh["collision_signals"]),
+        "novelty_task_count": len(novelty_tasks["tasks"]),
         "novelty_literature_signal_count": len(
             [
                 signal

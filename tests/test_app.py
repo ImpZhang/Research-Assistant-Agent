@@ -51,6 +51,7 @@ def test_research_status() -> None:
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
     assert "external_novelty_refresh" in body["implemented_capabilities"]
+    assert "novelty_check_task_generation" in body["implemented_capabilities"]
 
 
 def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
@@ -85,6 +86,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_tasks_from_idea_decision_memo" in names
     assert "create_idea_assumption_audit" in names
     assert "refresh_idea_novelty_search" in names
+    assert "create_tasks_from_idea_novelty_check" in names
     assert "create_advisor_brief" in names
     assert "analyze_experiment_run" in names
     assert "cancel_job" in names
@@ -356,6 +358,9 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/refine" in script.text
     assert "/research/ideas/${state.latestIdeaId}/feedback" in script.text
     assert "/research/ideas/${state.latestIdeaId}/novelty-refresh" in script.text
+    assert (
+        "/research/ideas/${state.latestIdeaId}/novelty-checks/${state.latestNoveltyCheckId}/tasks"
+    ) in script.text
     assert "/research/ideas/${state.latestIdeaId}/related-work-matrix" in script.text
     assert "/research/ideas/${state.latestIdeaId}/proposal-draft" in script.text
     assert "/proposal-drafts/${state.latestProposalDraftId}/review" in script.text
@@ -710,6 +715,25 @@ Future work should compare generated ideas against recent preprints.
     assert "query_override:True" in refresh_body["checked_sources"]
     assert "novelty_mode:external_refresh" in refresh_body["checked_sources"]
     assert "external_literature_search_disabled" in refresh_body["missing_searches"]
+
+    novelty_tasks = client.post(
+        f"/research/ideas/{idea_id}/novelty-checks/{refresh_body['id']}/tasks",
+        json={"created_by": "pytest"},
+    )
+    assert novelty_tasks.status_code == 200
+    novelty_task_body = novelty_tasks.json()
+    assert novelty_task_body["tasks"]
+    assert novelty_task_body["tasks"][0]["owner_type"] == "novelty_check"
+    assert novelty_task_body["tasks"][0]["due_phase"] == "novelty_follow_up"
+    novelty_task_edges = client.get("/research/graph/edges?edge_type=novelty_check_creates_task")
+    assert novelty_task_edges.status_code == 200
+    assert novelty_task_edges.json()
+
+    progress = client.get(f"/research/ideas/{idea_id}/progress")
+    assert progress.status_code == 200
+    progress_body = progress.json()
+    assert progress_body["artifact_counts"]["novelty_follow_up_tasks"] >= 1
+    assert progress_body["task_summary"]["by_owner_type"]["novelty_check"] >= 1
 
 
 def test_related_work_matrix_persists_overlap_rows_and_markdown() -> None:

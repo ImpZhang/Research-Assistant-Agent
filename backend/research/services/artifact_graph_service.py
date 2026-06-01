@@ -5,6 +5,7 @@ from backend.research.models import (
     Idea,
     IdeaAssumptionAudit,
     IdeaDecisionMemo,
+    NoveltyCheck,
     ProposalDraft,
     ProposalReview,
     ProposalRevision,
@@ -467,6 +468,49 @@ class ArtifactGraphService:
                     edge_type="opportunity_radar_creates_task",
                     payload={"source": "opportunity_radar_next_action"},
                 )
+
+    def link_novelty_check_tasks(
+        self,
+        check: NoveltyCheck,
+        tasks: list[ResearchTask],
+    ) -> None:
+        idea_node = self._idea_node(check.idea_id)
+        novelty_node = self.graph.get_or_create_node(
+            node_type="novelty_check",
+            label=f"Novelty check: {check.risk_level}",
+            canonical_key=check.id,
+            payload={
+                "idea_id": check.idea_id,
+                "status": check.status,
+                "risk_level": check.risk_level,
+                "local_overlap_score": check.local_overlap_score,
+                "external_overlap_score": check.external_overlap_score,
+            },
+        )
+        self.graph.create_edge(
+            source_node=idea_node,
+            target_node=novelty_node,
+            edge_type="idea_has_novelty_check",
+            payload={"source": "novelty_task_generation"},
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=novelty_node,
+                target_node=task_node,
+                edge_type="novelty_check_creates_task",
+                payload={"source": "novelty_recommended_action"},
+            )
 
     def link_idea_assumption_audit(self, audit: IdeaAssumptionAudit) -> None:
         idea_node = self._idea_node(audit.idea_id)
