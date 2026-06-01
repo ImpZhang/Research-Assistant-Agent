@@ -785,6 +785,8 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 
 Workbench 需要提供最小可用 task board：能按当前 idea 和状态读取任务，选择任务，并把任务更新为 doing、done 或 blocked。所有操作必须走同一套 `/research/tasks` API，避免前端维护第二份任务状态。
 
+系统需要提供 idea activity timeline：按时间聚合 proposal、experiment、decision、assumption audit、research plan 和 task event，返回结构化 events 与 Markdown 日志，用于导师汇报、handoff 和后续 agent 接手时快速理解一个 idea 的历史。
+
 系统需要提供 advisor brief：
 
 - 将选定 idea 或项目级状态固化成 Markdown brief。

@@ -659,6 +659,23 @@ class IdeaResearchPacketResponse(BaseModel):
     message: str
 
 
+class IdeaTimelineEvent(BaseModel):
+    event_type: str
+    artifact_type: str
+    artifact_id: str
+    title: str
+    status: str = ""
+    timestamp: datetime
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class IdeaTimelineResponse(BaseModel):
+    idea: IdeaRead
+    events: list[IdeaTimelineEvent] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class IdeaReadinessResponse(BaseModel):
     idea: IdeaRead
     readiness_score: float = 0.0

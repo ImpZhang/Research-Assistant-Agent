@@ -153,6 +153,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include workbench task board controls")
     if "idea_research_packet" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea research packet")
+    if "idea_activity_timeline" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea activity timeline")
     if "idea_readiness_scoring" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea readiness scoring")
     if "project_readiness_overview" not in status["implemented_capabilities"]:
@@ -196,6 +198,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include job retry tool")
     if "get_idea_research_packet" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea research packet tool")
+    if "get_idea_timeline" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea timeline tool")
     if "export_idea_bundle" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea bundle export tool")
     if "get_idea_readiness" not in manifest_names:
@@ -618,6 +622,17 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea research packet markdown did not include decision memo")
     if assumption_audit["id"] not in research_packet["markdown_export"]:
         raise RuntimeError("idea research packet markdown did not include assumption audit")
+    timeline = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/timeline"),
+        "idea timeline",
+    )
+    timeline_event_types = {event["event_type"] for event in timeline["events"]}
+    if "experiment_analysis_created" not in timeline_event_types:
+        raise RuntimeError("idea timeline did not include experiment analysis events")
+    if "decision_memo_created" not in timeline_event_types:
+        raise RuntimeError("idea timeline did not include decision memo events")
+    if "# Idea Timeline:" not in timeline["markdown_export"]:
+        raise RuntimeError("idea timeline markdown did not include title")
     readiness = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/readiness"),
         "idea readiness",
@@ -666,7 +681,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "03-progress.md",
             "04-research-packet.md",
             "05-readiness.md",
+            "06-timeline.md",
             "metadata/manifest.json",
+            "metadata/timeline.json",
         }
         missing_bundle_files = required_bundle_files - bundle_files
         if missing_bundle_files:
@@ -674,6 +691,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         bundle_manifest = json.loads(archive.read("metadata/manifest.json"))
     if bundle_manifest["idea_id"] != refined_idea["id"]:
         raise RuntimeError("idea bundle manifest returned the wrong idea id")
+    if bundle_manifest["timeline_event_count"] < len(timeline["events"]):
+        raise RuntimeError("idea bundle manifest did not count timeline events")
     overview = require_ok(client.get("/research/progress/overview"), "research progress overview")
     if overview["idea_count"] < 1:
         raise RuntimeError("research overview did not include ideas")
@@ -983,6 +1002,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "progress_open_task_count": progress["artifact_counts"]["open_tasks"],
         "progress_recommended_next_step": progress["recommended_next_step"],
         "research_packet_markdown_chars": len(research_packet["markdown_export"]),
+        "timeline_event_count": len(timeline["events"]),
+        "timeline_markdown_chars": len(timeline["markdown_export"]),
         "readiness_score": readiness["readiness_score"],
         "readiness_decision": readiness["decision"],
         "readiness_task_count": len(readiness_tasks["tasks"]),

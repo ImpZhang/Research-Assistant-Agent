@@ -34,6 +34,7 @@ def test_research_status() -> None:
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
     assert "task_execution_controls" in body["implemented_capabilities"]
     assert "workbench_task_board_controls" in body["implemented_capabilities"]
+    assert "idea_activity_timeline" in body["implemented_capabilities"]
     assert "idea_research_packet" in body["implemented_capabilities"]
     assert "idea_readiness_scoring" in body["implemented_capabilities"]
     assert "idea_readiness_task_generation" in body["implemented_capabilities"]
@@ -61,6 +62,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_progress_overview" in names
     assert "get_mcp_tool_spec" in names
     assert "get_idea_research_packet" in names
+    assert "get_idea_timeline" in names
     assert "export_idea_bundle" in names
     assert "get_idea_readiness" in names
     assert "create_tasks_from_idea_readiness" in names
@@ -297,6 +299,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "readinessTasksButton" in response.text
     assert "taskBoardButton" in response.text
     assert "taskSelect" in response.text
+    assert "timelineButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -324,6 +327,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/experiment-runs/${state.latestExperimentRunId}/analysis" in script.text
     assert "/research/experiment-analyses/${state.latestExperimentAnalysisId}/tasks" in script.text
     assert "/research/ideas/${state.latestIdeaId}/lineage" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/timeline" in script.text
     assert "/research/ideas/${state.latestIdeaId}/progress" in script.text
     assert "/research/ideas/${state.latestIdeaId}/research-packet" in script.text
     assert "/research/ideas/${encodeURIComponent(state.latestIdeaId)}/export/bundle" in script.text
@@ -1112,6 +1116,16 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "## Decision Memos" in lineage_body["markdown_export"]
     assert "## Assumption Audits" in lineage_body["markdown_export"]
 
+    timeline = client.get(f"/research/ideas/{idea_id}/timeline")
+    assert timeline.status_code == 200
+    timeline_body = timeline.json()
+    assert timeline_body["idea"]["id"] == idea_id
+    event_types = {event["event_type"] for event in timeline_body["events"]}
+    assert "idea_created" in event_types
+    assert "experiment_analysis_created" in event_types
+    assert "decision_memo_created" in event_types
+    assert "# Idea Timeline:" in timeline_body["markdown_export"]
+
     progress = client.get(f"/research/ideas/{idea_id}/progress")
     assert progress.status_code == 200
     progress_body = progress.json()
@@ -1192,6 +1206,8 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "03-progress.md" in names
         assert "04-research-packet.md" in names
         assert "05-readiness.md" in names
+        assert "06-timeline.md" in names
+        assert "metadata/timeline.json" in names
         assert f"artifacts/proposals/drafts/proposal-draft-{body['id']}.md" in names
         assert (f"artifacts/proposals/reviews/proposal-review-{review_body['id']}.md") in names
         assert f"artifacts/decisions/decision-memo-{decision_memo_body['id']}.md" in names
@@ -1200,6 +1216,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert manifest["idea_id"] == idea_id
         assert manifest["artifact_counts"]["proposal_drafts"] >= 1
         assert manifest["readiness"]["score"] == readiness_body["readiness_score"]
+        assert manifest["timeline_event_count"] >= len(timeline_body["events"])
 
     readiness_overview = client.get("/research/readiness/overview?limit=20")
     assert readiness_overview.status_code == 200

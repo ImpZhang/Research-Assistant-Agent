@@ -63,6 +63,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.
 - GraphRAG-lite links for proposal drafts, reviews, revisions, experiment runs, experiment analyses, decision memos, assumption audits, generated follow-up tasks, decision follow-up tasks, and task board snapshots.
 - Idea lineage endpoint that hydrates matrices, proposal artifacts, experiment runs, experiment analyses, decision memos, assumption audits, tasks, task snapshots, and graph edge summaries.
+- Idea activity timeline that turns proposal, experiment, decision, audit, plan, and task events into a chronological handoff log.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Idea progress summaries that aggregate proposal, experiment, analysis, task, blocker, and recommended-next-step state.
 - Idea research packets that bundle the latest artifacts, open tasks, graph edge summary, and Markdown context for a single idea.
@@ -184,7 +185,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, readiness score, readiness follow-up tasks, idea bundle export, project readiness overview, project overview, advisor brief, research execution plan, plan tasks, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, idea timeline, readiness score, readiness follow-up tasks, idea bundle export, project readiness overview, project overview, advisor brief, research execution plan, plan tasks, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -235,6 +236,7 @@ POST /research/experiment-analyses/{analysis_id}/tasks
 POST /research/ideas/{idea_id}/refine
 GET  /research/ideas/{idea_id}/progress
 GET  /research/ideas/{idea_id}/research-packet
+GET  /research/ideas/{idea_id}/timeline
 GET  /research/ideas/{idea_id}/readiness
 POST /research/ideas/{idea_id}/readiness/tasks
 GET  /research/ideas/{idea_id}/export/bundle

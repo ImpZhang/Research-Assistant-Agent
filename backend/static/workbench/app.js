@@ -929,6 +929,21 @@ async function loadIdeaLineage() {
   }
 }
 
+async function loadIdeaTimeline() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Loading idea timeline...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/timeline`);
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult("workflowResult", `${escapeHtml(body.message)} Latest events: ${body.events.length}.`);
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadIdeaProgress() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -1236,6 +1251,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("decisionMemoTasksButton").addEventListener("click", createDecisionMemoTasks);
   $("assumptionAuditButton").addEventListener("click", createAssumptionAudit);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
+  $("timelineButton").addEventListener("click", loadIdeaTimeline);
   $("progressButton").addEventListener("click", loadIdeaProgress);
   $("researchPacketButton").addEventListener("click", loadResearchPacket);
   $("ideaBundleButton").addEventListener("click", downloadIdeaBundle);

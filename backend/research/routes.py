@@ -70,6 +70,8 @@ from backend.research.schemas import (
     IdeaReadinessResponse,
     IdeaReadinessSummary,
     IdeaResearchPacketResponse,
+    IdeaTimelineEvent,
+    IdeaTimelineResponse,
     IdeaPortfolioComparisonRequest,
     IdeaPortfolioComparisonResponse,
     IdeaPortfolioExportRequest,
@@ -212,6 +214,7 @@ def status() -> ProjectStatus:
             "idea_ranking_portfolio",
             "idea_progress_summary",
             "idea_research_packet",
+            "idea_activity_timeline",
             "idea_readiness_scoring",
             "idea_readiness_task_generation",
             "idea_decision_memos",
@@ -390,6 +393,13 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/ideas/{idea_id}/research-packet",
             output_model="IdeaResearchPacketResponse",
+        ),
+        ToolManifestItem(
+            name="get_idea_timeline",
+            description="Load a chronological activity timeline for one idea.",
+            method="GET",
+            path="/research/ideas/{idea_id}/timeline",
+            output_model="IdeaTimelineResponse",
         ),
         ToolManifestItem(
             name="export_idea_bundle",
@@ -2432,6 +2442,222 @@ def _render_idea_research_packet_markdown(
     return "\n".join(lines).strip() + "\n"
 
 
+@router.get("/ideas/{idea_id}/timeline", response_model=IdeaTimelineResponse)
+def get_idea_timeline(
+    idea_id: str,
+    limit: int = 120,
+    session: Session = Depends(get_session),
+) -> IdeaTimelineResponse:
+    idea = IdeaService(session).get_idea(idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    limit = max(10, min(limit, 300))
+    events = _build_idea_timeline_events(session, idea, limit)
+    markdown_export = _render_idea_timeline_markdown(idea=idea, events=events)
+    return IdeaTimelineResponse(
+        idea=_serialize_idea(idea),
+        events=events,
+        markdown_export=markdown_export,
+        message=f"Loaded {len(events)} timeline events for idea {idea.id}.",
+    )
+
+
+def _build_idea_timeline_events(
+    session: Session,
+    idea: Idea,
+    limit: int,
+) -> list[IdeaTimelineEvent]:
+    events: list[IdeaTimelineEvent] = [
+        _timeline_event(
+            event_type="idea_created",
+            artifact_type="idea",
+            artifact_id=idea.id,
+            title=idea.title,
+            status=idea.status,
+            timestamp=idea.created_at,
+            metadata={"version": idea.version, "parent_idea_id": idea.parent_idea_id},
+        )
+    ]
+
+    for draft in _latest_for_idea(session, ProposalDraft, idea.id, 20):
+        events.append(
+            _timeline_event(
+                event_type="proposal_draft_created",
+                artifact_type="proposal_draft",
+                artifact_id=draft.id,
+                title=draft.title,
+                status=draft.status,
+                timestamp=draft.created_at,
+                metadata={"experiment_plan_id": draft.experiment_plan_id},
+            )
+        )
+    for review in _latest_for_idea(session, ProposalReview, idea.id, 20):
+        events.append(
+            _timeline_event(
+                event_type="proposal_review_created",
+                artifact_type="proposal_review",
+                artifact_id=review.id,
+                title=review.summary or review.decision,
+                status=review.decision,
+                timestamp=review.created_at,
+                metadata={"readiness_score": review.readiness_score},
+            )
+        )
+    for revision in _latest_for_idea(session, ProposalRevision, idea.id, 20):
+        events.append(
+            _timeline_event(
+                event_type="proposal_revision_created",
+                artifact_type="proposal_revision",
+                artifact_id=revision.id,
+                title=revision.revision_summary or revision.status,
+                status=revision.status,
+                timestamp=revision.created_at,
+                metadata={
+                    "proposal_draft_id": revision.proposal_draft_id,
+                    "proposal_review_id": revision.proposal_review_id,
+                },
+            )
+        )
+    for run in _latest_for_idea(session, ExperimentRun, idea.id, 30):
+        events.append(
+            _timeline_event(
+                event_type="experiment_run_recorded",
+                artifact_type="experiment_run",
+                artifact_id=run.id,
+                title=run.title,
+                status=run.status,
+                timestamp=run.created_at,
+                metadata={"task_id": run.task_id, "experiment_plan_id": run.experiment_plan_id},
+            )
+        )
+    for analysis in _latest_for_idea(session, ExperimentAnalysis, idea.id, 30):
+        events.append(
+            _timeline_event(
+                event_type="experiment_analysis_created",
+                artifact_type="experiment_analysis",
+                artifact_id=analysis.id,
+                title=analysis.decision,
+                status=analysis.decision,
+                timestamp=analysis.created_at,
+                metadata={
+                    "confidence": analysis.confidence,
+                    "experiment_run_id": analysis.experiment_run_id,
+                    "task_id": analysis.task_id,
+                },
+            )
+        )
+    for memo in _latest_for_idea(session, IdeaDecisionMemo, idea.id, 20):
+        events.append(
+            _timeline_event(
+                event_type="decision_memo_created",
+                artifact_type="idea_decision_memo",
+                artifact_id=memo.id,
+                title=memo.decision,
+                status=memo.decision,
+                timestamp=memo.created_at,
+                metadata={"commitment_count": len(memo.next_commitments_json or [])},
+            )
+        )
+    for audit in _latest_for_idea(session, IdeaAssumptionAudit, idea.id, 20):
+        events.append(
+            _timeline_event(
+                event_type="assumption_audit_created",
+                artifact_type="idea_assumption_audit",
+                artifact_id=audit.id,
+                title=f"{len(audit.assumptions_json or [])} assumptions",
+                status=audit.status,
+                timestamp=audit.created_at,
+                metadata={"assumption_count": len(audit.assumptions_json or [])},
+            )
+        )
+    for plan in _latest_research_plans_for_idea(session, idea.id, 20):
+        events.append(
+            _timeline_event(
+                event_type="research_plan_created",
+                artifact_type="research_plan",
+                artifact_id=plan.id,
+                title=plan.title,
+                status=f"{plan.horizon_days}d",
+                timestamp=plan.created_at,
+                metadata={"plan_item_count": len(plan.plan_items_json or [])},
+            )
+        )
+
+    task_ids = [task.id for task in _latest_for_idea(session, ResearchTask, idea.id, 200)]
+    if task_ids:
+        task_events = (
+            session.query(ResearchTaskEvent)
+            .filter(ResearchTaskEvent.task_id.in_(task_ids))
+            .order_by(ResearchTaskEvent.created_at.desc())
+            .limit(300)
+            .all()
+        )
+        for event in task_events:
+            events.append(
+                _timeline_event(
+                    event_type=f"task_{event.event_type}",
+                    artifact_type="research_task_event",
+                    artifact_id=event.id,
+                    title=event.note or f"Task event for {event.task_id}",
+                    status=event.status_to,
+                    timestamp=event.created_at,
+                    metadata={
+                        "task_id": event.task_id,
+                        "priority_to": event.priority_to,
+                        **(event.metadata_json or {}),
+                    },
+                )
+            )
+
+    return sorted(events, key=lambda event: event.timestamp, reverse=True)[:limit]
+
+
+def _timeline_event(
+    *,
+    event_type: str,
+    artifact_type: str,
+    artifact_id: str,
+    title: str,
+    status: str,
+    timestamp: datetime,
+    metadata: dict[str, Any] | None = None,
+) -> IdeaTimelineEvent:
+    return IdeaTimelineEvent(
+        event_type=event_type,
+        artifact_type=artifact_type,
+        artifact_id=artifact_id,
+        title=" ".join(str(title or artifact_id).split())[:180],
+        status=status or "",
+        timestamp=timestamp,
+        metadata=metadata or {},
+    )
+
+
+def _render_idea_timeline_markdown(
+    *,
+    idea: Idea,
+    events: list[IdeaTimelineEvent],
+) -> str:
+    lines = [
+        f"# Idea Timeline: {idea.title}",
+        "",
+        f"- Idea ID: `{idea.id}`",
+        f"- Event Count: {len(events)}",
+        "",
+        "## Events",
+        "",
+    ]
+    if not events:
+        lines.append("- No events recorded.")
+    for event in events:
+        lines.append(
+            f"- `{event.timestamp.isoformat()}` `{event.event_type}` "
+            f"`{event.artifact_type}` `{event.artifact_id}` {event.title}"
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
 @router.get("/ideas/{idea_id}/readiness", response_model=IdeaReadinessResponse)
 def get_idea_readiness(
     idea_id: str,
@@ -3737,6 +3963,7 @@ def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
     lineage = get_idea_lineage(idea_id, session=session)
     progress = get_idea_progress(idea_id, session=session)
     research_packet = get_idea_research_packet(idea_id, session=session)
+    timeline = get_idea_timeline(idea_id, session=session)
     readiness = get_idea_readiness(idea_id, session=session)
     manifest = _idea_bundle_manifest(
         idea_id=idea_id,
@@ -3745,6 +3972,7 @@ def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
         readiness=readiness,
         progress=progress,
         research_packet=research_packet,
+        timeline=timeline,
     )
 
     buffer = io.BytesIO()
@@ -3754,12 +3982,14 @@ def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
         archive.writestr("metadata/lineage.json", _json_dump(lineage))
         archive.writestr("metadata/progress.json", _json_dump(progress))
         archive.writestr("metadata/research-packet.json", _json_dump(research_packet))
+        archive.writestr("metadata/timeline.json", _json_dump(timeline))
         archive.writestr("metadata/readiness.json", _json_dump(readiness))
         _write_markdown(archive, "01-idea-dossier.md", idea_markdown)
         _write_markdown(archive, "02-lineage.md", lineage.markdown_export)
         _write_markdown(archive, "03-progress.md", progress.markdown_export)
         _write_markdown(archive, "04-research-packet.md", research_packet.markdown_export)
         _write_markdown(archive, "05-readiness.md", readiness.markdown_export)
+        _write_markdown(archive, "06-timeline.md", timeline.markdown_export)
         _write_artifact_markdowns(
             archive,
             "artifacts/related-work",
@@ -3835,6 +4065,7 @@ def _idea_bundle_manifest(
     readiness: IdeaReadinessResponse,
     progress: IdeaProgressResponse,
     research_packet: IdeaResearchPacketResponse,
+    timeline: IdeaTimelineResponse,
 ) -> dict[str, Any]:
     return {
         "bundle_type": "idea_research_bundle",
@@ -3848,6 +4079,7 @@ def _idea_bundle_manifest(
         },
         "recommended_next_step": progress.recommended_next_step,
         "open_task_count": len(research_packet.open_tasks),
+        "timeline_event_count": len(timeline.events),
         "artifact_counts": {
             "related_work_matrices": len(lineage.related_work_matrices),
             "proposal_drafts": len(lineage.proposal_drafts),
@@ -3881,6 +4113,7 @@ def _render_idea_bundle_readme(manifest: dict[str, Any]) -> str:
         "- `03-progress.md`: open work, blockers, and recommended next step.",
         "- `04-research-packet.md`: concise advisor/MCP context packet.",
         "- `05-readiness.md`: readiness score, blockers, and decision.",
+        "- `06-timeline.md`: chronological activity log for handoff and retrospection.",
         "",
         "## Artifact Folders",
         "",
