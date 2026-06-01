@@ -425,6 +425,49 @@ class ArtifactGraphService:
                 payload={"source": "idea_readiness_blocker"},
             )
 
+    def link_opportunity_radar_tasks(self, tasks: list[ResearchTask]) -> None:
+        tasks_by_idea: dict[str, list[ResearchTask]] = {}
+        for task in tasks:
+            if task.idea_id:
+                tasks_by_idea.setdefault(task.idea_id, []).append(task)
+
+        for idea_id, idea_tasks in tasks_by_idea.items():
+            idea_node = self._idea_node(idea_id)
+            radar_node = self.graph.get_or_create_node(
+                node_type="opportunity_radar",
+                label=f"Opportunity radar: {idea_id}",
+                canonical_key=f"{idea_id}:opportunity_radar",
+                payload={
+                    "idea_id": idea_id,
+                    "task_count": len(idea_tasks),
+                    "owner_type": "opportunity_radar",
+                },
+            )
+            self.graph.create_edge(
+                source_node=idea_node,
+                target_node=radar_node,
+                edge_type="idea_has_opportunity_radar",
+                payload={"source": "opportunity_radar_task_generation"},
+            )
+            for task in idea_tasks:
+                task_node = self.graph.get_or_create_node(
+                    node_type="research_task",
+                    label=task.title,
+                    canonical_key=task.id,
+                    payload={
+                        "status": task.status,
+                        "priority": task.priority,
+                        "source_type": task.source_type,
+                        "due_phase": task.due_phase,
+                    },
+                )
+                self.graph.create_edge(
+                    source_node=radar_node,
+                    target_node=task_node,
+                    edge_type="opportunity_radar_creates_task",
+                    payload={"source": "opportunity_radar_next_action"},
+                )
+
     def link_idea_assumption_audit(self, audit: IdeaAssumptionAudit) -> None:
         idea_node = self._idea_node(audit.idea_id)
         audit_node = self.graph.get_or_create_node(

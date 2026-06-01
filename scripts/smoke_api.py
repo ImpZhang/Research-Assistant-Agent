@@ -161,6 +161,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project readiness overview")
     if "research_opportunity_radar" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research opportunity radar")
+    if "opportunity_radar_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include opportunity radar task generation")
     if "idea_artifact_bundle_export" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea artifact bundle export")
     if "project_handoff_bundle_export" not in status["implemented_capabilities"]:
@@ -224,6 +226,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project readiness overview tool")
     if "get_research_opportunity_radar" not in manifest_names:
         raise RuntimeError("tool manifest did not include research opportunity radar tool")
+    if "create_tasks_from_research_opportunity_radar" not in manifest_names:
+        raise RuntimeError("tool manifest did not include opportunity radar task tool")
     if "create_idea_decision_memo" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea decision memo tool")
     if "create_tasks_from_idea_decision_memo" not in manifest_names:
@@ -734,6 +738,21 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research opportunity radar did not include recommended sequence")
     if "Research Opportunity Radar" not in radar["markdown_export"]:
         raise RuntimeError("research opportunity radar markdown did not include title")
+    radar_tasks = require_ok(
+        client.post(
+            "/research/opportunities/radar/tasks",
+            json_body={
+                "limit": 3,
+                "actions_per_opportunity": 1,
+                "created_by": "smoke_api",
+            },
+        ),
+        "research opportunity radar tasks",
+    )
+    if not radar_tasks["tasks"]:
+        raise RuntimeError("research opportunity radar did not create tasks")
+    if radar_tasks["tasks"][0]["owner_type"] != "opportunity_radar":
+        raise RuntimeError("research opportunity radar task used the wrong owner type")
     advisor_brief = require_ok(
         client.post(
             "/research/briefs",
@@ -1100,6 +1119,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "opportunity_radar_count": len(radar["top_opportunities"]),
         "opportunity_radar_top_score": radar["top_opportunities"][0]["radar_score"],
         "opportunity_radar_sequence_count": len(radar["recommended_sequence"]),
+        "opportunity_radar_task_count": len(radar_tasks["tasks"]),
         "advisor_brief_id": advisor_brief["id"],
         "advisor_brief_markdown_chars": len(advisor_brief_markdown),
         "plan_advisor_brief_id": plan_advisor_brief["id"],

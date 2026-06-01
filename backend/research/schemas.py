@@ -429,6 +429,12 @@ class ResearchTaskGenerateRequest(BaseModel):
     created_by: str = "system"
 
 
+class OpportunityRadarTaskGenerateRequest(BaseModel):
+    limit: int = 5
+    actions_per_opportunity: int = 2
+    created_by: str = "system"
+
+
 class ResearchTaskUpdate(BaseModel):
     status: Literal["todo", "doing", "blocked", "done", "archived"] | None = None
     priority: Literal["low", "medium", "high", "critical"] | None = None

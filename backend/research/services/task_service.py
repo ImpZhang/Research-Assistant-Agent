@@ -372,6 +372,82 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_opportunity_radar(
+        self,
+        opportunities: list[dict],
+        *,
+        actions_per_opportunity: int = 2,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        actions_per_opportunity = max(1, min(actions_per_opportunity, 4))
+        tasks = []
+        for opportunity in opportunities[:10]:
+            idea = self.session.get(Idea, opportunity.get("idea_id", ""))
+            if idea is None:
+                continue
+            actions = self._unique_commitments(opportunity.get("next_actions") or [])[
+                :actions_per_opportunity
+            ]
+            if not actions:
+                actions = [f"Review opportunity radar item for {idea.title}."]
+            for idx, action in enumerate(actions, start=1):
+                tasks.append(
+                    ResearchTask(
+                        idea_id=idea.id,
+                        owner_type="opportunity_radar",
+                        owner_id=idea.id,
+                        source_type="radar_next_action",
+                        source_id=f"rank_{opportunity.get('rank', 0)}_action_{idx}",
+                        title=self._opportunity_task_title(action, idx),
+                        description=action,
+                        priority=self._opportunity_task_priority(
+                            str(opportunity.get("priority") or "medium")
+                        ),
+                        status="todo",
+                        due_phase="opportunity_follow_up",
+                        metadata_json={
+                            "radar_score": opportunity.get("radar_score", 0.0),
+                            "weighted_score": opportunity.get("weighted_score", 0.0),
+                            "readiness_score": opportunity.get("readiness_score", 0.0),
+                            "readiness_decision": opportunity.get("readiness_decision", ""),
+                            "opportunity_type": opportunity.get("opportunity_type", ""),
+                            "why_now": opportunity.get("why_now", ""),
+                        },
+                        created_by=created_by or "system",
+                    )
+                )
+
+        tasks = self._deduplicate_opportunity_tasks(tasks)[:20]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note=f"Created from opportunity radar for idea {task.idea_id}.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "radar_score": (task.metadata_json or {}).get("radar_score", 0.0),
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_opportunity_radar_tasks(tasks)
+        self.session.commit()
+        return tasks
+
     def list_tasks(
         self,
         *,
@@ -571,6 +647,23 @@ class ResearchTaskService:
             return "high"
         return "medium"
 
+    def _opportunity_task_title(self, action: str, idx: int) -> str:
+        clean = " ".join(str(action).split())
+        if clean.lower().startswith("work task"):
+            clean = clean.split(":", 1)[-1].strip() or clean
+        if clean.lower().startswith("clear blocker:"):
+            clean = clean.split(":", 1)[-1].strip() or clean
+        return self._short_task_title(clean or f"Work opportunity radar action {idx}", idx)
+
+    def _opportunity_task_priority(self, priority: str) -> str:
+        if priority == "critical":
+            return "critical"
+        if priority == "high":
+            return "high"
+        if priority == "low":
+            return "low"
+        return "medium"
+
     def _unique_commitments(self, commitments: list) -> list[str]:
         unique = []
         seen = set()
@@ -593,6 +686,16 @@ class ResearchTaskService:
         return unique
 
     def _deduplicate_readiness_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
+        unique = []
+        seen = set()
+        for task in tasks:
+            key = (task.idea_id or "", task.title.lower(), task.description.lower())
+            if key not in seen:
+                unique.append(task)
+                seen.add(key)
+        return unique
+
+    def _deduplicate_opportunity_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
         unique = []
         seen = set()
         for task in tasks:

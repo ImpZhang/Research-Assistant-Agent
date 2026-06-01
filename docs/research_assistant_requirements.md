@@ -787,6 +787,8 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - 输出 top opportunities、risk watchlist、recommended sequence 和 Markdown report。
 - 用于回答“今天最值得推进哪个 idea、为什么现在推进、第一步做什么”，而不是只给静态排名或静态 readiness 分数。
 
+opportunity radar 需要能一键转成 task board 任务：从 top opportunities 的 next actions 创建 `owner_type=opportunity_radar`、`due_phase=opportunity_follow_up` 的任务，并写入 `opportunity_radar_creates_task` 图边。这样“机会判断 -> 行动建议 -> 任务推进”形成闭环。
+
 系统需要提供 project handoff bundle export：把 progress overview、readiness overview、opportunity radar、recent task board、advisor briefs、research plans、plan progress reports 和 JSON metadata 打包成 zip，用于项目级备份、导师沟通和外部 agent/MCP 接手。
 
 系统需要支持 readiness blocker task generation：readiness 评分产出的 blockers 不能只停留在报告里，应能一键转成 task board 任务，并带上 readiness_score、decision、owner_type=idea_readiness、due_phase=readiness_follow_up 和图边 `idea_readiness_creates_task`，保证“评分 -> 阻塞项 -> 可执行任务”闭环。

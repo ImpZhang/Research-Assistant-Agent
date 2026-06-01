@@ -1093,6 +1093,31 @@ async function loadOpportunityRadar() {
   }
 }
 
+async function createOpportunityRadarTasks() {
+  renderResult("workflowResult", "Creating opportunity radar tasks...", "warn");
+  try {
+    const body = await api("/research/opportunities/radar/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        limit: 5,
+        actions_per_opportunity: 1,
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    if (body.tasks.length) {
+      state.latestIdeaId = body.tasks[0].idea_id || state.latestIdeaId;
+    }
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Radar tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function createAdvisorBrief() {
   renderResult("workflowResult", "Creating advisor brief...", "warn");
   try {
@@ -1307,6 +1332,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
   $("opportunityRadarButton").addEventListener("click", loadOpportunityRadar);
+  $("opportunityRadarTasksButton").addEventListener("click", createOpportunityRadarTasks);
   $("advisorBriefButton").addEventListener("click", createAdvisorBrief);
   $("researchPlanButton").addEventListener("click", createResearchPlan);
   $("researchPlanProgressButton").addEventListener("click", loadResearchPlanProgress);

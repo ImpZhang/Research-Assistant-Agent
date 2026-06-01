@@ -76,6 +76,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Idea assumption audits that expose falsifiable assumptions, validation signals, risk levels, and source artifacts.
 - Project progress overview that aggregates all ideas, open tasks, blockers, recent analyses, and recommended actions.
 - Research opportunity radar that fuses portfolio ranking, readiness, blockers, and open tasks into a prioritized next-action view.
+- Task generation from opportunity radar next actions so project-level prioritization enters the task board.
 - Project handoff bundle export that packages project overviews, readiness, opportunity radar, task board state, briefs, and research plans.
 - Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries, including profile, tasks, experiment decisions, plan progress, and readiness signals.
 - Persisted research execution plans that turn profile, ranked ideas, and open tasks into 7/14+ day action plans.
@@ -209,6 +210,7 @@ PUT  /research/profile
 GET  /research/profile/export/markdown
 GET  /research/progress/overview
 GET  /research/opportunities/radar
+POST /research/opportunities/radar/tasks
 GET  /research/export/project-bundle
 POST /research/briefs
 GET  /research/briefs

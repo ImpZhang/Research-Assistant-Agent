@@ -41,6 +41,7 @@ def test_research_status() -> None:
     assert "idea_readiness_task_generation" in body["implemented_capabilities"]
     assert "project_readiness_overview" in body["implemented_capabilities"]
     assert "research_opportunity_radar" in body["implemented_capabilities"]
+    assert "opportunity_radar_task_generation" in body["implemented_capabilities"]
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
     assert "project_handoff_bundle_export" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
@@ -78,6 +79,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "update_research_task" in names
     assert "get_project_readiness_overview" in names
     assert "get_research_opportunity_radar" in names
+    assert "create_tasks_from_research_opportunity_radar" in names
     assert "create_idea_decision_memo" in names
     assert "create_tasks_from_idea_decision_memo" in names
     assert "create_idea_assumption_audit" in names
@@ -378,6 +380,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/progress/overview" in script.text
     assert "/research/readiness/overview" in script.text
     assert "/research/opportunities/radar?limit=8" in script.text
+    assert "/research/opportunities/radar/tasks" in script.text
     assert "/research/briefs" in script.text
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
@@ -1282,6 +1285,26 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert radar_body["top_opportunities"][0]["next_actions"]
     assert radar_body["recommended_sequence"]
     assert "# Research Opportunity Radar" in radar_body["markdown_export"]
+
+    radar_tasks = client.post(
+        "/research/opportunities/radar/tasks",
+        json={"limit": 3, "actions_per_opportunity": 1, "created_by": "pytest"},
+    )
+    assert radar_tasks.status_code == 200
+    radar_task_body = radar_tasks.json()
+    assert radar_task_body["tasks"]
+    assert radar_task_body["tasks"][0]["owner_type"] == "opportunity_radar"
+    assert radar_task_body["tasks"][0]["due_phase"] == "opportunity_follow_up"
+    radar_task_idea_id = radar_task_body["tasks"][0]["idea_id"]
+    radar_task_edges = client.get("/research/graph/edges?edge_type=opportunity_radar_creates_task")
+    assert radar_task_edges.status_code == 200
+    assert radar_task_edges.json()
+
+    progress_after_radar_tasks = client.get(f"/research/ideas/{radar_task_idea_id}/progress")
+    assert progress_after_radar_tasks.status_code == 200
+    progress_after_radar_body = progress_after_radar_tasks.json()
+    assert progress_after_radar_body["artifact_counts"]["opportunity_follow_up_tasks"] >= 1
+    assert progress_after_radar_body["task_summary"]["by_owner_type"]["opportunity_radar"] >= 1
 
     brief = client.post(
         "/research/briefs",

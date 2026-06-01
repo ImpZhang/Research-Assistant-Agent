@@ -91,6 +91,7 @@ from backend.research.schemas import (
     LiteratureToIdeasWorkflowRequest,
     LiteratureToIdeasWorkflowResponse,
     NoveltyCheckRead,
+    OpportunityRadarTaskGenerateRequest,
     PaperCreate,
     PaperCardPayload,
     PaperCardRead,
@@ -227,6 +228,7 @@ def status() -> ProjectStatus:
             "project_progress_overview",
             "project_readiness_overview",
             "research_opportunity_radar",
+            "opportunity_radar_task_generation",
             "idea_artifact_bundle_export",
             "project_handoff_bundle_export",
             "advisor_research_briefs",
@@ -510,6 +512,15 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/opportunities/radar",
             output_model="ResearchOpportunityRadarResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_research_opportunity_radar",
+            description="Turn top opportunity radar next actions into task-board tasks.",
+            method="POST",
+            path="/research/opportunities/radar/tasks",
+            input_model="OpportunityRadarTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="create_advisor_brief",
@@ -2057,6 +2068,7 @@ def get_idea_progress(
     ]
     research_plan_tasks = [task for task in tasks if task.owner_type == "research_plan"]
     readiness_tasks = [task for task in tasks if task.owner_type == "idea_readiness"]
+    opportunity_tasks = [task for task in tasks if task.owner_type == "opportunity_radar"]
     artifact_counts = {
         "related_work_matrices": len(matrices),
         "proposal_drafts": len(drafts),
@@ -2072,6 +2084,7 @@ def get_idea_progress(
         "blocked_tasks": len([task for task in tasks if task.status == "blocked"]),
         "research_plan_tasks": len(research_plan_tasks),
         "readiness_follow_up_tasks": len(readiness_tasks),
+        "opportunity_follow_up_tasks": len(opportunity_tasks),
         "analysis_follow_up_tasks": len(analysis_tasks),
         "decision_follow_up_tasks": len(decision_tasks),
         "task_board_snapshots": len(snapshots),
@@ -3274,6 +3287,26 @@ def get_research_opportunity_radar(
     )
 
 
+@router.post("/opportunities/radar/tasks", response_model=ResearchTaskGenerationResponse)
+def create_tasks_from_research_opportunity_radar(
+    payload: OpportunityRadarTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    radar = get_research_opportunity_radar(limit=payload.limit, session=session)
+    tasks = ResearchTaskService(session).create_from_opportunity_radar(
+        [item.model_dump() for item in radar.top_opportunities],
+        actions_per_opportunity=payload.actions_per_opportunity,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} task-board tasks from "
+            f"{len(radar.top_opportunities)} opportunity radar items."
+        ),
+    )
+
+
 def _build_research_opportunity_item(
     ranked_item: Any,
     readiness: IdeaReadinessSummary,
@@ -3667,6 +3700,8 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "research_plan_creates_task",
         "idea_has_readiness_assessment",
         "idea_readiness_creates_task",
+        "idea_has_opportunity_radar",
+        "opportunity_radar_creates_task",
     ]
     edges = (
         session.query(ResearchEdge)
