@@ -230,6 +230,7 @@ def status() -> ProjectStatus:
             "advisor_brief_execution_context",
             "tool_manifest",
             "mcp_tool_bridge_spec",
+            "mcp_stdio_http_bridge",
             "human_idea_feedback",
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",
@@ -269,7 +270,7 @@ def status() -> ProjectStatus:
             "external_embedding_provider",
             "learned_reranking",
             "external_novelty_search",
-            "mcp_tool_bridge",
+            "managed_mcp_server",
         ],
     )
 

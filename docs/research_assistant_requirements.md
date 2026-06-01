@@ -993,6 +993,8 @@ metric 选择理由
 
 tool manifest 之上需要提供轻量 HTTP tool bridge spec：把 path 参数、JSON body、multipart 上传、输出模型、side effect、read-only/destructive hint 统一成可被 MCP adapter、DeerFlow node 或外部 planner 消费的结构。正式 MCP server 后续只包装这层 spec，不重复维护工具清单。
 
+HTTP tool bridge spec 之上需要提供一个 dependency-light 的 stdio MCP-to-HTTP bridge 脚本：启动时读取 `/research/tools/mcp-spec`，实现 `initialize`、`tools/list` 和 `tools/call`，把 MCP tool call 翻译成 FastAPI HTTP 调用。该脚本必须把 spec 作为唯一工具事实源，不允许维护第二份 route/tool 清单；需要覆盖 path 参数编码、JSON body、multipart 文件上传和 zip bundle 的 base64 文本返回。
+
 系统需要保存研究者画像/项目约束：包括 primary domains、active research questions、target venues、methodological preferences、resource constraints、risk tolerance、negative preferences 和 ranking weights。ranking、advisor brief、后续 planner 应优先读取这份画像，避免生成“看起来不错但不适合当前资源和投稿目标”的 idea。
 
 系统需要提供 research execution plan snapshot：把 profile、ranked ideas、open/blocked tasks 聚合成 7/14/30 天行动计划，包含 phases、task ids、success checks、source ids 和 Markdown 导出。它回答“接下来一到两周具体做什么”，而不是只输出静态报告。

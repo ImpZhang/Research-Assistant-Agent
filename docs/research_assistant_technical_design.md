@@ -93,9 +93,11 @@ RAG 负责找证据；科研助手负责组织科研推理流程。
 
 - Microsoft GraphRAG: https://microsoft.github.io/graphrag/
 
-### 2.6 MCP 后置
+### 2.6 MCP 核心后置，薄桥接先行
 
 MCP 是连接外部系统的标准协议。官方文档将 MCP 定义为连接 AI 应用与外部数据源、工具和工作流的开放标准。它适合后续接 arXiv、Semantic Scholar、Zotero、GitHub 等工具，但第一阶段核心能力必须先在本地文献库内跑通。
+
+因此完整 MCP server、外部 tool sandbox 和第三方生态接入仍然后置；当前阶段只保留一个薄的 stdio MCP-to-HTTP bridge。它读取 `/research/tools/mcp-spec`，把已有 FastAPI 能力暴露给 MCP 客户端，不引入 MCP SDK 作为核心依赖，也不复制路由清单。
 
 参考：
 
@@ -211,7 +213,7 @@ flowchart TD
 | 任务队列 | FastAPI BackgroundTasks + jobs 表 | MVP | 简单可靠；后续可迁移 RQ/Celery。 |
 | 前端 | 当前 Vue CDN；工作台阶段迁移 Vue 3 + Vite + TypeScript | 渐进 | 不阻断后端升级；复杂 UI 时需要工程化前端。 |
 | 测试 | pytest + FastAPI TestClient + Playwright | 新增 | 后端工作流、API、前端回归都需要覆盖。 |
-| 外部工具协议 | MCP | 后置接入 | 适合 arXiv/Zotero/GitHub 等，但不是 MVP 核心依赖。 |
+| 外部工具协议 | MCP + stdio HTTP bridge | 薄桥接先行，完整生态后置 | MCP 适合 arXiv/Zotero/GitHub 等；当前只用 `scripts/mcp_http_bridge.py` 包装稳定 HTTP spec，避免成为核心依赖。 |
 | 大型 agent harness | DeerFlow | 不迁移 | 当前系统已有主线；DeerFlow 适合长任务 harness，但迁移成本高。 |
 
 参考：
@@ -1123,6 +1125,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/tools/mcp-spec` turns the stable tool manifest into an HTTP tool bridge spec with JSON-schema-like inputs, path parameters, HTTP method/path metadata, output models, side-effect flags, and read-only/destructive annotations. It is intentionally dependency-light: the project can expose a real MCP server later by wrapping this spec instead of duplicating route knowledge.
 
+`scripts/mcp_http_bridge.py` is the first runnable MCP bridge. It is a dependency-light stdio JSON-RPC adapter that implements `initialize`, `tools/list`, and `tools/call`, loads `/research/tools/mcp-spec`, and forwards calls to the FastAPI HTTP routes. Binary bundle responses are returned as base64 text payloads so MCP clients can still receive zip exports without SDK-specific extensions.
+
 `/profile` stores durable researcher/project context: domains, active questions, target venues, methodological preferences, resource constraints, risk tolerance, negative preferences, and ranking weights. Ranking reads this profile by default, while advisor briefs include profile constraints so shortlist decisions are grounded in the user's actual research situation rather than only intrinsic idea scores.
 
 `/plans` creates persisted research execution plan snapshots. Each plan combines the current research profile, profile-aware ranked ideas, and open/blocked tasks into a 7/14+ day action plan with phases, task ids, success checks, source ids, and Markdown export. It is the planning artifact between "idea is promising" and "what should I do this week".
@@ -1497,7 +1501,9 @@ SettingsPage
 
 ## 16.1 MCP 定位
 
-MCP 用于外部系统连接，不用于第一阶段内部工作流。
+MCP 用于外部系统连接，也用于把本项目已稳定的科研工作流暴露给外部 agent/client。它不负责第一阶段内部编排，内部主线仍是 FastAPI service + workflow graph + database artifacts。
+
+当前可运行形态是 `scripts/mcp_http_bridge.py`：一个 stdio JSON-RPC bridge，启动时读取 `/research/tools/mcp-spec`，实现 `initialize`、`tools/list`、`tools/call`，再把工具调用转发给 FastAPI HTTP routes。它是 MCP 客户端接入层，不是新的业务层。
 
 后续 MCP server/client 可以接：
 
@@ -1511,6 +1517,7 @@ MCP 用于外部系统连接，不用于第一阶段内部工作流。
 ## 16.2 接入顺序
 
 ```text
+0. Stable tool manifest + HTTP bridge spec + stdio MCP-to-HTTP bridge
 1. Semantic Scholar / arXiv 搜索
 2. Zotero 文献导入
 3. GitHub 代码检索
@@ -1524,6 +1531,7 @@ MCP 用于外部系统连接，不用于第一阶段内部工作流。
 - 写文件/执行命令必须显式确认。
 - 外部搜索结果必须标记来源和时间。
 - 不让外部工具直接覆盖本地知识库。
+- Bridge 必须读取 tool annotations 判断 read-only/destructive hint，并在后续 managed MCP server 中接入 auth/audit。
 
 ## 17. DeerFlow 决策
 
@@ -2005,12 +2013,14 @@ large UI framework
 
 决定：
 
-- MCP 放到外部工具阶段。
+- 完整 MCP 外部工具生态放到外部工具阶段。
+- 当前阶段允许一个 dependency-light stdio MCP-to-HTTP bridge，但它只能包装 `/research/tools/mcp-spec`，不能成为第二套 workflow 或 tool registry。
 
 原因：
 
 - 当前核心是本地文献理解和 idea 工作流。
 - 外部工具先接会分散主线。
+- 薄桥接能提前验证 tool contract，又不会把 MCP SDK、外部账号和工具沙箱绑进核心路径。
 
 ### ADR-006：不迁移 DeerFlow
 

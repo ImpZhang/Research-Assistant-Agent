@@ -43,6 +43,7 @@ def test_research_status() -> None:
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
     assert "project_handoff_bundle_export" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
+    assert "mcp_stdio_http_bridge" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]

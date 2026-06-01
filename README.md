@@ -82,6 +82,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Research plan progress reports that summarize generated plan tasks, completion ratio, blockers, phases, and next plan actions.
 - MCP/tool-ready manifest for stable research workflow APIs.
 - MCP-ready HTTP tool bridge spec generated from the stable tool manifest.
+- Lightweight stdio MCP-to-HTTP bridge script for exposing the stable HTTP tools to MCP clients without extra SDK dependencies.
 - Research idea portfolio ranking with profile-aware weighting, lineage deduplication, and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.
@@ -306,13 +307,23 @@ GET  /research/jobs/{job_id}/artifacts
 GET  /workbench
 ```
 
+## MCP Bridge
+
+Run the backend first, then start the stdio bridge for MCP-capable clients:
+
+```bash
+uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000
+```
+
+The bridge loads `/research/tools/mcp-spec`, exposes `tools/list` and `tools/call`, and forwards tool calls to the FastAPI routes.
+
 ## Near-Term Roadmap
 
 - Add external embedding providers and learned reranking.
 - Add external novelty search through OpenAlex/Semantic Scholar/arXiv adapters.
 - Add durable worker queues, richer retry policies, and resumable workflow state.
 - Expand the research workbench into a full review/edit loop.
-- Wrap the HTTP tool bridge spec in a lightweight MCP server for paper ingestion, workflow runs, and bundle export.
+- Add auth, deployment packaging, and richer binary artifact handling around the lightweight MCP bridge.
 - Introduce LangGraph/DeerFlow-style explicit workflow graphs once the service boundaries stabilize.
 
 ## Design Documents
