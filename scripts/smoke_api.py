@@ -159,6 +159,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea readiness scoring")
     if "idea_quality_gate" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea quality gate")
+    if "idea_quality_gate_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea quality gate task generation")
     if "project_readiness_overview" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project readiness overview")
     if "project_quality_gate_overview" not in status["implemented_capabilities"]:
@@ -232,6 +234,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea quality gate tool")
+    if "create_tasks_from_idea_quality_gate" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea quality gate task tool")
     if "get_project_readiness_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project readiness overview tool")
     if "get_project_quality_gate_overview" not in manifest_names:
@@ -715,6 +719,41 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea quality gate did not include recommended actions")
     if "Idea Quality Gate" not in quality_gate["markdown_export"]:
         raise RuntimeError("idea quality gate markdown did not include title")
+    quality_gate_tasks = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/quality-gate/tasks",
+            json_body={"created_by": "smoke_api"},
+        ),
+        "idea quality gate tasks",
+    )
+    if not quality_gate_tasks["tasks"]:
+        raise RuntimeError("idea quality gate task generation returned no tasks")
+    if quality_gate_tasks["tasks"][0]["owner_type"] != "idea_quality_gate":
+        raise RuntimeError("idea quality gate tasks used the wrong owner type")
+    progress_after_quality_gate_tasks = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/progress"),
+        "idea progress after quality gate tasks",
+    )
+    if (
+        progress_after_quality_gate_tasks["artifact_counts"].get(
+            "quality_gate_follow_up_tasks",
+            0,
+        )
+        < 1
+    ):
+        raise RuntimeError("idea progress did not count quality gate follow-up tasks")
+    packet_after_quality_gate_tasks = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/research-packet"),
+        "idea research packet after quality gate tasks",
+    )
+    if (
+        packet_after_quality_gate_tasks["graph_edge_summary"].get(
+            "quality_gate_creates_task",
+            0,
+        )
+        < 1
+    ):
+        raise RuntimeError("research packet did not summarize quality gate task edges")
     readiness_tasks = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/readiness/tasks",
@@ -1174,6 +1213,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "readiness_decision": readiness["decision"],
         "quality_gate_score": quality_gate["gate_score"],
         "quality_gate_decision": quality_gate["decision"],
+        "quality_gate_task_count": len(quality_gate_tasks["tasks"]),
+        "quality_gate_progress_task_count": progress_after_quality_gate_tasks["artifact_counts"][
+            "quality_gate_follow_up_tasks"
+        ],
         "quality_overview_idea_count": quality_overview["idea_count"],
         "quality_overview_average": quality_overview["average_gate_score"],
         "readiness_task_count": len(readiness_tasks["tasks"]),

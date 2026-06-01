@@ -69,6 +69,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Idea research packets that bundle the latest artifacts, open tasks, graph edge summary, and Markdown context for a single idea.
 - Idea readiness scoring that explains whether an idea is ready for deeper execution.
 - Idea quality gate that combines novelty, readiness, proposal review, experiment evidence, decision memo, and task health into a go/no-go decision.
+- Task generation from idea quality-gate actions so go/no-go decisions become concrete de-risking work.
 - Task generation from idea readiness blockers so readiness gaps become trackable follow-up work.
 - Configurable novelty refresh for rerunning local and optional external literature collision checks on an idea.
 - Task generation from novelty check recommended actions so collision-screening concerns become follow-up work.
@@ -107,7 +108,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
 - Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.
 - Job cancellation and retry controls for failed or interrupted workflow runs.
-- Browser workbench for profile editing, upload, workflow launch, job tracking/cancel/retry, search, readiness, decision, audit, bundle export, and dossier preview.
+- Browser workbench for profile editing, upload, workflow launch, job tracking/cancel/retry, search, readiness, quality gates, decision, audit, bundle export, and dossier preview.
 - End-to-end smoke test covering the current research workflow.
 
 ## Repository Layout
@@ -195,7 +196,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project overview, project bundle export, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, quality-gate follow-up tasks, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project overview, project bundle export, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -255,6 +256,7 @@ GET  /research/ideas/{idea_id}/research-packet
 GET  /research/ideas/{idea_id}/timeline
 GET  /research/ideas/{idea_id}/readiness
 GET  /research/ideas/{idea_id}/quality-gate
+POST /research/ideas/{idea_id}/quality-gate/tasks
 POST /research/ideas/{idea_id}/readiness/tasks
 GET  /research/ideas/{idea_id}/export/bundle
 GET  /research/readiness/overview

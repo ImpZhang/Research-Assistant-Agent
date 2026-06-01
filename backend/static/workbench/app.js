@@ -1097,6 +1097,28 @@ async function loadIdeaQualityGate() {
   }
 }
 
+async function createQualityGateTasks() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Creating quality-gate follow-up tasks...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/quality-gate/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ created_by: "workbench" }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Quality-gate tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function createReadinessTasks() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -1416,6 +1438,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleButton").addEventListener("click", downloadProjectBundle);
   $("readinessButton").addEventListener("click", loadIdeaReadiness);
   $("qualityGateButton").addEventListener("click", loadIdeaQualityGate);
+  $("qualityGateTasksButton").addEventListener("click", createQualityGateTasks);
   $("readinessTasksButton").addEventListener("click", createReadinessTasks);
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);

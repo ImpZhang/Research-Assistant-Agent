@@ -373,6 +373,81 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_idea_quality_gate(
+        self,
+        idea_id: str,
+        *,
+        gate_score: float,
+        decision: str,
+        recommended_actions: list[str],
+        blocking_risks: list[str],
+        missing_evidence_count: int,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        idea = self.session.get(Idea, idea_id)
+        if idea is None:
+            raise ValueError("Idea not found")
+
+        actions = self._unique_commitments(
+            recommended_actions
+            or blocking_risks
+            or ["Review the quality gate and define the next de-risking action."]
+        )[:8]
+        tasks = [
+            ResearchTask(
+                idea_id=idea.id,
+                owner_type="idea_quality_gate",
+                owner_id=idea.id,
+                source_type="quality_gate_recommended_action",
+                source_id=f"recommended_action_{idx}",
+                title=self._quality_gate_task_title(action, idx),
+                description=action,
+                priority=self._quality_gate_task_priority(action, decision),
+                status="todo",
+                due_phase="quality_gate_follow_up",
+                metadata_json={
+                    "gate_score": gate_score,
+                    "quality_gate_decision": decision,
+                    "blocking_risk_count": len(blocking_risks),
+                    "missing_evidence_count": missing_evidence_count,
+                    "blocking_risks": blocking_risks[:5],
+                },
+                created_by=created_by or "system",
+            )
+            for idx, action in enumerate(actions, start=1)
+        ]
+        tasks = self._deduplicate_quality_gate_tasks(tasks)[:8]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note=f"Created from quality gate for idea {idea.id}.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "gate_score": gate_score,
+                        "quality_gate_decision": decision,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_idea_quality_gate_tasks(idea, tasks)
+        self.session.commit()
+        return tasks
+
     def create_from_opportunity_radar(
         self,
         opportunities: list[dict],
@@ -715,6 +790,35 @@ class ResearchTaskService:
             return "high"
         return "medium"
 
+    def _quality_gate_task_title(self, action: str, idx: int) -> str:
+        clean = " ".join(str(action).split())
+        lower = clean.lower()
+        if "novelty" in lower or "collision" in lower:
+            return "De-risk novelty claim"
+        if "proposal readiness review" in lower:
+            return "Run proposal readiness review"
+        if "experiment" in lower:
+            return "Strengthen experiment evidence"
+        if "decision memo" in lower:
+            return "Record quality-gate decision memo"
+        if "assumption" in lower:
+            return "Validate quality-gate assumptions"
+        if lower.startswith("unblock task"):
+            return self._short_task_title(clean, idx)
+        return self._short_task_title(clean or f"Work quality-gate action {idx}", idx)
+
+    def _quality_gate_task_priority(self, action: str, decision: str) -> str:
+        lower = str(action).lower()
+        if decision in {"de_risk_novelty", "revise_before_investment", "reject"}:
+            return "critical"
+        if "blocked" in lower or "high-risk" in lower or "missing" in lower:
+            return "critical"
+        if decision in {"needs_targeted_revision", "park"}:
+            return "high"
+        if "review" in lower or "experiment" in lower or "decision" in lower:
+            return "high"
+        return "medium"
+
     def _opportunity_task_title(self, action: str, idx: int) -> str:
         clean = " ".join(str(action).split())
         if clean.lower().startswith("work task"):
@@ -774,6 +878,16 @@ class ResearchTaskService:
         return unique
 
     def _deduplicate_readiness_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
+        unique = []
+        seen = set()
+        for task in tasks:
+            key = (task.idea_id or "", task.title.lower(), task.description.lower())
+            if key not in seen:
+                unique.append(task)
+                seen.add(key)
+        return unique
+
+    def _deduplicate_quality_gate_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
         unique = []
         seen = set()
         for task in tasks:

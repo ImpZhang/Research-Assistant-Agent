@@ -426,6 +426,46 @@ class ArtifactGraphService:
                 payload={"source": "idea_readiness_blocker"},
             )
 
+    def link_idea_quality_gate_tasks(
+        self,
+        idea: Idea,
+        tasks: list[ResearchTask],
+    ) -> None:
+        idea_node = self._idea_node(idea.id)
+        quality_gate_node = self.graph.get_or_create_node(
+            node_type="idea_quality_gate",
+            label=f"Quality gate follow-up: {idea.title}",
+            canonical_key=f"{idea.id}:quality_gate",
+            payload={
+                "idea_id": idea.id,
+                "task_count": len(tasks),
+            },
+        )
+        self.graph.create_edge(
+            source_node=idea_node,
+            target_node=quality_gate_node,
+            edge_type="idea_has_quality_gate",
+            payload={"source": "idea_quality_gate_task_generation"},
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=quality_gate_node,
+                target_node=task_node,
+                edge_type="quality_gate_creates_task",
+                payload={"source": "quality_gate_recommended_action"},
+            )
+
     def link_opportunity_radar_tasks(self, tasks: list[ResearchTask]) -> None:
         tasks_by_idea: dict[str, list[ResearchTask]] = {}
         for task in tasks:

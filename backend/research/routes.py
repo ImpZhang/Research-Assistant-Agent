@@ -226,6 +226,7 @@ def status() -> ProjectStatus:
             "idea_activity_timeline",
             "idea_readiness_scoring",
             "idea_quality_gate",
+            "idea_quality_gate_task_generation",
             "idea_readiness_task_generation",
             "idea_decision_memos",
             "idea_decision_task_generation",
@@ -454,6 +455,15 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/ideas/{idea_id}/quality-gate",
             output_model="IdeaQualityGateResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_idea_quality_gate",
+            description="Turn quality-gate recommended actions into concrete follow-up research tasks.",
+            method="POST",
+            path="/research/ideas/{idea_id}/quality-gate/tasks",
+            input_model="ResearchTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="create_tasks_from_idea_readiness",
@@ -2108,6 +2118,7 @@ def get_idea_progress(
     ]
     research_plan_tasks = [task for task in tasks if task.owner_type == "research_plan"]
     readiness_tasks = [task for task in tasks if task.owner_type == "idea_readiness"]
+    quality_gate_tasks = [task for task in tasks if task.owner_type == "idea_quality_gate"]
     opportunity_tasks = [task for task in tasks if task.owner_type == "opportunity_radar"]
     novelty_tasks = [task for task in tasks if task.owner_type == "novelty_check"]
     artifact_counts = {
@@ -2125,6 +2136,7 @@ def get_idea_progress(
         "blocked_tasks": len([task for task in tasks if task.status == "blocked"]),
         "research_plan_tasks": len(research_plan_tasks),
         "readiness_follow_up_tasks": len(readiness_tasks),
+        "quality_gate_follow_up_tasks": len(quality_gate_tasks),
         "opportunity_follow_up_tasks": len(opportunity_tasks),
         "novelty_follow_up_tasks": len(novelty_tasks),
         "analysis_follow_up_tasks": len(analysis_tasks),
@@ -3234,6 +3246,34 @@ def get_idea_quality_gate(
     )
 
 
+@router.post("/ideas/{idea_id}/quality-gate/tasks", response_model=ResearchTaskGenerationResponse)
+def create_tasks_from_idea_quality_gate(
+    idea_id: str,
+    payload: ResearchTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    quality_gate = get_idea_quality_gate(idea_id, session=session)
+    missing_evidence_count = len(
+        [item for item in quality_gate.required_evidence if not item.get("satisfied")]
+    )
+    try:
+        tasks = ResearchTaskService(session).create_from_idea_quality_gate(
+            idea_id,
+            gate_score=quality_gate.gate_score,
+            decision=quality_gate.decision,
+            recommended_actions=quality_gate.recommended_actions,
+            blocking_risks=quality_gate.blocking_risks,
+            missing_evidence_count=missing_evidence_count,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} quality-gate follow-up tasks for idea {idea_id}.",
+    )
+
+
 def _quality_gate_breakdown(
     *,
     readiness: IdeaReadinessResponse,
@@ -4188,6 +4228,8 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "research_plan_creates_task",
         "idea_has_readiness_assessment",
         "idea_readiness_creates_task",
+        "idea_has_quality_gate",
+        "quality_gate_creates_task",
         "idea_has_opportunity_radar",
         "opportunity_radar_creates_task",
     ]
