@@ -28,6 +28,7 @@ def test_research_status() -> None:
     assert "sqlalchemy_models" in body["implemented_capabilities"]
     assert "research_profile_constraints" in body["implemented_capabilities"]
     assert "research_plan_snapshots" in body["implemented_capabilities"]
+    assert "research_plan_task_generation" in body["implemented_capabilities"]
     assert "tool_manifest" in body["implemented_capabilities"]
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
     assert "idea_research_packet" in body["implemented_capabilities"]
@@ -52,6 +53,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_research_profile" in names
     assert "update_research_profile" in names
     assert "create_research_plan" in names
+    assert "create_tasks_from_research_plan" in names
     assert "get_project_progress_overview" in names
     assert "get_mcp_tool_spec" in names
     assert "get_idea_research_packet" in names
@@ -212,6 +214,20 @@ Future work should preserve researcher goals as durable project context.
     assert plan_export.status_code == 200
     assert "## Source IDs" in plan_export.text
 
+    plan_tasks = client.post(
+        f"/research/plans/{plan_body['id']}/tasks",
+        json={"created_by": "pytest"},
+    )
+    assert plan_tasks.status_code == 200
+    plan_task_body = plan_tasks.json()
+    assert plan_task_body["tasks"]
+    assert plan_task_body["tasks"][0]["owner_type"] == "research_plan"
+    assert plan_task_body["tasks"][0]["owner_id"] == plan_body["id"]
+
+    plan_task_edges = client.get("/research/graph/edges?edge_type=research_plan_creates_task")
+    assert plan_task_edges.status_code == 200
+    assert plan_task_edges.json()
+
     reset = client.put(
         "/research/profile",
         json={
@@ -243,6 +259,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "profileForm" in response.text
     assert "profileRisk" in response.text
     assert "researchPlanButton" in response.text
+    assert "researchPlanTasksButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -250,6 +267,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/profile/export/markdown" in script.text
     assert "saveResearchProfile" in script.text
     assert "/research/plans" in script.text
+    assert "/research/plans/${state.latestResearchPlanId}/tasks" in script.text
     assert "/research/workflows/literature-to-ideas/async" in script.text
     assert "/research/jobs/${jobId}/artifacts" in script.text
     assert "/research/jobs/${jobId}/${action}" in script.text

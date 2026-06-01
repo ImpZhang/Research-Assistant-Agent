@@ -4,6 +4,7 @@ from backend.research.models import (
     ExperimentAnalysis,
     IdeaDecisionMemo,
     ProposalRevision,
+    ResearchPlanSnapshot,
     ResearchTask,
     ResearchTaskEvent,
 )
@@ -234,6 +235,73 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_research_plan(
+        self,
+        plan_id: str,
+        *,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        plan = self.session.get(ResearchPlanSnapshot, plan_id)
+        if plan is None:
+            raise ValueError("Research plan not found")
+        tasks = []
+        for item_index, item in enumerate(plan.plan_items_json or [], start=1):
+            actions = item.get("actions") or []
+            for action_index, action in enumerate(actions[:4], start=1):
+                action_text = " ".join(str(action).split())
+                if not action_text:
+                    continue
+                tasks.append(
+                    ResearchTask(
+                        idea_id=item.get("idea_id") or None,
+                        owner_type="research_plan",
+                        owner_id=plan.id,
+                        source_type="plan_action",
+                        source_id=f"item_{item_index}_action_{action_index}",
+                        title=self._short_task_title(action_text, action_index),
+                        description=action_text,
+                        priority=self._plan_task_priority(str(item.get("phase") or "")),
+                        status="todo",
+                        due_phase=str(item.get("days") or ""),
+                        metadata_json={
+                            "plan_title": plan.title,
+                            "phase": item.get("phase", ""),
+                            "success_check": item.get("success_check", ""),
+                            "source_task_ids": item.get("task_ids") or [],
+                        },
+                        created_by=created_by or "system",
+                    )
+                )
+        tasks = self._deduplicate_plan_tasks(tasks)[:12]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note=f"Created from research plan {plan.id}.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_research_plan_tasks(plan, tasks)
+        self.session.commit()
+        return tasks
+
     def list_tasks(
         self,
         *,
@@ -386,6 +454,13 @@ class ResearchTaskService:
             return "low"
         return "medium"
 
+    def _plan_task_priority(self, phase: str) -> str:
+        if phase == "triage":
+            return "critical"
+        if phase == "execution":
+            return "high"
+        return "medium"
+
     def _short_task_title(self, action: str, idx: int) -> str:
         clean = " ".join(str(action).split())
         if not clean:
@@ -400,5 +475,15 @@ class ResearchTaskService:
             key = clean.lower()
             if clean and key not in seen:
                 unique.append(clean)
+                seen.add(key)
+        return unique
+
+    def _deduplicate_plan_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
+        unique = []
+        seen = set()
+        for task in tasks:
+            key = (task.idea_id or "", task.title.lower(), task.owner_id)
+            if key not in seen:
+                unique.append(task)
                 seen.add(key)
         return unique

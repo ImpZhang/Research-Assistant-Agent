@@ -7,6 +7,7 @@ from backend.research.models import (
     ProposalDraft,
     ProposalReview,
     ProposalRevision,
+    ResearchPlanSnapshot,
     ResearchTask,
     TaskBoardSnapshot,
 )
@@ -347,6 +348,40 @@ class ArtifactGraphService:
                 target_node=task_node,
                 edge_type="decision_memo_creates_task",
                 payload={"source": "idea_decision_memo_next_commitments"},
+            )
+
+    def link_research_plan_tasks(
+        self,
+        plan: ResearchPlanSnapshot,
+        tasks: list[ResearchTask],
+    ) -> None:
+        plan_node = self.graph.get_or_create_node(
+            node_type="research_plan",
+            label=plan.title,
+            canonical_key=plan.id,
+            payload={
+                "horizon_days": plan.horizon_days,
+                "idea_ids": plan.idea_ids_json or [],
+                "profile": (plan.profile_summary_json or {}).get("name", ""),
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=plan_node,
+                target_node=task_node,
+                edge_type="research_plan_creates_task",
+                payload={"source": "research_plan_snapshot"},
             )
 
     def link_idea_assumption_audit(self, audit: IdeaAssumptionAudit) -> None:

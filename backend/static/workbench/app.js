@@ -13,6 +13,7 @@ const state = {
   latestAssumptionAuditId: "",
   latestTaskIds: [],
   latestTaskSnapshotId: "",
+  latestResearchPlanId: "",
   researchProfile: null,
   pollTimer: null,
 };
@@ -987,11 +988,35 @@ async function createResearchPlan() {
         created_by: "workbench",
       }),
     });
+    state.latestResearchPlanId = body.id;
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "workflowResult",
       `Created plan <code>${escapeHtml(body.id)}</code> with ${body.plan_items.length} plan items.`,
     );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createResearchPlanTasks() {
+  if (!state.latestResearchPlanId) {
+    renderResult("workflowResult", "Create a research plan before generating plan tasks.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Creating tasks from research plan...", "warn");
+  try {
+    const body = await api(`/research/plans/${state.latestResearchPlanId}/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ created_by: "workbench" }),
+    });
+    state.latestTaskIds = body.tasks.map((task) => task.id);
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Plan tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+    await refreshJobs();
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
   }
@@ -1116,6 +1141,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
   $("advisorBriefButton").addEventListener("click", createAdvisorBrief);
   $("researchPlanButton").addEventListener("click", createResearchPlan);
+  $("researchPlanTasksButton").addEventListener("click", createResearchPlanTasks);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);

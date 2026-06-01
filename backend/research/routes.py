@@ -198,6 +198,7 @@ def status() -> ProjectStatus:
             "sqlalchemy_models",
             "research_profile_constraints",
             "research_plan_snapshots",
+            "research_plan_task_generation",
             "paper_registry_api",
             "document_ingestion_api",
             "evidence_extraction",
@@ -313,6 +314,15 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/plans",
             input_model="ResearchPlanCreate",
             output_model="ResearchPlanDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_research_plan",
+            description="Turn a research execution plan into concrete task-board tasks.",
+            method="POST",
+            path="/research/plans/{plan_id}/tasks",
+            input_model="ResearchTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -859,6 +869,25 @@ def export_research_plan_markdown(
     if plan is None:
         raise HTTPException(status_code=404, detail="Research plan not found")
     return PlainTextResponse(plan.markdown_export or "", media_type="text/markdown")
+
+
+@router.post("/plans/{plan_id}/tasks", response_model=ResearchTaskGenerationResponse)
+def create_tasks_from_research_plan(
+    plan_id: str,
+    payload: ResearchTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    try:
+        tasks = ResearchTaskService(session).create_from_research_plan(
+            plan_id,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} research tasks from research plan {plan_id}.",
+    )
 
 
 def _serialize_job(job: Job) -> JobRead:

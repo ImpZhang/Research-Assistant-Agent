@@ -1119,6 +1119,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/plans` creates persisted research execution plan snapshots. Each plan combines the current research profile, profile-aware ranked ideas, and open/blocked tasks into a 7/14+ day action plan with phases, task ids, success checks, source ids, and Markdown export. It is the planning artifact between "idea is promising" and "what should I do this week".
 
+`/plans/{plan_id}/tasks` turns plan actions into `ResearchTask` records with `owner_type=research_plan` and `research_plan_creates_task` graph edges, so planning artifacts feed the same task board, progress, and lineage machinery as proposal revisions, decision memos, and experiment analyses.
+
 ## 11.5 Reviews
 
 ```text
@@ -1150,6 +1152,7 @@ POST /research/plans
 GET  /research/plans
 GET  /research/plans/{plan_id}
 GET  /research/plans/{plan_id}/export/markdown
+POST /research/plans/{plan_id}/tasks
 GET  /research/ideas/{idea_id}/experiment-runs
 POST /research/experiment-plans/{plan_id}/runs
 GET  /research/experiment-plans/{plan_id}/runs
