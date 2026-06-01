@@ -466,6 +466,35 @@ class ArtifactGraphService:
                 payload={"source": "quality_gate_recommended_action"},
             )
 
+    def link_project_triage_tasks(self, tasks: list[ResearchTask]) -> None:
+        triage_node = self.graph.get_or_create_node(
+            node_type="project_triage",
+            label="Project triage brief",
+            canonical_key="project_triage:latest",
+            payload={
+                "task_count": len(tasks),
+                "owner_type": "project_triage",
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=triage_node,
+                target_node=task_node,
+                edge_type="project_triage_creates_task",
+                payload={"source": task.source_type},
+            )
+
     def link_opportunity_radar_tasks(self, tasks: list[ResearchTask]) -> None:
         tasks_by_idea: dict[str, list[ResearchTask]] = {}
         for task in tasks:

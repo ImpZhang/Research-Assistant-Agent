@@ -112,6 +112,7 @@ from backend.research.schemas import (
     ProjectReadinessOverviewResponse,
     ProjectStatus,
     ProjectTriageBriefResponse,
+    ProjectTriageTaskGenerateRequest,
     RankedIdeaRead,
     RelatedWorkMatrixCreate,
     RelatedWorkMatrixRead,
@@ -235,6 +236,7 @@ def status() -> ProjectStatus:
             "idea_assumption_audits",
             "project_progress_overview",
             "project_triage_brief",
+            "project_triage_task_generation",
             "project_readiness_overview",
             "project_quality_gate_overview",
             "project_quality_gate_task_generation",
@@ -552,6 +554,15 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/triage/brief",
             output_model="ProjectTriageBriefResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_triage_brief",
+            description="Turn project triage brief next actions and risks into project-level task-board tasks.",
+            method="POST",
+            path="/research/triage/brief/tasks",
+            input_model="ProjectTriageTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_project_readiness_overview",
@@ -922,6 +933,24 @@ def get_project_triage_brief(
             "Built project triage brief from progress, readiness, "
             "quality gates, and opportunity radar."
         ),
+    )
+
+
+@router.post("/triage/brief/tasks", response_model=ResearchTaskGenerationResponse)
+def create_tasks_from_project_triage_brief(
+    payload: ProjectTriageTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    triage = get_project_triage_brief(session=session)
+    tasks = ResearchTaskService(session).create_from_project_triage(
+        next_actions=triage.next_actions,
+        risk_focus=triage.risk_focus if payload.include_risks else [],
+        limit=payload.limit,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} project triage tasks from the latest triage brief.",
     )
 
 
@@ -4470,6 +4499,7 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "idea_readiness_creates_task",
         "idea_has_quality_gate",
         "quality_gate_creates_task",
+        "project_triage_creates_task",
         "idea_has_opportunity_radar",
         "opportunity_radar_creates_task",
     ]

@@ -55,6 +55,7 @@ def test_research_status() -> None:
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
+    assert "project_triage_task_generation" in body["implemented_capabilities"]
     assert "external_novelty_refresh" in body["implemented_capabilities"]
     assert "novelty_check_task_generation" in body["implemented_capabilities"]
 
@@ -76,6 +77,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_research_plan_progress" in names
     assert "get_project_progress_overview" in names
     assert "get_project_triage_brief" in names
+    assert "create_tasks_from_project_triage_brief" in names
     assert "get_mcp_tool_spec" in names
     assert "get_idea_research_packet" in names
     assert "get_idea_timeline" in names
@@ -399,6 +401,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/assumption-audit" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
+    assert "/research/triage/brief/tasks" in script.text
     assert "/research/readiness/overview" in script.text
     assert "/research/quality/overview" in script.text
     assert "/research/quality/overview/tasks" in script.text
@@ -1297,6 +1300,23 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert triage_body["idea_count"] >= 1
     assert triage_body["next_actions"]
     assert "# Project Triage Brief" in triage_body["markdown_export"]
+
+    triage_tasks = client.post(
+        "/research/triage/brief/tasks",
+        json={"limit": 4, "include_risks": True, "created_by": "pytest"},
+    )
+    assert triage_tasks.status_code == 200
+    triage_task_body = triage_tasks.json()
+    assert triage_task_body["tasks"]
+    assert all(task["owner_type"] == "project_triage" for task in triage_task_body["tasks"])
+
+    triage_task_edges = client.get("/research/graph/edges?edge_type=project_triage_creates_task")
+    assert triage_task_edges.status_code == 200
+    assert triage_task_edges.json()
+
+    listed_triage_tasks = client.get("/research/tasks?owner_type=project_triage")
+    assert listed_triage_tasks.status_code == 200
+    assert listed_triage_tasks.json()
 
     quality_gate_tasks = client.post(
         f"/research/ideas/{idea_id}/quality-gate/tasks",

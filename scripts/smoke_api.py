@@ -203,6 +203,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea assumption audits")
     if "project_triage_brief" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project triage brief")
+    if "project_triage_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project triage task generation")
     if "external_novelty_refresh" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include external novelty refresh")
     if "novelty_check_task_generation" not in status["implemented_capabilities"]:
@@ -226,6 +228,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project progress overview tool")
     if "get_project_triage_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage brief tool")
+    if "create_tasks_from_project_triage_brief" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project triage task tool")
     if "retry_job" not in manifest_names:
         raise RuntimeError("tool manifest did not include job retry tool")
     if "get_idea_research_packet" not in manifest_names:
@@ -845,6 +849,27 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project triage brief did not include next actions")
     if "Project Triage Brief" not in triage_brief["markdown_export"]:
         raise RuntimeError("project triage brief markdown did not include title")
+    triage_tasks = require_ok(
+        client.post(
+            "/research/triage/brief/tasks",
+            json_body={
+                "limit": 5,
+                "include_risks": True,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project triage tasks",
+    )
+    if not triage_tasks["tasks"]:
+        raise RuntimeError("project triage task generation returned no tasks")
+    if triage_tasks["tasks"][0]["owner_type"] != "project_triage":
+        raise RuntimeError("project triage tasks used the wrong owner type")
+    triage_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=project_triage_creates_task"),
+        "project triage task graph edges",
+    )
+    if not triage_edges:
+        raise RuntimeError("project triage task generation did not create graph edges")
     project_quality_tasks = require_ok(
         client.post(
             "/research/quality/overview/tasks",
@@ -1263,6 +1288,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "quality_overview_idea_count": quality_overview["idea_count"],
         "quality_overview_average": quality_overview["average_gate_score"],
         "triage_next_action_count": len(triage_brief["next_actions"]),
+        "triage_task_count": len(triage_tasks["tasks"]),
         "project_quality_task_count": len(project_quality_tasks["tasks"]),
         "readiness_task_count": len(readiness_tasks["tasks"]),
         "readiness_progress_task_count": progress_after_readiness_tasks["artifact_counts"][

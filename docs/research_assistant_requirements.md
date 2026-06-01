@@ -803,6 +803,8 @@ project quality gate overview 需要能一键转成 task board 任务：从 de-r
 - 输出 recommended focus、risk focus、next actions 和 Markdown brief。
 - 用于回答“今天/本轮到底先做哪几件事”，作为人类工作台和外部 agent/MCP planner 的第一跳入口。
 
+project triage brief 需要能一键转成 task board 任务：从 next actions 和 risk focus 创建 `owner_type=project_triage`、`due_phase=triage_follow_up` 的项目级任务，并写入 `project_triage_creates_task` 图边。这样每日 triage 结果能直接进入执行队列。
+
 系统需要提供 research opportunity radar：
 
 - 聚合 profile-aware ranking、idea readiness、open/blocked tasks 和 readiness blockers。

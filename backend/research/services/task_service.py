@@ -448,6 +448,79 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_triage(
+        self,
+        *,
+        next_actions: list[str],
+        risk_focus: list[str],
+        limit: int = 8,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        action_items = [
+            ("triage_next_action", action)
+            for action in self._unique_commitments(next_actions or [])
+        ]
+        risk_items = [
+            ("triage_risk_focus", risk) for risk in self._unique_commitments(risk_focus or [])
+        ]
+        items = self._deduplicate_triage_items([*action_items, *risk_items])[:limit]
+        if not items:
+            items = [
+                (
+                    "triage_next_action",
+                    "Review the project triage brief and define the next research action.",
+                )
+            ]
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_triage",
+                owner_id="project_triage",
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._triage_task_title(action, idx),
+                description=action,
+                priority=self._triage_task_priority(source_type, action),
+                status="todo",
+                due_phase="triage_follow_up",
+                metadata_json={
+                    "triage_source_type": source_type,
+                    "source_rank": idx,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project triage brief.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_triage_tasks(tasks)
+        self.session.commit()
+        return tasks
+
     def create_from_opportunity_radar(
         self,
         opportunities: list[dict],
@@ -819,6 +892,27 @@ class ResearchTaskService:
             return "high"
         return "medium"
 
+    def _triage_task_title(self, action: str, idx: int) -> str:
+        clean = " ".join(str(action).split())
+        lower = clean.lower()
+        if lower.startswith("blocked task"):
+            return self._short_task_title(clean.replace("Blocked task", "Unblock task", 1), idx)
+        if "de-risk" in lower or "risk" in lower:
+            return self._short_task_title(f"De-risk project item {idx}: {clean}", idx)
+        if "opportunity" in lower:
+            return self._short_task_title(clean, idx)
+        return self._short_task_title(clean or f"Work project triage action {idx}", idx)
+
+    def _triage_task_priority(self, source_type: str, action: str) -> str:
+        lower = str(action).lower()
+        if source_type == "triage_risk_focus":
+            return "critical"
+        if "blocked" in lower or "de-risk" in lower or "high-risk" in lower:
+            return "critical"
+        if "advance" in lower or "opportunity" in lower:
+            return "high"
+        return "medium"
+
     def _opportunity_task_title(self, action: str, idx: int) -> str:
         clean = " ".join(str(action).split())
         if clean.lower().startswith("work task"):
@@ -864,6 +958,17 @@ class ResearchTaskService:
             key = clean.lower()
             if clean and key not in seen:
                 unique.append(clean)
+                seen.add(key)
+        return unique
+
+    def _deduplicate_triage_items(self, items: list[tuple[str, str]]) -> list[tuple[str, str]]:
+        unique = []
+        seen = set()
+        for source_type, action in items:
+            clean = " ".join(str(action).split())
+            key = clean.lower()
+            if clean and key not in seen:
+                unique.append((source_type, clean))
                 seen.add(key)
         return unique
 

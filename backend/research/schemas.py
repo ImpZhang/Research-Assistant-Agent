@@ -817,6 +817,12 @@ class ProjectTriageBriefResponse(BaseModel):
     message: str
 
 
+class ProjectTriageTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=8, ge=1, le=20)
+    include_risks: bool = True
+    created_by: str = "system"
+
+
 class ResearchBriefCreate(BaseModel):
     title: str = "Advisor Research Brief"
     scope: Literal["project", "idea_set"] = "project"

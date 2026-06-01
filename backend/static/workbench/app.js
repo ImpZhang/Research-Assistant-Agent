@@ -1169,6 +1169,28 @@ async function loadProjectTriageBrief() {
   }
 }
 
+async function createProjectTriageTasks() {
+  renderResult("workflowResult", "Creating project triage tasks...", "warn");
+  try {
+    const body = await api("/research/triage/brief/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        limit: 8,
+        include_risks: true,
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Triage tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectReadinessOverview() {
   renderResult("workflowResult", "Loading project readiness overview...", "warn");
   try {
@@ -1478,6 +1500,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("readinessTasksButton").addEventListener("click", createReadinessTasks);
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("triageBriefButton").addEventListener("click", loadProjectTriageBrief);
+  $("triageTasksButton").addEventListener("click", createProjectTriageTasks);
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
   $("qualityOverviewButton").addEventListener("click", loadProjectQualityOverview);
   $("projectQualityTasksButton").addEventListener("click", createProjectQualityTasks);
