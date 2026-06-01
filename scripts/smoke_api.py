@@ -171,6 +171,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include research plan task generation")
     if "research_plan_progress_integration" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research plan progress integration")
+    if "research_plan_progress_tracking" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include research plan progress tracking")
     if "idea_decision_memos" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision memos")
     if "idea_decision_task_generation" not in status["implemented_capabilities"]:
@@ -192,6 +194,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include research plan creator")
     if "create_tasks_from_research_plan" not in manifest_names:
         raise RuntimeError("tool manifest did not include research plan task creator")
+    if "get_research_plan_progress" not in manifest_names:
+        raise RuntimeError("tool manifest did not include research plan progress tool")
     if "get_project_progress_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project progress overview tool")
     if "retry_job" not in manifest_names:
@@ -753,6 +757,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research execution plan task generation returned no tasks")
     if research_plan_tasks["tasks"][0]["owner_type"] != "research_plan":
         raise RuntimeError("research execution plan tasks used the wrong owner type")
+    research_plan_progress = require_ok(
+        client.get(f"/research/plans/{research_plan['id']}/progress"),
+        "research execution plan progress",
+    )
+    if research_plan_progress["task_summary"]["task_count"] != len(research_plan_tasks["tasks"]):
+        raise RuntimeError("research plan progress did not count generated plan tasks")
+    if "Research Plan Progress" not in research_plan_progress["markdown_export"]:
+        raise RuntimeError("research plan progress markdown did not include title")
     post_plan_progress = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/progress"),
         "idea progress after research plan tasks",
@@ -1021,6 +1033,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "research_plan_id": research_plan["id"],
         "research_plan_item_count": len(research_plan["plan_items"]),
         "research_plan_task_count": len(research_plan_tasks["tasks"]),
+        "research_plan_progress_completion": research_plan_progress["task_summary"][
+            "completion_ratio"
+        ],
         "post_plan_progress_plan_count": post_plan_progress["artifact_counts"]["research_plans"],
         "post_plan_bundle_file_count": len(post_plan_bundle_files),
         "research_plan_markdown_chars": len(research_plan_markdown),

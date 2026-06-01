@@ -1127,6 +1127,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/plans/{plan_id}/tasks` turns plan actions into `ResearchTask` records with `owner_type=research_plan` and `research_plan_creates_task` graph edges, so planning artifacts feed the same task board, progress, lineage, research packet, and bundle-export machinery as proposal revisions, decision memos, and experiment analyses.
 
+`/plans/{plan_id}/progress` reads the tasks generated from one research execution plan and returns task counts, open/blocked/done totals, completion ratio, phase/priority/status breakdowns, next plan tasks, and Markdown progress report. It answers whether the current execution plan is actually moving or merely accumulating tasks.
+
 ## 11.5 Reviews
 
 ```text
@@ -1161,6 +1163,7 @@ GET  /research/plans
 GET  /research/plans/{plan_id}
 GET  /research/plans/{plan_id}/export/markdown
 POST /research/plans/{plan_id}/tasks
+GET  /research/plans/{plan_id}/progress
 GET  /research/ideas/{idea_id}/experiment-runs
 POST /research/experiment-plans/{plan_id}/runs
 GET  /research/experiment-plans/{plan_id}/runs

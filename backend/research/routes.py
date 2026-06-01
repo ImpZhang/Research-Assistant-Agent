@@ -117,6 +117,7 @@ from backend.research.schemas import (
     ResearchOverviewResponse,
     ResearchPlanCreate,
     ResearchPlanDetail,
+    ResearchPlanProgressResponse,
     ResearchPlanRead,
     ResearchProfileRead,
     ResearchProfileUpdate,
@@ -202,6 +203,7 @@ def status() -> ProjectStatus:
             "research_plan_snapshots",
             "research_plan_task_generation",
             "research_plan_progress_integration",
+            "research_plan_progress_tracking",
             "paper_registry_api",
             "document_ingestion_api",
             "evidence_extraction",
@@ -331,6 +333,13 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="ResearchTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="get_research_plan_progress",
+            description="Summarize task progress for one research execution plan.",
+            method="GET",
+            path="/research/plans/{plan_id}/progress",
+            output_model="ResearchPlanProgressResponse",
         ),
         ToolManifestItem(
             name="get_mcp_tool_spec",
@@ -932,6 +941,115 @@ def create_tasks_from_research_plan(
         tasks=[_serialize_research_task(task) for task in tasks],
         message=f"Created {len(tasks)} research tasks from research plan {plan_id}.",
     )
+
+
+@router.get("/plans/{plan_id}/progress", response_model=ResearchPlanProgressResponse)
+def get_research_plan_progress(
+    plan_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchPlanProgressResponse:
+    plan = ResearchPlanService(session).get_plan(plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Research plan not found")
+    tasks = (
+        session.query(ResearchTask)
+        .filter(
+            ResearchTask.owner_type == "research_plan",
+            ResearchTask.owner_id == plan.id,
+        )
+        .order_by(ResearchTask.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    task_summary = _research_plan_task_summary(tasks)
+    markdown_export = _render_research_plan_progress_markdown(
+        plan=plan,
+        task_summary=task_summary,
+        tasks=tasks,
+    )
+    return ResearchPlanProgressResponse(
+        plan=_serialize_research_plan(plan),
+        task_summary=task_summary,
+        tasks=[_serialize_research_task(task) for task in tasks],
+        markdown_export=markdown_export,
+        message=f"Loaded progress for research plan {plan.id}.",
+    )
+
+
+def _research_plan_task_summary(tasks: list[ResearchTask]) -> dict[str, Any]:
+    by_status = Counter(task.status for task in tasks)
+    by_priority = Counter(task.priority for task in tasks)
+    by_phase = Counter((task.metadata_json or {}).get("phase", "") for task in tasks)
+    open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
+    done_count = by_status.get("done", 0) + by_status.get("archived", 0)
+    total_count = len(tasks)
+    return {
+        "task_count": total_count,
+        "open_task_count": len(open_tasks),
+        "blocked_task_count": by_status.get("blocked", 0),
+        "done_task_count": done_count,
+        "completion_ratio": round(done_count / total_count, 4) if total_count else 0.0,
+        "by_status": dict(by_status),
+        "by_priority": dict(by_priority),
+        "by_phase": {key or "unspecified": value for key, value in by_phase.items()},
+        "next_tasks": [
+            {
+                "id": task.id,
+                "title": task.title,
+                "priority": task.priority,
+                "status": task.status,
+                "phase": (task.metadata_json or {}).get("phase", ""),
+            }
+            for task in sorted(open_tasks, key=_progress_task_order)[:10]
+        ],
+    }
+
+
+def _render_research_plan_progress_markdown(
+    *,
+    plan: ResearchPlanSnapshot,
+    task_summary: dict[str, Any],
+    tasks: list[ResearchTask],
+) -> str:
+    lines = [
+        f"# Research Plan Progress: {plan.title}",
+        "",
+        f"- Plan ID: `{plan.id}`",
+        f"- Horizon Days: {plan.horizon_days}",
+        f"- Task Count: {task_summary.get('task_count', 0)}",
+        f"- Open Tasks: {task_summary.get('open_task_count', 0)}",
+        f"- Blocked Tasks: {task_summary.get('blocked_task_count', 0)}",
+        f"- Completion Ratio: {task_summary.get('completion_ratio', 0.0)}",
+        "",
+        "## Status Breakdown",
+        "",
+        f"- By Status: {task_summary.get('by_status', {})}",
+        f"- By Priority: {task_summary.get('by_priority', {})}",
+        f"- By Phase: {task_summary.get('by_phase', {})}",
+        "",
+        "## Next Plan Tasks",
+        "",
+    ]
+    next_tasks = task_summary.get("next_tasks") or []
+    if next_tasks:
+        for task in next_tasks:
+            lines.append(
+                f"- `{task['id']}` `{task['priority']}` `{task['status']}` "
+                f"phase=`{task.get('phase') or 'unspecified'}` {task['title']}"
+            )
+    else:
+        lines.append("- No open plan tasks.")
+    lines.extend(["", "## All Plan Tasks", ""])
+    if tasks:
+        for task in sorted(tasks, key=_progress_task_order):
+            phase = (task.metadata_json or {}).get("phase", "")
+            lines.append(
+                f"- `{task.id}` `{task.priority}` `{task.status}` "
+                f"phase=`{phase or 'unspecified'}` {task.title}"
+            )
+    else:
+        lines.append("- No tasks have been generated from this plan yet.")
+    return "\n".join(lines).strip() + "\n"
 
 
 def _serialize_job(job: Job) -> JobRead:

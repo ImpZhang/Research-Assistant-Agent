@@ -1136,6 +1136,25 @@ async function createResearchPlanTasks() {
   }
 }
 
+async function loadResearchPlanProgress() {
+  if (!state.latestResearchPlanId) {
+    renderResult("workflowResult", "Create a research plan before loading plan progress.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Loading research plan progress...", "warn");
+  try {
+    const body = await api(`/research/plans/${state.latestResearchPlanId}/progress`);
+    state.latestTaskIds = body.tasks.map((task) => task.id);
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)} Completion: ${body.task_summary.completion_ratio}. Open: ${body.task_summary.open_task_count}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function rankIdeas() {
   renderResult("workflowResult", "Ranking idea portfolio...", "warn");
   try {
@@ -1261,6 +1280,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
   $("advisorBriefButton").addEventListener("click", createAdvisorBrief);
   $("researchPlanButton").addEventListener("click", createResearchPlan);
+  $("researchPlanProgressButton").addEventListener("click", loadResearchPlanProgress);
   $("researchPlanTasksButton").addEventListener("click", createResearchPlanTasks);
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);

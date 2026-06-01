@@ -30,6 +30,7 @@ def test_research_status() -> None:
     assert "research_plan_snapshots" in body["implemented_capabilities"]
     assert "research_plan_task_generation" in body["implemented_capabilities"]
     assert "research_plan_progress_integration" in body["implemented_capabilities"]
+    assert "research_plan_progress_tracking" in body["implemented_capabilities"]
     assert "tool_manifest" in body["implemented_capabilities"]
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
     assert "task_execution_controls" in body["implemented_capabilities"]
@@ -59,6 +60,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "update_research_profile" in names
     assert "create_research_plan" in names
     assert "create_tasks_from_research_plan" in names
+    assert "get_research_plan_progress" in names
     assert "get_project_progress_overview" in names
     assert "get_mcp_tool_spec" in names
     assert "get_idea_research_packet" in names
@@ -233,6 +235,14 @@ Future work should preserve researcher goals as durable project context.
     assert plan_task_body["tasks"][0]["owner_type"] == "research_plan"
     assert plan_task_body["tasks"][0]["owner_id"] == plan_body["id"]
 
+    plan_progress = client.get(f"/research/plans/{plan_body['id']}/progress")
+    assert plan_progress.status_code == 200
+    plan_progress_body = plan_progress.json()
+    assert plan_progress_body["plan"]["id"] == plan_body["id"]
+    assert plan_progress_body["task_summary"]["task_count"] == len(plan_task_body["tasks"])
+    assert plan_progress_body["task_summary"]["open_task_count"] >= 1
+    assert "# Research Plan Progress:" in plan_progress_body["markdown_export"]
+
     plan_task_edges = client.get("/research/graph/edges?edge_type=research_plan_creates_task")
     assert plan_task_edges.status_code == 200
     assert plan_task_edges.json()
@@ -295,6 +305,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "profileForm" in response.text
     assert "profileRisk" in response.text
     assert "researchPlanButton" in response.text
+    assert "researchPlanProgressButton" in response.text
     assert "researchPlanTasksButton" in response.text
     assert "readinessTasksButton" in response.text
     assert "taskBoardButton" in response.text
@@ -308,6 +319,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "saveResearchProfile" in script.text
     assert "/research/plans" in script.text
     assert "/research/plans/${state.latestResearchPlanId}/tasks" in script.text
+    assert "/research/plans/${state.latestResearchPlanId}/progress" in script.text
     assert "/research/workflows/literature-to-ideas/async" in script.text
     assert "/research/jobs/${jobId}/artifacts" in script.text
     assert "/research/jobs/${jobId}/${action}" in script.text

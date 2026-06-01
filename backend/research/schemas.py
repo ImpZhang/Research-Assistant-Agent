@@ -765,6 +765,14 @@ class ResearchPlanDetail(ResearchPlanRead):
     markdown_export: str = ""
 
 
+class ResearchPlanProgressResponse(BaseModel):
+    plan: ResearchPlanRead
+    task_summary: dict[str, Any] = Field(default_factory=dict)
+    tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ToolManifestItem(BaseModel):
     name: str
     description: str
