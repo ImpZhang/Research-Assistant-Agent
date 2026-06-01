@@ -29,6 +29,7 @@ def test_research_status() -> None:
     assert "research_profile_constraints" in body["implemented_capabilities"]
     assert "research_plan_snapshots" in body["implemented_capabilities"]
     assert "research_plan_task_generation" in body["implemented_capabilities"]
+    assert "research_plan_progress_integration" in body["implemented_capabilities"]
     assert "tool_manifest" in body["implemented_capabilities"]
     assert "workflow_job_cancel_retry_controls" in body["implemented_capabilities"]
     assert "idea_research_packet" in body["implemented_capabilities"]
@@ -227,6 +228,33 @@ Future work should preserve researcher goals as durable project context.
     plan_task_edges = client.get("/research/graph/edges?edge_type=research_plan_creates_task")
     assert plan_task_edges.status_code == 200
     assert plan_task_edges.json()
+
+    progress = client.get(f"/research/ideas/{idea_id}/progress")
+    assert progress.status_code == 200
+    progress_body = progress.json()
+    assert progress_body["artifact_counts"]["research_plans"] >= 1
+    assert progress_body["artifact_counts"]["research_plan_tasks"] >= 1
+    assert progress_body["latest_artifacts"]["research_plan"]["id"] == plan_body["id"]
+    assert progress_body["task_summary"]["by_owner_type"]["research_plan"] >= 1
+
+    packet = client.get(f"/research/ideas/{idea_id}/research-packet")
+    assert packet.status_code == 200
+    packet_body = packet.json()
+    assert packet_body["latest_artifacts"]["research_plan"]["id"] == plan_body["id"]
+    assert packet_body["graph_edge_summary"]["research_plan_creates_task"] >= 1
+
+    lineage = client.get(f"/research/ideas/{idea_id}/lineage")
+    assert lineage.status_code == 200
+    lineage_body = lineage.json()
+    assert lineage_body["research_plans"][0]["id"] == plan_body["id"]
+    assert lineage_body["graph_edge_summary"]["research_plan_creates_task"] >= 1
+    assert "## Research Plans" in lineage_body["markdown_export"]
+
+    bundle = client.get(f"/research/ideas/{idea_id}/export/bundle")
+    assert bundle.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(bundle.content)) as archive:
+        names = set(archive.namelist())
+    assert f"artifacts/plans/research-plan-{plan_body['id']}.md" in names
 
     reset = client.put(
         "/research/profile",

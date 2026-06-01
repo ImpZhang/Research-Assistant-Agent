@@ -163,6 +163,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include research plan snapshots")
     if "research_plan_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research plan task generation")
+    if "research_plan_progress_integration" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include research plan progress integration")
     if "idea_decision_memos" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea decision memos")
     if "idea_decision_task_generation" not in status["implemented_capabilities"]:
@@ -697,6 +699,33 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research execution plan task generation returned no tasks")
     if research_plan_tasks["tasks"][0]["owner_type"] != "research_plan":
         raise RuntimeError("research execution plan tasks used the wrong owner type")
+    post_plan_progress = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/progress"),
+        "idea progress after research plan tasks",
+    )
+    if post_plan_progress["artifact_counts"].get("research_plans", 0) < 1:
+        raise RuntimeError("idea progress did not count research plans")
+    if post_plan_progress["artifact_counts"].get("research_plan_tasks", 0) < 1:
+        raise RuntimeError("idea progress did not count research plan tasks")
+    if post_plan_progress["latest_artifacts"]["research_plan"]["id"] != research_plan["id"]:
+        raise RuntimeError("idea progress did not expose latest research plan")
+    post_plan_packet = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/research-packet"),
+        "idea research packet after research plan tasks",
+    )
+    if post_plan_packet["graph_edge_summary"].get("research_plan_creates_task", 0) < 1:
+        raise RuntimeError("research packet did not summarize research plan task edges")
+    post_plan_bundle_response = client.get(f"/research/ideas/{refined_idea['id']}/export/bundle")
+    if post_plan_bundle_response.status_code != 200:
+        raise RuntimeError(
+            f"post-plan idea bundle failed: {post_plan_bundle_response.status_code} "
+            f"{post_plan_bundle_response.text}"
+        )
+    with zipfile.ZipFile(io.BytesIO(post_plan_bundle_response.content)) as archive:
+        post_plan_bundle_files = set(archive.namelist())
+    expected_plan_file = f"artifacts/plans/research-plan-{research_plan['id']}.md"
+    if expected_plan_file not in post_plan_bundle_files:
+        raise RuntimeError("idea bundle did not include research plan markdown")
     feedback = require_ok(
         client.post(
             f"/research/ideas/{refined_idea['id']}/feedback",
@@ -932,6 +961,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "research_plan_id": research_plan["id"],
         "research_plan_item_count": len(research_plan["plan_items"]),
         "research_plan_task_count": len(research_plan_tasks["tasks"]),
+        "post_plan_progress_plan_count": post_plan_progress["artifact_counts"]["research_plans"],
+        "post_plan_bundle_file_count": len(post_plan_bundle_files),
         "research_plan_markdown_chars": len(research_plan_markdown),
         "feedback_decision": feedback["decision"],
         "feedback_rating": feedback["rating"],

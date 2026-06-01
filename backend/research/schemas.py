@@ -622,6 +622,7 @@ class IdeaAssumptionAuditRead(BaseModel):
 
 class IdeaLineageResponse(BaseModel):
     idea: IdeaRead
+    research_plans: list["ResearchPlanRead"] = Field(default_factory=list)
     related_work_matrices: list[RelatedWorkMatrixRead] = Field(default_factory=list)
     proposal_drafts: list[ProposalDraftRead] = Field(default_factory=list)
     proposal_reviews: list[ProposalReviewRead] = Field(default_factory=list)

@@ -199,6 +199,7 @@ def status() -> ProjectStatus:
             "research_profile_constraints",
             "research_plan_snapshots",
             "research_plan_task_generation",
+            "research_plan_progress_integration",
             "paper_registry_api",
             "document_ingestion_api",
             "evidence_extraction",
@@ -632,13 +633,16 @@ def get_research_progress_overview(
 def _overview_task_summary(tasks: list[ResearchTask]) -> dict:
     by_status = Counter(task.status for task in tasks)
     by_priority = Counter(task.priority for task in tasks)
+    by_owner_type = Counter(task.owner_type for task in tasks)
     open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
     top_open_tasks = sorted(open_tasks, key=_progress_task_order)[:10]
     return {
         "total_recent_tasks": len(tasks),
         "open_task_count": len(open_tasks),
+        "research_plan_task_count": by_owner_type.get("research_plan", 0),
         "by_status": dict(by_status),
         "by_priority": dict(by_priority),
+        "by_owner_type": dict(by_owner_type),
         "top_open_tasks": [
             {
                 "id": task.id,
@@ -693,6 +697,8 @@ def _render_research_overview_markdown(
         f"- Idea Count: {idea_count}",
         f"- Status Counts: {status_counts}",
         f"- Open Tasks: {task_summary.get('open_task_count', 0)}",
+        f"- Research Plan Tasks: {task_summary.get('research_plan_task_count', 0)}",
+        f"- Tasks By Owner Type: {task_summary.get('by_owner_type', {})}",
         "",
         "## Top Open Tasks",
         "",
@@ -1758,6 +1764,7 @@ def get_idea_lineage(
         .limit(20)
         .all()
     )
+    research_plans = _latest_research_plans_for_idea(session, idea_id, 20)
     tasks = (
         session.query(ResearchTask)
         .filter(ResearchTask.idea_id == idea_id)
@@ -1785,6 +1792,7 @@ def get_idea_lineage(
             *[analysis.id for analysis in experiment_analyses],
             *[memo.id for memo in decision_memos],
             *[audit.id for audit in assumption_audits],
+            *[plan.id for plan in research_plans],
             *[task.id for task in tasks],
             *[snapshot.id for snapshot in snapshots],
         ],
@@ -1799,12 +1807,14 @@ def get_idea_lineage(
         experiment_analyses=experiment_analyses,
         decision_memos=decision_memos,
         assumption_audits=assumption_audits,
+        research_plans=research_plans,
         tasks=tasks,
         snapshots=snapshots,
         graph_edge_summary=graph_edge_summary,
     )
     return IdeaLineageResponse(
         idea=_serialize_idea(idea),
+        research_plans=[_serialize_research_plan(plan) for plan in research_plans],
         related_work_matrices=[_serialize_related_work_matrix(matrix) for matrix in matrices],
         proposal_drafts=[_serialize_proposal_draft(draft) for draft in drafts],
         proposal_reviews=[_serialize_proposal_review(review) for review in reviews],
@@ -1825,7 +1835,8 @@ def get_idea_lineage(
             f"{len(experiment_runs)} experiment runs, "
             f"{len(experiment_analyses)} analyses, "
             f"{len(decision_memos)} decision memos, "
-            f"{len(assumption_audits)} assumption audits, {len(tasks)} tasks."
+            f"{len(assumption_audits)} assumption audits, "
+            f"{len(research_plans)} research plans, {len(tasks)} tasks."
         ),
     )
 
@@ -1847,6 +1858,7 @@ def get_idea_progress(
     experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 50)
     decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea_id, 20)
     assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea_id, 20)
+    research_plans = _latest_research_plans_for_idea(session, idea_id, 20)
     tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
     snapshots = _latest_for_idea(session, TaskBoardSnapshot, idea_id, 20)
 
@@ -1866,6 +1878,7 @@ def get_idea_progress(
         and task.owner_type == "idea_decision_memo"
         and task.owner_id == latest_memo.id
     ]
+    research_plan_tasks = [task for task in tasks if task.owner_type == "research_plan"]
     artifact_counts = {
         "related_work_matrices": len(matrices),
         "proposal_drafts": len(drafts),
@@ -1875,9 +1888,11 @@ def get_idea_progress(
         "experiment_analyses": len(experiment_analyses),
         "decision_memos": len(decision_memos),
         "assumption_audits": len(assumption_audits),
+        "research_plans": len(research_plans),
         "research_tasks": len(tasks),
         "open_tasks": len([task for task in tasks if task.status in {"todo", "doing", "blocked"}]),
         "blocked_tasks": len([task for task in tasks if task.status == "blocked"]),
+        "research_plan_tasks": len(research_plan_tasks),
         "analysis_follow_up_tasks": len(analysis_tasks),
         "decision_follow_up_tasks": len(decision_tasks),
         "task_board_snapshots": len(snapshots),
@@ -1891,6 +1906,7 @@ def get_idea_progress(
         experiment_analyses,
         decision_memos,
         assumption_audits,
+        research_plans,
         snapshots,
     )
     task_summary = _progress_task_summary(tasks)
@@ -1934,6 +1950,21 @@ def _latest_for_idea(session: Session, model, idea_id: str, limit: int) -> list:
     )
 
 
+def _latest_research_plans_for_idea(
+    session: Session,
+    idea_id: str,
+    limit: int,
+) -> list[ResearchPlanSnapshot]:
+    scan_limit = max(limit * 5, 50)
+    plans = (
+        session.query(ResearchPlanSnapshot)
+        .order_by(ResearchPlanSnapshot.created_at.desc())
+        .limit(scan_limit)
+        .all()
+    )
+    return [plan for plan in plans if idea_id in (plan.idea_ids_json or [])][:limit]
+
+
 def _progress_latest_artifacts(
     matrices: list[RelatedWorkMatrix],
     drafts: list[ProposalDraft],
@@ -1943,12 +1974,14 @@ def _progress_latest_artifacts(
     experiment_analyses: list[ExperimentAnalysis],
     decision_memos: list[IdeaDecisionMemo],
     assumption_audits: list[IdeaAssumptionAudit],
+    research_plans: list[ResearchPlanSnapshot],
     snapshots: list[TaskBoardSnapshot],
 ) -> dict[str, dict | None]:
     latest_run = experiment_runs[0] if experiment_runs else None
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
     latest_memo = decision_memos[0] if decision_memos else None
     latest_audit = assumption_audits[0] if assumption_audits else None
+    latest_plan = research_plans[0] if research_plans else None
     return {
         "related_work_matrix": {"id": matrices[0].id, "status": matrices[0].status}
         if matrices
@@ -1983,6 +2016,14 @@ def _progress_latest_artifacts(
         }
         if latest_audit
         else None,
+        "research_plan": {
+            "id": latest_plan.id,
+            "title": latest_plan.title,
+            "horizon_days": latest_plan.horizon_days,
+            "plan_item_count": len(latest_plan.plan_items_json or []),
+        }
+        if latest_plan
+        else None,
         "task_board_snapshot": {"id": snapshots[0].id, "title": snapshots[0].title}
         if snapshots
         else None,
@@ -1992,6 +2033,8 @@ def _progress_latest_artifacts(
 def _progress_task_summary(tasks: list[ResearchTask]) -> dict:
     by_status = Counter(task.status for task in tasks)
     by_priority = Counter(task.priority for task in tasks)
+    by_owner_type = Counter(task.owner_type for task in tasks)
+    by_due_phase = Counter(task.due_phase for task in tasks if task.due_phase)
     next_tasks = sorted(
         [task for task in tasks if task.status in {"todo", "doing", "blocked"}],
         key=_progress_task_order,
@@ -1999,6 +2042,8 @@ def _progress_task_summary(tasks: list[ResearchTask]) -> dict:
     return {
         "by_status": dict(by_status),
         "by_priority": dict(by_priority),
+        "by_owner_type": dict(by_owner_type),
+        "by_due_phase": dict(by_due_phase),
         "next_tasks": [
             {
                 "id": task.id,
@@ -2086,6 +2131,8 @@ def _progress_recommendation(
         return "Create a proposal revision from the latest review."
     if artifact_counts["research_tasks"] == 0:
         return "Generate a task backlog from the latest proposal revision."
+    if artifact_counts["research_plans"] and artifact_counts["research_plan_tasks"] == 0:
+        return "Generate concrete tasks from the latest research execution plan."
     if artifact_counts["experiment_runs"] == 0:
         return "Record the first experiment run for the latest experiment plan."
     if artifact_counts["experiment_analyses"] == 0:
@@ -2133,6 +2180,8 @@ def _render_idea_progress_markdown(
     lines.extend(["", "## Task Summary", ""])
     lines.append(f"- By Status: {task_summary.get('by_status', {})}")
     lines.append(f"- By Priority: {task_summary.get('by_priority', {})}")
+    lines.append(f"- By Owner Type: {task_summary.get('by_owner_type', {})}")
+    lines.append(f"- By Due Phase: {task_summary.get('by_due_phase', {})}")
     lines.extend(["", "## Next Tasks", ""])
     next_tasks = task_summary.get("next_tasks") or []
     if next_tasks:
@@ -2174,6 +2223,7 @@ def get_idea_research_packet(
     experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 50)
     decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea_id, 20)
     assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea_id, 20)
+    research_plans = _latest_research_plans_for_idea(session, idea_id, 20)
     tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
     open_tasks = sorted(
         [task for task in tasks if task.status in {"todo", "doing", "blocked"}],
@@ -2192,6 +2242,7 @@ def get_idea_research_packet(
             *[analysis.id for analysis in experiment_analyses],
             *[memo.id for memo in decision_memos],
             *[audit.id for audit in assumption_audits],
+            *[plan.id for plan in research_plans],
             *[task.id for task in open_tasks],
         ],
     )
@@ -2204,6 +2255,7 @@ def get_idea_research_packet(
         experiment_analyses=experiment_analyses,
         decision_memos=decision_memos,
         assumption_audits=assumption_audits,
+        research_plans=research_plans,
     )
     markdown_export = _render_idea_research_packet_markdown(
         idea=idea,
@@ -2231,10 +2283,12 @@ def _research_packet_latest_artifacts(
     experiment_analyses: list[ExperimentAnalysis],
     decision_memos: list[IdeaDecisionMemo],
     assumption_audits: list[IdeaAssumptionAudit],
+    research_plans: list[ResearchPlanSnapshot],
 ) -> dict[str, Any]:
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
     latest_memo = decision_memos[0] if decision_memos else None
     latest_audit = assumption_audits[0] if assumption_audits else None
+    latest_plan = research_plans[0] if research_plans else None
     return {
         "related_work_matrix": {
             "id": matrices[0].id,
@@ -2289,6 +2343,14 @@ def _research_packet_latest_artifacts(
             ][:5],
         }
         if latest_audit
+        else None,
+        "research_plan": {
+            "id": latest_plan.id,
+            "title": latest_plan.title,
+            "horizon_days": latest_plan.horizon_days,
+            "plan_item_count": len(latest_plan.plan_items_json or []),
+        }
+        if latest_plan
         else None,
     }
 
@@ -2916,6 +2978,7 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "idea_has_decision_memo",
         "decision_memo_creates_task",
         "idea_has_assumption_audit",
+        "research_plan_creates_task",
     ]
     edges = (
         session.query(ResearchEdge)
@@ -2942,6 +3005,7 @@ def _render_idea_lineage_markdown(
     experiment_analyses: list[ExperimentAnalysis],
     decision_memos: list[IdeaDecisionMemo],
     assumption_audits: list[IdeaAssumptionAudit],
+    research_plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
     snapshots: list[TaskBoardSnapshot],
     graph_edge_summary: dict[str, int],
@@ -2958,6 +3022,7 @@ def _render_idea_lineage_markdown(
         f"- Experiment Analyses: {len(experiment_analyses)}",
         f"- Decision Memos: {len(decision_memos)}",
         f"- Assumption Audits: {len(assumption_audits)}",
+        f"- Research Plans: {len(research_plans)}",
         f"- Research Tasks: {len(tasks)}",
         f"- Task Board Snapshots: {len(snapshots)}",
         "",
@@ -3010,6 +3075,16 @@ def _render_idea_lineage_markdown(
             )
     else:
         lines.append("- No assumption audits recorded yet.")
+
+    lines.extend(["", "## Research Plans", ""])
+    if research_plans:
+        for plan in research_plans[:5]:
+            lines.append(
+                f"- `{plan.id}` {plan.title} horizon={plan.horizon_days}d "
+                f"items={len(plan.plan_items_json or [])}"
+            )
+    else:
+        lines.append("- No research execution plans include this idea.")
 
     lines.extend(["", "## Next Tasks", ""])
     next_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}][:20]
@@ -3686,6 +3761,14 @@ def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
                     f"artifacts/tasks/task-board-snapshot-{snapshot.id}.md",
                     persisted.markdown_export,
                 )
+        for plan in lineage.research_plans:
+            persisted = session.get(ResearchPlanSnapshot, plan.id)
+            if persisted and persisted.markdown_export:
+                _write_markdown(
+                    archive,
+                    f"artifacts/plans/research-plan-{plan.id}.md",
+                    persisted.markdown_export,
+                )
     return buffer.getvalue()
 
 
@@ -3719,6 +3802,7 @@ def _idea_bundle_manifest(
             "experiment_analyses": len(lineage.experiment_analyses),
             "decision_memos": len(lineage.decision_memos),
             "assumption_audits": len(lineage.assumption_audits),
+            "research_plans": len(lineage.research_plans),
             "research_tasks": len(lineage.research_tasks),
             "task_board_snapshots": len(lineage.task_board_snapshots),
         },
@@ -3746,6 +3830,7 @@ def _render_idea_bundle_readme(manifest: dict[str, Any]) -> str:
         "## Artifact Folders",
         "",
         "- `artifacts/`: Markdown exports for proposal, experiment, decision, audit, and task artifacts.",
+        "- `artifacts/plans/`: execution plans that include this idea.",
         "- `metadata/`: JSON payloads for rebuilding or passing the bundle into external tools.",
         "",
         "## Recommended Next Step",

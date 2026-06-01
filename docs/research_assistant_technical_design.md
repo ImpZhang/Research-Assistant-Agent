@@ -1081,11 +1081,11 @@ GET  /research/ideas/{idea_id}/feedback
 
 Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_draft`、`proposal_review_reviews_draft`、`proposal_revision_updates_draft`、`proposal_revision_addresses_review`、`proposal_revision_creates_task`、`idea_has_experiment_plan`、`experiment_plan_has_run`、`idea_has_experiment_run`、`task_records_experiment_run`、`experiment_run_has_analysis`、`idea_has_experiment_analysis`、`task_records_experiment_analysis`、`experiment_analysis_creates_task`、`idea_has_decision_memo`、`decision_memo_creates_task`、`idea_has_assumption_audit`、`task_board_snapshot_tracks_task`。这使得后续 context search、MCP tool 或 workflow planner 可以沿着 idea 的演化链路追踪到草案、评审、修订、执行任务、实验运行、实验结论、决策 memo、假设审计和下一轮 follow-up 任务。
 
-`/ideas/{idea_id}/lineage` 将 idea 的 related-work matrices、proposal drafts、proposal reviews、proposal revisions、experiment runs、experiment analyses、decision memos、assumption audits、research tasks、task board snapshots 与 graph edge summary 聚合为一个响应，并提供 Markdown lineage export，方便前端和 MCP 一次性读取研究演化轨迹。
+`/ideas/{idea_id}/lineage` 将 idea 的 research plans、related-work matrices、proposal drafts、proposal reviews、proposal revisions、experiment runs、experiment analyses、decision memos、assumption audits、research tasks、task board snapshots 与 graph edge summary 聚合为一个响应，并提供 Markdown lineage export，方便前端和 MCP 一次性读取研究演化轨迹。
 
-`/ideas/{idea_id}/progress` 将同一 idea 的 proposal、experiment、analysis、task、blocker 和 snapshot 状态聚合为进度总览，返回 artifact counts、latest artifacts、task summary、experiment summary、blockers、recommended next step 和 Markdown report。它面向 dashboard 和 MCP planner，不替代 lineage，而是回答“下一步该干什么”。
+`/ideas/{idea_id}/progress` 将同一 idea 的 proposal、experiment、analysis、task、research plan、blocker 和 snapshot 状态聚合为进度总览，返回 artifact counts、latest artifacts、task summary、experiment summary、blockers、recommended next step 和 Markdown report。task summary 会按 owner type 和 due phase 汇总，让 plan task 能和 proposal/analysis/decision follow-up task 一起排优先级。它面向 dashboard 和 MCP planner，不替代 lineage，而是回答“下一步该干什么”。
 
-`/ideas/{idea_id}/research-packet` 面向导师讨论、MCP tool 和外部 planner，聚合 latest artifacts、open tasks、graph edge summary 和 Markdown context。它不替代 lineage/progress，而是提供一个“拿来就能作为上下文”的单 idea packet，避免调用方每次自行拼接多个端点。
+`/ideas/{idea_id}/research-packet` 面向导师讨论、MCP tool 和外部 planner，聚合 latest artifacts、latest research plan、open tasks、graph edge summary 和 Markdown context。它不替代 lineage/progress，而是提供一个“拿来就能作为上下文”的单 idea packet，避免调用方每次自行拼接多个端点。
 
 `/ideas/{idea_id}/readiness` 将 evidence、novelty、proposal review、experiment analysis、decision memo、assumption audit 和 task health 转成解释型 readiness score。响应包含总分、决策标签、score breakdown、blockers 和 Markdown report，用于判断是否可以继续深入执行，或者需要 targeted work、park、reject。
 
@@ -1111,7 +1111,7 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/feedback` 记录人类研究者对 idea 的 shortlist/accept/revise/reject/archive 决策、rating、comment 和 tags。Ranking 会读取这些反馈作为 human preference adjustment；后续可把这张表扩展成偏好学习、选题日志和 active learning 数据源。
 
-`/ideas/{idea_id}/export/bundle` produces an `application/zip` handoff package for one idea. It includes the dossier, lineage, progress report, research packet, readiness report, artifact Markdown files, and JSON metadata so the workbench, advisor meetings, backups, and later MCP tools can consume the same state without stitching many endpoints together.
+`/ideas/{idea_id}/export/bundle` produces an `application/zip` handoff package for one idea. It includes the dossier, lineage, progress report, research packet, readiness report, research plan Markdown files, artifact Markdown files, and JSON metadata so the workbench, advisor meetings, backups, and later MCP tools can consume the same state without stitching many endpoints together.
 
 `/tools/mcp-spec` turns the stable tool manifest into an HTTP tool bridge spec with JSON-schema-like inputs, path parameters, HTTP method/path metadata, output models, side-effect flags, and read-only/destructive annotations. It is intentionally dependency-light: the project can expose a real MCP server later by wrapping this spec instead of duplicating route knowledge.
 
@@ -1119,7 +1119,7 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/plans` creates persisted research execution plan snapshots. Each plan combines the current research profile, profile-aware ranked ideas, and open/blocked tasks into a 7/14+ day action plan with phases, task ids, success checks, source ids, and Markdown export. It is the planning artifact between "idea is promising" and "what should I do this week".
 
-`/plans/{plan_id}/tasks` turns plan actions into `ResearchTask` records with `owner_type=research_plan` and `research_plan_creates_task` graph edges, so planning artifacts feed the same task board, progress, and lineage machinery as proposal revisions, decision memos, and experiment analyses.
+`/plans/{plan_id}/tasks` turns plan actions into `ResearchTask` records with `owner_type=research_plan` and `research_plan_creates_task` graph edges, so planning artifacts feed the same task board, progress, lineage, research packet, and bundle-export machinery as proposal revisions, decision memos, and experiment analyses.
 
 ## 11.5 Reviews
 
