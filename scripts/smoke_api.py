@@ -213,6 +213,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea evidence task generation")
     if "claim_evidence_graph_links" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include claim evidence graph links")
+    if "claim_validation_packets" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include claim validation packets")
     if "advisor_brief_evidence_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief evidence context")
     if "project_triage_brief" not in status["implemented_capabilities"]:
@@ -317,6 +319,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea evidence ledger lister")
     if "create_tasks_from_idea_evidence_ledger" not in manifest_names:
         raise RuntimeError("tool manifest did not include evidence ledger task tool")
+    if "get_idea_claim_validation_packet" not in manifest_names:
+        raise RuntimeError("tool manifest did not include claim validation packet tool")
     if "refresh_idea_novelty_search" not in manifest_names:
         raise RuntimeError("tool manifest did not include novelty refresh tool")
     if "create_tasks_from_idea_novelty_check" not in manifest_names:
@@ -735,6 +739,22 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea evidence ledger tasks used the wrong owner type")
     if evidence_tasks["tasks"][0]["due_phase"] != "evidence_follow_up":
         raise RuntimeError("idea evidence ledger tasks used the wrong due phase")
+    claim_id = evidence_ledger["claims"][0]["claim_id"]
+    claim_packet = require_ok(
+        client.get(
+            f"/research/ideas/{refined_idea['id']}/evidence-ledgers/"
+            f"{evidence_ledger['id']}/claims/{claim_id}/validation-packet"
+        ),
+        "claim validation packet",
+    )
+    if claim_packet["claim"]["claim_id"] != claim_id:
+        raise RuntimeError("claim validation packet returned the wrong claim")
+    if not claim_packet["supporting_evidence"]:
+        raise RuntimeError("claim validation packet did not include supporting evidence")
+    if not claim_packet["validation_actions"]:
+        raise RuntimeError("claim validation packet did not include validation actions")
+    if "Claim Validation Packet" not in claim_packet["markdown_export"]:
+        raise RuntimeError("claim validation packet markdown did not include title")
     proposal_graph_edges = require_ok(
         client.get("/research/graph/edges?edge_type=proposal_revision_creates_task"),
         "proposal task graph edges",
@@ -1537,6 +1557,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "evidence_ledger_coverage_score": evidence_ledger["coverage_score"],
         "evidence_ledger_markdown_chars": len(evidence_ledger_markdown),
         "evidence_ledger_task_count": len(evidence_tasks["tasks"]),
+        "claim_validation_claim_id": claim_packet["claim"]["claim_id"],
+        "claim_validation_support_count": len(claim_packet["supporting_evidence"]),
+        "claim_validation_action_count": len(claim_packet["validation_actions"]),
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
         "evidence_ledger_task_graph_edge_count": len(ledger_task_edges),
         "lineage_task_count": len(lineage["research_tasks"]),

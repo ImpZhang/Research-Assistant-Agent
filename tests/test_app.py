@@ -59,6 +59,7 @@ def test_research_status() -> None:
     assert "idea_evidence_ledgers" in body["implemented_capabilities"]
     assert "idea_evidence_task_generation" in body["implemented_capabilities"]
     assert "claim_evidence_graph_links" in body["implemented_capabilities"]
+    assert "claim_validation_packets" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
     assert "project_triage_task_generation" in body["implemented_capabilities"]
@@ -117,6 +118,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_idea_evidence_ledger" in names
     assert "list_idea_evidence_ledgers" in names
     assert "create_tasks_from_idea_evidence_ledger" in names
+    assert "get_idea_claim_validation_packet" in names
     assert "refresh_idea_novelty_search" in names
     assert "create_tasks_from_idea_novelty_check" in names
     assert "create_advisor_brief" in names
@@ -376,6 +378,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "projectBundleButton" in response.text
     assert "evidenceLedgerButton" in response.text
     assert "evidenceLedgerTasksButton" in response.text
+    assert "claimPacketButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -425,6 +428,9 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/evidence-ledger" in script.text
     assert (
         "/research/ideas/${state.latestIdeaId}/evidence-ledgers/${state.latestEvidenceLedgerId}/tasks"
+    ) in script.text
+    assert (
+        "/research/ideas/${state.latestIdeaId}/evidence-ledgers/${state.latestEvidenceLedgerId}/claims/${claimId}/validation-packet"
     ) in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
@@ -1252,6 +1258,21 @@ Future work should preserve proposal drafts as reviewable artifacts.
     evidence_task_events = client.get(f"/research/tasks/{evidence_task_id}/events")
     assert evidence_task_events.status_code == 200
     assert evidence_task_events.json()[0]["event_type"] == "created"
+
+    claim_id = evidence_ledger_body["claims"][0]["claim_id"]
+    claim_packet = client.get(
+        f"/research/ideas/{idea_id}/evidence-ledgers/{evidence_ledger_body['id']}"
+        f"/claims/{claim_id}/validation-packet"
+    )
+    assert claim_packet.status_code == 200
+    claim_packet_body = claim_packet.json()
+    assert claim_packet_body["idea"]["id"] == idea_id
+    assert claim_packet_body["ledger"]["id"] == evidence_ledger_body["id"]
+    assert claim_packet_body["claim"]["claim_id"] == claim_id
+    assert claim_packet_body["supporting_evidence"]
+    assert claim_packet_body["validation_actions"]
+    assert "evidence_ledger_tracks_claim" in claim_packet_body["graph_edge_summary"]
+    assert "# Claim Validation Packet:" in claim_packet_body["markdown_export"]
 
     graph_edge_types = [
         "idea_has_proposal_draft",

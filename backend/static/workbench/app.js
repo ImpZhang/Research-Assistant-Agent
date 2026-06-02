@@ -13,6 +13,7 @@ const state = {
   latestDecisionMemoId: "",
   latestAssumptionAuditId: "",
   latestEvidenceLedgerId: "",
+  latestClaimId: "",
   latestTaskIds: [],
   taskBoardItems: [],
   latestTaskSnapshotId: "",
@@ -980,6 +981,7 @@ async function createEvidenceLedger() {
       body: JSON.stringify({ created_by: "workbench" }),
     });
     state.latestEvidenceLedgerId = body.id;
+    state.latestClaimId = body.claims.length ? body.claims[0].claim_id : "C1";
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "workflowResult",
@@ -1009,6 +1011,27 @@ async function createEvidenceLedgerTasks() {
     renderResult(
       "workflowResult",
       `${escapeHtml(body.message)}<br />${renderList("Ledger tasks", body.tasks.slice(0, 8), (task) => `${task.priority} ${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function loadClaimValidationPacket() {
+  if (!state.latestIdeaId || !state.latestEvidenceLedgerId) {
+    renderResult("workflowResult", "Create an evidence ledger first.", "warn");
+    return;
+  }
+  const claimId = state.latestClaimId || "C1";
+  renderResult("workflowResult", `Loading claim packet <code>${escapeHtml(claimId)}</code>...`, "warn");
+  try {
+    const body = await api(
+      `/research/ideas/${state.latestIdeaId}/evidence-ledgers/${state.latestEvidenceLedgerId}/claims/${claimId}/validation-packet`,
+    );
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Loaded claim packet <code>${escapeHtml(claimId)}</code> with ${body.supporting_evidence.length} supporting evidence records and ${body.related_tasks.length} related tasks.`,
     );
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
@@ -1629,6 +1652,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("assumptionAuditButton").addEventListener("click", createAssumptionAudit);
   $("evidenceLedgerButton").addEventListener("click", createEvidenceLedger);
   $("evidenceLedgerTasksButton").addEventListener("click", createEvidenceLedgerTasks);
+  $("claimPacketButton").addEventListener("click", loadClaimValidationPacket);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("timelineButton").addEventListener("click", loadIdeaTimeline);
   $("progressButton").addEventListener("click", loadIdeaProgress);

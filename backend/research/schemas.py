@@ -649,6 +649,21 @@ class IdeaEvidenceLedgerRead(BaseModel):
     updated_at: datetime
 
 
+class IdeaClaimValidationPacketResponse(BaseModel):
+    idea: "IdeaRead"
+    ledger: IdeaEvidenceLedgerRead
+    claim: dict[str, Any] = Field(default_factory=dict)
+    supporting_evidence: list[EvidenceRead] = Field(default_factory=list)
+    evidence_links: list[dict[str, Any]] = Field(default_factory=list)
+    counterevidence: list[dict[str, Any]] = Field(default_factory=list)
+    missing_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    related_tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    validation_actions: list[str] = Field(default_factory=list)
+    graph_edge_summary: dict[str, int] = Field(default_factory=dict)
+    markdown_export: str = ""
+    message: str
+
+
 class IdeaLineageResponse(BaseModel):
     idea: IdeaRead
     research_plans: list["ResearchPlanRead"] = Field(default_factory=list)

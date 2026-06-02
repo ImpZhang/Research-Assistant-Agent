@@ -61,6 +61,7 @@ from backend.research.schemas import (
     GapMiningResponse,
     IdeaAssumptionAuditCreate,
     IdeaAssumptionAuditRead,
+    IdeaClaimValidationPacketResponse,
     IdeaFeedbackCreate,
     IdeaFeedbackRead,
     IdeaGenerationRequest,
@@ -249,6 +250,7 @@ def status() -> ProjectStatus:
             "idea_evidence_ledgers",
             "idea_evidence_task_generation",
             "claim_evidence_graph_links",
+            "claim_validation_packets",
             "project_progress_overview",
             "project_triage_brief",
             "project_triage_task_generation",
@@ -568,6 +570,13 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="ResearchTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="get_idea_claim_validation_packet",
+            description="Load one ledger claim with support, counterevidence, tasks, and graph summary.",
+            method="GET",
+            path="/research/ideas/{idea_id}/evidence-ledgers/{ledger_id}/claims/{claim_id}/validation-packet",
+            output_model="IdeaClaimValidationPacketResponse",
         ),
         ToolManifestItem(
             name="refresh_idea_novelty_search",
@@ -4924,6 +4933,291 @@ def create_tasks_from_idea_evidence_ledger(
         tasks=[_serialize_research_task(task) for task in tasks],
         message=f"Created {len(tasks)} evidence follow-up tasks from ledger {ledger.id}.",
     )
+
+
+@router.get(
+    "/ideas/{idea_id}/evidence-ledgers/{ledger_id}/claims/{claim_id}/validation-packet",
+    response_model=IdeaClaimValidationPacketResponse,
+)
+def get_idea_claim_validation_packet(
+    idea_id: str,
+    ledger_id: str,
+    claim_id: str,
+    session: Session = Depends(get_session),
+) -> IdeaClaimValidationPacketResponse:
+    idea = IdeaService(session).get_idea(idea_id)
+    if idea is None:
+        raise HTTPException(status_code=404, detail="Idea not found")
+    ledger = IdeaEvidenceLedgerService(session).get_ledger(idea_id, ledger_id)
+    if ledger is None:
+        raise HTTPException(status_code=404, detail="Idea evidence ledger not found")
+    claim = _find_ledger_claim(ledger, claim_id)
+    if claim is None:
+        raise HTTPException(status_code=404, detail="Evidence ledger claim not found")
+
+    support_ids = [str(evidence_id) for evidence_id in claim.get("supporting_evidence_ids") or []]
+    evidence_records = _load_evidences_by_id(session, support_ids)
+    evidence_links = [
+        link
+        for link in ledger.evidence_links_json or []
+        if claim.get("claim_id") in (link.get("linked_claim_ids") or [])
+        or str(link.get("evidence_id") or "") in support_ids
+    ]
+    counterevidence = _claim_packet_counterevidence(ledger, claim)
+    missing_evidence = _claim_packet_missing_evidence(ledger, claim)
+    related_tasks = _claim_packet_related_tasks(session, ledger, claim)
+    graph_edge_summary = _graph_edge_summary(
+        session,
+        [
+            idea.id,
+            ledger.id,
+            f"{ledger.id}:{claim.get('claim_id', claim_id)}",
+            *support_ids,
+            *[task.id for task in related_tasks],
+        ],
+    )
+    validation_actions = _claim_validation_actions(
+        claim=claim,
+        supporting_evidence=evidence_records,
+        counterevidence=counterevidence,
+        missing_evidence=missing_evidence,
+        related_tasks=related_tasks,
+    )
+    markdown_export = _render_claim_validation_packet_markdown(
+        idea=idea,
+        ledger=ledger,
+        claim=claim,
+        supporting_evidence=evidence_records,
+        evidence_links=evidence_links,
+        counterevidence=counterevidence,
+        missing_evidence=missing_evidence,
+        related_tasks=related_tasks,
+        validation_actions=validation_actions,
+        graph_edge_summary=graph_edge_summary,
+    )
+    return IdeaClaimValidationPacketResponse(
+        idea=_serialize_idea(idea),
+        ledger=_serialize_idea_evidence_ledger(ledger),
+        claim=claim,
+        supporting_evidence=[_serialize_evidence(evidence) for evidence in evidence_records],
+        evidence_links=evidence_links,
+        counterevidence=counterevidence,
+        missing_evidence=missing_evidence,
+        related_tasks=[_serialize_research_task(task) for task in related_tasks],
+        validation_actions=validation_actions,
+        graph_edge_summary=graph_edge_summary,
+        markdown_export=markdown_export,
+        message=(
+            f"Loaded validation packet for claim {claim.get('claim_id', claim_id)} "
+            f"from ledger {ledger.id}."
+        ),
+    )
+
+
+def _find_ledger_claim(ledger: IdeaEvidenceLedger, claim_id: str) -> dict | None:
+    normalized = str(claim_id).strip().lower()
+    for claim in ledger.claims_json or []:
+        if str(claim.get("claim_id") or "").strip().lower() == normalized:
+            return claim
+    return None
+
+
+def _load_evidences_by_id(session: Session, evidence_ids: list[str]) -> list[Evidence]:
+    if not evidence_ids:
+        return []
+    records = session.query(Evidence).filter(Evidence.id.in_(evidence_ids)).limit(100).all()
+    by_id = {record.id: record for record in records}
+    return [by_id[evidence_id] for evidence_id in evidence_ids if evidence_id in by_id]
+
+
+def _claim_packet_counterevidence(
+    ledger: IdeaEvidenceLedger,
+    claim: dict,
+) -> list[dict[str, Any]]:
+    items = [
+        {
+            "source_type": "claim_challenge",
+            "source_id": claim.get("claim_id", ""),
+            "signal": signal,
+            "severity": "medium",
+        }
+        for signal in claim.get("challenge_signals") or []
+    ]
+    items.extend((ledger.counterevidence_json or [])[:8])
+    return _dedupe_packet_items(items, key="signal")[:12]
+
+
+def _claim_packet_missing_evidence(
+    ledger: IdeaEvidenceLedger,
+    claim: dict,
+) -> list[dict[str, Any]]:
+    claim_id = str(claim.get("claim_id") or "")
+    direct = [
+        item
+        for item in ledger.missing_evidence_json or []
+        if str(item.get("source_id") or "") == claim_id
+    ]
+    if direct:
+        return direct[:12]
+    if not claim.get("supporting_evidence_ids"):
+        return [
+            {
+                "gap": f"No direct evidence is linked to claim {claim_id}.",
+                "source_type": "claim_coverage",
+                "source_id": claim_id,
+                "priority": "high",
+            }
+        ]
+    return []
+
+
+def _claim_packet_related_tasks(
+    session: Session,
+    ledger: IdeaEvidenceLedger,
+    claim: dict,
+) -> list[ResearchTask]:
+    claim_id = str(claim.get("claim_id") or "")
+    tasks = (
+        session.query(ResearchTask)
+        .filter(
+            ResearchTask.owner_type == "idea_evidence_ledger",
+            ResearchTask.owner_id == ledger.id,
+        )
+        .order_by(ResearchTask.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    related = []
+    for task in tasks:
+        metadata = task.metadata_json or {}
+        ledger_item = metadata.get("ledger_item") or {}
+        if (
+            task.source_id == claim_id
+            or str(metadata.get("claim_id") or "") == claim_id
+            or str(ledger_item.get("source_id") or "") == claim_id
+        ):
+            related.append(task)
+    return related[:20]
+
+
+def _claim_validation_actions(
+    *,
+    claim: dict,
+    supporting_evidence: list[Evidence],
+    counterevidence: list[dict],
+    missing_evidence: list[dict],
+    related_tasks: list[ResearchTask],
+) -> list[str]:
+    actions = []
+    next_validation = str(claim.get("next_validation") or "").strip()
+    if next_validation:
+        actions.append(next_validation)
+    if not supporting_evidence:
+        actions.append("Collect at least one direct evidence record for this claim.")
+    actions.extend(str(item.get("gap") or "") for item in missing_evidence[:4])
+    actions.extend(f"Resolve challenge: {item.get('signal', '')}" for item in counterevidence[:4])
+    actions.extend(
+        f"Work task `{task.id}` ({task.priority}/{task.status}): {task.title}"
+        for task in related_tasks[:4]
+        if task.status in {"todo", "doing", "blocked"}
+    )
+    return _dedupe_strings(actions)[:10]
+
+
+def _render_claim_validation_packet_markdown(
+    *,
+    idea: Idea,
+    ledger: IdeaEvidenceLedger,
+    claim: dict,
+    supporting_evidence: list[Evidence],
+    evidence_links: list[dict],
+    counterevidence: list[dict],
+    missing_evidence: list[dict],
+    related_tasks: list[ResearchTask],
+    validation_actions: list[str],
+    graph_edge_summary: dict[str, int],
+) -> str:
+    lines = [
+        f"# Claim Validation Packet: {claim.get('claim_id', '')}",
+        "",
+        f"- Idea ID: `{idea.id}`",
+        f"- Ledger ID: `{ledger.id}`",
+        f"- Claim ID: `{claim.get('claim_id', '')}`",
+        f"- Support Level: `{claim.get('support_level', '')}`",
+        f"- Claim Type: `{claim.get('claim_type', '')}`",
+        f"- Coverage Score: {ledger.coverage_score}",
+        "",
+        "## Claim",
+        "",
+        str(claim.get("claim") or ""),
+        "",
+        "## Supporting Evidence",
+        "",
+    ]
+    if supporting_evidence:
+        for evidence in supporting_evidence:
+            lines.append(
+                f"- `{evidence.id}` `{evidence.evidence_type}` confidence={evidence.confidence}: "
+                f"{evidence.summary or evidence.supports or evidence.text}"
+            )
+    else:
+        lines.append("- No supporting evidence is linked to this claim.")
+
+    lines.extend(["", "## Evidence Links", ""])
+    if evidence_links:
+        for link in evidence_links:
+            lines.append(
+                f"- `{link.get('evidence_id', '')}` `{link.get('support_role', '')}`: "
+                f"{link.get('summary', '')}"
+            )
+    else:
+        lines.append("- No evidence-link records matched this claim.")
+
+    lines.extend(["", "## Counterevidence", ""])
+    if counterevidence:
+        lines.extend(f"- {item.get('signal', item)}" for item in counterevidence)
+    else:
+        lines.append("- No counterevidence is linked to this claim.")
+
+    lines.extend(["", "## Missing Evidence", ""])
+    if missing_evidence:
+        lines.extend(f"- {item.get('gap', item)}" for item in missing_evidence)
+    else:
+        lines.append("- No claim-specific missing evidence is recorded.")
+
+    lines.extend(["", "## Related Tasks", ""])
+    if related_tasks:
+        for task in related_tasks:
+            lines.append(
+                f"- `{task.id}` `{task.priority}` `{task.status}` `{task.due_phase}` {task.title}"
+            )
+    else:
+        lines.append("- No claim-specific follow-up tasks are linked yet.")
+
+    lines.extend(["", "## Validation Actions", ""])
+    if validation_actions:
+        lines.extend(f"- {action}" for action in validation_actions)
+    else:
+        lines.append("- No validation actions generated.")
+
+    lines.extend(["", "## Graph Edge Summary", ""])
+    if graph_edge_summary:
+        lines.extend(f"- `{edge}`: {count}" for edge, count in graph_edge_summary.items())
+    else:
+        lines.append("- No graph edges found for this claim packet.")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _dedupe_packet_items(items: list[dict], *, key: str) -> list[dict]:
+    unique = []
+    seen = set()
+    for item in items:
+        value = " ".join(str(item.get(key) or item).split())
+        lowered = value.lower()
+        if value and lowered not in seen:
+            unique.append(item)
+            seen.add(lowered)
+    return unique
 
 
 def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str, int]:
