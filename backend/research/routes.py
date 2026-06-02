@@ -5552,7 +5552,13 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     quality_overview = get_project_quality_gate_overview(session=session)
     opportunity_radar = get_research_opportunity_radar(session=session)
     triage_brief = get_project_triage_brief(session=session)
-    triage_snapshots = ProjectTriageSnapshotService(session).list_snapshots(limit=12)
+    triage_snapshot_service = ProjectTriageSnapshotService(session)
+    triage_snapshots = triage_snapshot_service.list_snapshots(limit=12)
+    triage_snapshot_comparison = (
+        triage_snapshot_service.compare_snapshots(triage_snapshots[1].id, triage_snapshots[0].id)
+        if len(triage_snapshots) >= 2
+        else None
+    )
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -5564,6 +5570,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         opportunity_radar=opportunity_radar,
         triage_brief=triage_brief,
         triage_snapshots=triage_snapshots,
+        triage_snapshot_comparison=triage_snapshot_comparison,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -5585,6 +5592,11 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 [_serialize_project_triage_snapshot(snapshot) for snapshot in triage_snapshots]
             ),
         )
+        if triage_snapshot_comparison:
+            archive.writestr(
+                "metadata/triage-snapshot-comparison.json",
+                _json_dump(triage_snapshot_comparison),
+            )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
@@ -5598,6 +5610,12 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                     f"artifacts/triage/project-triage-snapshot-{snapshot.id}.md",
                     snapshot.markdown_export,
                 )
+        if triage_snapshot_comparison:
+            _write_markdown(
+                archive,
+                "artifacts/triage/latest-triage-snapshot-comparison.md",
+                triage_snapshot_comparison["markdown_export"],
+            )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -5629,6 +5647,7 @@ def _project_bundle_manifest(
     opportunity_radar: ResearchOpportunityRadarResponse,
     triage_brief: ProjectTriageBriefResponse,
     triage_snapshots: list[ProjectTriageSnapshot],
+    triage_snapshot_comparison: dict | None,
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -5648,6 +5667,26 @@ def _project_bundle_manifest(
         "triage_risk_focus_count": len(triage_brief.risk_focus),
         "triage_snapshot_count": len(triage_snapshots),
         "latest_triage_snapshot_id": triage_snapshots[0].id if triage_snapshots else "",
+        "triage_snapshot_comparison_available": triage_snapshot_comparison is not None,
+        "latest_triage_snapshot_comparison_baseline_id": (
+            triage_snapshot_comparison["baseline_snapshot_id"] if triage_snapshot_comparison else ""
+        ),
+        "latest_triage_snapshot_comparison_candidate_id": (
+            triage_snapshot_comparison["candidate_snapshot_id"]
+            if triage_snapshot_comparison
+            else ""
+        ),
+        "latest_triage_snapshot_comparison_added_focus_count": (
+            len(triage_snapshot_comparison["added_focus"]) if triage_snapshot_comparison else 0
+        ),
+        "latest_triage_snapshot_comparison_added_risk_count": (
+            len(triage_snapshot_comparison["added_risks"]) if triage_snapshot_comparison else 0
+        ),
+        "latest_triage_snapshot_comparison_added_next_action_count": (
+            len(triage_snapshot_comparison["added_next_actions"])
+            if triage_snapshot_comparison
+            else 0
+        ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
             opportunity_radar.top_opportunities[0].radar_score
@@ -5691,12 +5730,20 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         "- `03-task-board.md`: recent task board state.",
         "- `04-opportunity-radar.md`: ranked next opportunities and risk watchlist.",
         "- `05-quality-gate-overview.md`: go/no-go quality gate comparison across ideas.",
-        "- `artifacts/triage/`: persisted project triage decision snapshots.",
-        "- `artifacts/briefs/`: persisted advisor or group-meeting briefs.",
-        "- `artifacts/plans/`: execution plans and plan progress reports.",
-        "- `metadata/`: JSON payloads for downstream tools or backup.",
-        "",
     ]
+    if manifest.get("triage_snapshot_comparison_available"):
+        lines.append(
+            "- `artifacts/triage/latest-triage-snapshot-comparison.md`: latest saved triage change report."
+        )
+    lines.extend(
+        [
+            "- `artifacts/triage/`: persisted project triage decision snapshots.",
+            "- `artifacts/briefs/`: persisted advisor or group-meeting briefs.",
+            "- `artifacts/plans/`: execution plans and plan progress reports.",
+            "- `metadata/`: JSON payloads for downstream tools or backup.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 

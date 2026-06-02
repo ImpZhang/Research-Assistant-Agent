@@ -1116,14 +1116,19 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/manifest.json",
             "metadata/triage-brief.json",
             "metadata/triage-snapshots.json",
+            "metadata/triage-snapshot-comparison.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             f"artifacts/triage/project-triage-snapshot-{triage_snapshot['id']}.md",
+            "artifacts/triage/latest-triage-snapshot-comparison.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
             raise RuntimeError(f"project bundle export missed files: {missing_project_files}")
         project_bundle_manifest = json.loads(archive.read("metadata/manifest.json"))
+        project_bundle_triage_comparison = json.loads(
+            archive.read("metadata/triage-snapshot-comparison.json")
+        )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
     if project_bundle_manifest["research_plan_count"] < 1:
@@ -1136,6 +1141,20 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle manifest did not include triage snapshots")
     if project_bundle_manifest["latest_triage_snapshot_id"] != triage_snapshot["id"]:
         raise RuntimeError("project bundle manifest did not point at the latest triage snapshot")
+    if not project_bundle_manifest["triage_snapshot_comparison_available"]:
+        raise RuntimeError("project bundle manifest did not expose triage comparison availability")
+    if (
+        project_bundle_manifest["latest_triage_snapshot_comparison_candidate_id"]
+        != triage_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle manifest did not point at the comparison candidate")
+    if (
+        project_bundle_manifest["latest_triage_snapshot_comparison_baseline_id"]
+        != baseline_triage_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle manifest did not point at the comparison baseline")
+    if project_bundle_triage_comparison["candidate_snapshot_id"] != triage_snapshot["id"]:
+        raise RuntimeError("project bundle comparison metadata used the wrong candidate")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     post_plan_progress = require_ok(
@@ -1427,6 +1446,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_file_count": len(project_bundle_files),
         "project_bundle_plan_count": project_bundle_manifest["research_plan_count"],
         "project_bundle_triage_snapshot_count": project_bundle_manifest["triage_snapshot_count"],
+        "project_bundle_triage_comparison_available": project_bundle_manifest[
+            "triage_snapshot_comparison_available"
+        ],
         "project_bundle_opportunity_count": project_bundle_manifest["opportunity_count"],
         "research_plan_id": research_plan["id"],
         "research_plan_item_count": len(research_plan["plan_items"]),

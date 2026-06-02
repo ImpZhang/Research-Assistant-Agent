@@ -1589,12 +1589,17 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "metadata/manifest.json" in names
         assert "metadata/triage-brief.json" in names
         assert "metadata/triage-snapshots.json" in names
+        assert "metadata/triage-snapshot-comparison.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         assert (
             f"artifacts/triage/project-triage-snapshot-{triage_snapshot_body['id']}.md"
         ) in names
+        assert "artifacts/triage/latest-triage-snapshot-comparison.md" in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
+        bundled_triage_comparison = json.loads(
+            archive.read("metadata/triage-snapshot-comparison.json")
+        )
         assert project_manifest["idea_count"] >= 1
         assert project_manifest["quality_gate_idea_count"] >= 1
         assert project_manifest["average_quality_gate_score"] >= 0
@@ -1602,6 +1607,16 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert project_manifest["triage_next_action_count"] >= 1
         assert project_manifest["triage_snapshot_count"] >= 2
         assert project_manifest["latest_triage_snapshot_id"] == triage_snapshot_body["id"]
+        assert project_manifest["triage_snapshot_comparison_available"] is True
+        assert (
+            project_manifest["latest_triage_snapshot_comparison_baseline_id"]
+            == baseline_triage_snapshot_body["id"]
+        )
+        assert (
+            project_manifest["latest_triage_snapshot_comparison_candidate_id"]
+            == triage_snapshot_body["id"]
+        )
+        assert bundled_triage_comparison["candidate_snapshot_id"] == triage_snapshot_body["id"]
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["recent_task_count"] >= 1
 
