@@ -246,6 +246,7 @@ def status() -> ProjectStatus:
             "project_handoff_bundle_export",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
+            "advisor_brief_triage_context",
             "tool_manifest",
             "mcp_tool_bridge_spec",
             "mcp_stdio_http_bridge",

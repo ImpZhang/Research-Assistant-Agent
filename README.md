@@ -86,7 +86,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Research opportunity radar that fuses portfolio ranking, readiness, blockers, and open tasks into a prioritized next-action view.
 - Task generation from opportunity radar next actions so project-level prioritization enters the task board.
 - Project handoff bundle export that packages triage brief, project overviews, readiness, quality gates, opportunity radar, task board state, briefs, and research plans.
-- Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries, including profile, tasks, experiment decisions, plan progress, and readiness signals.
+- Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries, including profile, tasks, experiment decisions, plan progress, readiness signals, and triage signals.
 - Persisted research execution plans that turn profile, ranked ideas, and open tasks into 7/14+ day action plans.
 - Task generation from research execution plans so plan actions enter the task board, idea progress, lineage, research packets, and bundle exports.
 - Research plan progress reports that summarize generated plan tasks, completion ratio, blockers, phases, and next plan actions.

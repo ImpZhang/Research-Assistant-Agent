@@ -49,6 +49,7 @@ def test_research_status() -> None:
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
     assert "project_handoff_bundle_export" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
+    assert "advisor_brief_triage_context" in body["implemented_capabilities"]
     assert "mcp_stdio_http_bridge" in body["implemented_capabilities"]
     assert "mcp_bridge_policy_controls" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
@@ -219,6 +220,7 @@ Future work should preserve researcher goals as durable project context.
     brief_body = brief.json()
     assert brief_body["summary"]["profile_name"] == "Pytest Research Profile"
     assert "## Research Profile" in brief_body["markdown_export"]
+    assert "## Triage Signals" in brief_body["markdown_export"]
     assert "limited GPU budget" in brief_body["markdown_export"]
 
     plan = client.post(
@@ -1473,6 +1475,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert brief_body["idea_ids"] == [idea_id]
     assert brief_body["summary"]["idea_count"] == 1
     assert "# Pytest Advisor Brief" in brief_body["markdown_export"]
+    assert "## Triage Signals" in brief_body["markdown_export"]
     assert "## Discussion Prompts" in brief_body["markdown_export"]
 
     briefs = client.get("/research/briefs")

@@ -34,7 +34,16 @@ class ResearchBriefService:
         analyses = self._load_analyses([idea.id for idea in ideas])
         plan_summaries = self._load_plan_summaries([idea.id for idea in ideas])
         readiness_signals = self._load_readiness_signals([idea.id for idea in ideas])
-        summary = self._summary(ideas, tasks, analyses, profile, plan_summaries, readiness_signals)
+        triage_signals = self._load_triage_signals([idea.id for idea in ideas])
+        summary = self._summary(
+            ideas,
+            tasks,
+            analyses,
+            profile,
+            plan_summaries,
+            readiness_signals,
+            triage_signals,
+        )
         brief = ResearchBrief(
             title=title or "Advisor Research Brief",
             scope=scope or "project",
@@ -52,6 +61,7 @@ class ResearchBriefService:
             profile,
             plan_summaries,
             readiness_signals,
+            triage_signals,
         )
         self.session.commit()
         self.session.refresh(brief)
@@ -181,6 +191,52 @@ class ResearchBriefService:
             )
         return signals
 
+    def _load_triage_signals(self, idea_ids: list[str]) -> dict:
+        triage_owner_types = {
+            "project_triage",
+            "idea_quality_gate",
+            "opportunity_radar",
+            "idea_readiness",
+        }
+        tasks = (
+            self.session.query(ResearchTask)
+            .filter(ResearchTask.owner_type.in_(triage_owner_types))
+            .order_by(ResearchTask.created_at.desc())
+            .limit(300)
+            .all()
+        )
+        idea_id_set = set(idea_ids)
+        scoped_tasks = [
+            task
+            for task in tasks
+            if task.idea_id is None or not idea_id_set or task.idea_id in idea_id_set
+        ]
+        open_tasks = [task for task in scoped_tasks if task.status in {"todo", "doing", "blocked"}]
+        by_owner_type = Counter(task.owner_type for task in scoped_tasks)
+        by_source_type = Counter(task.source_type for task in scoped_tasks)
+        top_tasks = sorted(open_tasks, key=self._task_order)[:8]
+        return {
+            "task_count": len(scoped_tasks),
+            "open_task_count": len(open_tasks),
+            "project_triage_task_count": by_owner_type.get("project_triage", 0),
+            "quality_gate_task_count": by_owner_type.get("idea_quality_gate", 0),
+            "opportunity_task_count": by_owner_type.get("opportunity_radar", 0),
+            "readiness_task_count": by_owner_type.get("idea_readiness", 0),
+            "risk_focus_count": by_source_type.get("triage_risk_focus", 0),
+            "top_tasks": [
+                {
+                    "id": task.id,
+                    "idea_id": task.idea_id,
+                    "owner_type": task.owner_type,
+                    "source_type": task.source_type,
+                    "title": task.title,
+                    "priority": task.priority,
+                    "status": task.status,
+                }
+                for task in top_tasks
+            ],
+        }
+
     def _summary(
         self,
         ideas: list[Idea],
@@ -189,6 +245,7 @@ class ResearchBriefService:
         profile: ResearchProfile | None,
         plan_summaries: list[dict],
         readiness_signals: list[dict],
+        triage_signals: dict,
     ) -> dict:
         open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
         blocked_tasks = [task for task in tasks if task.status == "blocked"]
@@ -211,6 +268,7 @@ class ResearchBriefService:
                 item.get("blocked_task_count", 0) for item in plan_summaries
             ),
             "readiness_signals": readiness_signals,
+            "triage_signals": triage_signals,
         }
 
     def _render_markdown(
@@ -222,6 +280,7 @@ class ResearchBriefService:
         profile: ResearchProfile | None,
         plan_summaries: list[dict],
         readiness_signals: list[dict],
+        triage_signals: dict,
     ) -> str:
         summary = brief.summary_json or {}
         lines = [
@@ -297,6 +356,33 @@ class ResearchBriefService:
                 )
         else:
             lines.append("- No readiness signals recorded.")
+
+        lines.extend(["", "## Triage Signals", ""])
+        if triage_signals.get("task_count", 0):
+            lines.extend(
+                [
+                    f"- Project Triage Tasks: {triage_signals.get('project_triage_task_count', 0)}",
+                    f"- Quality Gate Tasks: {triage_signals.get('quality_gate_task_count', 0)}",
+                    f"- Opportunity Tasks: {triage_signals.get('opportunity_task_count', 0)}",
+                    f"- Readiness Tasks: {triage_signals.get('readiness_task_count', 0)}",
+                    f"- Risk Focus Items: {triage_signals.get('risk_focus_count', 0)}",
+                    "",
+                    "### Top Triage Tasks",
+                    "",
+                ]
+            )
+            top_tasks = triage_signals.get("top_tasks") or []
+            if top_tasks:
+                for task in top_tasks:
+                    lines.append(
+                        f"- `{task['id']}` `{task['priority']}` `{task['status']}` "
+                        f"`{task['owner_type']}` idea=`{task['idea_id'] or 'project'}` "
+                        f"{task['title']}"
+                    )
+            else:
+                lines.append("- No open triage tasks.")
+        else:
+            lines.append("- No triage task signals recorded.")
 
         lines.extend(["", "## Highest Priority Open Tasks", ""])
         open_tasks = sorted(

@@ -177,6 +177,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project handoff bundle export")
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
+    if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include advisor brief triage context")
     if "mcp_tool_bridge_spec" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include MCP tool bridge spec")
     if "mcp_stdio_http_bridge" not in status["implemented_capabilities"]:
@@ -942,6 +944,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         client.get(f"/research/briefs/{advisor_brief['id']}/export/markdown"),
         "advisor research brief markdown",
     )
+    if "## Triage Signals" not in advisor_brief_markdown:
+        raise RuntimeError("advisor brief markdown did not include triage signals")
     if "## Discussion Prompts" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include discussion prompts")
     research_plan = require_ok(
