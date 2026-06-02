@@ -6360,6 +6360,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     readiness_overview = get_project_readiness_overview(session=session)
     quality_overview = get_project_quality_gate_overview(session=session)
     opportunity_radar = get_research_opportunity_radar(session=session)
+    claim_validation_queue = get_claim_validation_queue(limit=100, session=session)
     triage_brief = get_project_triage_brief(session=session)
     triage_snapshot_service = ProjectTriageSnapshotService(session)
     triage_snapshots = triage_snapshot_service.list_snapshots(limit=12)
@@ -6377,6 +6378,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         readiness_overview=readiness_overview,
         quality_overview=quality_overview,
         opportunity_radar=opportunity_radar,
+        claim_validation_queue=claim_validation_queue,
         triage_brief=triage_brief,
         triage_snapshots=triage_snapshots,
         triage_snapshot_comparison=triage_snapshot_comparison,
@@ -6394,6 +6396,10 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         archive.writestr("metadata/readiness-overview.json", _json_dump(readiness_overview))
         archive.writestr("metadata/quality-gate-overview.json", _json_dump(quality_overview))
         archive.writestr("metadata/opportunity-radar.json", _json_dump(opportunity_radar))
+        archive.writestr(
+            "metadata/claim-validation-queue.json",
+            _json_dump(claim_validation_queue),
+        )
         archive.writestr("metadata/triage-brief.json", _json_dump(triage_brief))
         archive.writestr(
             "metadata/triage-snapshots.json",
@@ -6412,6 +6418,11 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         _write_markdown(archive, "03-task-board.md", _render_project_task_board_markdown(tasks))
         _write_markdown(archive, "04-opportunity-radar.md", opportunity_radar.markdown_export)
         _write_markdown(archive, "05-quality-gate-overview.md", quality_overview.markdown_export)
+        _write_markdown(
+            archive,
+            "06-claim-validation-queue.md",
+            claim_validation_queue.markdown_export,
+        )
         for snapshot in triage_snapshots:
             if snapshot.markdown_export:
                 _write_markdown(
@@ -6454,6 +6465,7 @@ def _project_bundle_manifest(
     readiness_overview: ProjectReadinessOverviewResponse,
     quality_overview: ProjectQualityGateOverviewResponse,
     opportunity_radar: ResearchOpportunityRadarResponse,
+    claim_validation_queue: ClaimValidationQueueResponse,
     triage_brief: ProjectTriageBriefResponse,
     triage_snapshots: list[ProjectTriageSnapshot],
     triage_snapshot_comparison: dict | None,
@@ -6502,6 +6514,27 @@ def _project_bundle_manifest(
             if opportunity_radar.top_opportunities
             else 0.0
         ),
+        "claim_validation_queue_count": len(claim_validation_queue.items),
+        "claim_validation_queue_idea_count": claim_validation_queue.summary.get(
+            "idea_count",
+            0,
+        ),
+        "claim_validation_queue_critical_count": claim_validation_queue.summary.get(
+            "critical_count",
+            0,
+        ),
+        "claim_validation_queue_high_count": claim_validation_queue.summary.get(
+            "high_count",
+            0,
+        ),
+        "claim_validation_queue_by_priority": claim_validation_queue.summary.get(
+            "by_priority",
+            {},
+        ),
+        "claim_validation_queue_by_support_level": claim_validation_queue.summary.get(
+            "by_support_level",
+            {},
+        ),
         "brief_count": len(briefs),
         "research_plan_count": len(plans),
         "recent_task_count": len(tasks),
@@ -6528,6 +6561,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         f"- Blocked Tasks: {manifest['blocked_task_count']}",
         f"- Average Readiness: {manifest['average_readiness']}",
         f"- Opportunities: {manifest['opportunity_count']}",
+        f"- Claim Validation Queue: {manifest['claim_validation_queue_count']}",
         f"- Research Plans: {manifest['research_plan_count']}",
         f"- Briefs: {manifest['brief_count']}",
         "",
@@ -6539,6 +6573,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         "- `03-task-board.md`: recent task board state.",
         "- `04-opportunity-radar.md`: ranked next opportunities and risk watchlist.",
         "- `05-quality-gate-overview.md`: go/no-go quality gate comparison across ideas.",
+        "- `06-claim-validation-queue.md`: highest-priority claims to validate before handoff.",
     ]
     if manifest.get("triage_snapshot_comparison_available"):
         lines.append(

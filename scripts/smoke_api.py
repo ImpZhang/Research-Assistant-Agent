@@ -1296,12 +1296,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "03-task-board.md",
             "04-opportunity-radar.md",
             "05-quality-gate-overview.md",
+            "06-claim-validation-queue.md",
             "metadata/manifest.json",
             "metadata/triage-brief.json",
             "metadata/triage-snapshots.json",
             "metadata/triage-snapshot-comparison.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
+            "metadata/claim-validation-queue.json",
             f"artifacts/triage/project-triage-snapshot-{triage_snapshot['id']}.md",
             "artifacts/triage/latest-triage-snapshot-comparison.md",
         }
@@ -1309,6 +1311,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         if missing_project_files:
             raise RuntimeError(f"project bundle export missed files: {missing_project_files}")
         project_bundle_manifest = json.loads(archive.read("metadata/manifest.json"))
+        project_bundle_claim_queue = json.loads(
+            archive.read("metadata/claim-validation-queue.json")
+        )
         project_bundle_triage_comparison = json.loads(
             archive.read("metadata/triage-snapshot-comparison.json")
         )
@@ -1340,6 +1345,21 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle comparison metadata used the wrong candidate")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
+    if project_bundle_manifest["claim_validation_queue_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include claim validation queue items")
+    if project_bundle_manifest["claim_validation_queue_idea_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include claim validation queue ideas")
+    if project_bundle_claim_queue["summary"]["item_count"] < 1:
+        raise RuntimeError("project bundle claim validation queue metadata was empty")
+    if (
+        project_bundle_claim_queue["summary"]["item_count"]
+        != project_bundle_manifest["claim_validation_queue_count"]
+    ):
+        raise RuntimeError("project bundle claim validation queue count did not match manifest")
+    if not project_bundle_claim_queue["items"][0].get(
+        "ledger_id"
+    ) or not project_bundle_claim_queue["items"][0].get("claim_id"):
+        raise RuntimeError("project bundle claim validation queue item missed claim identity")
     post_plan_progress = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/progress"),
         "idea progress after research plan tasks",
@@ -1649,6 +1669,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "triage_snapshot_comparison_available"
         ],
         "project_bundle_opportunity_count": project_bundle_manifest["opportunity_count"],
+        "project_bundle_claim_queue_count": project_bundle_manifest["claim_validation_queue_count"],
+        "project_bundle_claim_queue_critical": project_bundle_manifest[
+            "claim_validation_queue_critical_count"
+        ],
         "research_plan_id": research_plan["id"],
         "research_plan_item_count": len(research_plan["plan_items"]),
         "research_plan_task_count": len(research_plan_tasks["tasks"]),

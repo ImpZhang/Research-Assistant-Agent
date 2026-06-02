@@ -1763,17 +1763,20 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "03-task-board.md" in names
         assert "04-opportunity-radar.md" in names
         assert "05-quality-gate-overview.md" in names
+        assert "06-claim-validation-queue.md" in names
         assert "metadata/manifest.json" in names
         assert "metadata/triage-brief.json" in names
         assert "metadata/triage-snapshots.json" in names
         assert "metadata/triage-snapshot-comparison.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
+        assert "metadata/claim-validation-queue.json" in names
         assert (
             f"artifacts/triage/project-triage-snapshot-{triage_snapshot_body['id']}.md"
         ) in names
         assert "artifacts/triage/latest-triage-snapshot-comparison.md" in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
+        bundled_claim_queue = json.loads(archive.read("metadata/claim-validation-queue.json"))
         bundled_triage_comparison = json.loads(
             archive.read("metadata/triage-snapshot-comparison.json")
         )
@@ -1795,6 +1798,17 @@ Future work should preserve proposal drafts as reviewable artifacts.
         )
         assert bundled_triage_comparison["candidate_snapshot_id"] == triage_snapshot_body["id"]
         assert project_manifest["opportunity_count"] >= 1
+        assert project_manifest["claim_validation_queue_count"] >= 1
+        assert project_manifest["claim_validation_queue_idea_count"] >= 1
+        assert project_manifest["claim_validation_queue_by_priority"]
+        assert bundled_claim_queue["summary"]["item_count"] >= 1
+        assert (
+            bundled_claim_queue["summary"]["item_count"]
+            == project_manifest["claim_validation_queue_count"]
+        )
+        assert bundled_claim_queue["items"][0]["ledger_id"]
+        assert bundled_claim_queue["items"][0]["claim_id"]
+        assert "# Claim Validation Queue" in archive.read("06-claim-validation-queue.md").decode()
         assert project_manifest["recent_task_count"] >= 1
 
 
