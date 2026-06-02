@@ -198,6 +198,7 @@ class ResearchBriefService:
     def _load_triage_signals(self, idea_ids: list[str]) -> dict:
         triage_owner_types = {
             "project_triage",
+            "project_triage_comparison",
             "idea_quality_gate",
             "opportunity_radar",
             "idea_readiness",
@@ -223,6 +224,7 @@ class ResearchBriefService:
             "task_count": len(scoped_tasks),
             "open_task_count": len(open_tasks),
             "project_triage_task_count": by_owner_type.get("project_triage", 0),
+            "comparison_task_count": by_owner_type.get("project_triage_comparison", 0),
             "quality_gate_task_count": by_owner_type.get("idea_quality_gate", 0),
             "opportunity_task_count": by_owner_type.get("opportunity_radar", 0),
             "readiness_task_count": by_owner_type.get("idea_readiness", 0),
@@ -377,6 +379,7 @@ class ResearchBriefService:
             lines.extend(
                 [
                     f"- Project Triage Tasks: {triage_signals.get('project_triage_task_count', 0)}",
+                    f"- Triage Comparison Tasks: {triage_signals.get('comparison_task_count', 0)}",
                     f"- Quality Gate Tasks: {triage_signals.get('quality_gate_task_count', 0)}",
                     f"- Opportunity Tasks: {triage_signals.get('opportunity_task_count', 0)}",
                     f"- Readiness Tasks: {triage_signals.get('readiness_task_count', 0)}",

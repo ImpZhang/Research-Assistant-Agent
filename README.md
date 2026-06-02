@@ -85,6 +85,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Task generation from project triage brief next actions and risks for daily execution.
 - Persisted project triage snapshots that freeze daily decision state, source task ids, and Markdown exports for later review.
 - Project triage snapshot comparison for tracking focus, risk, next-action, and metric changes across decision rounds.
+- Task generation from triage snapshot comparison changes so newly added risks and actions enter the task board.
 - Research opportunity radar that fuses portfolio ranking, readiness, blockers, and open tasks into a prioritized next-action view.
 - Task generation from opportunity radar next actions so project-level prioritization enters the task board.
 - Project handoff bundle export that packages triage brief, saved triage snapshots, latest triage comparison, project overviews, readiness, quality gates, opportunity radar, task board state, briefs, and research plans.
@@ -201,7 +202,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, quality-gate follow-up tasks, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project triage brief, project triage tasks, persisted project triage snapshots, triage snapshot comparison, project quality-gate tasks, project overview, project bundle export, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, quality-gate follow-up tasks, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project triage brief, project triage tasks, persisted project triage snapshots, triage snapshot comparison, triage comparison tasks, project quality-gate tasks, project overview, project bundle export, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -226,6 +227,7 @@ POST /research/triage/snapshots
 GET  /research/triage/snapshots
 POST /research/triage/snapshots/compare
 POST /research/triage/snapshots/compare/export/markdown
+POST /research/triage/snapshots/compare/tasks
 GET  /research/triage/snapshots/{snapshot_id}
 GET  /research/triage/snapshots/{snapshot_id}/export/markdown
 GET  /research/opportunities/radar

@@ -1228,6 +1228,36 @@ async function compareProjectTriageSnapshots() {
   }
 }
 
+async function createProjectTriageComparisonTasks() {
+  renderResult("workflowResult", "Creating project triage comparison tasks...", "warn");
+  try {
+    const snapshots = await api("/research/triage/snapshots?limit=2");
+    if (snapshots.length < 2) {
+      renderResult("workflowResult", "Save at least two triage snapshots before creating comparison tasks.", "warn");
+      return;
+    }
+    const body = await api("/research/triage/snapshots/compare/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseline_snapshot_id: snapshots[1].id,
+        candidate_snapshot_id: snapshots[0].id,
+        limit: 8,
+        include_focus: true,
+        include_risks: true,
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Comparison tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function createProjectTriageTasks() {
   renderResult("workflowResult", "Creating project triage tasks...", "warn");
   try {
@@ -1562,6 +1592,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("triageMarkdownButton").addEventListener("click", loadProjectTriageMarkdown);
   $("triageSnapshotButton").addEventListener("click", saveProjectTriageSnapshot);
   $("triageCompareButton").addEventListener("click", compareProjectTriageSnapshots);
+  $("triageComparisonTasksButton").addEventListener(
+    "click",
+    createProjectTriageComparisonTasks,
+  );
   $("triageTasksButton").addEventListener("click", createProjectTriageTasks);
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
   $("qualityOverviewButton").addEventListener("click", loadProjectQualityOverview);

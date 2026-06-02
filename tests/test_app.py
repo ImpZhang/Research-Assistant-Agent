@@ -60,6 +60,7 @@ def test_research_status() -> None:
     assert "project_triage_task_generation" in body["implemented_capabilities"]
     assert "project_triage_snapshots" in body["implemented_capabilities"]
     assert "project_triage_snapshot_comparison" in body["implemented_capabilities"]
+    assert "project_triage_snapshot_comparison_task_generation" in body["implemented_capabilities"]
     assert "external_novelty_refresh" in body["implemented_capabilities"]
     assert "novelty_check_task_generation" in body["implemented_capabilities"]
 
@@ -87,6 +88,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "list_project_triage_snapshots" in names
     assert "compare_project_triage_snapshots" in names
     assert "export_project_triage_snapshot_comparison_markdown" in names
+    assert "create_tasks_from_project_triage_snapshot_comparison" in names
     assert "get_project_triage_snapshot" in names
     assert "export_project_triage_snapshot_markdown" in names
     assert "get_mcp_tool_spec" in names
@@ -416,6 +418,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/triage/brief/export/markdown" in script.text
     assert "/research/triage/snapshots" in script.text
     assert "/research/triage/snapshots/compare" in script.text
+    assert "/research/triage/snapshots/compare/tasks" in script.text
     assert "/research/triage/brief/tasks" in script.text
     assert "/research/readiness/overview" in script.text
     assert "/research/quality/overview" in script.text
@@ -1412,6 +1415,35 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert triage_snapshot_comparison_markdown.headers["content-type"].startswith("text/markdown")
     assert "## Metric Delta" in triage_snapshot_comparison_markdown.text
 
+    triage_comparison_tasks = client.post(
+        "/research/triage/snapshots/compare/tasks",
+        json={
+            "baseline_snapshot_id": baseline_triage_snapshot_body["id"],
+            "candidate_snapshot_id": triage_snapshot_body["id"],
+            "limit": 4,
+            "include_focus": True,
+            "include_risks": True,
+            "created_by": "pytest",
+        },
+    )
+    assert triage_comparison_tasks.status_code == 200
+    triage_comparison_task_body = triage_comparison_tasks.json()
+    assert triage_comparison_task_body["tasks"]
+    assert all(
+        task["owner_type"] == "project_triage_comparison"
+        for task in triage_comparison_task_body["tasks"]
+    )
+    assert all(
+        task["due_phase"] == "triage_change_follow_up"
+        for task in triage_comparison_task_body["tasks"]
+    )
+
+    triage_comparison_task_edges = client.get(
+        "/research/graph/edges?edge_type=project_triage_comparison_creates_task"
+    )
+    assert triage_comparison_task_edges.status_code == 200
+    assert triage_comparison_task_edges.json()
+
     quality_gate_tasks = client.post(
         f"/research/ideas/{idea_id}/quality-gate/tasks",
         json={"created_by": "pytest"},
@@ -1559,6 +1591,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     brief_body = brief.json()
     assert brief_body["idea_ids"] == [idea_id]
     assert brief_body["summary"]["idea_count"] == 1
+    assert brief_body["summary"]["triage_signals"]["comparison_task_count"] >= 1
     assert (
         brief_body["summary"]["triage_snapshot_comparison"]["candidate_snapshot_id"]
         == triage_snapshot_body["id"]

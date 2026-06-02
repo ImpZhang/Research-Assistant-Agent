@@ -853,6 +853,13 @@ class ProjectTriageSnapshotComparisonRequest(BaseModel):
     candidate_snapshot_id: str
 
 
+class ProjectTriageSnapshotComparisonTaskGenerateRequest(ProjectTriageSnapshotComparisonRequest):
+    limit: int = Field(default=8, ge=1, le=20)
+    include_focus: bool = True
+    include_risks: bool = True
+    created_by: str = "system"
+
+
 class ProjectTriageSnapshotComparisonResponse(BaseModel):
     baseline_snapshot_id: str
     candidate_snapshot_id: str

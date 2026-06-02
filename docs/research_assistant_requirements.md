@@ -810,6 +810,8 @@ project triage brief 需要能一键转成 task board 任务：从 next actions 
 
 project triage snapshots 需要支持 comparison：输入 baseline snapshot 和 candidate snapshot，输出 readiness、quality、task、opportunity 等指标 delta，以及 recommended focus、risk focus、next actions 的 added/removed/kept 列表和 Markdown report。它用于日/周复盘和导师沟通，回答“这一轮判断相比上一轮到底变了什么”。
 
+project triage snapshot comparison 需要能一键转成 task board 任务：从 added next actions、added risks 和 added focus 创建 `owner_type=project_triage_comparison`、`due_phase=triage_change_follow_up` 的项目级任务，并写入 `project_triage_comparison_creates_task` 图边。这样“本轮新增变化 -> 需要处理的任务”形成闭环。
+
 系统需要提供 research opportunity radar：
 
 - 聚合 profile-aware ranking、idea readiness、open/blocked tasks 和 readiness blockers。

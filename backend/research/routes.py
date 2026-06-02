@@ -115,6 +115,7 @@ from backend.research.schemas import (
     ProjectTriageBriefResponse,
     ProjectTriageSnapshotComparisonRequest,
     ProjectTriageSnapshotComparisonResponse,
+    ProjectTriageSnapshotComparisonTaskGenerateRequest,
     ProjectTriageSnapshotCreate,
     ProjectTriageSnapshotDetail,
     ProjectTriageSnapshotRead,
@@ -246,6 +247,7 @@ def status() -> ProjectStatus:
             "project_triage_task_generation",
             "project_triage_snapshots",
             "project_triage_snapshot_comparison",
+            "project_triage_snapshot_comparison_task_generation",
             "project_readiness_overview",
             "project_quality_gate_overview",
             "project_quality_gate_task_generation",
@@ -613,6 +615,15 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/triage/snapshots/compare/export/markdown",
             input_model="ProjectTriageSnapshotComparisonRequest",
             output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_triage_snapshot_comparison",
+            description="Turn added focus, risks, and next actions from a triage snapshot comparison into project tasks.",
+            method="POST",
+            path="/research/triage/snapshots/compare/tasks",
+            input_model="ProjectTriageSnapshotComparisonTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_project_triage_snapshot",
@@ -1118,6 +1129,37 @@ def export_project_triage_snapshot_comparison_markdown(
 ) -> PlainTextResponse:
     comparison = compare_project_triage_snapshots(payload, session)
     return PlainTextResponse(comparison.markdown_export, media_type="text/markdown")
+
+
+@router.post(
+    "/triage/snapshots/compare/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_triage_snapshot_comparison(
+    payload: ProjectTriageSnapshotComparisonTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    try:
+        comparison = ProjectTriageSnapshotService(session).compare_snapshots(
+            payload.baseline_snapshot_id,
+            payload.candidate_snapshot_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    tasks = ResearchTaskService(session).create_from_project_triage_comparison(
+        comparison,
+        limit=payload.limit,
+        include_focus=payload.include_focus,
+        include_risks=payload.include_risks,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} project triage comparison tasks from snapshots "
+            f"{payload.baseline_snapshot_id} -> {payload.candidate_snapshot_id}."
+        ),
+    )
 
 
 @router.get("/triage/snapshots/{snapshot_id}", response_model=ProjectTriageSnapshotDetail)

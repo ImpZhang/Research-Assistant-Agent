@@ -215,6 +215,13 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project triage snapshots")
     if "project_triage_snapshot_comparison" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project triage snapshot comparison")
+    if (
+        "project_triage_snapshot_comparison_task_generation"
+        not in status["implemented_capabilities"]
+    ):
+        raise RuntimeError(
+            "research status did not include project triage snapshot comparison task generation"
+        )
     if "external_novelty_refresh" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include external novelty refresh")
     if "novelty_check_task_generation" not in status["implemented_capabilities"]:
@@ -252,6 +259,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "tool manifest did not include project triage comparison markdown export"
         )
+    if "create_tasks_from_project_triage_snapshot_comparison" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project triage comparison task tool")
     if "get_project_triage_snapshot" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage snapshot reader")
     if "export_project_triage_snapshot_markdown" not in manifest_names:
@@ -978,6 +987,30 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "## Metric Delta" not in triage_snapshot_comparison_markdown:
         raise RuntimeError("project triage snapshot comparison markdown missed metric deltas")
+    triage_comparison_tasks = require_ok(
+        client.post(
+            "/research/triage/snapshots/compare/tasks",
+            json_body={
+                "baseline_snapshot_id": baseline_triage_snapshot["id"],
+                "candidate_snapshot_id": triage_snapshot["id"],
+                "limit": 5,
+                "include_focus": True,
+                "include_risks": True,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project triage snapshot comparison tasks",
+    )
+    if not triage_comparison_tasks["tasks"]:
+        raise RuntimeError("project triage snapshot comparison task generation returned no tasks")
+    if triage_comparison_tasks["tasks"][0]["owner_type"] != "project_triage_comparison":
+        raise RuntimeError("project triage snapshot comparison tasks used the wrong owner type")
+    triage_comparison_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=project_triage_comparison_creates_task"),
+        "project triage snapshot comparison task graph edges",
+    )
+    if not triage_comparison_edges:
+        raise RuntimeError("project triage snapshot comparison tasks did not create graph edges")
     project_quality_tasks = require_ok(
         client.post(
             "/research/quality/overview/tasks",
@@ -1047,6 +1080,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         != triage_snapshot["id"]
     ):
         raise RuntimeError("advisor brief did not include latest triage snapshot comparison")
+    if advisor_brief["summary"]["triage_signals"].get("comparison_task_count", 0) < 1:
+        raise RuntimeError("advisor brief did not include triage comparison task signals")
     if "## Triage Signals" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include triage signals")
     if "## Triage Snapshot Changes" not in advisor_brief_markdown:
@@ -1435,6 +1470,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "triage_snapshot_id": triage_snapshot["id"],
         "triage_snapshot_markdown_chars": len(triage_snapshot_markdown),
         "triage_snapshot_comparison_markdown_chars": len(triage_snapshot_comparison_markdown),
+        "triage_comparison_task_count": len(triage_comparison_tasks["tasks"]),
         "project_quality_task_count": len(project_quality_tasks["tasks"]),
         "readiness_task_count": len(readiness_tasks["tasks"]),
         "readiness_progress_task_count": progress_after_readiness_tasks["artifact_counts"][

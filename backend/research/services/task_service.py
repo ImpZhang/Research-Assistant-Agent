@@ -521,6 +521,97 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_triage_comparison(
+        self,
+        comparison: dict,
+        *,
+        limit: int = 8,
+        include_focus: bool = True,
+        include_risks: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        items = [
+            ("triage_comparison_added_next_action", action)
+            for action in self._unique_commitments(comparison.get("added_next_actions") or [])
+        ]
+        if include_risks:
+            items.extend(
+                ("triage_comparison_added_risk", risk)
+                for risk in self._unique_commitments(comparison.get("added_risks") or [])
+            )
+        if include_focus:
+            items.extend(
+                ("triage_comparison_added_focus", focus)
+                for focus in self._unique_commitments(comparison.get("added_focus") or [])
+            )
+        items = self._deduplicate_triage_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "triage_comparison_review",
+                    comparison.get("summary")
+                    or "Review the latest project triage snapshot comparison.",
+                )
+            ]
+
+        candidate_id = comparison.get("candidate_snapshot_id", "")
+        baseline_id = comparison.get("baseline_snapshot_id", "")
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_triage_comparison",
+                owner_id=candidate_id or "project_triage_comparison",
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._triage_comparison_task_title(action, idx),
+                description=action,
+                priority=self._triage_comparison_task_priority(source_type, action),
+                status="todo",
+                due_phase="triage_change_follow_up",
+                metadata_json={
+                    "baseline_snapshot_id": baseline_id,
+                    "candidate_snapshot_id": candidate_id,
+                    "comparison_source_type": source_type,
+                    "source_rank": idx,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project triage snapshot comparison.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "baseline_snapshot_id": baseline_id,
+                        "candidate_snapshot_id": candidate_id,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_triage_comparison_tasks(
+            comparison, tasks
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_opportunity_radar(
         self,
         opportunities: list[dict],
@@ -910,6 +1001,22 @@ class ResearchTaskService:
         if "blocked" in lower or "de-risk" in lower or "high-risk" in lower:
             return "critical"
         if "advance" in lower or "opportunity" in lower:
+            return "high"
+        return "medium"
+
+    def _triage_comparison_task_title(self, action: str, idx: int) -> str:
+        clean = " ".join(str(action).split())
+        if "risk" in clean.lower() or "de-risk" in clean.lower():
+            return self._short_task_title(f"Resolve triage change risk {idx}: {clean}", idx)
+        return self._short_task_title(clean or f"Review triage comparison change {idx}", idx)
+
+    def _triage_comparison_task_priority(self, source_type: str, action: str) -> str:
+        lower = str(action).lower()
+        if source_type == "triage_comparison_added_risk":
+            return "critical"
+        if "blocked" in lower or "risk" in lower or "de-risk" in lower:
+            return "critical"
+        if source_type == "triage_comparison_added_next_action":
             return "high"
         return "medium"
 
