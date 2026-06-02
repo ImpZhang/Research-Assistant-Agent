@@ -209,6 +209,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project triage task generation")
     if "project_triage_snapshots" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project triage snapshots")
+    if "project_triage_snapshot_comparison" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project triage snapshot comparison")
     if "external_novelty_refresh" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include external novelty refresh")
     if "novelty_check_task_generation" not in status["implemented_capabilities"]:
@@ -240,6 +242,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project triage snapshot creator")
     if "list_project_triage_snapshots" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage snapshot lister")
+    if "compare_project_triage_snapshots" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project triage snapshot comparison")
+    if "export_project_triage_snapshot_comparison_markdown" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project triage comparison markdown export"
+        )
     if "get_project_triage_snapshot" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage snapshot reader")
     if "export_project_triage_snapshot_markdown" not in manifest_names:
@@ -869,6 +877,20 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "Project Triage Brief" not in triage_markdown:
         raise RuntimeError("project triage brief markdown export did not include title")
+    baseline_triage_snapshot = require_ok(
+        client.post(
+            "/research/triage/snapshots",
+            json_body={
+                "title": "Smoke Baseline Project Triage Snapshot",
+                "idea_limit": 50,
+                "opportunity_limit": 5,
+                "created_by": "smoke_api",
+            },
+        ),
+        "baseline project triage snapshot",
+    )
+    if baseline_triage_snapshot["summary"].get("idea_count", 0) < 1:
+        raise RuntimeError("baseline project triage snapshot did not include ideas")
     triage_tasks = require_ok(
         client.post(
             "/research/triage/brief/tasks",
@@ -926,6 +948,32 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "## Source IDs" not in triage_snapshot_markdown:
         raise RuntimeError("project triage snapshot markdown export missed source ids")
+    triage_snapshot_comparison = require_ok(
+        client.post(
+            "/research/triage/snapshots/compare",
+            json_body={
+                "baseline_snapshot_id": baseline_triage_snapshot["id"],
+                "candidate_snapshot_id": triage_snapshot["id"],
+            },
+        ),
+        "project triage snapshot comparison",
+    )
+    if "open_task_count" not in triage_snapshot_comparison["metric_delta"]:
+        raise RuntimeError("project triage snapshot comparison missed metric deltas")
+    if "Compared project triage snapshots" not in triage_snapshot_comparison["summary"]:
+        raise RuntimeError("project triage snapshot comparison summary was incomplete")
+    triage_snapshot_comparison_markdown = require_ok(
+        client.post(
+            "/research/triage/snapshots/compare/export/markdown",
+            json_body={
+                "baseline_snapshot_id": baseline_triage_snapshot["id"],
+                "candidate_snapshot_id": triage_snapshot["id"],
+            },
+        ),
+        "project triage snapshot comparison markdown",
+    )
+    if "## Metric Delta" not in triage_snapshot_comparison_markdown:
+        raise RuntimeError("project triage snapshot comparison markdown missed metric deltas")
     project_quality_tasks = require_ok(
         client.post(
             "/research/quality/overview/tasks",
@@ -1084,7 +1132,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle manifest did not include quality gate ideas")
     if project_bundle_manifest["triage_next_action_count"] < 1:
         raise RuntimeError("project bundle manifest did not include triage next actions")
-    if project_bundle_manifest["triage_snapshot_count"] < 1:
+    if project_bundle_manifest["triage_snapshot_count"] < 2:
         raise RuntimeError("project bundle manifest did not include triage snapshots")
     if project_bundle_manifest["latest_triage_snapshot_id"] != triage_snapshot["id"]:
         raise RuntimeError("project bundle manifest did not point at the latest triage snapshot")
@@ -1356,6 +1404,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "triage_task_count": len(triage_tasks["tasks"]),
         "triage_snapshot_id": triage_snapshot["id"],
         "triage_snapshot_markdown_chars": len(triage_snapshot_markdown),
+        "triage_snapshot_comparison_markdown_chars": len(triage_snapshot_comparison_markdown),
         "project_quality_task_count": len(project_quality_tasks["tasks"]),
         "readiness_task_count": len(readiness_tasks["tasks"]),
         "readiness_progress_task_count": progress_after_readiness_tasks["artifact_counts"][

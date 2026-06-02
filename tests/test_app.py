@@ -58,6 +58,7 @@ def test_research_status() -> None:
     assert "project_triage_brief" in body["implemented_capabilities"]
     assert "project_triage_task_generation" in body["implemented_capabilities"]
     assert "project_triage_snapshots" in body["implemented_capabilities"]
+    assert "project_triage_snapshot_comparison" in body["implemented_capabilities"]
     assert "external_novelty_refresh" in body["implemented_capabilities"]
     assert "novelty_check_task_generation" in body["implemented_capabilities"]
 
@@ -83,6 +84,8 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_tasks_from_project_triage_brief" in names
     assert "create_project_triage_snapshot" in names
     assert "list_project_triage_snapshots" in names
+    assert "compare_project_triage_snapshots" in names
+    assert "export_project_triage_snapshot_comparison_markdown" in names
     assert "get_project_triage_snapshot" in names
     assert "export_project_triage_snapshot_markdown" in names
     assert "get_mcp_tool_spec" in names
@@ -411,6 +414,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/triage/brief" in script.text
     assert "/research/triage/brief/export/markdown" in script.text
     assert "/research/triage/snapshots" in script.text
+    assert "/research/triage/snapshots/compare" in script.text
     assert "/research/triage/brief/tasks" in script.text
     assert "/research/readiness/overview" in script.text
     assert "/research/quality/overview" in script.text
@@ -1316,6 +1320,19 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "text/markdown" in triage_markdown.headers["content-type"]
     assert "# Project Triage Brief" in triage_markdown.text
 
+    baseline_triage_snapshot = client.post(
+        "/research/triage/snapshots",
+        json={
+            "title": "Pytest Baseline Project Triage Snapshot",
+            "idea_limit": 20,
+            "opportunity_limit": 5,
+            "created_by": "pytest",
+        },
+    )
+    assert baseline_triage_snapshot.status_code == 200
+    baseline_triage_snapshot_body = baseline_triage_snapshot.json()
+    assert baseline_triage_snapshot_body["summary"]["idea_count"] >= 1
+
     triage_tasks = client.post(
         "/research/triage/brief/tasks",
         json={"limit": 4, "include_risks": True, "created_by": "pytest"},
@@ -1367,6 +1384,32 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert triage_snapshot_markdown.status_code == 200
     assert triage_snapshot_markdown.headers["content-type"].startswith("text/markdown")
     assert "## Source IDs" in triage_snapshot_markdown.text
+
+    triage_snapshot_comparison = client.post(
+        "/research/triage/snapshots/compare",
+        json={
+            "baseline_snapshot_id": baseline_triage_snapshot_body["id"],
+            "candidate_snapshot_id": triage_snapshot_body["id"],
+        },
+    )
+    assert triage_snapshot_comparison.status_code == 200
+    comparison_body = triage_snapshot_comparison.json()
+    assert comparison_body["baseline_snapshot_id"] == baseline_triage_snapshot_body["id"]
+    assert comparison_body["candidate_snapshot_id"] == triage_snapshot_body["id"]
+    assert "open_task_count" in comparison_body["metric_delta"]
+    assert "Compared project triage snapshots" in comparison_body["summary"]
+    assert "# Project Triage Snapshot Comparison" in comparison_body["markdown_export"]
+
+    triage_snapshot_comparison_markdown = client.post(
+        "/research/triage/snapshots/compare/export/markdown",
+        json={
+            "baseline_snapshot_id": baseline_triage_snapshot_body["id"],
+            "candidate_snapshot_id": triage_snapshot_body["id"],
+        },
+    )
+    assert triage_snapshot_comparison_markdown.status_code == 200
+    assert triage_snapshot_comparison_markdown.headers["content-type"].startswith("text/markdown")
+    assert "## Metric Delta" in triage_snapshot_comparison_markdown.text
 
     quality_gate_tasks = client.post(
         f"/research/ideas/{idea_id}/quality-gate/tasks",
@@ -1557,7 +1600,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert project_manifest["average_quality_gate_score"] >= 0
         assert project_manifest["quality_gate_decision_counts"]
         assert project_manifest["triage_next_action_count"] >= 1
-        assert project_manifest["triage_snapshot_count"] >= 1
+        assert project_manifest["triage_snapshot_count"] >= 2
         assert project_manifest["latest_triage_snapshot_id"] == triage_snapshot_body["id"]
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["recent_task_count"] >= 1

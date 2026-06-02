@@ -63,6 +63,43 @@ class ProjectTriageSnapshotService:
     def get_snapshot(self, snapshot_id: str) -> ProjectTriageSnapshot | None:
         return self.session.get(ProjectTriageSnapshot, snapshot_id)
 
+    def compare_snapshots(
+        self,
+        baseline_snapshot_id: str,
+        candidate_snapshot_id: str,
+    ) -> dict:
+        baseline = self.get_snapshot(baseline_snapshot_id)
+        candidate = self.get_snapshot(candidate_snapshot_id)
+        if baseline is None:
+            raise ValueError("Baseline project triage snapshot not found")
+        if candidate is None:
+            raise ValueError("Candidate project triage snapshot not found")
+
+        comparison = {
+            "baseline_snapshot_id": baseline.id,
+            "candidate_snapshot_id": candidate.id,
+            "baseline_title": baseline.title,
+            "candidate_title": candidate.title,
+            "metric_delta": _metric_delta(
+                baseline.summary_json or {}, candidate.summary_json or {}
+            ),
+            **_list_delta(
+                "focus", baseline.recommended_focus_json, candidate.recommended_focus_json
+            ),
+            **_list_delta("risks", baseline.risk_focus_json, candidate.risk_focus_json),
+            **_list_delta("next_actions", baseline.next_actions_json, candidate.next_actions_json),
+        }
+        comparison["summary"] = (
+            "Compared project triage snapshots: "
+            f"{len(comparison['added_focus'])} focus items added, "
+            f"{len(comparison['added_risks'])} risks added, "
+            f"{len(comparison['added_next_actions'])} next actions added."
+        )
+        comparison["markdown_export"] = render_project_triage_snapshot_comparison_markdown(
+            comparison
+        )
+        return comparison
+
     def _load_source_tasks(self) -> list[ResearchTask]:
         return (
             self.session.query(ResearchTask)
@@ -158,11 +195,97 @@ def render_project_triage_snapshot_markdown(snapshot: ProjectTriageSnapshot) -> 
     return "\n".join(lines).strip() + "\n"
 
 
+def render_project_triage_snapshot_comparison_markdown(comparison: dict) -> str:
+    lines = [
+        "# Project Triage Snapshot Comparison",
+        "",
+        f"- Baseline: `{comparison['baseline_snapshot_id']}` {_clean(comparison['baseline_title'])}",
+        f"- Candidate: `{comparison['candidate_snapshot_id']}` {_clean(comparison['candidate_title'])}",
+        f"- Summary: {_clean(comparison['summary'])}",
+        "",
+        "## Metric Delta",
+        "",
+    ]
+    for key, value in (comparison.get("metric_delta") or {}).items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Recommended Focus Changes", ""])
+    _append_change_group(lines, "Added", comparison.get("added_focus") or [])
+    _append_change_group(lines, "Removed", comparison.get("removed_focus") or [])
+    _append_change_group(lines, "Kept", comparison.get("kept_focus") or [])
+    lines.extend(["", "## Risk Focus Changes", ""])
+    _append_change_group(lines, "Added", comparison.get("added_risks") or [])
+    _append_change_group(lines, "Removed", comparison.get("removed_risks") or [])
+    _append_change_group(lines, "Kept", comparison.get("kept_risks") or [])
+    lines.extend(["", "## Next Action Changes", ""])
+    _append_change_group(lines, "Added", comparison.get("added_next_actions") or [])
+    _append_change_group(lines, "Removed", comparison.get("removed_next_actions") or [])
+    _append_change_group(lines, "Kept", comparison.get("kept_next_actions") or [])
+    return "\n".join(lines).strip() + "\n"
+
+
 def _append_items(lines: list[str], items: list[str], empty: str) -> None:
     if not items:
         lines.append(f"- {empty}")
         return
     lines.extend(f"- {_clean(item)}" for item in items)
+
+
+def _append_change_group(lines: list[str], label: str, items: list[str]) -> None:
+    lines.append(f"### {label}")
+    if not items:
+        lines.append("- none")
+        return
+    lines.extend(f"- {_clean(item)}" for item in items)
+
+
+def _metric_delta(baseline: dict, candidate: dict) -> dict:
+    keys = [
+        "idea_count",
+        "open_task_count",
+        "blocked_task_count",
+        "average_readiness",
+        "average_quality_gate_score",
+        "opportunity_count",
+        "tracked_task_count",
+        "next_action_count",
+        "risk_focus_count",
+    ]
+    delta = {}
+    for key in keys:
+        delta[key] = round(float(candidate.get(key, 0)) - float(baseline.get(key, 0)), 4)
+    return delta
+
+
+def _list_delta(prefix: str, baseline: list[str] | None, candidate: list[str] | None) -> dict:
+    baseline_items = _unique_by_normalized_text(baseline or [])
+    candidate_items = _unique_by_normalized_text(candidate or [])
+    baseline_keys = {_normalize(item) for item in baseline_items}
+    candidate_keys = {_normalize(item) for item in candidate_items}
+    return {
+        f"added_{prefix}": [
+            item for item in candidate_items if _normalize(item) not in baseline_keys
+        ],
+        f"removed_{prefix}": [
+            item for item in baseline_items if _normalize(item) not in candidate_keys
+        ],
+        f"kept_{prefix}": [item for item in candidate_items if _normalize(item) in baseline_keys],
+    }
+
+
+def _unique_by_normalized_text(items: list[str]) -> list[str]:
+    unique = []
+    seen = set()
+    for item in items:
+        key = _normalize(item)
+        if not key or key in seen:
+            continue
+        unique.append(_clean(item))
+        seen.add(key)
+    return unique
+
+
+def _normalize(value: object) -> str:
+    return " ".join(str(value or "").strip().lower().split())
 
 
 def _inline_value(value: object) -> str:

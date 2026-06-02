@@ -113,6 +113,8 @@ from backend.research.schemas import (
     ProjectReadinessOverviewResponse,
     ProjectStatus,
     ProjectTriageBriefResponse,
+    ProjectTriageSnapshotComparisonRequest,
+    ProjectTriageSnapshotComparisonResponse,
     ProjectTriageSnapshotCreate,
     ProjectTriageSnapshotDetail,
     ProjectTriageSnapshotRead,
@@ -243,6 +245,7 @@ def status() -> ProjectStatus:
             "project_triage_brief",
             "project_triage_task_generation",
             "project_triage_snapshots",
+            "project_triage_snapshot_comparison",
             "project_readiness_overview",
             "project_quality_gate_overview",
             "project_quality_gate_task_generation",
@@ -593,6 +596,22 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/triage/snapshots",
             output_model="list[ProjectTriageSnapshotRead]",
+        ),
+        ToolManifestItem(
+            name="compare_project_triage_snapshots",
+            description="Compare two saved project triage snapshots for focus, risk, action, and metric changes.",
+            method="POST",
+            path="/research/triage/snapshots/compare",
+            input_model="ProjectTriageSnapshotComparisonRequest",
+            output_model="ProjectTriageSnapshotComparisonResponse",
+        ),
+        ToolManifestItem(
+            name="export_project_triage_snapshot_comparison_markdown",
+            description="Export a comparison of two saved project triage snapshots as text/markdown.",
+            method="POST",
+            path="/research/triage/snapshots/compare/export/markdown",
+            input_model="ProjectTriageSnapshotComparisonRequest",
+            output_model="text/markdown",
         ),
         ToolManifestItem(
             name="get_project_triage_snapshot",
@@ -1068,6 +1087,36 @@ def list_project_triage_snapshots(
 ) -> list[ProjectTriageSnapshotRead]:
     snapshots = ProjectTriageSnapshotService(session).list_snapshots(limit)
     return [_serialize_project_triage_snapshot(snapshot) for snapshot in snapshots]
+
+
+@router.post(
+    "/triage/snapshots/compare",
+    response_model=ProjectTriageSnapshotComparisonResponse,
+)
+def compare_project_triage_snapshots(
+    payload: ProjectTriageSnapshotComparisonRequest,
+    session: Session = Depends(get_session),
+) -> ProjectTriageSnapshotComparisonResponse:
+    try:
+        comparison = ProjectTriageSnapshotService(session).compare_snapshots(
+            payload.baseline_snapshot_id,
+            payload.candidate_snapshot_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ProjectTriageSnapshotComparisonResponse(**comparison)
+
+
+@router.post(
+    "/triage/snapshots/compare/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_triage_snapshot_comparison_markdown(
+    payload: ProjectTriageSnapshotComparisonRequest,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    comparison = compare_project_triage_snapshots(payload, session)
+    return PlainTextResponse(comparison.markdown_export, media_type="text/markdown")
 
 
 @router.get("/triage/snapshots/{snapshot_id}", response_model=ProjectTriageSnapshotDetail)

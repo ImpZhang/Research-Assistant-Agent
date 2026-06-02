@@ -808,6 +808,8 @@ project triage brief 需要能一键转成 task board 任务：从 next actions 
 
 系统需要提供 persisted project triage snapshot：把某一次 project triage brief 固化为可追溯 artifact，保存 summary、recommended focus、risk focus、next actions、source task ids 和 Markdown export。snapshot 需要支持创建、列表、详情和 Markdown 导出，避免“今天为什么先做这些事”的判断被后续任务状态覆盖。
 
+project triage snapshots 需要支持 comparison：输入 baseline snapshot 和 candidate snapshot，输出 readiness、quality、task、opportunity 等指标 delta，以及 recommended focus、risk focus、next actions 的 added/removed/kept 列表和 Markdown report。它用于日/周复盘和导师沟通，回答“这一轮判断相比上一轮到底变了什么”。
+
 系统需要提供 research opportunity radar：
 
 - 聚合 profile-aware ranking、idea readiness、open/blocked tasks 和 readiness blockers。

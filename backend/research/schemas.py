@@ -848,6 +848,30 @@ class ProjectTriageSnapshotDetail(ProjectTriageSnapshotRead):
     markdown_export: str = ""
 
 
+class ProjectTriageSnapshotComparisonRequest(BaseModel):
+    baseline_snapshot_id: str
+    candidate_snapshot_id: str
+
+
+class ProjectTriageSnapshotComparisonResponse(BaseModel):
+    baseline_snapshot_id: str
+    candidate_snapshot_id: str
+    baseline_title: str
+    candidate_title: str
+    metric_delta: dict[str, Any] = Field(default_factory=dict)
+    added_focus: list[str] = Field(default_factory=list)
+    removed_focus: list[str] = Field(default_factory=list)
+    kept_focus: list[str] = Field(default_factory=list)
+    added_risks: list[str] = Field(default_factory=list)
+    removed_risks: list[str] = Field(default_factory=list)
+    kept_risks: list[str] = Field(default_factory=list)
+    added_next_actions: list[str] = Field(default_factory=list)
+    removed_next_actions: list[str] = Field(default_factory=list)
+    kept_next_actions: list[str] = Field(default_factory=list)
+    summary: str
+    markdown_export: str = ""
+
+
 class ResearchBriefCreate(BaseModel):
     title: str = "Advisor Research Brief"
     scope: Literal["project", "idea_set"] = "project"

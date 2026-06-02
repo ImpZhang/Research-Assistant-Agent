@@ -1137,6 +1137,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/triage/snapshots` 将当前 triage brief 固化为 `ProjectTriageSnapshot`，保存 summary、recommended focus、risk focus、next actions、source ids 和 Markdown export。`/triage/snapshots/{snapshot_id}` 与 `/triage/snapshots/{snapshot_id}/export/markdown` 用于读取和导出历史决策，避免每日/每轮 triage 被后续任务状态覆盖。
 
+`/triage/snapshots/compare` 比较两个 saved triage snapshots，返回 metric delta、recommended focus/risk/next action 的 added/removed/kept 集合，以及 Markdown comparison report。`/triage/snapshots/compare/export/markdown` 直接返回 `text/markdown`，用于周报、导师会和 MCP/agent 复盘输入。
+
 `/opportunities/radar` 聚合 profile-aware ranking、readiness summary、open/blocked tasks 和 blockers，输出 top opportunities、risk watchlist、recommended sequence 与 Markdown report。它不是替代 ranking 或 readiness，而是把“想法是否好”和“今天该做什么”合成一个可行动视图。
 
 `/opportunities/radar/tasks` 将 radar top opportunities 的 next actions 写入 `ResearchTask`，使用 `owner_type=opportunity_radar`、`due_phase=opportunity_follow_up`，并写入 `idea_has_opportunity_radar` 与 `opportunity_radar_creates_task` 图边。它让项目级优先级不只是报告，而能进入 task board、idea progress、lineage 和后续 agent handoff。
@@ -1206,6 +1208,8 @@ GET  /research/triage/brief/export/markdown
 POST /research/triage/brief/tasks
 POST /research/triage/snapshots
 GET  /research/triage/snapshots
+POST /research/triage/snapshots/compare
+POST /research/triage/snapshots/compare/export/markdown
 GET  /research/triage/snapshots/{snapshot_id}
 GET  /research/triage/snapshots/{snapshot_id}/export/markdown
 GET  /research/opportunities/radar
