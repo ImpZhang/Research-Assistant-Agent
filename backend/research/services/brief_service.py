@@ -37,6 +37,7 @@ class ResearchBriefService:
         plan_summaries = self._load_plan_summaries([idea.id for idea in ideas])
         readiness_signals = self._load_readiness_signals([idea.id for idea in ideas])
         evidence_signals = self._load_evidence_signals([idea.id for idea in ideas])
+        claim_queue_signals = self._load_claim_queue_signals([idea.id for idea in ideas])
         triage_signals = self._load_triage_signals([idea.id for idea in ideas])
         triage_snapshot_comparison = self._load_triage_snapshot_comparison()
         summary = self._summary(
@@ -47,6 +48,7 @@ class ResearchBriefService:
             plan_summaries,
             readiness_signals,
             evidence_signals,
+            claim_queue_signals,
             triage_signals,
             triage_snapshot_comparison,
         )
@@ -68,6 +70,7 @@ class ResearchBriefService:
             plan_summaries,
             readiness_signals,
             evidence_signals,
+            claim_queue_signals,
             triage_signals,
             triage_snapshot_comparison,
         )
@@ -228,6 +231,119 @@ class ResearchBriefService:
             )
         return signals
 
+    def _load_claim_queue_signals(self, idea_ids: list[str]) -> dict:
+        if not idea_ids:
+            return {"items": [], "summary": {"item_count": 0}}
+        ledgers = (
+            self.session.query(IdeaEvidenceLedger)
+            .filter(IdeaEvidenceLedger.idea_id.in_(idea_ids))
+            .order_by(IdeaEvidenceLedger.created_at.desc())
+            .limit(200)
+            .all()
+        )
+        latest_ledger_by_idea = _first_by_idea(ledgers)
+        ledger_ids = [ledger.id for ledger in latest_ledger_by_idea.values()]
+        tasks = (
+            self.session.query(ResearchTask)
+            .filter(
+                ResearchTask.owner_type == "idea_evidence_ledger",
+                ResearchTask.owner_id.in_(ledger_ids),
+            )
+            .order_by(ResearchTask.created_at.desc())
+            .limit(300)
+            .all()
+            if ledger_ids
+            else []
+        )
+        tasks_by_ledger: dict[str, list[ResearchTask]] = {ledger_id: [] for ledger_id in ledger_ids}
+        for task in tasks:
+            tasks_by_ledger.setdefault(task.owner_id, []).append(task)
+
+        items = []
+        for idea_id in idea_ids:
+            ledger = latest_ledger_by_idea.get(idea_id)
+            if ledger is None:
+                continue
+            for claim in ledger.claims_json or []:
+                item = self._claim_queue_item(
+                    idea_id=idea_id,
+                    ledger=ledger,
+                    claim=claim,
+                    tasks=tasks_by_ledger.get(ledger.id, []),
+                )
+                items.append(item)
+        items = sorted(items, key=lambda item: (-item["urgency_score"], item["claim_id"]))[:10]
+        priorities = Counter(item["priority"] for item in items)
+        return {
+            "items": items,
+            "summary": {
+                "item_count": len(items),
+                "critical_count": priorities.get("critical", 0),
+                "high_count": priorities.get("high", 0),
+                "by_priority": dict(priorities),
+            },
+        }
+
+    def _claim_queue_item(
+        self,
+        *,
+        idea_id: str,
+        ledger: IdeaEvidenceLedger,
+        claim: dict,
+        tasks: list[ResearchTask],
+    ) -> dict:
+        claim_id = str(claim.get("claim_id") or "")
+        support_ids = claim.get("supporting_evidence_ids") or []
+        related_tasks = [
+            task
+            for task in tasks
+            if task.source_id == claim_id
+            or str((task.metadata_json or {}).get("claim_id") or "") == claim_id
+            or str(((task.metadata_json or {}).get("ledger_item") or {}).get("source_id") or "")
+            == claim_id
+        ]
+        missing_evidence = [
+            item
+            for item in ledger.missing_evidence_json or []
+            if str(item.get("source_id") or "") == claim_id
+        ]
+        if not support_ids and not missing_evidence:
+            missing_evidence = [{"gap": f"No direct evidence is linked to claim {claim_id}."}]
+        counter_count = len(claim.get("challenge_signals") or [])
+        if claim.get("support_level") in {"unsupported", "partially_supported", "challenged"}:
+            counter_count += len(ledger.counterevidence_json or [])
+        urgency_score = _claim_queue_urgency_score(
+            support_level=str(claim.get("support_level") or ""),
+            supporting_evidence_count=len(support_ids),
+            missing_evidence_count=len(missing_evidence),
+            counterevidence_count=counter_count,
+            related_task_count=len(
+                [task for task in related_tasks if task.status in {"todo", "doing", "blocked"}]
+            ),
+        )
+        priority = _claim_queue_priority(urgency_score)
+        open_tasks = [task for task in related_tasks if task.status in {"todo", "doing", "blocked"}]
+        recommended_action = (
+            f"Work linked task `{open_tasks[0].id}`: {open_tasks[0].title}"
+            if open_tasks
+            else str(claim.get("next_validation") or "Validate this claim against evidence.")
+        )
+        return {
+            "idea_id": idea_id,
+            "ledger_id": ledger.id,
+            "claim_id": claim_id,
+            "claim": str(claim.get("claim") or ""),
+            "claim_type": str(claim.get("claim_type") or ""),
+            "support_level": str(claim.get("support_level") or ""),
+            "priority": priority,
+            "urgency_score": urgency_score,
+            "supporting_evidence_count": len(support_ids),
+            "missing_evidence_count": len(missing_evidence),
+            "counterevidence_count": counter_count,
+            "related_task_count": len(related_tasks),
+            "recommended_action": recommended_action,
+        }
+
     def _load_triage_signals(self, idea_ids: list[str]) -> dict:
         triage_owner_types = {
             "project_triage",
@@ -293,6 +409,7 @@ class ResearchBriefService:
         plan_summaries: list[dict],
         readiness_signals: list[dict],
         evidence_signals: list[dict],
+        claim_queue_signals: dict,
         triage_signals: dict,
         triage_snapshot_comparison: dict,
     ) -> dict:
@@ -318,6 +435,7 @@ class ResearchBriefService:
             ),
             "readiness_signals": readiness_signals,
             "evidence_signals": evidence_signals,
+            "claim_validation_queue": claim_queue_signals,
             "triage_signals": triage_signals,
             "triage_snapshot_comparison": triage_snapshot_comparison,
         }
@@ -332,6 +450,7 @@ class ResearchBriefService:
         plan_summaries: list[dict],
         readiness_signals: list[dict],
         evidence_signals: list[dict],
+        claim_queue_signals: dict,
         triage_signals: dict,
         triage_snapshot_comparison: dict,
     ) -> str:
@@ -423,6 +542,20 @@ class ResearchBriefService:
                 )
         else:
             lines.append("- No evidence ledger signals recorded.")
+
+        lines.extend(["", "## Claim Validation Queue", ""])
+        queue_items = claim_queue_signals.get("items") or []
+        if queue_items:
+            for item in queue_items[:8]:
+                lines.append(
+                    f"- `{item['priority']}` score={item['urgency_score']} "
+                    f"idea=`{item['idea_id']}` ledger=`{item['ledger_id']}` "
+                    f"claim=`{item['claim_id']}` support=`{item['support_level']}`: "
+                    f"{item['claim']}"
+                )
+                lines.append(f"  - action: {item['recommended_action']}")
+        else:
+            lines.append("- No claim validation queue items available.")
 
         lines.extend(["", "## Triage Signals", ""])
         if triage_signals.get("task_count", 0):
@@ -530,6 +663,40 @@ class ResearchBriefService:
 
 def _join_profile_items(items: list | None) -> str:
     return ", ".join(str(item) for item in (items or [])) or "none"
+
+
+def _claim_queue_urgency_score(
+    *,
+    support_level: str,
+    supporting_evidence_count: int,
+    missing_evidence_count: int,
+    counterevidence_count: int,
+    related_task_count: int,
+) -> float:
+    base = {
+        "challenged": 0.95,
+        "unsupported": 0.9,
+        "partially_supported": 0.7,
+        "supported": 0.35,
+    }.get(support_level, 0.55)
+    score = (
+        base
+        + min(missing_evidence_count, 4) * 0.08
+        + min(counterevidence_count, 4) * 0.06
+        + min(related_task_count, 4) * 0.03
+        - min(supporting_evidence_count, 4) * 0.04
+    )
+    return round(max(0.0, min(1.0, score)), 4)
+
+
+def _claim_queue_priority(urgency_score: float) -> str:
+    if urgency_score >= 0.85:
+        return "critical"
+    if urgency_score >= 0.65:
+        return "high"
+    if urgency_score >= 0.4:
+        return "medium"
+    return "low"
 
 
 def _append_brief_change_items(lines: list[str], items: list[str]) -> None:

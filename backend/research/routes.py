@@ -270,6 +270,7 @@ def status() -> ProjectStatus:
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
+            "advisor_brief_claim_validation_context",
             "advisor_brief_triage_context",
             "advisor_brief_triage_snapshot_comparison_context",
             "tool_manifest",

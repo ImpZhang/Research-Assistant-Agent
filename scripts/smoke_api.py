@@ -219,6 +219,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include claim validation queue")
     if "advisor_brief_evidence_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief evidence context")
+    if "advisor_brief_claim_validation_context" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include advisor brief claim validation context")
     if "project_triage_brief" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project triage brief")
     if "project_triage_task_generation" not in status["implemented_capabilities"]:
@@ -1205,10 +1207,20 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("advisor brief did not include triage comparison task signals")
     if advisor_brief["summary"]["evidence_signals"][0]["ledger_id"] != evidence_ledger["id"]:
         raise RuntimeError("advisor brief did not include the latest evidence ledger signal")
+    claim_queue_summary = advisor_brief["summary"]["claim_validation_queue"]["summary"]
+    if claim_queue_summary["item_count"] < 1:
+        raise RuntimeError("advisor brief did not include claim validation queue items")
+    if not any(
+        item["ledger_id"] == evidence_ledger["id"] and item["claim_id"] == claim_id
+        for item in advisor_brief["summary"]["claim_validation_queue"]["items"]
+    ):
+        raise RuntimeError("advisor brief claim validation queue missed the smoke ledger claim")
     if "## Triage Signals" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include triage signals")
     if "## Evidence Signals" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include evidence signals")
+    if "## Claim Validation Queue" not in advisor_brief_markdown:
+        raise RuntimeError("advisor brief markdown did not include claim validation queue")
     if "## Triage Snapshot Changes" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include triage snapshot changes")
     if "## Discussion Prompts" not in advisor_brief_markdown:
@@ -1624,6 +1636,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "opportunity_radar_task_count": len(radar_tasks["tasks"]),
         "advisor_brief_id": advisor_brief["id"],
         "advisor_brief_markdown_chars": len(advisor_brief_markdown),
+        "advisor_brief_claim_queue_count": claim_queue_summary["item_count"],
         "advisor_brief_triage_snapshot_candidate": advisor_brief["summary"][
             "triage_snapshot_comparison"
         ]["candidate_snapshot_id"],

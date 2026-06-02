@@ -62,6 +62,7 @@ def test_research_status() -> None:
     assert "claim_validation_packets" in body["implemented_capabilities"]
     assert "claim_validation_queue" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
+    assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
     assert "project_triage_task_generation" in body["implemented_capabilities"]
     assert "project_triage_snapshots" in body["implemented_capabilities"]
@@ -1718,6 +1719,11 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert brief_body["summary"]["idea_count"] == 1
     assert brief_body["summary"]["evidence_signals"][0]["ledger_id"] == evidence_ledger_body["id"]
     assert brief_body["summary"]["evidence_signals"][0]["claim_count"] >= 1
+    assert brief_body["summary"]["claim_validation_queue"]["summary"]["item_count"] >= 1
+    assert any(
+        item["ledger_id"] == evidence_ledger_body["id"] and item["claim_id"] == claim_id
+        for item in brief_body["summary"]["claim_validation_queue"]["items"]
+    )
     assert brief_body["summary"]["triage_signals"]["comparison_task_count"] >= 1
     assert (
         brief_body["summary"]["triage_snapshot_comparison"]["candidate_snapshot_id"]
@@ -1725,6 +1731,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     )
     assert "# Pytest Advisor Brief" in brief_body["markdown_export"]
     assert "## Evidence Signals" in brief_body["markdown_export"]
+    assert "## Claim Validation Queue" in brief_body["markdown_export"]
     assert "## Triage Signals" in brief_body["markdown_export"]
     assert "## Triage Snapshot Changes" in brief_body["markdown_export"]
     assert "## Discussion Prompts" in brief_body["markdown_export"]
@@ -1741,6 +1748,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert brief_export.status_code == 200
     assert "## Highest Priority Open Tasks" in brief_export.text
     assert "## Evidence Signals" in brief_export.text
+    assert "## Claim Validation Queue" in brief_export.text
     assert "## Triage Snapshot Changes" in brief_export.text
 
     project_bundle = client.get("/research/export/project-bundle")
