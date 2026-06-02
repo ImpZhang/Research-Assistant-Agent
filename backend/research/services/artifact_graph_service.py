@@ -696,6 +696,40 @@ class ArtifactGraphService:
                     payload={"source": "idea_evidence_ledger"},
                 )
 
+    def link_idea_evidence_ledger_tasks(
+        self,
+        ledger: IdeaEvidenceLedger,
+        tasks: list[ResearchTask],
+    ) -> None:
+        ledger_node = self.graph.get_or_create_node(
+            node_type="idea_evidence_ledger",
+            label=f"Evidence ledger {ledger.id}",
+            canonical_key=ledger.id,
+            payload={
+                "idea_id": ledger.idea_id,
+                "coverage_score": ledger.coverage_score,
+                "summary": ledger.summary_json or {},
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=ledger_node,
+                target_node=task_node,
+                edge_type="evidence_ledger_creates_task",
+                payload={"source": "idea_evidence_ledger_follow_up"},
+            )
+
     def _evidence_nodes(self, evidence_ids: list[str]) -> dict[str, object]:
         if not evidence_ids:
             return {}

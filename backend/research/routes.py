@@ -247,6 +247,7 @@ def status() -> ProjectStatus:
             "idea_decision_task_generation",
             "idea_assumption_audits",
             "idea_evidence_ledgers",
+            "idea_evidence_task_generation",
             "claim_evidence_graph_links",
             "project_progress_overview",
             "project_triage_brief",
@@ -558,6 +559,15 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/ideas/{idea_id}/evidence-ledgers",
             output_model="list[IdeaEvidenceLedgerRead]",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_idea_evidence_ledger",
+            description="Turn evidence-ledger gaps, counterevidence, and risks into follow-up tasks.",
+            method="POST",
+            path="/research/ideas/{idea_id}/evidence-ledgers/{ledger_id}/tasks",
+            input_model="ResearchTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="refresh_idea_novelty_search",
@@ -2507,6 +2517,9 @@ def get_idea_lineage(
         session,
         [
             idea_id,
+            f"{idea_id}:readiness",
+            f"{idea_id}:quality_gate",
+            f"{idea_id}:opportunity_radar",
             *[matrix.id for matrix in matrices],
             *[draft.id for draft in drafts],
             *[review.id for review in reviews],
@@ -2593,6 +2606,7 @@ def get_idea_progress(
 
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
     latest_memo = decision_memos[0] if decision_memos else None
+    latest_ledger = evidence_ledgers[0] if evidence_ledgers else None
     analysis_tasks = [
         task
         for task in tasks
@@ -2606,6 +2620,13 @@ def get_idea_progress(
         if latest_memo
         and task.owner_type == "idea_decision_memo"
         and task.owner_id == latest_memo.id
+    ]
+    evidence_tasks = [
+        task
+        for task in tasks
+        if latest_ledger
+        and task.owner_type == "idea_evidence_ledger"
+        and task.owner_id == latest_ledger.id
     ]
     research_plan_tasks = [task for task in tasks if task.owner_type == "research_plan"]
     readiness_tasks = [task for task in tasks if task.owner_type == "idea_readiness"]
@@ -2633,6 +2654,7 @@ def get_idea_progress(
         "novelty_follow_up_tasks": len(novelty_tasks),
         "analysis_follow_up_tasks": len(analysis_tasks),
         "decision_follow_up_tasks": len(decision_tasks),
+        "evidence_follow_up_tasks": len(evidence_tasks),
         "task_board_snapshots": len(snapshots),
     }
     latest_artifacts = _progress_latest_artifacts(
@@ -2760,9 +2782,16 @@ def _progress_latest_artifacts(
         "evidence_ledger": {
             "id": latest_ledger.id,
             "coverage_score": latest_ledger.coverage_score,
+            "unsupported_claim_count": (latest_ledger.summary_json or {}).get(
+                "unsupported_claim_count", 0
+            ),
+            "counterevidence_count": (latest_ledger.summary_json or {}).get(
+                "counterevidence_count", 0
+            ),
             "missing_evidence_count": (latest_ledger.summary_json or {}).get(
                 "missing_evidence_count", 0
             ),
+            "high_risk_count": (latest_ledger.summary_json or {}).get("high_risk_count", 0),
             "decision_hint": (latest_ledger.summary_json or {}).get("decision_hint", ""),
         }
         if latest_ledger
@@ -2880,6 +2909,16 @@ def _progress_recommendation(
         return "Create an assumption audit to expose what must be true before deeper execution."
     if artifact_counts["evidence_ledgers"] == 0:
         return "Create an evidence ledger to map claims, support, counterevidence, and missing evidence."
+    latest_ledger = latest_artifacts.get("evidence_ledger") or {}
+    if latest_ledger and artifact_counts["evidence_follow_up_tasks"] == 0:
+        open_evidence_items = (
+            int(latest_ledger.get("unsupported_claim_count") or 0)
+            + int(latest_ledger.get("missing_evidence_count") or 0)
+            + int(latest_ledger.get("counterevidence_count") or 0)
+            + int(latest_ledger.get("high_risk_count") or 0)
+        )
+        if open_evidence_items:
+            return "Generate follow-up tasks from the latest evidence ledger gaps."
     if artifact_counts["proposal_revisions"] == 0:
         return "Create a proposal revision from the latest review."
     if artifact_counts["research_tasks"] == 0:
@@ -2987,6 +3026,9 @@ def get_idea_research_packet(
         session,
         [
             idea_id,
+            f"{idea_id}:readiness",
+            f"{idea_id}:quality_gate",
+            f"{idea_id}:opportunity_radar",
             *[matrix.id for matrix in matrices],
             *[draft.id for draft in drafts],
             *[review.id for review in reviews],
@@ -4858,6 +4900,32 @@ def export_idea_evidence_ledger_markdown(
     return PlainTextResponse(ledger.markdown_export or "", media_type="text/markdown")
 
 
+@router.post(
+    "/ideas/{idea_id}/evidence-ledgers/{ledger_id}/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_idea_evidence_ledger(
+    idea_id: str,
+    ledger_id: str,
+    payload: ResearchTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    ledger = IdeaEvidenceLedgerService(session).get_ledger(idea_id, ledger_id)
+    if ledger is None:
+        raise HTTPException(status_code=404, detail="Idea evidence ledger not found")
+    try:
+        tasks = ResearchTaskService(session).create_from_idea_evidence_ledger(
+            ledger.id,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} evidence follow-up tasks from ledger {ledger.id}.",
+    )
+
+
 def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str, int]:
     if not canonical_keys:
         return {}
@@ -4893,6 +4961,7 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "idea_has_evidence_ledger",
         "evidence_ledger_tracks_claim",
         "evidence_supports_claim",
+        "evidence_ledger_creates_task",
         "research_plan_creates_task",
         "idea_has_readiness_assessment",
         "idea_readiness_creates_task",

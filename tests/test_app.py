@@ -57,6 +57,7 @@ def test_research_status() -> None:
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
     assert "idea_evidence_ledgers" in body["implemented_capabilities"]
+    assert "idea_evidence_task_generation" in body["implemented_capabilities"]
     assert "claim_evidence_graph_links" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
@@ -115,6 +116,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_idea_assumption_audit" in names
     assert "create_idea_evidence_ledger" in names
     assert "list_idea_evidence_ledgers" in names
+    assert "create_tasks_from_idea_evidence_ledger" in names
     assert "refresh_idea_novelty_search" in names
     assert "create_tasks_from_idea_novelty_check" in names
     assert "create_advisor_brief" in names
@@ -373,6 +375,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "timelineButton" in response.text
     assert "projectBundleButton" in response.text
     assert "evidenceLedgerButton" in response.text
+    assert "evidenceLedgerTasksButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -420,6 +423,9 @@ def test_workbench_static_assets_are_served() -> None:
     ) in script.text
     assert "/research/ideas/${state.latestIdeaId}/assumption-audit" in script.text
     assert "/research/ideas/${state.latestIdeaId}/evidence-ledger" in script.text
+    assert (
+        "/research/ideas/${state.latestIdeaId}/evidence-ledgers/${state.latestEvidenceLedgerId}/tasks"
+    ) in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
     assert "/research/triage/brief/export/markdown" in script.text
@@ -1224,6 +1230,29 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert evidence_ledger_export.status_code == 200
     assert "## Claims" in evidence_ledger_export.text
 
+    evidence_task_generation = client.post(
+        f"/research/ideas/{idea_id}/evidence-ledgers/{evidence_ledger_body['id']}/tasks",
+        json={"created_by": "pytest"},
+    )
+    assert evidence_task_generation.status_code == 200
+    evidence_task_body = evidence_task_generation.json()
+    assert evidence_task_body["tasks"]
+    evidence_task_id = evidence_task_body["tasks"][0]["id"]
+    assert evidence_task_body["tasks"][0]["owner_type"] == "idea_evidence_ledger"
+    assert evidence_task_body["tasks"][0]["owner_id"] == evidence_ledger_body["id"]
+    assert evidence_task_body["tasks"][0]["due_phase"] == "evidence_follow_up"
+    assert "coverage_score" in evidence_task_body["tasks"][0]["metadata"]
+
+    evidence_tasks = client.get(
+        f"/research/tasks?idea_id={idea_id}&owner_type=idea_evidence_ledger"
+    )
+    assert evidence_tasks.status_code == 200
+    assert any(task["id"] == evidence_task_id for task in evidence_tasks.json())
+
+    evidence_task_events = client.get(f"/research/tasks/{evidence_task_id}/events")
+    assert evidence_task_events.status_code == 200
+    assert evidence_task_events.json()[0]["event_type"] == "created"
+
     graph_edge_types = [
         "idea_has_proposal_draft",
         "proposal_review_reviews_draft",
@@ -1241,6 +1270,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         "idea_has_evidence_ledger",
         "evidence_ledger_tracks_claim",
         "evidence_supports_claim",
+        "evidence_ledger_creates_task",
     ]
     for edge_type in graph_edge_types:
         edges = client.get(f"/research/graph/edges?edge_type={edge_type}")
@@ -1263,6 +1293,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert any(task["id"] == task_id for task in lineage_body["research_tasks"])
     assert any(task["id"] == analysis_task_id for task in lineage_body["research_tasks"])
     assert any(task["id"] == decision_task_id for task in lineage_body["research_tasks"])
+    assert any(task["id"] == evidence_task_id for task in lineage_body["research_tasks"])
     assert lineage_body["task_board_snapshots"][0]["id"] == snapshot_body["id"]
     assert lineage_body["graph_edge_summary"]["proposal_revision_creates_task"] > 0
     assert lineage_body["graph_edge_summary"]["experiment_plan_has_run"] > 0
@@ -1273,6 +1304,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert lineage_body["graph_edge_summary"]["idea_has_assumption_audit"] > 0
     assert lineage_body["graph_edge_summary"]["idea_has_evidence_ledger"] > 0
     assert lineage_body["graph_edge_summary"]["evidence_ledger_tracks_claim"] > 0
+    assert lineage_body["graph_edge_summary"]["evidence_ledger_creates_task"] > 0
     assert "# Idea Lineage:" in lineage_body["markdown_export"]
     assert "## Experiment Runs" in lineage_body["markdown_export"]
     assert "## Experiment Analyses" in lineage_body["markdown_export"]
@@ -1303,6 +1335,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert progress_body["latest_artifacts"]["evidence_ledger"]["id"] == evidence_ledger_body["id"]
     assert progress_body["artifact_counts"]["analysis_follow_up_tasks"] >= 1
     assert progress_body["artifact_counts"]["decision_follow_up_tasks"] >= 1
+    assert progress_body["artifact_counts"]["evidence_follow_up_tasks"] >= 1
     assert progress_body["task_summary"]["next_tasks"]
     assert progress_body["experiment_summary"]["latest_analysis_decision"] == "supports_hypothesis"
     assert progress_body["recommended_next_step"]
@@ -1316,8 +1349,10 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert packet_body["latest_artifacts"]["assumption_audit"]["id"] == assumption_audit_body["id"]
     assert packet_body["latest_artifacts"]["evidence_ledger"]["id"] == evidence_ledger_body["id"]
     assert any(task["id"] == decision_task_id for task in packet_body["open_tasks"])
+    assert any(task["id"] == evidence_task_id for task in packet_body["open_tasks"])
     assert "idea_has_assumption_audit" in packet_body["graph_edge_summary"]
     assert "idea_has_evidence_ledger" in packet_body["graph_edge_summary"]
+    assert "evidence_ledger_creates_task" in packet_body["graph_edge_summary"]
     assert "# Idea Research Packet:" in packet_body["markdown_export"]
     assert "## Packet Use" in packet_body["markdown_export"]
 

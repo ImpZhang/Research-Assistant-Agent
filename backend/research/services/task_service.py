@@ -4,6 +4,7 @@ from backend.research.models import (
     ExperimentAnalysis,
     Idea,
     IdeaDecisionMemo,
+    IdeaEvidenceLedger,
     NoveltyCheck,
     ProposalRevision,
     ResearchPlanSnapshot,
@@ -232,6 +233,186 @@ class ResearchTaskService:
             self.session.refresh(task)
         ArtifactGraphService(GraphService(self.session)).link_idea_decision_memo_tasks(
             memo,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
+    def create_from_idea_evidence_ledger(
+        self,
+        ledger_id: str,
+        *,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        ledger = self.session.get(IdeaEvidenceLedger, ledger_id)
+        if ledger is None:
+            raise ValueError("Idea evidence ledger not found")
+
+        tasks = []
+        for idx, claim in enumerate(ledger.claims_json or [], start=1):
+            support_level = str(claim.get("support_level") or "")
+            if support_level not in {"unsupported", "partially_supported", "challenged"}:
+                continue
+            claim_id = str(claim.get("claim_id") or f"C{idx}")
+            description = str(
+                claim.get("next_validation")
+                or claim.get("claim")
+                or "Validate this evidence-ledger claim."
+            )
+            tasks.append(
+                ResearchTask(
+                    idea_id=ledger.idea_id,
+                    owner_type="idea_evidence_ledger",
+                    owner_id=ledger.id,
+                    source_type="claim_validation",
+                    source_id=claim_id,
+                    title=self._ledger_task_title(description, idx, source_type="claim"),
+                    description=description,
+                    priority=self._ledger_task_priority(
+                        support_level,
+                        fallback="high",
+                    ),
+                    status="todo",
+                    due_phase="evidence_follow_up",
+                    metadata_json={
+                        "claim_id": claim_id,
+                        "claim_type": claim.get("claim_type", ""),
+                        "support_level": support_level,
+                        "supporting_evidence_ids": claim.get("supporting_evidence_ids") or [],
+                        "coverage_score": ledger.coverage_score,
+                    },
+                    created_by=created_by or "system",
+                )
+            )
+
+        for idx, item in enumerate(ledger.missing_evidence_json or [], start=1):
+            gap = str(item.get("gap") or "Resolve missing evidence from the ledger.")
+            tasks.append(
+                ResearchTask(
+                    idea_id=ledger.idea_id,
+                    owner_type="idea_evidence_ledger",
+                    owner_id=ledger.id,
+                    source_type="missing_evidence",
+                    source_id=str(item.get("source_id") or f"missing_evidence_{idx}"),
+                    title=self._ledger_task_title(gap, idx, source_type="missing_evidence"),
+                    description=gap,
+                    priority=self._ledger_task_priority(
+                        str(item.get("priority") or ""),
+                        fallback="high",
+                    ),
+                    status="todo",
+                    due_phase="evidence_follow_up",
+                    metadata_json={
+                        "ledger_item": item,
+                        "coverage_score": ledger.coverage_score,
+                    },
+                    created_by=created_by or "system",
+                )
+            )
+
+        for idx, item in enumerate(ledger.counterevidence_json or [], start=1):
+            signal = str(item.get("signal") or "Review counterevidence from the ledger.")
+            tasks.append(
+                ResearchTask(
+                    idea_id=ledger.idea_id,
+                    owner_type="idea_evidence_ledger",
+                    owner_id=ledger.id,
+                    source_type="counterevidence",
+                    source_id=str(item.get("source_id") or f"counterevidence_{idx}"),
+                    title=self._ledger_task_title(signal, idx, source_type="counterevidence"),
+                    description=signal,
+                    priority=self._ledger_task_priority(
+                        str(item.get("severity") or ""),
+                        fallback="medium",
+                    ),
+                    status="todo",
+                    due_phase="evidence_follow_up",
+                    metadata_json={
+                        "ledger_item": item,
+                        "coverage_score": ledger.coverage_score,
+                    },
+                    created_by=created_by or "system",
+                )
+            )
+
+        for idx, item in enumerate(ledger.risk_register_json or [], start=1):
+            risk = str(item.get("risk") or "Resolve evidence-ledger risk.")
+            tasks.append(
+                ResearchTask(
+                    idea_id=ledger.idea_id,
+                    owner_type="idea_evidence_ledger",
+                    owner_id=ledger.id,
+                    source_type="evidence_risk",
+                    source_id=f"evidence_risk_{idx}",
+                    title=self._ledger_task_title(risk, idx, source_type="risk"),
+                    description=risk,
+                    priority=self._ledger_task_priority(
+                        str(item.get("severity") or ""),
+                        fallback="medium",
+                    ),
+                    status="todo",
+                    due_phase="evidence_follow_up",
+                    metadata_json={
+                        "ledger_item": item,
+                        "coverage_score": ledger.coverage_score,
+                    },
+                    created_by=created_by or "system",
+                )
+            )
+
+        if not tasks:
+            tasks.append(
+                ResearchTask(
+                    idea_id=ledger.idea_id,
+                    owner_type="idea_evidence_ledger",
+                    owner_id=ledger.id,
+                    source_type="evidence_review",
+                    source_id="ledger_review",
+                    title="Review evidence ledger with advisor",
+                    description=(
+                        "Review the evidence ledger and decide whether the idea can advance "
+                        "to advisor discussion or needs a sharper validation pass."
+                    ),
+                    priority="medium",
+                    status="todo",
+                    due_phase="evidence_follow_up",
+                    metadata_json={
+                        "coverage_score": ledger.coverage_score,
+                        "summary": ledger.summary_json or {},
+                    },
+                    created_by=created_by or "system",
+                )
+            )
+
+        tasks = self._deduplicate_evidence_ledger_tasks(tasks)[:12]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note=f"Created from idea evidence ledger {ledger.id}.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "coverage_score": ledger.coverage_score,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_idea_evidence_ledger_tasks(
+            ledger,
             tasks,
         )
         self.session.commit()
@@ -1057,6 +1238,33 @@ class ResearchTaskService:
             return "medium"
         return "medium"
 
+    def _ledger_task_title(self, action: str, idx: int, *, source_type: str) -> str:
+        clean = " ".join(str(action).split())
+        lower = clean.lower()
+        if source_type == "claim":
+            return self._short_task_title(f"Validate ledger claim {idx}: {clean}", idx)
+        if source_type == "missing_evidence":
+            return self._short_task_title(f"Collect missing evidence {idx}: {clean}", idx)
+        if source_type == "counterevidence":
+            return self._short_task_title(f"Resolve counterevidence {idx}: {clean}", idx)
+        if source_type == "risk":
+            if "evidence gaps remain open" in lower:
+                return "Close evidence gaps"
+            return self._short_task_title(f"De-risk evidence issue {idx}: {clean}", idx)
+        return self._short_task_title(clean or f"Follow up evidence ledger item {idx}", idx)
+
+    def _ledger_task_priority(self, signal: str, *, fallback: str) -> str:
+        normalized = str(signal).lower()
+        if normalized in {"critical", "high"}:
+            return "critical" if normalized == "critical" else "high"
+        if normalized in {"unsupported", "challenged"}:
+            return "critical"
+        if normalized in {"medium", "partially_supported"}:
+            return "high"
+        if normalized == "low":
+            return "medium"
+        return fallback
+
     def _unique_commitments(self, commitments: list) -> list[str]:
         unique = []
         seen = set()
@@ -1124,6 +1332,22 @@ class ResearchTaskService:
         seen = set()
         for task in tasks:
             key = (task.idea_id or "", task.title.lower(), task.description.lower())
+            if key not in seen:
+                unique.append(task)
+                seen.add(key)
+        return unique
+
+    def _deduplicate_evidence_ledger_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
+        unique = []
+        seen = set()
+        for task in tasks:
+            key = (
+                task.idea_id or "",
+                task.owner_id,
+                task.source_type,
+                task.source_id,
+                task.description.lower(),
+            )
             if key not in seen:
                 unique.append(task)
                 seen.add(key)

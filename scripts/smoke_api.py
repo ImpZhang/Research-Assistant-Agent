@@ -209,6 +209,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea assumption audits")
     if "idea_evidence_ledgers" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea evidence ledgers")
+    if "idea_evidence_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea evidence task generation")
     if "claim_evidence_graph_links" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include claim evidence graph links")
     if "advisor_brief_evidence_context" not in status["implemented_capabilities"]:
@@ -313,6 +315,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea evidence ledger tool")
     if "list_idea_evidence_ledgers" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea evidence ledger lister")
+    if "create_tasks_from_idea_evidence_ledger" not in manifest_names:
+        raise RuntimeError("tool manifest did not include evidence ledger task tool")
     if "refresh_idea_novelty_search" not in manifest_names:
         raise RuntimeError("tool manifest did not include novelty refresh tool")
     if "create_tasks_from_idea_novelty_check" not in manifest_names:
@@ -718,6 +722,19 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea evidence ledger returned no claims")
     if "## Missing Evidence" not in evidence_ledger_markdown:
         raise RuntimeError("idea evidence ledger markdown did not include missing evidence")
+    evidence_tasks = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/evidence-ledgers/{evidence_ledger['id']}/tasks",
+            json_body={"created_by": "smoke_api"},
+        ),
+        "idea evidence ledger tasks",
+    )
+    if not evidence_tasks["tasks"]:
+        raise RuntimeError("idea evidence ledger task generation returned no tasks")
+    if evidence_tasks["tasks"][0]["owner_type"] != "idea_evidence_ledger":
+        raise RuntimeError("idea evidence ledger tasks used the wrong owner type")
+    if evidence_tasks["tasks"][0]["due_phase"] != "evidence_follow_up":
+        raise RuntimeError("idea evidence ledger tasks used the wrong due phase")
     proposal_graph_edges = require_ok(
         client.get("/research/graph/edges?edge_type=proposal_revision_creates_task"),
         "proposal task graph edges",
@@ -736,6 +753,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not claim_graph_edges:
         raise RuntimeError("evidence ledger claim graph edges were not created")
+    ledger_task_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=evidence_ledger_creates_task"),
+        "evidence ledger task graph edges",
+    )
+    if not ledger_task_edges:
+        raise RuntimeError("evidence ledger task graph edges were not created")
     lineage = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/lineage"),
         "idea lineage",
@@ -748,10 +771,13 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea lineage markdown did not include experiment analysis")
     if decision_memo["id"] not in lineage["markdown_export"]:
         raise RuntimeError("idea lineage markdown did not include decision memo")
-    if analysis_tasks["tasks"][0]["id"] not in lineage["markdown_export"]:
-        raise RuntimeError("idea lineage markdown did not include experiment analysis task")
-    if decision_tasks["tasks"][0]["id"] not in lineage["markdown_export"]:
-        raise RuntimeError("idea lineage markdown did not include decision memo task")
+    lineage_task_ids = {task["id"] for task in lineage["research_tasks"]}
+    if analysis_tasks["tasks"][0]["id"] not in lineage_task_ids:
+        raise RuntimeError("idea lineage did not include experiment analysis task")
+    if decision_tasks["tasks"][0]["id"] not in lineage_task_ids:
+        raise RuntimeError("idea lineage did not include decision memo task")
+    if evidence_tasks["tasks"][0]["id"] not in lineage_task_ids:
+        raise RuntimeError("idea lineage did not include evidence ledger task")
     if assumption_audit["id"] not in lineage["markdown_export"]:
         raise RuntimeError("idea lineage markdown did not include assumption audit")
     if evidence_ledger["id"] not in lineage["markdown_export"]:
@@ -770,6 +796,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea progress did not count assumption audits")
     if progress["artifact_counts"]["evidence_ledgers"] < 1:
         raise RuntimeError("idea progress did not count evidence ledgers")
+    if progress["artifact_counts"]["evidence_follow_up_tasks"] < 1:
+        raise RuntimeError("idea progress did not count evidence follow-up tasks")
     if progress["latest_artifacts"]["evidence_ledger"]["id"] != evidence_ledger["id"]:
         raise RuntimeError("idea progress did not expose latest evidence ledger")
     if "Idea Progress" not in progress["markdown_export"]:
@@ -784,6 +812,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea research packet markdown did not include assumption audit")
     if evidence_ledger["id"] not in research_packet["markdown_export"]:
         raise RuntimeError("idea research packet markdown did not include evidence ledger")
+    if evidence_tasks["tasks"][0]["id"] not in research_packet["markdown_export"]:
+        raise RuntimeError("idea research packet markdown did not include evidence ledger task")
     timeline = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/timeline"),
         "idea timeline",
@@ -1506,7 +1536,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "evidence_ledger_claim_count": len(evidence_ledger["claims"]),
         "evidence_ledger_coverage_score": evidence_ledger["coverage_score"],
         "evidence_ledger_markdown_chars": len(evidence_ledger_markdown),
+        "evidence_ledger_task_count": len(evidence_tasks["tasks"]),
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
+        "evidence_ledger_task_graph_edge_count": len(ledger_task_edges),
         "lineage_task_count": len(lineage["research_tasks"]),
         "lineage_graph_edge_types": len(lineage["graph_edge_summary"]),
         "progress_open_task_count": progress["artifact_counts"]["open_tasks"],

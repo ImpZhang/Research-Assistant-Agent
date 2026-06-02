@@ -990,6 +990,31 @@ async function createEvidenceLedger() {
   }
 }
 
+async function createEvidenceLedgerTasks() {
+  if (!state.latestIdeaId || !state.latestEvidenceLedgerId) {
+    renderResult("workflowResult", "Create an evidence ledger first.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Creating evidence follow-up tasks...", "warn");
+  try {
+    const body = await api(
+      `/research/ideas/${state.latestIdeaId}/evidence-ledgers/${state.latestEvidenceLedgerId}/tasks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ created_by: "workbench" }),
+      },
+    );
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Ledger tasks", body.tasks.slice(0, 8), (task) => `${task.priority} ${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadIdeaLineage() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -1603,6 +1628,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("decisionMemoTasksButton").addEventListener("click", createDecisionMemoTasks);
   $("assumptionAuditButton").addEventListener("click", createAssumptionAudit);
   $("evidenceLedgerButton").addEventListener("click", createEvidenceLedger);
+  $("evidenceLedgerTasksButton").addEventListener("click", createEvidenceLedgerTasks);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("timelineButton").addEventListener("click", loadIdeaTimeline);
   $("progressButton").addEventListener("click", loadIdeaProgress);

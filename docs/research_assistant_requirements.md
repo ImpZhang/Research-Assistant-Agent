@@ -737,6 +737,7 @@ idea 需要支持 evidence ledger：
 - 自动汇总 novelty collision signals、proposal review concerns、experiment analysis concerns、related-work missing searches 和 assumption audit 高风险项，形成 counterevidence、missing evidence 与 risk register。
 - 输出 coverage score、decision hint、Markdown export，并进入 idea lineage、progress、research packet、idea bundle 和 advisor brief。
 - 在 GraphRAG-lite 中写入 `idea_has_evidence_ledger`、`evidence_ledger_tracks_claim`、`evidence_supports_claim` 边，方便后续 MCP/agent 查询“某个科研主张由哪些证据支撑”。
+- evidence ledger 的 missing evidence、counterevidence、risk register 和未充分支持的 claim 需要能一键转成 `owner_type=idea_evidence_ledger`、`due_phase=evidence_follow_up` 的 research tasks，并通过 `evidence_ledger_creates_task` 图边连接。
 
 proposal、review、revision、experiment run、experiment analysis、task 和 task snapshot 都需要进入 GraphRAG-lite：
 
@@ -753,6 +754,7 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - idea 可以追踪到 assumption audit。
 - idea 可以追踪到 evidence ledger。
 - evidence ledger 可以追踪到 claim，evidence 可以追踪到它支持的 claim。
+- evidence ledger 可以追踪到它生成的 follow-up tasks。
 - task snapshot 可以追踪到当时的任务集合。
 
 系统需要提供 idea lineage：
