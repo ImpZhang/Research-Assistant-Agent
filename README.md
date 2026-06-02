@@ -218,6 +218,7 @@ PUT  /research/profile
 GET  /research/profile/export/markdown
 GET  /research/progress/overview
 GET  /research/triage/brief
+GET  /research/triage/brief/export/markdown
 POST /research/triage/brief/tasks
 GET  /research/opportunities/radar
 POST /research/opportunities/radar/tasks

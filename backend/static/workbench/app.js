@@ -1169,6 +1169,17 @@ async function loadProjectTriageBrief() {
   }
 }
 
+async function loadProjectTriageMarkdown() {
+  renderResult("workflowResult", "Exporting project triage Markdown...", "warn");
+  try {
+    const markdown = await api("/research/triage/brief/export/markdown");
+    $("dossierPreview").textContent = markdown;
+    renderResult("workflowResult", "Loaded project triage Markdown export.");
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function createProjectTriageTasks() {
   renderResult("workflowResult", "Creating project triage tasks...", "warn");
   try {
@@ -1500,6 +1511,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("readinessTasksButton").addEventListener("click", createReadinessTasks);
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("triageBriefButton").addEventListener("click", loadProjectTriageBrief);
+  $("triageMarkdownButton").addEventListener("click", loadProjectTriageMarkdown);
   $("triageTasksButton").addEventListener("click", createProjectTriageTasks);
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
   $("qualityOverviewButton").addEventListener("click", loadProjectQualityOverview);

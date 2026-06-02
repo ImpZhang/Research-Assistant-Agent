@@ -1115,6 +1115,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/triage/brief` 组合 `/progress/overview`、`/readiness/overview`、`/quality/overview` 和 `/opportunities/radar`，输出 recommended focus、risk focus、next actions 与 Markdown brief。它是更高层的“科研驾驶舱”入口：外部 agent 不需要自己拼多个 endpoint，就能拿到今天该推进什么、卡在哪里、下一步怎么做的压缩上下文。
 
+`/triage/brief/export/markdown` 返回同一份 project triage brief 的 `text/markdown` 表示，方便导师会、纯文本备份和只消费 Markdown 的 MCP/agent 工具使用。
+
 `/triage/brief/tasks` 将 triage brief 的 next actions 和 risk focus 写入 `ResearchTask`，使用 `owner_type=project_triage`、`due_phase=triage_follow_up`，并写入 `project_triage_creates_task` 图边。它面向每日/每轮执行：triage brief 负责判断，task endpoint 负责让判断进入任务队列。
 
 `/opportunities/radar` 聚合 profile-aware ranking、readiness summary、open/blocked tasks 和 blockers，输出 top opportunities、risk watchlist、recommended sequence 与 Markdown report。它不是替代 ranking 或 readiness，而是把“想法是否好”和“今天该做什么”合成一个可行动视图。
@@ -1182,6 +1184,7 @@ GET  /research/quality/overview
 POST /research/quality/overview/tasks
 GET  /research/progress/overview
 GET  /research/triage/brief
+GET  /research/triage/brief/export/markdown
 POST /research/triage/brief/tasks
 GET  /research/opportunities/radar
 POST /research/opportunities/radar/tasks

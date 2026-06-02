@@ -228,6 +228,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project progress overview tool")
     if "get_project_triage_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage brief tool")
+    if "export_project_triage_brief_markdown" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project triage brief markdown export")
     if "create_tasks_from_project_triage_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage task tool")
     if "retry_job" not in manifest_names:
@@ -849,6 +851,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project triage brief did not include next actions")
     if "Project Triage Brief" not in triage_brief["markdown_export"]:
         raise RuntimeError("project triage brief markdown did not include title")
+    triage_markdown = require_ok(
+        client.get("/research/triage/brief/export/markdown"),
+        "project triage brief markdown export",
+    )
+    if "Project Triage Brief" not in triage_markdown:
+        raise RuntimeError("project triage brief markdown export did not include title")
     triage_tasks = require_ok(
         client.post(
             "/research/triage/brief/tasks",
@@ -1288,6 +1296,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "quality_overview_idea_count": quality_overview["idea_count"],
         "quality_overview_average": quality_overview["average_gate_score"],
         "triage_next_action_count": len(triage_brief["next_actions"]),
+        "triage_markdown_chars": len(triage_markdown),
         "triage_task_count": len(triage_tasks["tasks"]),
         "project_quality_task_count": len(project_quality_tasks["tasks"]),
         "readiness_task_count": len(readiness_tasks["tasks"]),

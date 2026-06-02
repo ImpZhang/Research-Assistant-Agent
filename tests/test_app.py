@@ -77,6 +77,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_research_plan_progress" in names
     assert "get_project_progress_overview" in names
     assert "get_project_triage_brief" in names
+    assert "export_project_triage_brief_markdown" in names
     assert "create_tasks_from_project_triage_brief" in names
     assert "get_mcp_tool_spec" in names
     assert "get_idea_research_packet" in names
@@ -401,6 +402,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/assumption-audit" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
+    assert "/research/triage/brief/export/markdown" in script.text
     assert "/research/triage/brief/tasks" in script.text
     assert "/research/readiness/overview" in script.text
     assert "/research/quality/overview" in script.text
@@ -1300,6 +1302,11 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert triage_body["idea_count"] >= 1
     assert triage_body["next_actions"]
     assert "# Project Triage Brief" in triage_body["markdown_export"]
+
+    triage_markdown = client.get("/research/triage/brief/export/markdown")
+    assert triage_markdown.status_code == 200
+    assert "text/markdown" in triage_markdown.headers["content-type"]
+    assert "# Project Triage Brief" in triage_markdown.text
 
     triage_tasks = client.post(
         "/research/triage/brief/tasks",

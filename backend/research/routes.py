@@ -556,6 +556,13 @@ def tool_manifest() -> ToolManifestResponse:
             output_model="ProjectTriageBriefResponse",
         ),
         ToolManifestItem(
+            name="export_project_triage_brief_markdown",
+            description="Export the latest project triage brief as text/markdown.",
+            method="GET",
+            path="/research/triage/brief/export/markdown",
+            output_model="text/markdown",
+        ),
+        ToolManifestItem(
             name="create_tasks_from_project_triage_brief",
             description="Turn project triage brief next actions and risks into project-level task-board tasks.",
             method="POST",
@@ -934,6 +941,23 @@ def get_project_triage_brief(
             "quality gates, and opportunity radar."
         ),
     )
+
+
+@router.get(
+    "/triage/brief/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_triage_brief_markdown(
+    idea_limit: int = 50,
+    opportunity_limit: int = 8,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    triage = get_project_triage_brief(
+        idea_limit=idea_limit,
+        opportunity_limit=opportunity_limit,
+        session=session,
+    )
+    return PlainTextResponse(triage.markdown_export, media_type="text/markdown")
 
 
 @router.post("/triage/brief/tasks", response_model=ResearchTaskGenerationResponse)
