@@ -12,6 +12,7 @@ const state = {
   latestNoveltyCheckId: "",
   latestDecisionMemoId: "",
   latestAssumptionAuditId: "",
+  latestEvidenceLedgerId: "",
   latestTaskIds: [],
   taskBoardItems: [],
   latestTaskSnapshotId: "",
@@ -499,6 +500,7 @@ async function refineLatestIdea() {
     state.latestProposalReviewId = "";
     state.latestProposalRevisionId = "";
     state.latestNoveltyCheckId = "";
+    state.latestEvidenceLedgerId = "";
     state.latestTaskIds = [];
     state.latestTaskSnapshotId = "";
     renderResult(
@@ -959,6 +961,29 @@ async function createAssumptionAudit() {
     renderResult(
       "workflowResult",
       `Created assumption audit <code>${escapeHtml(body.id)}</code> with ${body.assumptions.length} assumptions.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createEvidenceLedger() {
+  if (!state.latestIdeaId) {
+    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    return;
+  }
+  renderResult("workflowResult", "Building claim-level evidence ledger...", "warn");
+  try {
+    const body = await api(`/research/ideas/${state.latestIdeaId}/evidence-ledger`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ created_by: "workbench" }),
+    });
+    state.latestEvidenceLedgerId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Created evidence ledger <code>${escapeHtml(body.id)}</code> with ${body.claims.length} claims, coverage ${body.coverage_score}.`,
     );
   } catch (error) {
     renderResult("workflowResult", escapeHtml(error.message), "error");
@@ -1577,6 +1602,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("decisionMemoButton").addEventListener("click", createDecisionMemo);
   $("decisionMemoTasksButton").addEventListener("click", createDecisionMemoTasks);
   $("assumptionAuditButton").addEventListener("click", createAssumptionAudit);
+  $("evidenceLedgerButton").addEventListener("click", createEvidenceLedger);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("timelineButton").addEventListener("click", loadIdeaTimeline);
   $("progressButton").addEventListener("click", loadIdeaProgress);

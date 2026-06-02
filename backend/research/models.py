@@ -308,6 +308,24 @@ class IdeaAssumptionAudit(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="system")
 
 
+class IdeaEvidenceLedger(Base, TimestampMixin):
+    __tablename__ = "idea_evidence_ledgers"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    idea_id: Mapped[str] = mapped_column(ForeignKey("ideas.id"), index=True)
+    status: Mapped[str] = mapped_column(String(64), default="completed", index=True)
+    claims_json: Mapped[list] = mapped_column(JSON, default=list)
+    evidence_links_json: Mapped[list] = mapped_column(JSON, default=list)
+    counterevidence_json: Mapped[list] = mapped_column(JSON, default=list)
+    missing_evidence_json: Mapped[list] = mapped_column(JSON, default=list)
+    risk_register_json: Mapped[list] = mapped_column(JSON, default=list)
+    source_artifacts_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    summary_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    coverage_score: Mapped[float] = mapped_column(Float, default=0.0)
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="system")
+
+
 class RelatedWorkMatrix(Base, TimestampMixin):
     __tablename__ = "related_work_matrices"
 

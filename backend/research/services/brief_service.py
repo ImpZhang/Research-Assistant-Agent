@@ -6,6 +6,7 @@ from backend.research.models import (
     ExperimentAnalysis,
     Idea,
     IdeaDecisionMemo,
+    IdeaEvidenceLedger,
     ProposalReview,
     ResearchBrief,
     ResearchPlanSnapshot,
@@ -35,6 +36,7 @@ class ResearchBriefService:
         analyses = self._load_analyses([idea.id for idea in ideas])
         plan_summaries = self._load_plan_summaries([idea.id for idea in ideas])
         readiness_signals = self._load_readiness_signals([idea.id for idea in ideas])
+        evidence_signals = self._load_evidence_signals([idea.id for idea in ideas])
         triage_signals = self._load_triage_signals([idea.id for idea in ideas])
         triage_snapshot_comparison = self._load_triage_snapshot_comparison()
         summary = self._summary(
@@ -44,6 +46,7 @@ class ResearchBriefService:
             profile,
             plan_summaries,
             readiness_signals,
+            evidence_signals,
             triage_signals,
             triage_snapshot_comparison,
         )
@@ -64,6 +67,7 @@ class ResearchBriefService:
             profile,
             plan_summaries,
             readiness_signals,
+            evidence_signals,
             triage_signals,
             triage_snapshot_comparison,
         )
@@ -195,6 +199,35 @@ class ResearchBriefService:
             )
         return signals
 
+    def _load_evidence_signals(self, idea_ids: list[str]) -> list[dict]:
+        if not idea_ids:
+            return []
+        ledgers = (
+            self.session.query(IdeaEvidenceLedger)
+            .filter(IdeaEvidenceLedger.idea_id.in_(idea_ids))
+            .order_by(IdeaEvidenceLedger.created_at.desc())
+            .limit(200)
+            .all()
+        )
+        latest_ledger_by_idea = _first_by_idea(ledgers)
+        signals = []
+        for idea_id in idea_ids:
+            ledger = latest_ledger_by_idea.get(idea_id)
+            summary = (ledger.summary_json or {}) if ledger else {}
+            signals.append(
+                {
+                    "idea_id": idea_id,
+                    "ledger_id": ledger.id if ledger else "",
+                    "coverage_score": ledger.coverage_score if ledger else 0.0,
+                    "decision_hint": summary.get("decision_hint", ""),
+                    "claim_count": summary.get("claim_count", 0),
+                    "unsupported_claim_count": summary.get("unsupported_claim_count", 0),
+                    "missing_evidence_count": summary.get("missing_evidence_count", 0),
+                    "high_risk_count": summary.get("high_risk_count", 0),
+                }
+            )
+        return signals
+
     def _load_triage_signals(self, idea_ids: list[str]) -> dict:
         triage_owner_types = {
             "project_triage",
@@ -259,6 +292,7 @@ class ResearchBriefService:
         profile: ResearchProfile | None,
         plan_summaries: list[dict],
         readiness_signals: list[dict],
+        evidence_signals: list[dict],
         triage_signals: dict,
         triage_snapshot_comparison: dict,
     ) -> dict:
@@ -283,6 +317,7 @@ class ResearchBriefService:
                 item.get("blocked_task_count", 0) for item in plan_summaries
             ),
             "readiness_signals": readiness_signals,
+            "evidence_signals": evidence_signals,
             "triage_signals": triage_signals,
             "triage_snapshot_comparison": triage_snapshot_comparison,
         }
@@ -296,6 +331,7 @@ class ResearchBriefService:
         profile: ResearchProfile | None,
         plan_summaries: list[dict],
         readiness_signals: list[dict],
+        evidence_signals: list[dict],
         triage_signals: dict,
         triage_snapshot_comparison: dict,
     ) -> str:
@@ -373,6 +409,20 @@ class ResearchBriefService:
                 )
         else:
             lines.append("- No readiness signals recorded.")
+
+        lines.extend(["", "## Evidence Signals", ""])
+        if evidence_signals:
+            for signal in evidence_signals:
+                lines.append(
+                    f"- idea=`{signal['idea_id']}` ledger=`{signal['ledger_id'] or 'none'}` "
+                    f"coverage={signal['coverage_score']:.2f} "
+                    f"hint=`{signal['decision_hint'] or 'none'}` "
+                    f"unsupported={signal['unsupported_claim_count']} "
+                    f"missing={signal['missing_evidence_count']} "
+                    f"high_risk={signal['high_risk_count']}"
+                )
+        else:
+            lines.append("- No evidence ledger signals recorded.")
 
         lines.extend(["", "## Triage Signals", ""])
         if triage_signals.get("task_count", 0):

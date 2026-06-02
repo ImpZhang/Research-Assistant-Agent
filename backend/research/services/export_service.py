@@ -6,6 +6,7 @@ from backend.research.models import (
     Evidence,
     ExperimentPlan,
     Idea,
+    IdeaEvidenceLedger,
     NoveltyCheck,
     Paper,
     PaperCard,
@@ -85,6 +86,7 @@ class ExportService:
         reviews = self._load_reviews(idea.id)
         novelty_checks = self._load_novelty_checks(idea.id)
         plans = self._load_experiment_plans(idea.id)
+        ledgers = self._load_evidence_ledgers(idea.id)
 
         lines = [
             f"# Research Idea Dossier: {self._clean(idea.title)}",
@@ -129,6 +131,7 @@ class ExportService:
         lines.extend(self._render_score(idea.score_json or {}))
         lines.extend(self._render_gaps(gaps))
         lines.extend(self._render_evidence(evidence))
+        lines.extend(self._render_evidence_ledgers(ledgers))
         lines.extend(self._render_novelty_checks(novelty_checks))
         lines.extend(self._render_reviews(reviews))
         lines.extend(self._render_experiment_plans(plans))
@@ -176,6 +179,15 @@ class ExportService:
             self.session.query(ExperimentPlan)
             .filter(ExperimentPlan.idea_id == idea_id)
             .order_by(ExperimentPlan.created_at.desc())
+            .all()
+        )
+
+    def _load_evidence_ledgers(self, idea_id: str) -> list[IdeaEvidenceLedger]:
+        return (
+            self.session.query(IdeaEvidenceLedger)
+            .filter(IdeaEvidenceLedger.idea_id == idea_id)
+            .order_by(IdeaEvidenceLedger.created_at.desc())
+            .limit(5)
             .all()
         )
 
@@ -272,6 +284,39 @@ class ExportService:
                     self._clean(item.summary or item.text),
                 ]
             )
+        return lines
+
+    def _render_evidence_ledgers(self, ledgers: list[IdeaEvidenceLedger]) -> list[str]:
+        lines = ["", "## Evidence Ledger", ""]
+        if not ledgers:
+            return lines + ["No claim-level evidence ledger has been generated."]
+
+        latest = ledgers[0]
+        summary = latest.summary_json or {}
+        lines.extend(
+            [
+                f"- Ledger ID: `{latest.id}`",
+                f"- Coverage Score: {latest.coverage_score}",
+                f"- Decision Hint: `{summary.get('decision_hint', '')}`",
+                f"- Claims: {summary.get('claim_count', 0)}",
+                f"- Unsupported Claims: {summary.get('unsupported_claim_count', 0)}",
+                f"- Missing Evidence: {summary.get('missing_evidence_count', 0)}",
+                "",
+                "### Claims",
+                "",
+            ]
+        )
+        for claim in (latest.claims_json or [])[:6]:
+            lines.append(
+                f"- `{claim.get('claim_id', '')}` `{claim.get('support_level', '')}` "
+                f"{self._clean(str(claim.get('claim', '')))}"
+            )
+        lines.extend(["", "### Missing Evidence", ""])
+        missing = latest.missing_evidence_json or []
+        if missing:
+            lines.extend(f"- {item.get('gap', '')}" for item in missing[:8])
+        else:
+            lines.append("- none")
         return lines
 
     def _render_novelty_checks(self, novelty_checks: list[NoveltyCheck]) -> list[str]:

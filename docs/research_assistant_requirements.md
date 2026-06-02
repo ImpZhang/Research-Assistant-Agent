@@ -730,6 +730,14 @@ idea 需要支持 assumption audit：
 - 至少覆盖 core hypothesis、novelty differentiation、evidence sufficiency、evaluation validity 和 resource feasibility。
 - 支持 Markdown 导出，并进入 GraphRAG-lite，避免“这个方向必须满足什么条件才值得继续”停留在隐含判断里。
 
+idea 需要支持 evidence ledger：
+
+- 将 core hypothesis、novelty argument、expected contribution、proposal draft sections 等压成 claim-level ledger。
+- 自动连接 idea 已挂载的 evidence ids，并标注每个 claim 的 support level、supporting evidence ids 和 next validation。
+- 自动汇总 novelty collision signals、proposal review concerns、experiment analysis concerns、related-work missing searches 和 assumption audit 高风险项，形成 counterevidence、missing evidence 与 risk register。
+- 输出 coverage score、decision hint、Markdown export，并进入 idea lineage、progress、research packet、idea bundle 和 advisor brief。
+- 在 GraphRAG-lite 中写入 `idea_has_evidence_ledger`、`evidence_ledger_tracks_claim`、`evidence_supports_claim` 边，方便后续 MCP/agent 查询“某个科研主张由哪些证据支撑”。
+
 proposal、review、revision、experiment run、experiment analysis、task 和 task snapshot 都需要进入 GraphRAG-lite：
 
 - idea 可以追踪到 proposal draft。
@@ -743,11 +751,13 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 - idea 可以追踪到 decision memo。
 - decision memo 可以追踪到它生成的 follow-up tasks。
 - idea 可以追踪到 assumption audit。
+- idea 可以追踪到 evidence ledger。
+- evidence ledger 可以追踪到 claim，evidence 可以追踪到它支持的 claim。
 - task snapshot 可以追踪到当时的任务集合。
 
 系统需要提供 idea lineage：
 
-- 一次性返回 idea 的 related work、proposal、review、revision、experiment run、experiment analysis、decision memo、assumption audit、task、snapshot。
+- 一次性返回 idea 的 related work、proposal、review、revision、experiment run、experiment analysis、decision memo、assumption audit、evidence ledger、task、snapshot。
 - 返回 graph edge summary，说明研究对象之间的演化关系。
 - 支持 Markdown 导出，用于科研日志、导师沟通和 MCP 上下文。
 
@@ -760,18 +770,18 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 系统需要提供 idea research packet：
 
 - 聚合 latest artifacts、open tasks、graph edge summary 和 Markdown context。
-- 必须包含 latest decision memo 与 assumption audit 的摘要入口。
+- 必须包含 latest decision memo、assumption audit 与 evidence ledger 的摘要入口。
 - 用于导师讨论、MCP tool 或外部 planner 的第一段上下文，而不是让调用方自己拼多个端点。
 
 系统需要提供 idea readiness scoring：
 
-- 综合 evidence、novelty、proposal review、experiment analysis、decision memo、assumption audit 和 task health。
+- 综合 evidence、novelty、proposal review、experiment analysis、decision memo、assumption audit、evidence ledger 和 task health。
 - 输出总分、决策标签、score breakdown、blockers 和 Markdown report。
 - 用于判断一个 idea 是否 ready_for_execution，还是需要 targeted work、park 或 reject。
 
 系统需要提供 idea quality gate：
 
-- 综合 novelty refresh、readiness、proposal review、experiment analysis、decision memo、assumption audit 和 task health。
+- 综合 novelty refresh、readiness、proposal review、experiment analysis、decision memo、assumption audit、evidence ledger 和 task health。
 - 输出 gate score、advance/revise/de-risk/park/reject 决策、required evidence、blocking risks、recommended actions 和 Markdown report。
 - 用于回答“这个 idea 现在是否值得继续投入实验/写作资源”，比 readiness 更接近 go/no-go 决策。
 
@@ -830,13 +840,13 @@ novelty check 需要能一键转成 task board 任务：把 recommended actions 
 
 Workbench 需要提供最小可用 task board：能按当前 idea 和状态读取任务，选择任务，并把任务更新为 doing、done 或 blocked。所有操作必须走同一套 `/research/tasks` API，避免前端维护第二份任务状态。
 
-系统需要提供 idea activity timeline：按时间聚合 proposal、experiment、decision、assumption audit、research plan 和 task event，返回结构化 events 与 Markdown 日志，用于导师汇报、handoff 和后续 agent 接手时快速理解一个 idea 的历史。
+系统需要提供 idea activity timeline：按时间聚合 proposal、experiment、decision、assumption audit、evidence ledger、research plan 和 task event，返回结构化 events 与 Markdown 日志，用于导师汇报、handoff 和后续 agent 接手时快速理解一个 idea 的历史。
 
 系统需要提供 advisor brief：
 
 - 将选定 idea 或项目级状态固化成 Markdown brief。
 - brief 需要包含 idea 列表、最近实验判断、高优先级开放任务和 discussion prompts。
-- brief 需要包含相关 research execution plans、plan task progress、readiness signals、triage signals 和 latest triage snapshot comparison。
+- brief 需要包含相关 research execution plans、plan task progress、readiness signals、evidence ledger signals、triage signals 和 latest triage snapshot comparison。
 - brief 需要持久化，避免组会/导师沟通时报告内容被后续任务状态改变。
 
 ### 6.5.4 Idea 输出模板

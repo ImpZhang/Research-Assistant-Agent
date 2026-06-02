@@ -56,6 +56,9 @@ def test_research_status() -> None:
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
+    assert "idea_evidence_ledgers" in body["implemented_capabilities"]
+    assert "claim_evidence_graph_links" in body["implemented_capabilities"]
+    assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
     assert "project_triage_task_generation" in body["implemented_capabilities"]
     assert "project_triage_snapshots" in body["implemented_capabilities"]
@@ -110,6 +113,8 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_idea_decision_memo" in names
     assert "create_tasks_from_idea_decision_memo" in names
     assert "create_idea_assumption_audit" in names
+    assert "create_idea_evidence_ledger" in names
+    assert "list_idea_evidence_ledgers" in names
     assert "refresh_idea_novelty_search" in names
     assert "create_tasks_from_idea_novelty_check" in names
     assert "create_advisor_brief" in names
@@ -367,6 +372,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "taskSelect" in response.text
     assert "timelineButton" in response.text
     assert "projectBundleButton" in response.text
+    assert "evidenceLedgerButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -413,6 +419,7 @@ def test_workbench_static_assets_are_served() -> None:
         "/research/ideas/${state.latestIdeaId}/decision-memos/${state.latestDecisionMemoId}/tasks"
     ) in script.text
     assert "/research/ideas/${state.latestIdeaId}/assumption-audit" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/evidence-ledger" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
     assert "/research/triage/brief/export/markdown" in script.text
@@ -1186,6 +1193,37 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert assumption_audit_export.status_code == 200
     assert "## Assumptions" in assumption_audit_export.text
 
+    evidence_ledger = client.post(
+        f"/research/ideas/{idea_id}/evidence-ledger",
+        json={"created_by": "pytest"},
+    )
+    assert evidence_ledger.status_code == 200
+    evidence_ledger_body = evidence_ledger.json()
+    assert evidence_ledger_body["idea_id"] == idea_id
+    assert evidence_ledger_body["claims"]
+    assert evidence_ledger_body["summary"]["claim_count"] >= 1
+    assert evidence_ledger_body["coverage_score"] >= 0
+    assert "# Evidence Ledger:" in evidence_ledger_body["markdown_export"]
+
+    evidence_ledgers = client.get(f"/research/ideas/{idea_id}/evidence-ledgers")
+    assert evidence_ledgers.status_code == 200
+    assert evidence_ledgers.json()[0]["id"] == evidence_ledger_body["id"]
+
+    fetched_ledger = client.get(
+        f"/research/ideas/{idea_id}/evidence-ledgers/{evidence_ledger_body['id']}"
+    )
+    assert fetched_ledger.status_code == 200
+    assert (
+        fetched_ledger.json()["summary"]["claim_count"]
+        == evidence_ledger_body["summary"]["claim_count"]
+    )
+
+    evidence_ledger_export = client.get(
+        f"/research/ideas/{idea_id}/evidence-ledgers/{evidence_ledger_body['id']}/export/markdown"
+    )
+    assert evidence_ledger_export.status_code == 200
+    assert "## Claims" in evidence_ledger_export.text
+
     graph_edge_types = [
         "idea_has_proposal_draft",
         "proposal_review_reviews_draft",
@@ -1200,6 +1238,9 @@ Future work should preserve proposal drafts as reviewable artifacts.
         "idea_has_decision_memo",
         "decision_memo_creates_task",
         "idea_has_assumption_audit",
+        "idea_has_evidence_ledger",
+        "evidence_ledger_tracks_claim",
+        "evidence_supports_claim",
     ]
     for edge_type in graph_edge_types:
         edges = client.get(f"/research/graph/edges?edge_type={edge_type}")
@@ -1218,6 +1259,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert lineage_body["experiment_analyses"][0]["id"] == analysis_body["id"]
     assert lineage_body["decision_memos"][0]["id"] == decision_memo_body["id"]
     assert lineage_body["assumption_audits"][0]["id"] == assumption_audit_body["id"]
+    assert lineage_body["evidence_ledgers"][0]["id"] == evidence_ledger_body["id"]
     assert any(task["id"] == task_id for task in lineage_body["research_tasks"])
     assert any(task["id"] == analysis_task_id for task in lineage_body["research_tasks"])
     assert any(task["id"] == decision_task_id for task in lineage_body["research_tasks"])
@@ -1229,11 +1271,14 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert lineage_body["graph_edge_summary"]["idea_has_decision_memo"] > 0
     assert lineage_body["graph_edge_summary"]["decision_memo_creates_task"] > 0
     assert lineage_body["graph_edge_summary"]["idea_has_assumption_audit"] > 0
+    assert lineage_body["graph_edge_summary"]["idea_has_evidence_ledger"] > 0
+    assert lineage_body["graph_edge_summary"]["evidence_ledger_tracks_claim"] > 0
     assert "# Idea Lineage:" in lineage_body["markdown_export"]
     assert "## Experiment Runs" in lineage_body["markdown_export"]
     assert "## Experiment Analyses" in lineage_body["markdown_export"]
     assert "## Decision Memos" in lineage_body["markdown_export"]
     assert "## Assumption Audits" in lineage_body["markdown_export"]
+    assert "## Evidence Ledgers" in lineage_body["markdown_export"]
 
     timeline = client.get(f"/research/ideas/{idea_id}/timeline")
     assert timeline.status_code == 200
@@ -1243,6 +1288,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "idea_created" in event_types
     assert "experiment_analysis_created" in event_types
     assert "decision_memo_created" in event_types
+    assert "evidence_ledger_created" in event_types
     assert "# Idea Timeline:" in timeline_body["markdown_export"]
 
     progress = client.get(f"/research/ideas/{idea_id}/progress")
@@ -1253,6 +1299,8 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert progress_body["artifact_counts"]["experiment_analyses"] >= 1
     assert progress_body["artifact_counts"]["decision_memos"] >= 1
     assert progress_body["artifact_counts"]["assumption_audits"] >= 1
+    assert progress_body["artifact_counts"]["evidence_ledgers"] >= 1
+    assert progress_body["latest_artifacts"]["evidence_ledger"]["id"] == evidence_ledger_body["id"]
     assert progress_body["artifact_counts"]["analysis_follow_up_tasks"] >= 1
     assert progress_body["artifact_counts"]["decision_follow_up_tasks"] >= 1
     assert progress_body["task_summary"]["next_tasks"]
@@ -1266,8 +1314,10 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert packet_body["idea"]["id"] == idea_id
     assert packet_body["latest_artifacts"]["decision_memo"]["id"] == decision_memo_body["id"]
     assert packet_body["latest_artifacts"]["assumption_audit"]["id"] == assumption_audit_body["id"]
+    assert packet_body["latest_artifacts"]["evidence_ledger"]["id"] == evidence_ledger_body["id"]
     assert any(task["id"] == decision_task_id for task in packet_body["open_tasks"])
     assert "idea_has_assumption_audit" in packet_body["graph_edge_summary"]
+    assert "idea_has_evidence_ledger" in packet_body["graph_edge_summary"]
     assert "# Idea Research Packet:" in packet_body["markdown_export"]
     assert "## Packet Use" in packet_body["markdown_export"]
 
@@ -1525,9 +1575,13 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert (f"artifacts/proposals/reviews/proposal-review-{review_body['id']}.md") in names
         assert f"artifacts/decisions/decision-memo-{decision_memo_body['id']}.md" in names
         assert (f"artifacts/assumptions/assumption-audit-{assumption_audit_body['id']}.md") in names
+        assert (
+            f"artifacts/evidence-ledgers/evidence-ledger-{evidence_ledger_body['id']}.md" in names
+        )
         manifest = json.loads(archive.read("metadata/manifest.json"))
         assert manifest["idea_id"] == idea_id
         assert manifest["artifact_counts"]["proposal_drafts"] >= 1
+        assert manifest["artifact_counts"]["evidence_ledgers"] >= 1
         assert manifest["readiness"]["score"] == readiness_body["readiness_score"]
         assert manifest["timeline_event_count"] >= len(timeline_body["events"])
 
@@ -1591,12 +1645,15 @@ Future work should preserve proposal drafts as reviewable artifacts.
     brief_body = brief.json()
     assert brief_body["idea_ids"] == [idea_id]
     assert brief_body["summary"]["idea_count"] == 1
+    assert brief_body["summary"]["evidence_signals"][0]["ledger_id"] == evidence_ledger_body["id"]
+    assert brief_body["summary"]["evidence_signals"][0]["claim_count"] >= 1
     assert brief_body["summary"]["triage_signals"]["comparison_task_count"] >= 1
     assert (
         brief_body["summary"]["triage_snapshot_comparison"]["candidate_snapshot_id"]
         == triage_snapshot_body["id"]
     )
     assert "# Pytest Advisor Brief" in brief_body["markdown_export"]
+    assert "## Evidence Signals" in brief_body["markdown_export"]
     assert "## Triage Signals" in brief_body["markdown_export"]
     assert "## Triage Snapshot Changes" in brief_body["markdown_export"]
     assert "## Discussion Prompts" in brief_body["markdown_export"]
@@ -1612,6 +1669,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     brief_export = client.get(f"/research/briefs/{brief_body['id']}/export/markdown")
     assert brief_export.status_code == 200
     assert "## Highest Priority Open Tasks" in brief_export.text
+    assert "## Evidence Signals" in brief_export.text
     assert "## Triage Snapshot Changes" in brief_export.text
 
     project_bundle = client.get("/research/export/project-bundle")

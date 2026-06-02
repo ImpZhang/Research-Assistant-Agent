@@ -21,6 +21,7 @@ from backend.research.models import (
     Idea,
     IdeaAssumptionAudit,
     IdeaDecisionMemo,
+    IdeaEvidenceLedger,
     IdeaFeedback,
     IdeaPortfolioSnapshot,
     Job,
@@ -66,6 +67,8 @@ from backend.research.schemas import (
     IdeaGenerationResponse,
     IdeaDecisionMemoCreate,
     IdeaDecisionMemoRead,
+    IdeaEvidenceLedgerCreate,
+    IdeaEvidenceLedgerRead,
     IdeaLineageResponse,
     IdeaProgressResponse,
     IdeaQualityGateResponse,
@@ -160,6 +163,7 @@ from backend.research.services.assumption_audit_service import IdeaAssumptionAud
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.decision_memo_service import IdeaDecisionMemoService
 from backend.research.services.embedding_service import EmbeddingService
+from backend.research.services.evidence_ledger_service import IdeaEvidenceLedgerService
 from backend.research.services.experiment_analysis_service import ExperimentAnalysisService
 from backend.research.services.experiment_run_service import ExperimentRunService
 from backend.research.services.experiment_service import ExperimentService
@@ -242,6 +246,8 @@ def status() -> ProjectStatus:
             "idea_decision_memos",
             "idea_decision_task_generation",
             "idea_assumption_audits",
+            "idea_evidence_ledgers",
+            "claim_evidence_graph_links",
             "project_progress_overview",
             "project_triage_brief",
             "project_triage_task_generation",
@@ -257,6 +263,7 @@ def status() -> ProjectStatus:
             "project_handoff_bundle_export",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
+            "advisor_brief_evidence_context",
             "advisor_brief_triage_context",
             "advisor_brief_triage_snapshot_comparison_context",
             "tool_manifest",
@@ -535,6 +542,22 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="IdeaAssumptionAuditCreate",
             output_model="IdeaAssumptionAuditRead",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_idea_evidence_ledger",
+            description="Persist a claim-level evidence ledger for one idea.",
+            method="POST",
+            path="/research/ideas/{idea_id}/evidence-ledger",
+            input_model="IdeaEvidenceLedgerCreate",
+            output_model="IdeaEvidenceLedgerRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_idea_evidence_ledgers",
+            description="List saved claim-evidence ledgers for one idea.",
+            method="GET",
+            path="/research/ideas/{idea_id}/evidence-ledgers",
+            output_model="list[IdeaEvidenceLedgerRead]",
         ),
         ToolManifestItem(
             name="refresh_idea_novelty_search",
@@ -2116,6 +2139,26 @@ def _serialize_idea_assumption_audit(audit: IdeaAssumptionAudit) -> IdeaAssumpti
     )
 
 
+def _serialize_idea_evidence_ledger(ledger: IdeaEvidenceLedger) -> IdeaEvidenceLedgerRead:
+    return IdeaEvidenceLedgerRead(
+        id=ledger.id,
+        idea_id=ledger.idea_id,
+        status=ledger.status,
+        claims=ledger.claims_json or [],
+        evidence_links=ledger.evidence_links_json or [],
+        counterevidence=ledger.counterevidence_json or [],
+        missing_evidence=ledger.missing_evidence_json or [],
+        risk_register=ledger.risk_register_json or [],
+        source_artifacts=ledger.source_artifacts_json or {},
+        summary=ledger.summary_json or {},
+        coverage_score=ledger.coverage_score,
+        markdown_export=ledger.markdown_export or "",
+        created_by=ledger.created_by,
+        created_at=ledger.created_at,
+        updated_at=ledger.updated_at,
+    )
+
+
 def _serialize_research_task(task: ResearchTask) -> ResearchTaskRead:
     return ResearchTaskRead(
         id=task.id,
@@ -2438,6 +2481,13 @@ def get_idea_lineage(
         .limit(20)
         .all()
     )
+    evidence_ledgers = (
+        session.query(IdeaEvidenceLedger)
+        .filter(IdeaEvidenceLedger.idea_id == idea_id)
+        .order_by(IdeaEvidenceLedger.created_at.desc())
+        .limit(20)
+        .all()
+    )
     research_plans = _latest_research_plans_for_idea(session, idea_id, 20)
     tasks = (
         session.query(ResearchTask)
@@ -2466,6 +2516,7 @@ def get_idea_lineage(
             *[analysis.id for analysis in experiment_analyses],
             *[memo.id for memo in decision_memos],
             *[audit.id for audit in assumption_audits],
+            *[ledger.id for ledger in evidence_ledgers],
             *[plan.id for plan in research_plans],
             *[task.id for task in tasks],
             *[snapshot.id for snapshot in snapshots],
@@ -2481,6 +2532,7 @@ def get_idea_lineage(
         experiment_analyses=experiment_analyses,
         decision_memos=decision_memos,
         assumption_audits=assumption_audits,
+        evidence_ledgers=evidence_ledgers,
         research_plans=research_plans,
         tasks=tasks,
         snapshots=snapshots,
@@ -2499,6 +2551,7 @@ def get_idea_lineage(
         ],
         decision_memos=[_serialize_idea_decision_memo(memo) for memo in decision_memos],
         assumption_audits=[_serialize_idea_assumption_audit(audit) for audit in assumption_audits],
+        evidence_ledgers=[_serialize_idea_evidence_ledger(ledger) for ledger in evidence_ledgers],
         research_tasks=[_serialize_research_task(task) for task in tasks],
         task_board_snapshots=[_serialize_task_board_snapshot(snapshot) for snapshot in snapshots],
         graph_edge_summary=graph_edge_summary,
@@ -2510,6 +2563,7 @@ def get_idea_lineage(
             f"{len(experiment_analyses)} analyses, "
             f"{len(decision_memos)} decision memos, "
             f"{len(assumption_audits)} assumption audits, "
+            f"{len(evidence_ledgers)} evidence ledgers, "
             f"{len(research_plans)} research plans, {len(tasks)} tasks."
         ),
     )
@@ -2532,6 +2586,7 @@ def get_idea_progress(
     experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 50)
     decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea_id, 20)
     assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea_id, 20)
+    evidence_ledgers = _latest_for_idea(session, IdeaEvidenceLedger, idea_id, 20)
     research_plans = _latest_research_plans_for_idea(session, idea_id, 20)
     tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
     snapshots = _latest_for_idea(session, TaskBoardSnapshot, idea_id, 20)
@@ -2566,6 +2621,7 @@ def get_idea_progress(
         "experiment_analyses": len(experiment_analyses),
         "decision_memos": len(decision_memos),
         "assumption_audits": len(assumption_audits),
+        "evidence_ledgers": len(evidence_ledgers),
         "research_plans": len(research_plans),
         "research_tasks": len(tasks),
         "open_tasks": len([task for task in tasks if task.status in {"todo", "doing", "blocked"}]),
@@ -2588,6 +2644,7 @@ def get_idea_progress(
         experiment_analyses,
         decision_memos,
         assumption_audits,
+        evidence_ledgers,
         research_plans,
         snapshots,
     )
@@ -2656,6 +2713,7 @@ def _progress_latest_artifacts(
     experiment_analyses: list[ExperimentAnalysis],
     decision_memos: list[IdeaDecisionMemo],
     assumption_audits: list[IdeaAssumptionAudit],
+    evidence_ledgers: list[IdeaEvidenceLedger],
     research_plans: list[ResearchPlanSnapshot],
     snapshots: list[TaskBoardSnapshot],
 ) -> dict[str, dict | None]:
@@ -2663,6 +2721,7 @@ def _progress_latest_artifacts(
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
     latest_memo = decision_memos[0] if decision_memos else None
     latest_audit = assumption_audits[0] if assumption_audits else None
+    latest_ledger = evidence_ledgers[0] if evidence_ledgers else None
     latest_plan = research_plans[0] if research_plans else None
     return {
         "related_work_matrix": {"id": matrices[0].id, "status": matrices[0].status}
@@ -2697,6 +2756,16 @@ def _progress_latest_artifacts(
             "assumption_count": len(latest_audit.assumptions_json or []),
         }
         if latest_audit
+        else None,
+        "evidence_ledger": {
+            "id": latest_ledger.id,
+            "coverage_score": latest_ledger.coverage_score,
+            "missing_evidence_count": (latest_ledger.summary_json or {}).get(
+                "missing_evidence_count", 0
+            ),
+            "decision_hint": (latest_ledger.summary_json or {}).get("decision_hint", ""),
+        }
+        if latest_ledger
         else None,
         "research_plan": {
             "id": latest_plan.id,
@@ -2809,6 +2878,8 @@ def _progress_recommendation(
         return "Run a proposal readiness review."
     if artifact_counts["assumption_audits"] == 0:
         return "Create an assumption audit to expose what must be true before deeper execution."
+    if artifact_counts["evidence_ledgers"] == 0:
+        return "Create an evidence ledger to map claims, support, counterevidence, and missing evidence."
     if artifact_counts["proposal_revisions"] == 0:
         return "Create a proposal revision from the latest review."
     if artifact_counts["research_tasks"] == 0:
@@ -2905,6 +2976,7 @@ def get_idea_research_packet(
     experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 50)
     decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea_id, 20)
     assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea_id, 20)
+    evidence_ledgers = _latest_for_idea(session, IdeaEvidenceLedger, idea_id, 20)
     research_plans = _latest_research_plans_for_idea(session, idea_id, 20)
     tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
     open_tasks = sorted(
@@ -2924,6 +2996,7 @@ def get_idea_research_packet(
             *[analysis.id for analysis in experiment_analyses],
             *[memo.id for memo in decision_memos],
             *[audit.id for audit in assumption_audits],
+            *[ledger.id for ledger in evidence_ledgers],
             *[plan.id for plan in research_plans],
             *[task.id for task in open_tasks],
         ],
@@ -2937,6 +3010,7 @@ def get_idea_research_packet(
         experiment_analyses=experiment_analyses,
         decision_memos=decision_memos,
         assumption_audits=assumption_audits,
+        evidence_ledgers=evidence_ledgers,
         research_plans=research_plans,
     )
     markdown_export = _render_idea_research_packet_markdown(
@@ -2965,11 +3039,13 @@ def _research_packet_latest_artifacts(
     experiment_analyses: list[ExperimentAnalysis],
     decision_memos: list[IdeaDecisionMemo],
     assumption_audits: list[IdeaAssumptionAudit],
+    evidence_ledgers: list[IdeaEvidenceLedger],
     research_plans: list[ResearchPlanSnapshot],
 ) -> dict[str, Any]:
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
     latest_memo = decision_memos[0] if decision_memos else None
     latest_audit = assumption_audits[0] if assumption_audits else None
+    latest_ledger = evidence_ledgers[0] if evidence_ledgers else None
     latest_plan = research_plans[0] if research_plans else None
     return {
         "related_work_matrix": {
@@ -3025,6 +3101,17 @@ def _research_packet_latest_artifacts(
             ][:5],
         }
         if latest_audit
+        else None,
+        "evidence_ledger": {
+            "id": latest_ledger.id,
+            "coverage_score": latest_ledger.coverage_score,
+            "decision_hint": (latest_ledger.summary_json or {}).get("decision_hint", ""),
+            "unsupported_claim_count": (latest_ledger.summary_json or {}).get(
+                "unsupported_claim_count", 0
+            ),
+            "missing_evidence": (latest_ledger.missing_evidence_json or [])[:5],
+        }
+        if latest_ledger
         else None,
         "research_plan": {
             "id": latest_plan.id,
@@ -3211,6 +3298,22 @@ def _build_idea_timeline_events(
                 status=audit.status,
                 timestamp=audit.created_at,
                 metadata={"assumption_count": len(audit.assumptions_json or [])},
+            )
+        )
+    for ledger in _latest_for_idea(session, IdeaEvidenceLedger, idea.id, 20):
+        summary = ledger.summary_json or {}
+        events.append(
+            _timeline_event(
+                event_type="evidence_ledger_created",
+                artifact_type="idea_evidence_ledger",
+                artifact_id=ledger.id,
+                title=f"coverage={ledger.coverage_score}",
+                status=summary.get("decision_hint", ledger.status),
+                timestamp=ledger.created_at,
+                metadata={
+                    "claim_count": summary.get("claim_count", 0),
+                    "missing_evidence_count": summary.get("missing_evidence_count", 0),
+                },
             )
         )
     for plan in _latest_research_plans_for_idea(session, idea.id, 20):
@@ -4695,6 +4798,66 @@ def export_idea_assumption_audit_markdown(
     return PlainTextResponse(audit.markdown_export or "", media_type="text/markdown")
 
 
+@router.post("/ideas/{idea_id}/evidence-ledger", response_model=IdeaEvidenceLedgerRead)
+def create_idea_evidence_ledger(
+    idea_id: str,
+    payload: IdeaEvidenceLedgerCreate,
+    session: Session = Depends(get_session),
+) -> IdeaEvidenceLedgerRead:
+    try:
+        ledger = IdeaEvidenceLedgerService(session).create_ledger(
+            idea_id,
+            claims=payload.claims,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_idea_evidence_ledger(ledger)
+
+
+@router.get("/ideas/{idea_id}/evidence-ledgers", response_model=list[IdeaEvidenceLedgerRead])
+def list_idea_evidence_ledgers(
+    idea_id: str,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+) -> list[IdeaEvidenceLedgerRead]:
+    try:
+        ledgers = IdeaEvidenceLedgerService(session).list_for_idea(idea_id, limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_idea_evidence_ledger(ledger) for ledger in ledgers]
+
+
+@router.get(
+    "/ideas/{idea_id}/evidence-ledgers/{ledger_id}",
+    response_model=IdeaEvidenceLedgerRead,
+)
+def get_idea_evidence_ledger(
+    idea_id: str,
+    ledger_id: str,
+    session: Session = Depends(get_session),
+) -> IdeaEvidenceLedgerRead:
+    ledger = IdeaEvidenceLedgerService(session).get_ledger(idea_id, ledger_id)
+    if ledger is None:
+        raise HTTPException(status_code=404, detail="Idea evidence ledger not found")
+    return _serialize_idea_evidence_ledger(ledger)
+
+
+@router.get(
+    "/ideas/{idea_id}/evidence-ledgers/{ledger_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_idea_evidence_ledger_markdown(
+    idea_id: str,
+    ledger_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    ledger = IdeaEvidenceLedgerService(session).get_ledger(idea_id, ledger_id)
+    if ledger is None:
+        raise HTTPException(status_code=404, detail="Idea evidence ledger not found")
+    return PlainTextResponse(ledger.markdown_export or "", media_type="text/markdown")
+
+
 def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str, int]:
     if not canonical_keys:
         return {}
@@ -4727,6 +4890,9 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "idea_has_decision_memo",
         "decision_memo_creates_task",
         "idea_has_assumption_audit",
+        "idea_has_evidence_ledger",
+        "evidence_ledger_tracks_claim",
+        "evidence_supports_claim",
         "research_plan_creates_task",
         "idea_has_readiness_assessment",
         "idea_readiness_creates_task",
@@ -4761,6 +4927,7 @@ def _render_idea_lineage_markdown(
     experiment_analyses: list[ExperimentAnalysis],
     decision_memos: list[IdeaDecisionMemo],
     assumption_audits: list[IdeaAssumptionAudit],
+    evidence_ledgers: list[IdeaEvidenceLedger],
     research_plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
     snapshots: list[TaskBoardSnapshot],
@@ -4778,6 +4945,7 @@ def _render_idea_lineage_markdown(
         f"- Experiment Analyses: {len(experiment_analyses)}",
         f"- Decision Memos: {len(decision_memos)}",
         f"- Assumption Audits: {len(assumption_audits)}",
+        f"- Evidence Ledgers: {len(evidence_ledgers)}",
         f"- Research Plans: {len(research_plans)}",
         f"- Research Tasks: {len(tasks)}",
         f"- Task Board Snapshots: {len(snapshots)}",
@@ -4831,6 +4999,18 @@ def _render_idea_lineage_markdown(
             )
     else:
         lines.append("- No assumption audits recorded yet.")
+
+    lines.extend(["", "## Evidence Ledgers", ""])
+    if evidence_ledgers:
+        for ledger in evidence_ledgers[:5]:
+            summary = ledger.summary_json or {}
+            lines.append(
+                f"- `{ledger.id}` coverage={ledger.coverage_score} "
+                f"claims={summary.get('claim_count', 0)} "
+                f"missing={summary.get('missing_evidence_count', 0)}"
+            )
+    else:
+        lines.append("- No evidence ledger recorded yet.")
 
     lines.extend(["", "## Research Plans", ""])
     if research_plans:
@@ -5570,6 +5750,12 @@ def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
             "assumption-audit",
             lineage.assumption_audits,
         )
+        _write_artifact_markdowns(
+            archive,
+            "artifacts/evidence-ledgers",
+            "evidence-ledger",
+            lineage.evidence_ledgers,
+        )
         for snapshot in lineage.task_board_snapshots:
             persisted = session.get(TaskBoardSnapshot, snapshot.id)
             if persisted and persisted.markdown_export:
@@ -5841,6 +6027,7 @@ def _idea_bundle_manifest(
             "experiment_analyses": len(lineage.experiment_analyses),
             "decision_memos": len(lineage.decision_memos),
             "assumption_audits": len(lineage.assumption_audits),
+            "evidence_ledgers": len(lineage.evidence_ledgers),
             "research_plans": len(lineage.research_plans),
             "research_tasks": len(lineage.research_tasks),
             "task_board_snapshots": len(lineage.task_board_snapshots),
@@ -5870,6 +6057,7 @@ def _render_idea_bundle_readme(manifest: dict[str, Any]) -> str:
         "## Artifact Folders",
         "",
         "- `artifacts/`: Markdown exports for proposal, experiment, decision, audit, and task artifacts.",
+        "- `artifacts/evidence-ledgers/`: claim-level evidence ledgers for this idea.",
         "- `artifacts/plans/`: execution plans that include this idea.",
         "- `metadata/`: JSON payloads for rebuilding or passing the bundle into external tools.",
         "",

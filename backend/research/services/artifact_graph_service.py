@@ -1,10 +1,12 @@
 from backend.research.models import (
+    Evidence,
     ExperimentAnalysis,
     ExperimentPlan,
     ExperimentRun,
     Idea,
     IdeaAssumptionAudit,
     IdeaDecisionMemo,
+    IdeaEvidenceLedger,
     NoveltyCheck,
     ProposalDraft,
     ProposalReview,
@@ -636,6 +638,86 @@ class ArtifactGraphService:
             edge_type="idea_has_assumption_audit",
             payload={"source": "idea_assumption_audit"},
         )
+
+    def link_idea_evidence_ledger(self, ledger: IdeaEvidenceLedger) -> None:
+        idea_node = self._idea_node(ledger.idea_id)
+        ledger_node = self.graph.get_or_create_node(
+            node_type="idea_evidence_ledger",
+            label=f"Evidence ledger {ledger.id}",
+            canonical_key=ledger.id,
+            payload={
+                "idea_id": ledger.idea_id,
+                "coverage_score": ledger.coverage_score,
+                "summary": ledger.summary_json or {},
+            },
+        )
+        evidence_ids = [
+            str(evidence_id)
+            for evidence_id in (ledger.source_artifacts_json or {}).get("evidence_ids", [])
+        ]
+        self.graph.create_edge(
+            source_node=idea_node,
+            target_node=ledger_node,
+            edge_type="idea_has_evidence_ledger",
+            evidence_ids=evidence_ids,
+            payload={"source": "idea_evidence_ledger"},
+        )
+
+        evidence_nodes = self._evidence_nodes(evidence_ids)
+        for claim in ledger.claims_json or []:
+            claim_id = str(claim.get("claim_id") or "")
+            claim_node = self.graph.get_or_create_node(
+                node_type="claim",
+                label=str(claim.get("claim") or claim_id),
+                canonical_key=f"{ledger.id}:{claim_id}",
+                payload={
+                    "idea_id": ledger.idea_id,
+                    "ledger_id": ledger.id,
+                    "claim_type": claim.get("claim_type", ""),
+                    "support_level": claim.get("support_level", ""),
+                },
+            )
+            self.graph.create_edge(
+                source_node=ledger_node,
+                target_node=claim_node,
+                edge_type="evidence_ledger_tracks_claim",
+                evidence_ids=claim.get("supporting_evidence_ids") or [],
+                payload={"source": "idea_evidence_ledger"},
+            )
+            for evidence_id in claim.get("supporting_evidence_ids") or []:
+                evidence_node = evidence_nodes.get(str(evidence_id))
+                if evidence_node is None:
+                    continue
+                self.graph.create_edge(
+                    source_node=evidence_node,
+                    target_node=claim_node,
+                    edge_type="evidence_supports_claim",
+                    evidence_ids=[str(evidence_id)],
+                    payload={"source": "idea_evidence_ledger"},
+                )
+
+    def _evidence_nodes(self, evidence_ids: list[str]) -> dict[str, object]:
+        if not evidence_ids:
+            return {}
+        evidences = (
+            self.graph.session.query(Evidence)
+            .filter(Evidence.id.in_(evidence_ids))
+            .limit(200)
+            .all()
+        )
+        nodes = {}
+        for evidence in evidences:
+            nodes[evidence.id] = self.graph.get_or_create_node(
+                node_type="evidence",
+                label=evidence.summary or evidence.supports or evidence.id,
+                canonical_key=evidence.id,
+                payload={
+                    "paper_id": evidence.paper_id,
+                    "evidence_type": evidence.evidence_type,
+                    "confidence": evidence.confidence,
+                },
+            )
+        return nodes
 
     def _idea_node(self, idea_id: str):
         return self.graph.get_or_create_node(

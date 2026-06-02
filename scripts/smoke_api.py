@@ -207,6 +207,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea readiness task generation")
     if "idea_assumption_audits" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include idea assumption audits")
+    if "idea_evidence_ledgers" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include idea evidence ledgers")
+    if "claim_evidence_graph_links" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include claim evidence graph links")
+    if "advisor_brief_evidence_context" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include advisor brief evidence context")
     if "project_triage_brief" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project triage brief")
     if "project_triage_task_generation" not in status["implemented_capabilities"]:
@@ -303,6 +309,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include task update tool")
     if "create_idea_assumption_audit" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea assumption audit tool")
+    if "create_idea_evidence_ledger" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea evidence ledger tool")
+    if "list_idea_evidence_ledgers" not in manifest_names:
+        raise RuntimeError("tool manifest did not include idea evidence ledger lister")
     if "refresh_idea_novelty_search" not in manifest_names:
         raise RuntimeError("tool manifest did not include novelty refresh tool")
     if "create_tasks_from_idea_novelty_check" not in manifest_names:
@@ -691,12 +701,41 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "## Assumptions" not in assumption_audit_markdown:
         raise RuntimeError("idea assumption audit markdown did not include assumptions")
+    evidence_ledger = require_ok(
+        client.post(
+            f"/research/ideas/{refined_idea['id']}/evidence-ledger",
+            json_body={"created_by": "smoke_api"},
+        ),
+        "idea evidence ledger",
+    )
+    evidence_ledger_markdown = require_ok(
+        client.get(
+            f"/research/ideas/{refined_idea['id']}/evidence-ledgers/{evidence_ledger['id']}/export/markdown"
+        ),
+        "idea evidence ledger markdown",
+    )
+    if not evidence_ledger["claims"]:
+        raise RuntimeError("idea evidence ledger returned no claims")
+    if "## Missing Evidence" not in evidence_ledger_markdown:
+        raise RuntimeError("idea evidence ledger markdown did not include missing evidence")
     proposal_graph_edges = require_ok(
         client.get("/research/graph/edges?edge_type=proposal_revision_creates_task"),
         "proposal task graph edges",
     )
     if not proposal_graph_edges:
         raise RuntimeError("proposal revision task graph edges were not created")
+    ledger_graph_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=idea_has_evidence_ledger"),
+        "evidence ledger graph edges",
+    )
+    if not ledger_graph_edges:
+        raise RuntimeError("idea evidence ledger graph edges were not created")
+    claim_graph_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=evidence_ledger_tracks_claim"),
+        "claim tracking graph edges",
+    )
+    if not claim_graph_edges:
+        raise RuntimeError("evidence ledger claim graph edges were not created")
     lineage = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/lineage"),
         "idea lineage",
@@ -715,6 +754,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea lineage markdown did not include decision memo task")
     if assumption_audit["id"] not in lineage["markdown_export"]:
         raise RuntimeError("idea lineage markdown did not include assumption audit")
+    if evidence_ledger["id"] not in lineage["markdown_export"]:
+        raise RuntimeError("idea lineage markdown did not include evidence ledger")
     progress = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/progress"),
         "idea progress",
@@ -727,6 +768,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea progress did not count decision follow-up tasks")
     if progress["artifact_counts"]["assumption_audits"] < 1:
         raise RuntimeError("idea progress did not count assumption audits")
+    if progress["artifact_counts"]["evidence_ledgers"] < 1:
+        raise RuntimeError("idea progress did not count evidence ledgers")
+    if progress["latest_artifacts"]["evidence_ledger"]["id"] != evidence_ledger["id"]:
+        raise RuntimeError("idea progress did not expose latest evidence ledger")
     if "Idea Progress" not in progress["markdown_export"]:
         raise RuntimeError("idea progress markdown did not include the report title")
     research_packet = require_ok(
@@ -737,6 +782,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea research packet markdown did not include decision memo")
     if assumption_audit["id"] not in research_packet["markdown_export"]:
         raise RuntimeError("idea research packet markdown did not include assumption audit")
+    if evidence_ledger["id"] not in research_packet["markdown_export"]:
+        raise RuntimeError("idea research packet markdown did not include evidence ledger")
     timeline = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/timeline"),
         "idea timeline",
@@ -746,6 +793,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea timeline did not include experiment analysis events")
     if "decision_memo_created" not in timeline_event_types:
         raise RuntimeError("idea timeline did not include decision memo events")
+    if "evidence_ledger_created" not in timeline_event_types:
+        raise RuntimeError("idea timeline did not include evidence ledger events")
     if "# Idea Timeline:" not in timeline["markdown_export"]:
         raise RuntimeError("idea timeline markdown did not include title")
     readiness = require_ok(
@@ -844,6 +893,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "06-timeline.md",
             "metadata/manifest.json",
             "metadata/timeline.json",
+            f"artifacts/evidence-ledgers/evidence-ledger-{evidence_ledger['id']}.md",
         }
         missing_bundle_files = required_bundle_files - bundle_files
         if missing_bundle_files:
@@ -853,6 +903,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea bundle manifest returned the wrong idea id")
     if bundle_manifest["timeline_event_count"] < len(timeline["events"]):
         raise RuntimeError("idea bundle manifest did not count timeline events")
+    if bundle_manifest["artifact_counts"].get("evidence_ledgers", 0) < 1:
+        raise RuntimeError("idea bundle manifest did not count evidence ledgers")
     overview = require_ok(client.get("/research/progress/overview"), "research progress overview")
     if overview["idea_count"] < 1:
         raise RuntimeError("research overview did not include ideas")
@@ -1082,8 +1134,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("advisor brief did not include latest triage snapshot comparison")
     if advisor_brief["summary"]["triage_signals"].get("comparison_task_count", 0) < 1:
         raise RuntimeError("advisor brief did not include triage comparison task signals")
+    if advisor_brief["summary"]["evidence_signals"][0]["ledger_id"] != evidence_ledger["id"]:
+        raise RuntimeError("advisor brief did not include the latest evidence ledger signal")
     if "## Triage Signals" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include triage signals")
+    if "## Evidence Signals" not in advisor_brief_markdown:
+        raise RuntimeError("advisor brief markdown did not include evidence signals")
     if "## Triage Snapshot Changes" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include triage snapshot changes")
     if "## Discussion Prompts" not in advisor_brief_markdown:
@@ -1446,6 +1502,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "assumption_audit_id": assumption_audit["id"],
         "assumption_audit_count": len(assumption_audit["assumptions"]),
         "assumption_audit_markdown_chars": len(assumption_audit_markdown),
+        "evidence_ledger_id": evidence_ledger["id"],
+        "evidence_ledger_claim_count": len(evidence_ledger["claims"]),
+        "evidence_ledger_coverage_score": evidence_ledger["coverage_score"],
+        "evidence_ledger_markdown_chars": len(evidence_ledger_markdown),
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
         "lineage_task_count": len(lineage["research_tasks"]),
         "lineage_graph_edge_types": len(lineage["graph_edge_summary"]),

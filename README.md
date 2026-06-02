@@ -61,9 +61,9 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Experiment result analysis that turns run metrics into a decision, concerns, next actions, task events, and Markdown analysis reports.
 - Follow-up task generation from experiment analysis next actions.
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.
-- GraphRAG-lite links for proposal drafts, reviews, revisions, experiment runs, experiment analyses, decision memos, assumption audits, generated follow-up tasks, decision follow-up tasks, and task board snapshots.
-- Idea lineage endpoint that hydrates matrices, proposal artifacts, experiment runs, experiment analyses, decision memos, assumption audits, tasks, task snapshots, and graph edge summaries.
-- Idea activity timeline that turns proposal, experiment, decision, audit, plan, and task events into a chronological handoff log.
+- GraphRAG-lite links for proposal drafts, reviews, revisions, experiment runs, experiment analyses, decision memos, assumption audits, evidence ledgers, claim/evidence support edges, generated follow-up tasks, decision follow-up tasks, and task board snapshots.
+- Idea lineage endpoint that hydrates matrices, proposal artifacts, experiment runs, experiment analyses, decision memos, assumption audits, evidence ledgers, tasks, task snapshots, and graph edge summaries.
+- Idea activity timeline that turns proposal, experiment, decision, audit, evidence ledger, plan, and task events into a chronological handoff log.
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Idea progress summaries that aggregate proposal, experiment, analysis, task, blocker, and recommended-next-step state.
 - Idea research packets that bundle the latest artifacts, open tasks, graph edge summary, and Markdown context for a single idea.
@@ -80,6 +80,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Idea decision memos that record pursue/revise/park/reject rationale, risks, evidence, next commitments, and graph links.
 - Follow-up task generation from idea decision memo commitments.
 - Idea assumption audits that expose falsifiable assumptions, validation signals, risk levels, and source artifacts.
+- Idea evidence ledgers that map claims to supporting evidence, counterevidence, missing evidence, risks, coverage scores, Markdown exports, and claim/evidence graph links.
 - Project progress overview that aggregates all ideas, open tasks, blockers, recent analyses, and recommended actions.
 - Project triage brief that combines progress, readiness, quality gates, and opportunity radar into one daily decision view.
 - Task generation from project triage brief next actions and risks for daily execution.
@@ -89,7 +90,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Research opportunity radar that fuses portfolio ranking, readiness, blockers, and open tasks into a prioritized next-action view.
 - Task generation from opportunity radar next actions so project-level prioritization enters the task board.
 - Project handoff bundle export that packages triage brief, saved triage snapshots, latest triage comparison, project overviews, readiness, quality gates, opportunity radar, task board state, briefs, and research plans.
-- Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries, including profile, tasks, experiment decisions, plan progress, readiness signals, triage signals, and latest triage snapshot comparison.
+- Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries, including profile, tasks, experiment decisions, plan progress, readiness signals, evidence ledger signals, triage signals, and latest triage snapshot comparison.
 - Persisted research execution plans that turn profile, ranked ideas, and open tasks into 7/14+ day action plans.
 - Task generation from research execution plans so plan actions enter the task board, idea progress, lineage, research packets, and bundle exports.
 - Research plan progress reports that summarize generated plan tasks, completion ratio, blockers, phases, and next plan actions.
@@ -202,7 +203,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, quality-gate follow-up tasks, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project triage brief, project triage tasks, persisted project triage snapshots, triage snapshot comparison, triage comparison tasks, project quality-gate tasks, project overview, project bundle export, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, evidence ledger, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, quality-gate follow-up tasks, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project triage brief, project triage tasks, persisted project triage snapshots, triage snapshot comparison, triage comparison tasks, project quality-gate tasks, project overview, project bundle export, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -287,6 +288,10 @@ POST /research/ideas/{idea_id}/assumption-audit
 GET  /research/ideas/{idea_id}/assumption-audits
 GET  /research/ideas/{idea_id}/assumption-audits/{audit_id}
 GET  /research/ideas/{idea_id}/assumption-audits/{audit_id}/export/markdown
+POST /research/ideas/{idea_id}/evidence-ledger
+GET  /research/ideas/{idea_id}/evidence-ledgers
+GET  /research/ideas/{idea_id}/evidence-ledgers/{ledger_id}
+GET  /research/ideas/{idea_id}/evidence-ledgers/{ledger_id}/export/markdown
 POST /research/ideas/{idea_id}/related-work-matrix
 GET  /research/ideas/{idea_id}/related-work-matrices
 GET  /research/ideas/{idea_id}/related-work-matrices/{matrix_id}

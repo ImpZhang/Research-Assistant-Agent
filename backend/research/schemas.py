@@ -626,6 +626,29 @@ class IdeaAssumptionAuditRead(BaseModel):
     updated_at: datetime
 
 
+class IdeaEvidenceLedgerCreate(BaseModel):
+    claims: list[str] = Field(default_factory=list)
+    created_by: str = "system"
+
+
+class IdeaEvidenceLedgerRead(BaseModel):
+    id: str
+    idea_id: str
+    status: str
+    claims: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_links: list[dict[str, Any]] = Field(default_factory=list)
+    counterevidence: list[dict[str, Any]] = Field(default_factory=list)
+    missing_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    risk_register: list[dict[str, Any]] = Field(default_factory=list)
+    source_artifacts: dict[str, Any] = Field(default_factory=dict)
+    summary: dict[str, Any] = Field(default_factory=dict)
+    coverage_score: float = 0.0
+    markdown_export: str = ""
+    created_by: str = "system"
+    created_at: datetime
+    updated_at: datetime
+
+
 class IdeaLineageResponse(BaseModel):
     idea: IdeaRead
     research_plans: list["ResearchPlanRead"] = Field(default_factory=list)
@@ -637,6 +660,7 @@ class IdeaLineageResponse(BaseModel):
     experiment_analyses: list[ExperimentAnalysisRead] = Field(default_factory=list)
     decision_memos: list[IdeaDecisionMemoRead] = Field(default_factory=list)
     assumption_audits: list[IdeaAssumptionAuditRead] = Field(default_factory=list)
+    evidence_ledgers: list[IdeaEvidenceLedgerRead] = Field(default_factory=list)
     research_tasks: list[ResearchTaskRead] = Field(default_factory=list)
     task_board_snapshots: list[TaskBoardSnapshotRead] = Field(default_factory=list)
     graph_edge_summary: dict[str, int] = Field(default_factory=dict)
