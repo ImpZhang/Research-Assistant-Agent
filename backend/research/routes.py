@@ -31,6 +31,7 @@ from backend.research.models import (
     ProposalDraft,
     ProposalReview,
     ProposalRevision,
+    ProjectTriageSnapshot,
     RelatedWorkMatrix,
     ResearchBrief,
     ResearchEdge,
@@ -112,6 +113,9 @@ from backend.research.schemas import (
     ProjectReadinessOverviewResponse,
     ProjectStatus,
     ProjectTriageBriefResponse,
+    ProjectTriageSnapshotCreate,
+    ProjectTriageSnapshotDetail,
+    ProjectTriageSnapshotRead,
     ProjectTriageTaskGenerateRequest,
     RankedIdeaRead,
     RelatedWorkMatrixCreate,
@@ -190,6 +194,7 @@ from backend.research.services.structured_idea_service import StructuredIdeaServ
 from backend.research.services.task_service import ResearchTaskService
 from backend.research.services.task_board_service import TaskBoardService
 from backend.research.services.tool_bridge_service import build_tool_bridge_items
+from backend.research.services.triage_snapshot_service import ProjectTriageSnapshotService
 from backend.research.services.workflow_service import (
     WorkflowService,
     run_literature_to_ideas_job_background,
@@ -237,6 +242,7 @@ def status() -> ProjectStatus:
             "project_progress_overview",
             "project_triage_brief",
             "project_triage_task_generation",
+            "project_triage_snapshots",
             "project_readiness_overview",
             "project_quality_gate_overview",
             "project_quality_gate_task_generation",
@@ -571,6 +577,36 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="ProjectTriageTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_project_triage_snapshot",
+            description="Persist the latest project triage brief as a durable Markdown decision snapshot.",
+            method="POST",
+            path="/research/triage/snapshots",
+            input_model="ProjectTriageSnapshotCreate",
+            output_model="ProjectTriageSnapshotDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_project_triage_snapshots",
+            description="List saved project triage decision snapshots.",
+            method="GET",
+            path="/research/triage/snapshots",
+            output_model="list[ProjectTriageSnapshotRead]",
+        ),
+        ToolManifestItem(
+            name="get_project_triage_snapshot",
+            description="Load one saved project triage decision snapshot.",
+            method="GET",
+            path="/research/triage/snapshots/{snapshot_id}",
+            output_model="ProjectTriageSnapshotDetail",
+        ),
+        ToolManifestItem(
+            name="export_project_triage_snapshot_markdown",
+            description="Export one saved project triage snapshot as text/markdown.",
+            method="GET",
+            path="/research/triage/snapshots/{snapshot_id}/export/markdown",
+            output_model="text/markdown",
         ),
         ToolManifestItem(
             name="get_project_readiness_overview",
@@ -977,6 +1013,86 @@ def create_tasks_from_project_triage_brief(
         tasks=[_serialize_research_task(task) for task in tasks],
         message=f"Created {len(tasks)} project triage tasks from the latest triage brief.",
     )
+
+
+def _serialize_project_triage_snapshot(
+    snapshot: ProjectTriageSnapshot,
+    *,
+    include_markdown: bool = False,
+) -> ProjectTriageSnapshotRead | ProjectTriageSnapshotDetail:
+    payload = {
+        "id": snapshot.id,
+        "title": snapshot.title,
+        "summary": snapshot.summary_json or {},
+        "recommended_focus": snapshot.recommended_focus_json or [],
+        "risk_focus": snapshot.risk_focus_json or [],
+        "next_actions": snapshot.next_actions_json or [],
+        "source_ids": snapshot.source_ids_json or {},
+        "markdown_export_chars": len(snapshot.markdown_export or ""),
+        "created_by": snapshot.created_by,
+        "created_at": snapshot.created_at,
+        "updated_at": snapshot.updated_at,
+    }
+    if include_markdown:
+        return ProjectTriageSnapshotDetail(
+            **payload,
+            markdown_export=snapshot.markdown_export or "",
+        )
+    return ProjectTriageSnapshotRead(**payload)
+
+
+@router.post("/triage/snapshots", response_model=ProjectTriageSnapshotDetail)
+def create_project_triage_snapshot(
+    payload: ProjectTriageSnapshotCreate,
+    session: Session = Depends(get_session),
+) -> ProjectTriageSnapshotDetail:
+    triage = get_project_triage_brief(
+        idea_limit=payload.idea_limit,
+        opportunity_limit=payload.opportunity_limit,
+        session=session,
+    )
+    snapshot = ProjectTriageSnapshotService(session).create_snapshot(
+        triage=triage,
+        title=payload.title,
+        idea_limit=payload.idea_limit,
+        opportunity_limit=payload.opportunity_limit,
+        created_by=payload.created_by,
+    )
+    return _serialize_project_triage_snapshot(snapshot, include_markdown=True)
+
+
+@router.get("/triage/snapshots", response_model=list[ProjectTriageSnapshotRead])
+def list_project_triage_snapshots(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ProjectTriageSnapshotRead]:
+    snapshots = ProjectTriageSnapshotService(session).list_snapshots(limit)
+    return [_serialize_project_triage_snapshot(snapshot) for snapshot in snapshots]
+
+
+@router.get("/triage/snapshots/{snapshot_id}", response_model=ProjectTriageSnapshotDetail)
+def get_project_triage_snapshot(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> ProjectTriageSnapshotDetail:
+    snapshot = ProjectTriageSnapshotService(session).get_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Project triage snapshot not found")
+    return _serialize_project_triage_snapshot(snapshot, include_markdown=True)
+
+
+@router.get(
+    "/triage/snapshots/{snapshot_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_triage_snapshot_markdown(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    snapshot = ProjectTriageSnapshotService(session).get_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Project triage snapshot not found")
+    return PlainTextResponse(snapshot.markdown_export or "", media_type="text/markdown")
 
 
 def _triage_recommended_focus(
@@ -5387,6 +5503,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     quality_overview = get_project_quality_gate_overview(session=session)
     opportunity_radar = get_research_opportunity_radar(session=session)
     triage_brief = get_project_triage_brief(session=session)
+    triage_snapshots = ProjectTriageSnapshotService(session).list_snapshots(limit=12)
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -5397,6 +5514,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         quality_overview=quality_overview,
         opportunity_radar=opportunity_radar,
         triage_brief=triage_brief,
+        triage_snapshots=triage_snapshots,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -5412,12 +5530,25 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         archive.writestr("metadata/quality-gate-overview.json", _json_dump(quality_overview))
         archive.writestr("metadata/opportunity-radar.json", _json_dump(opportunity_radar))
         archive.writestr("metadata/triage-brief.json", _json_dump(triage_brief))
+        archive.writestr(
+            "metadata/triage-snapshots.json",
+            _json_dump(
+                [_serialize_project_triage_snapshot(snapshot) for snapshot in triage_snapshots]
+            ),
+        )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
         _write_markdown(archive, "03-task-board.md", _render_project_task_board_markdown(tasks))
         _write_markdown(archive, "04-opportunity-radar.md", opportunity_radar.markdown_export)
         _write_markdown(archive, "05-quality-gate-overview.md", quality_overview.markdown_export)
+        for snapshot in triage_snapshots:
+            if snapshot.markdown_export:
+                _write_markdown(
+                    archive,
+                    f"artifacts/triage/project-triage-snapshot-{snapshot.id}.md",
+                    snapshot.markdown_export,
+                )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -5448,6 +5579,7 @@ def _project_bundle_manifest(
     quality_overview: ProjectQualityGateOverviewResponse,
     opportunity_radar: ResearchOpportunityRadarResponse,
     triage_brief: ProjectTriageBriefResponse,
+    triage_snapshots: list[ProjectTriageSnapshot],
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -5465,6 +5597,8 @@ def _project_bundle_manifest(
         "quality_gate_decision_counts": quality_overview.decision_counts,
         "triage_next_action_count": len(triage_brief.next_actions),
         "triage_risk_focus_count": len(triage_brief.risk_focus),
+        "triage_snapshot_count": len(triage_snapshots),
+        "latest_triage_snapshot_id": triage_snapshots[0].id if triage_snapshots else "",
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
             opportunity_radar.top_opportunities[0].radar_score
@@ -5508,6 +5642,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         "- `03-task-board.md`: recent task board state.",
         "- `04-opportunity-radar.md`: ranked next opportunities and risk watchlist.",
         "- `05-quality-gate-overview.md`: go/no-go quality gate comparison across ideas.",
+        "- `artifacts/triage/`: persisted project triage decision snapshots.",
         "- `artifacts/briefs/`: persisted advisor or group-meeting briefs.",
         "- `artifacts/plans/`: execution plans and plan progress reports.",
         "- `metadata/`: JSON payloads for downstream tools or backup.",

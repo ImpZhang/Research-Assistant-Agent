@@ -806,6 +806,8 @@ project quality gate overview 需要能一键转成 task board 任务：从 de-r
 
 project triage brief 需要能一键转成 task board 任务：从 next actions 和 risk focus 创建 `owner_type=project_triage`、`due_phase=triage_follow_up` 的项目级任务，并写入 `project_triage_creates_task` 图边。这样每日 triage 结果能直接进入执行队列。
 
+系统需要提供 persisted project triage snapshot：把某一次 project triage brief 固化为可追溯 artifact，保存 summary、recommended focus、risk focus、next actions、source task ids 和 Markdown export。snapshot 需要支持创建、列表、详情和 Markdown 导出，避免“今天为什么先做这些事”的判断被后续任务状态覆盖。
+
 系统需要提供 research opportunity radar：
 
 - 聚合 profile-aware ranking、idea readiness、open/blocked tasks 和 readiness blockers。
@@ -814,7 +816,7 @@ project triage brief 需要能一键转成 task board 任务：从 next actions 
 
 opportunity radar 需要能一键转成 task board 任务：从 top opportunities 的 next actions 创建 `owner_type=opportunity_radar`、`due_phase=opportunity_follow_up` 的任务，并写入 `opportunity_radar_creates_task` 图边。这样“机会判断 -> 行动建议 -> 任务推进”形成闭环。
 
-系统需要提供 project handoff bundle export：把 triage brief、progress overview、readiness overview、quality gate overview、opportunity radar、recent task board、advisor briefs、research plans、plan progress reports 和 JSON metadata 打包成 zip，用于项目级备份、导师沟通和外部 agent/MCP 接手。
+系统需要提供 project handoff bundle export：把 triage brief、persisted triage snapshots、progress overview、readiness overview、quality gate overview、opportunity radar、recent task board、advisor briefs、research plans、plan progress reports 和 JSON metadata 打包成 zip，用于项目级备份、导师沟通和外部 agent/MCP 接手。
 
 系统需要支持 readiness blocker task generation：readiness 评分产出的 blockers 不能只停留在报告里，应能一键转成 task board 任务，并带上 readiness_score、decision、owner_type=idea_readiness、due_phase=readiness_follow_up 和图边 `idea_readiness_creates_task`，保证“评分 -> 阻塞项 -> 可执行任务”闭环。
 

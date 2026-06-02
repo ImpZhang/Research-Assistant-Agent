@@ -57,6 +57,7 @@ def test_research_status() -> None:
     assert "idea_assumption_audits" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
     assert "project_triage_task_generation" in body["implemented_capabilities"]
+    assert "project_triage_snapshots" in body["implemented_capabilities"]
     assert "external_novelty_refresh" in body["implemented_capabilities"]
     assert "novelty_check_task_generation" in body["implemented_capabilities"]
 
@@ -80,6 +81,10 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_triage_brief" in names
     assert "export_project_triage_brief_markdown" in names
     assert "create_tasks_from_project_triage_brief" in names
+    assert "create_project_triage_snapshot" in names
+    assert "list_project_triage_snapshots" in names
+    assert "get_project_triage_snapshot" in names
+    assert "export_project_triage_snapshot_markdown" in names
     assert "get_mcp_tool_spec" in names
     assert "get_idea_research_packet" in names
     assert "get_idea_timeline" in names
@@ -405,6 +410,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
     assert "/research/triage/brief/export/markdown" in script.text
+    assert "/research/triage/snapshots" in script.text
     assert "/research/triage/brief/tasks" in script.text
     assert "/research/readiness/overview" in script.text
     assert "/research/quality/overview" in script.text
@@ -1327,6 +1333,41 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert listed_triage_tasks.status_code == 200
     assert listed_triage_tasks.json()
 
+    triage_snapshot = client.post(
+        "/research/triage/snapshots",
+        json={
+            "title": "Pytest Project Triage Snapshot",
+            "idea_limit": 20,
+            "opportunity_limit": 5,
+            "created_by": "pytest",
+        },
+    )
+    assert triage_snapshot.status_code == 200
+    triage_snapshot_body = triage_snapshot.json()
+    assert triage_snapshot_body["title"] == "Pytest Project Triage Snapshot"
+    assert triage_snapshot_body["summary"]["idea_count"] >= 1
+    assert triage_snapshot_body["summary"]["next_action_count"] >= 1
+    assert triage_snapshot_body["source_ids"]["project_triage_task_ids"]
+    assert (
+        "# Project Triage Snapshot: Pytest Project Triage Snapshot"
+        in (triage_snapshot_body["markdown_export"])
+    )
+
+    listed_triage_snapshots = client.get("/research/triage/snapshots?limit=5")
+    assert listed_triage_snapshots.status_code == 200
+    assert any(item["id"] == triage_snapshot_body["id"] for item in listed_triage_snapshots.json())
+
+    fetched_triage_snapshot = client.get(f"/research/triage/snapshots/{triage_snapshot_body['id']}")
+    assert fetched_triage_snapshot.status_code == 200
+    assert fetched_triage_snapshot.json()["id"] == triage_snapshot_body["id"]
+
+    triage_snapshot_markdown = client.get(
+        f"/research/triage/snapshots/{triage_snapshot_body['id']}/export/markdown"
+    )
+    assert triage_snapshot_markdown.status_code == 200
+    assert triage_snapshot_markdown.headers["content-type"].startswith("text/markdown")
+    assert "## Source IDs" in triage_snapshot_markdown.text
+
     quality_gate_tasks = client.post(
         f"/research/ideas/{idea_id}/quality-gate/tasks",
         json={"created_by": "pytest"},
@@ -1504,14 +1545,20 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "05-quality-gate-overview.md" in names
         assert "metadata/manifest.json" in names
         assert "metadata/triage-brief.json" in names
+        assert "metadata/triage-snapshots.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
+        assert (
+            f"artifacts/triage/project-triage-snapshot-{triage_snapshot_body['id']}.md"
+        ) in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         assert project_manifest["idea_count"] >= 1
         assert project_manifest["quality_gate_idea_count"] >= 1
         assert project_manifest["average_quality_gate_score"] >= 0
         assert project_manifest["quality_gate_decision_counts"]
         assert project_manifest["triage_next_action_count"] >= 1
+        assert project_manifest["triage_snapshot_count"] >= 1
+        assert project_manifest["latest_triage_snapshot_id"] == triage_snapshot_body["id"]
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["recent_task_count"] >= 1
 

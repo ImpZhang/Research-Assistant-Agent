@@ -15,6 +15,7 @@ const state = {
   latestTaskIds: [],
   taskBoardItems: [],
   latestTaskSnapshotId: "",
+  latestTriageSnapshotId: "",
   latestResearchPlanId: "",
   researchProfile: null,
   pollTimer: null,
@@ -1180,6 +1181,30 @@ async function loadProjectTriageMarkdown() {
   }
 }
 
+async function saveProjectTriageSnapshot() {
+  renderResult("workflowResult", "Saving project triage snapshot...", "warn");
+  try {
+    const body = await api("/research/triage/snapshots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Workbench Project Triage Snapshot",
+        idea_limit: 50,
+        opportunity_limit: 8,
+        created_by: "workbench",
+      }),
+    });
+    state.latestTriageSnapshotId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Saved project triage snapshot <code>${escapeHtml(body.id)}</code> with ${body.next_actions.length} next actions.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function createProjectTriageTasks() {
   renderResult("workflowResult", "Creating project triage tasks...", "warn");
   try {
@@ -1512,6 +1537,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("triageBriefButton").addEventListener("click", loadProjectTriageBrief);
   $("triageMarkdownButton").addEventListener("click", loadProjectTriageMarkdown);
+  $("triageSnapshotButton").addEventListener("click", saveProjectTriageSnapshot);
   $("triageTasksButton").addEventListener("click", createProjectTriageTasks);
   $("readinessOverviewButton").addEventListener("click", loadProjectReadinessOverview);
   $("qualityOverviewButton").addEventListener("click", loadProjectQualityOverview);

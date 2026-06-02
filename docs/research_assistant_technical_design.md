@@ -571,6 +571,22 @@ created_at
 updated_at
 ```
 
+### project_triage_snapshots
+
+```text
+id
+title
+summary_json
+recommended_focus_json
+risk_focus_json
+next_actions_json
+source_ids_json
+markdown_export
+created_by
+created_at
+updated_at
+```
+
 ### research_briefs
 
 ```text
@@ -1119,11 +1135,13 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/triage/brief/tasks` 将 triage brief 的 next actions 和 risk focus 写入 `ResearchTask`，使用 `owner_type=project_triage`、`due_phase=triage_follow_up`，并写入 `project_triage_creates_task` 图边。它面向每日/每轮执行：triage brief 负责判断，task endpoint 负责让判断进入任务队列。
 
+`/triage/snapshots` 将当前 triage brief 固化为 `ProjectTriageSnapshot`，保存 summary、recommended focus、risk focus、next actions、source ids 和 Markdown export。`/triage/snapshots/{snapshot_id}` 与 `/triage/snapshots/{snapshot_id}/export/markdown` 用于读取和导出历史决策，避免每日/每轮 triage 被后续任务状态覆盖。
+
 `/opportunities/radar` 聚合 profile-aware ranking、readiness summary、open/blocked tasks 和 blockers，输出 top opportunities、risk watchlist、recommended sequence 与 Markdown report。它不是替代 ranking 或 readiness，而是把“想法是否好”和“今天该做什么”合成一个可行动视图。
 
 `/opportunities/radar/tasks` 将 radar top opportunities 的 next actions 写入 `ResearchTask`，使用 `owner_type=opportunity_radar`、`due_phase=opportunity_follow_up`，并写入 `idea_has_opportunity_radar` 与 `opportunity_radar_creates_task` 图边。它让项目级优先级不只是报告，而能进入 task board、idea progress、lineage 和后续 agent handoff。
 
-`/export/project-bundle` produces an `application/zip` handoff package for the whole project. It includes project triage brief, project progress overview, readiness overview, quality gate overview, opportunity radar, recent task board state, persisted advisor briefs, research execution plans, plan progress reports, and JSON metadata. It is the project-level counterpart to idea bundle export, meant for backups, advisor meetings, and downstream MCP/agent handoff.
+`/export/project-bundle` produces an `application/zip` handoff package for the whole project. It includes project triage brief, persisted triage snapshots, project progress overview, readiness overview, quality gate overview, opportunity radar, recent task board state, persisted advisor briefs, research execution plans, plan progress reports, and JSON metadata. It is the project-level counterpart to idea bundle export, meant for backups, advisor meetings, and downstream MCP/agent handoff.
 
 `/briefs` 将项目级或 idea-set 状态保存为 `ResearchBrief` artifact，包含 idea list、recent experiment decisions、highest-priority open tasks、discussion prompts 和 Markdown export。它还会读取包含这些 ideas 的 research execution plans，汇总 plan task count/open/blocked/completion ratio，并加入 latest proposal review / decision memo signals 以及 project triage / quality gate / opportunity / readiness task signals。它是组会、导师沟通和后续 MCP 报告导出的稳定快照。
 
@@ -1186,6 +1204,10 @@ GET  /research/progress/overview
 GET  /research/triage/brief
 GET  /research/triage/brief/export/markdown
 POST /research/triage/brief/tasks
+POST /research/triage/snapshots
+GET  /research/triage/snapshots
+GET  /research/triage/snapshots/{snapshot_id}
+GET  /research/triage/snapshots/{snapshot_id}/export/markdown
 GET  /research/opportunities/radar
 POST /research/opportunities/radar/tasks
 GET  /research/tools/manifest

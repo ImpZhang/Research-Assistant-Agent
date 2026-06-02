@@ -444,6 +444,20 @@ class TaskBoardSnapshot(Base, TimestampMixin):
     created_by: Mapped[str] = mapped_column(String(128), default="system")
 
 
+class ProjectTriageSnapshot(Base, TimestampMixin):
+    __tablename__ = "project_triage_snapshots"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    title: Mapped[str] = mapped_column(String(512), default="Project Triage Snapshot")
+    summary_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    recommended_focus_json: Mapped[list] = mapped_column(JSON, default=list)
+    risk_focus_json: Mapped[list] = mapped_column(JSON, default=list)
+    next_actions_json: Mapped[list] = mapped_column(JSON, default=list)
+    source_ids_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    markdown_export: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(128), default="researcher")
+
+
 class IdeaPortfolioSnapshot(Base, TimestampMixin):
     __tablename__ = "idea_portfolio_snapshots"
 

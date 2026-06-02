@@ -207,6 +207,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project triage brief")
     if "project_triage_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project triage task generation")
+    if "project_triage_snapshots" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project triage snapshots")
     if "external_novelty_refresh" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include external novelty refresh")
     if "novelty_check_task_generation" not in status["implemented_capabilities"]:
@@ -234,6 +236,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project triage brief markdown export")
     if "create_tasks_from_project_triage_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage task tool")
+    if "create_project_triage_snapshot" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project triage snapshot creator")
+    if "list_project_triage_snapshots" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project triage snapshot lister")
+    if "get_project_triage_snapshot" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project triage snapshot reader")
+    if "export_project_triage_snapshot_markdown" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project triage snapshot markdown export")
     if "retry_job" not in manifest_names:
         raise RuntimeError("tool manifest did not include job retry tool")
     if "get_idea_research_packet" not in manifest_names:
@@ -880,6 +890,42 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not triage_edges:
         raise RuntimeError("project triage task generation did not create graph edges")
+    triage_snapshot = require_ok(
+        client.post(
+            "/research/triage/snapshots",
+            json_body={
+                "title": "Smoke Project Triage Snapshot",
+                "idea_limit": 50,
+                "opportunity_limit": 5,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project triage snapshot",
+    )
+    if "Project Triage Snapshot" not in triage_snapshot["markdown_export"]:
+        raise RuntimeError("project triage snapshot markdown did not include title")
+    if triage_snapshot["summary"].get("next_action_count", 0) < 1:
+        raise RuntimeError("project triage snapshot did not retain next actions")
+    if not triage_snapshot["source_ids"].get("project_triage_task_ids"):
+        raise RuntimeError("project triage snapshot did not retain triage task source ids")
+    triage_snapshots = require_ok(
+        client.get("/research/triage/snapshots?limit=5"),
+        "project triage snapshot list",
+    )
+    if not any(item["id"] == triage_snapshot["id"] for item in triage_snapshots):
+        raise RuntimeError("project triage snapshot list did not include the saved snapshot")
+    fetched_triage_snapshot = require_ok(
+        client.get(f"/research/triage/snapshots/{triage_snapshot['id']}"),
+        "project triage snapshot detail",
+    )
+    if fetched_triage_snapshot["id"] != triage_snapshot["id"]:
+        raise RuntimeError("project triage snapshot detail returned the wrong snapshot")
+    triage_snapshot_markdown = require_ok(
+        client.get(f"/research/triage/snapshots/{triage_snapshot['id']}/export/markdown"),
+        "project triage snapshot markdown export",
+    )
+    if "## Source IDs" not in triage_snapshot_markdown:
+        raise RuntimeError("project triage snapshot markdown export missed source ids")
     project_quality_tasks = require_ok(
         client.post(
             "/research/quality/overview/tasks",
@@ -1021,8 +1067,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "05-quality-gate-overview.md",
             "metadata/manifest.json",
             "metadata/triage-brief.json",
+            "metadata/triage-snapshots.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
+            f"artifacts/triage/project-triage-snapshot-{triage_snapshot['id']}.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -1036,6 +1084,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle manifest did not include quality gate ideas")
     if project_bundle_manifest["triage_next_action_count"] < 1:
         raise RuntimeError("project bundle manifest did not include triage next actions")
+    if project_bundle_manifest["triage_snapshot_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include triage snapshots")
+    if project_bundle_manifest["latest_triage_snapshot_id"] != triage_snapshot["id"]:
+        raise RuntimeError("project bundle manifest did not point at the latest triage snapshot")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     post_plan_progress = require_ok(
@@ -1302,6 +1354,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "triage_next_action_count": len(triage_brief["next_actions"]),
         "triage_markdown_chars": len(triage_markdown),
         "triage_task_count": len(triage_tasks["tasks"]),
+        "triage_snapshot_id": triage_snapshot["id"],
+        "triage_snapshot_markdown_chars": len(triage_snapshot_markdown),
         "project_quality_task_count": len(project_quality_tasks["tasks"]),
         "readiness_task_count": len(readiness_tasks["tasks"]),
         "readiness_progress_task_count": progress_after_readiness_tasks["artifact_counts"][
@@ -1323,6 +1377,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "plan_advisor_brief_plan_count": plan_advisor_brief["summary"]["research_plan_count"],
         "project_bundle_file_count": len(project_bundle_files),
         "project_bundle_plan_count": project_bundle_manifest["research_plan_count"],
+        "project_bundle_triage_snapshot_count": project_bundle_manifest["triage_snapshot_count"],
         "project_bundle_opportunity_count": project_bundle_manifest["opportunity_count"],
         "research_plan_id": research_plan["id"],
         "research_plan_item_count": len(research_plan["plan_items"]),

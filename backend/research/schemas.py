@@ -823,6 +823,31 @@ class ProjectTriageTaskGenerateRequest(BaseModel):
     created_by: str = "system"
 
 
+class ProjectTriageSnapshotCreate(BaseModel):
+    title: str = "Project Triage Snapshot"
+    idea_limit: int = Field(default=50, ge=1, le=200)
+    opportunity_limit: int = Field(default=8, ge=1, le=20)
+    created_by: str = "researcher"
+
+
+class ProjectTriageSnapshotRead(BaseModel):
+    id: str
+    title: str
+    summary: dict[str, Any] = Field(default_factory=dict)
+    recommended_focus: list[str] = Field(default_factory=list)
+    risk_focus: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+    source_ids: dict[str, Any] = Field(default_factory=dict)
+    markdown_export_chars: int = 0
+    created_by: str = "researcher"
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectTriageSnapshotDetail(ProjectTriageSnapshotRead):
+    markdown_export: str = ""
+
+
 class ResearchBriefCreate(BaseModel):
     title: str = "Advisor Research Brief"
     scope: Literal["project", "idea_set"] = "project"
