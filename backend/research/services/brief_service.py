@@ -351,6 +351,7 @@ class ResearchBriefService:
             "idea_quality_gate",
             "opportunity_radar",
             "idea_readiness",
+            "claim_validation_queue",
         }
         tasks = (
             self.session.query(ResearchTask)
@@ -377,6 +378,7 @@ class ResearchBriefService:
             "quality_gate_task_count": by_owner_type.get("idea_quality_gate", 0),
             "opportunity_task_count": by_owner_type.get("opportunity_radar", 0),
             "readiness_task_count": by_owner_type.get("idea_readiness", 0),
+            "claim_validation_task_count": by_owner_type.get("claim_validation_queue", 0),
             "risk_focus_count": by_source_type.get("triage_risk_focus", 0),
             "top_tasks": [
                 {
@@ -566,6 +568,7 @@ class ResearchBriefService:
                     f"- Quality Gate Tasks: {triage_signals.get('quality_gate_task_count', 0)}",
                     f"- Opportunity Tasks: {triage_signals.get('opportunity_task_count', 0)}",
                     f"- Readiness Tasks: {triage_signals.get('readiness_task_count', 0)}",
+                    f"- Claim Validation Tasks: {triage_signals.get('claim_validation_task_count', 0)}",
                     f"- Risk Focus Items: {triage_signals.get('risk_focus_count', 0)}",
                     "",
                     "### Top Triage Tasks",

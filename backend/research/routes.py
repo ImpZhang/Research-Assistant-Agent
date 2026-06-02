@@ -939,6 +939,7 @@ def _overview_task_summary(tasks: list[ResearchTask]) -> dict:
         "total_recent_tasks": len(tasks),
         "open_task_count": len(open_tasks),
         "research_plan_task_count": by_owner_type.get("research_plan", 0),
+        "claim_validation_task_count": by_owner_type.get("claim_validation_queue", 0),
         "by_status": dict(by_status),
         "by_priority": dict(by_priority),
         "by_owner_type": dict(by_owner_type),

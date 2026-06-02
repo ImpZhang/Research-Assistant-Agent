@@ -1707,6 +1707,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     overview_body = overview.json()
     assert overview_body["idea_count"] >= 1
     assert overview_body["task_summary"]["open_task_count"] >= 1
+    assert overview_body["task_summary"]["claim_validation_task_count"] >= 1
     assert overview_body["recent_experiment_analyses"]
     assert overview_body["recommended_actions"]
     assert "# Research Progress Overview" in overview_body["markdown_export"]
@@ -1762,6 +1763,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         for item in brief_body["summary"]["claim_validation_queue"]["items"]
     )
     assert brief_body["summary"]["triage_signals"]["comparison_task_count"] >= 1
+    assert brief_body["summary"]["triage_signals"]["claim_validation_task_count"] >= 1
     assert (
         brief_body["summary"]["triage_snapshot_comparison"]["candidate_snapshot_id"]
         == triage_snapshot_body["id"]
@@ -1770,6 +1772,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "## Evidence Signals" in brief_body["markdown_export"]
     assert "## Claim Validation Queue" in brief_body["markdown_export"]
     assert "## Triage Signals" in brief_body["markdown_export"]
+    assert "Claim Validation Tasks" in brief_body["markdown_export"]
     assert "## Triage Snapshot Changes" in brief_body["markdown_export"]
     assert "## Discussion Prompts" in brief_body["markdown_export"]
 
@@ -1786,6 +1789,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "## Highest Priority Open Tasks" in brief_export.text
     assert "## Evidence Signals" in brief_export.text
     assert "## Claim Validation Queue" in brief_export.text
+    assert "Claim Validation Tasks" in brief_export.text
     assert "## Triage Snapshot Changes" in brief_export.text
 
     project_bundle = client.get("/research/export/project-bundle")

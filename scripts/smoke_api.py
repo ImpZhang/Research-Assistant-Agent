@@ -1015,6 +1015,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     overview = require_ok(client.get("/research/progress/overview"), "research progress overview")
     if overview["idea_count"] < 1:
         raise RuntimeError("research overview did not include ideas")
+    if overview["task_summary"].get("claim_validation_task_count", 0) < 1:
+        raise RuntimeError("research overview did not count claim validation tasks")
     if not overview["recommended_actions"]:
         raise RuntimeError("research overview did not include recommended actions")
     readiness_overview = require_ok(
@@ -1241,6 +1243,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("advisor brief did not include latest triage snapshot comparison")
     if advisor_brief["summary"]["triage_signals"].get("comparison_task_count", 0) < 1:
         raise RuntimeError("advisor brief did not include triage comparison task signals")
+    if advisor_brief["summary"]["triage_signals"].get("claim_validation_task_count", 0) < 1:
+        raise RuntimeError("advisor brief did not include claim validation task signals")
     if advisor_brief["summary"]["evidence_signals"][0]["ledger_id"] != evidence_ledger["id"]:
         raise RuntimeError("advisor brief did not include the latest evidence ledger signal")
     claim_queue_summary = advisor_brief["summary"]["claim_validation_queue"]["summary"]
@@ -1257,6 +1261,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("advisor brief markdown did not include evidence signals")
     if "## Claim Validation Queue" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include claim validation queue")
+    if "Claim Validation Tasks" not in advisor_brief_markdown:
+        raise RuntimeError("advisor brief markdown did not include claim validation task signals")
     if "## Triage Snapshot Changes" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include triage snapshot changes")
     if "## Discussion Prompts" not in advisor_brief_markdown:
@@ -1686,6 +1692,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "idea_bundle_manifest_decision": bundle_manifest["readiness"]["decision"],
         "overview_idea_count": overview["idea_count"],
         "overview_open_task_count": overview["task_summary"]["open_task_count"],
+        "overview_claim_validation_task_count": overview["task_summary"][
+            "claim_validation_task_count"
+        ],
         "readiness_overview_idea_count": readiness_overview["idea_count"],
         "readiness_overview_average": readiness_overview["average_readiness"],
         "opportunity_radar_count": len(radar["top_opportunities"]),
@@ -1695,6 +1704,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "advisor_brief_id": advisor_brief["id"],
         "advisor_brief_markdown_chars": len(advisor_brief_markdown),
         "advisor_brief_claim_queue_count": claim_queue_summary["item_count"],
+        "advisor_brief_claim_validation_task_count": advisor_brief["summary"]["triage_signals"][
+            "claim_validation_task_count"
+        ],
         "advisor_brief_triage_snapshot_candidate": advisor_brief["summary"][
             "triage_snapshot_comparison"
         ]["candidate_snapshot_id"],
