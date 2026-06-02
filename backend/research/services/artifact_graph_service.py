@@ -730,6 +730,71 @@ class ArtifactGraphService:
                 payload={"source": "idea_evidence_ledger_follow_up"},
             )
 
+    def link_claim_validation_queue_tasks(self, tasks: list[ResearchTask]) -> None:
+        tasks_by_idea: dict[str, list[ResearchTask]] = {}
+        for task in tasks:
+            if task.idea_id:
+                tasks_by_idea.setdefault(task.idea_id, []).append(task)
+
+        for idea_id, idea_tasks in tasks_by_idea.items():
+            idea_node = self._idea_node(idea_id)
+            queue_node = self.graph.get_or_create_node(
+                node_type="claim_validation_queue",
+                label=f"Claim validation queue: {idea_id}",
+                canonical_key=f"{idea_id}:claim_validation_queue",
+                payload={
+                    "idea_id": idea_id,
+                    "task_count": len(idea_tasks),
+                    "owner_type": "claim_validation_queue",
+                },
+            )
+            self.graph.create_edge(
+                source_node=idea_node,
+                target_node=queue_node,
+                edge_type="idea_has_claim_validation_queue",
+                payload={"source": "claim_validation_queue_task_generation"},
+            )
+            for task in idea_tasks:
+                metadata = task.metadata_json or {}
+                claim_key = task.source_id or (
+                    f"{metadata.get('ledger_id', '')}:{metadata.get('claim_id', '')}"
+                )
+                claim_node = self.graph.get_or_create_node(
+                    node_type="claim",
+                    label=str(metadata.get("claim") or metadata.get("claim_id") or claim_key),
+                    canonical_key=claim_key,
+                    payload={
+                        "idea_id": idea_id,
+                        "ledger_id": metadata.get("ledger_id", ""),
+                        "claim_id": metadata.get("claim_id", ""),
+                        "support_level": metadata.get("support_level", ""),
+                        "urgency_score": metadata.get("urgency_score", 0.0),
+                    },
+                )
+                task_node = self.graph.get_or_create_node(
+                    node_type="research_task",
+                    label=task.title,
+                    canonical_key=task.id,
+                    payload={
+                        "status": task.status,
+                        "priority": task.priority,
+                        "source_type": task.source_type,
+                        "due_phase": task.due_phase,
+                    },
+                )
+                self.graph.create_edge(
+                    source_node=queue_node,
+                    target_node=claim_node,
+                    edge_type="claim_validation_queue_prioritizes_claim",
+                    payload={"source": "claim_validation_queue"},
+                )
+                self.graph.create_edge(
+                    source_node=queue_node,
+                    target_node=task_node,
+                    edge_type="claim_validation_queue_creates_task",
+                    payload={"source": "claim_validation_queue_follow_up"},
+                )
+
     def _evidence_nodes(self, evidence_ids: list[str]) -> dict[str, object]:
         if not evidence_ids:
             return {}

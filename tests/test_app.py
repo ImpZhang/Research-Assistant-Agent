@@ -61,6 +61,7 @@ def test_research_status() -> None:
     assert "claim_evidence_graph_links" in body["implemented_capabilities"]
     assert "claim_validation_packets" in body["implemented_capabilities"]
     assert "claim_validation_queue" in body["implemented_capabilities"]
+    assert "claim_validation_queue_task_generation" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
@@ -122,6 +123,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_tasks_from_idea_evidence_ledger" in names
     assert "get_idea_claim_validation_packet" in names
     assert "get_claim_validation_queue" in names
+    assert "create_tasks_from_claim_validation_queue" in names
     assert "refresh_idea_novelty_search" in names
     assert "create_tasks_from_idea_novelty_check" in names
     assert "create_advisor_brief" in names
@@ -383,6 +385,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "evidenceLedgerTasksButton" in response.text
     assert "claimPacketButton" in response.text
     assert "claimQueueButton" in response.text
+    assert "claimQueueTasksButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -437,6 +440,7 @@ def test_workbench_static_assets_are_served() -> None:
         "/research/ideas/${state.latestIdeaId}/evidence-ledgers/${state.latestEvidenceLedgerId}/claims/${claimId}/validation-packet"
     ) in script.text
     assert "/research/claims/validation-queue?${params.toString()}" in script.text
+    assert "/research/claims/validation-queue/tasks" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
     assert "/research/triage/brief/export/markdown" in script.text
@@ -1290,6 +1294,30 @@ Future work should preserve proposal drafts as reviewable artifacts.
     )
     assert "# Claim Validation Queue" in claim_queue_body["markdown_export"]
 
+    claim_queue_tasks = client.post(
+        "/research/claims/validation-queue/tasks",
+        json={
+            "idea_id": idea_id,
+            "limit": 3,
+            "priority_filter": ["critical", "high"],
+            "created_by": "pytest",
+        },
+    )
+    assert claim_queue_tasks.status_code == 200
+    claim_queue_task_body = claim_queue_tasks.json()
+    assert claim_queue_task_body["tasks"]
+    claim_queue_task_id = claim_queue_task_body["tasks"][0]["id"]
+    assert claim_queue_task_body["tasks"][0]["owner_type"] == "claim_validation_queue"
+    assert claim_queue_task_body["tasks"][0]["owner_id"] == evidence_ledger_body["id"]
+    assert claim_queue_task_body["tasks"][0]["due_phase"] == "claim_validation_follow_up"
+    assert claim_queue_task_body["tasks"][0]["metadata"]["claim_id"]
+
+    claim_queue_task_list = client.get(
+        f"/research/tasks?idea_id={idea_id}&owner_type=claim_validation_queue"
+    )
+    assert claim_queue_task_list.status_code == 200
+    assert any(task["id"] == claim_queue_task_id for task in claim_queue_task_list.json())
+
     graph_edge_types = [
         "idea_has_proposal_draft",
         "proposal_review_reviews_draft",
@@ -1308,6 +1336,9 @@ Future work should preserve proposal drafts as reviewable artifacts.
         "evidence_ledger_tracks_claim",
         "evidence_supports_claim",
         "evidence_ledger_creates_task",
+        "idea_has_claim_validation_queue",
+        "claim_validation_queue_prioritizes_claim",
+        "claim_validation_queue_creates_task",
     ]
     for edge_type in graph_edge_types:
         edges = client.get(f"/research/graph/edges?edge_type={edge_type}")
@@ -1331,6 +1362,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert any(task["id"] == analysis_task_id for task in lineage_body["research_tasks"])
     assert any(task["id"] == decision_task_id for task in lineage_body["research_tasks"])
     assert any(task["id"] == evidence_task_id for task in lineage_body["research_tasks"])
+    assert any(task["id"] == claim_queue_task_id for task in lineage_body["research_tasks"])
     assert lineage_body["task_board_snapshots"][0]["id"] == snapshot_body["id"]
     assert lineage_body["graph_edge_summary"]["proposal_revision_creates_task"] > 0
     assert lineage_body["graph_edge_summary"]["experiment_plan_has_run"] > 0
@@ -1342,6 +1374,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert lineage_body["graph_edge_summary"]["idea_has_evidence_ledger"] > 0
     assert lineage_body["graph_edge_summary"]["evidence_ledger_tracks_claim"] > 0
     assert lineage_body["graph_edge_summary"]["evidence_ledger_creates_task"] > 0
+    assert lineage_body["graph_edge_summary"]["claim_validation_queue_creates_task"] > 0
     assert "# Idea Lineage:" in lineage_body["markdown_export"]
     assert "## Experiment Runs" in lineage_body["markdown_export"]
     assert "## Experiment Analyses" in lineage_body["markdown_export"]
@@ -1373,6 +1406,8 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert progress_body["artifact_counts"]["analysis_follow_up_tasks"] >= 1
     assert progress_body["artifact_counts"]["decision_follow_up_tasks"] >= 1
     assert progress_body["artifact_counts"]["evidence_follow_up_tasks"] >= 1
+    assert progress_body["artifact_counts"]["claim_validation_follow_up_tasks"] >= 1
+    assert progress_body["task_summary"]["by_owner_type"]["claim_validation_queue"] >= 1
     assert progress_body["task_summary"]["next_tasks"]
     assert progress_body["experiment_summary"]["latest_analysis_decision"] == "supports_hypothesis"
     assert progress_body["recommended_next_step"]
@@ -1387,9 +1422,11 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert packet_body["latest_artifacts"]["evidence_ledger"]["id"] == evidence_ledger_body["id"]
     assert any(task["id"] == decision_task_id for task in packet_body["open_tasks"])
     assert any(task["id"] == evidence_task_id for task in packet_body["open_tasks"])
+    assert any(task["id"] == claim_queue_task_id for task in packet_body["open_tasks"])
     assert "idea_has_assumption_audit" in packet_body["graph_edge_summary"]
     assert "idea_has_evidence_ledger" in packet_body["graph_edge_summary"]
     assert "evidence_ledger_creates_task" in packet_body["graph_edge_summary"]
+    assert "claim_validation_queue_creates_task" in packet_body["graph_edge_summary"]
     assert "# Idea Research Packet:" in packet_body["markdown_export"]
     assert "## Packet Use" in packet_body["markdown_export"]
 

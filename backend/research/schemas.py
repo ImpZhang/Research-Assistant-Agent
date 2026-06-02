@@ -435,6 +435,15 @@ class OpportunityRadarTaskGenerateRequest(BaseModel):
     created_by: str = "system"
 
 
+class ClaimValidationQueueTaskGenerateRequest(BaseModel):
+    idea_id: str | None = None
+    limit: int = 5
+    priority_filter: list[Literal["critical", "high", "medium", "low"]] = Field(
+        default_factory=lambda: ["critical", "high"]
+    )
+    created_by: str = "system"
+
+
 class ResearchTaskUpdate(BaseModel):
     status: Literal["todo", "doing", "blocked", "done", "archived"] | None = None
     priority: Literal["low", "medium", "high", "critical"] | None = None

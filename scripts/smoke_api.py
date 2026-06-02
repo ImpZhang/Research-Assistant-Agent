@@ -217,6 +217,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include claim validation packets")
     if "claim_validation_queue" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include claim validation queue")
+    if "claim_validation_queue_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include claim validation queue task generation")
     if "advisor_brief_evidence_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief evidence context")
     if "advisor_brief_claim_validation_context" not in status["implemented_capabilities"]:
@@ -327,6 +329,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include claim validation packet tool")
     if "get_claim_validation_queue" not in manifest_names:
         raise RuntimeError("tool manifest did not include claim validation queue tool")
+    if "create_tasks_from_claim_validation_queue" not in manifest_names:
+        raise RuntimeError("tool manifest did not include claim validation queue task tool")
     if "refresh_idea_novelty_search" not in manifest_names:
         raise RuntimeError("tool manifest did not include novelty refresh tool")
     if "create_tasks_from_idea_novelty_check" not in manifest_names:
@@ -776,6 +780,24 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("claim validation queue did not include the smoke ledger claim")
     if "Claim Validation Queue" not in claim_queue["markdown_export"]:
         raise RuntimeError("claim validation queue markdown did not include title")
+    claim_queue_tasks = require_ok(
+        client.post(
+            "/research/claims/validation-queue/tasks",
+            json_body={
+                "idea_id": refined_idea["id"],
+                "limit": 3,
+                "priority_filter": ["critical", "high"],
+                "created_by": "smoke_api",
+            },
+        ),
+        "claim validation queue tasks",
+    )
+    if not claim_queue_tasks["tasks"]:
+        raise RuntimeError("claim validation queue task generation returned no tasks")
+    if claim_queue_tasks["tasks"][0]["owner_type"] != "claim_validation_queue":
+        raise RuntimeError("claim validation queue tasks used the wrong owner type")
+    if claim_queue_tasks["tasks"][0]["due_phase"] != "claim_validation_follow_up":
+        raise RuntimeError("claim validation queue tasks used the wrong due phase")
     proposal_graph_edges = require_ok(
         client.get("/research/graph/edges?edge_type=proposal_revision_creates_task"),
         "proposal task graph edges",
@@ -800,6 +822,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not ledger_task_edges:
         raise RuntimeError("evidence ledger task graph edges were not created")
+    claim_queue_task_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=claim_validation_queue_creates_task"),
+        "claim validation queue task graph edges",
+    )
+    if not claim_queue_task_edges:
+        raise RuntimeError("claim validation queue task graph edges were not created")
     lineage = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/lineage"),
         "idea lineage",
@@ -819,6 +847,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea lineage did not include decision memo task")
     if evidence_tasks["tasks"][0]["id"] not in lineage_task_ids:
         raise RuntimeError("idea lineage did not include evidence ledger task")
+    if claim_queue_tasks["tasks"][0]["id"] not in lineage_task_ids:
+        raise RuntimeError("idea lineage did not include claim validation queue task")
+    if lineage["graph_edge_summary"].get("claim_validation_queue_creates_task", 0) < 1:
+        raise RuntimeError("idea lineage did not summarize claim validation queue task edges")
     if assumption_audit["id"] not in lineage["markdown_export"]:
         raise RuntimeError("idea lineage markdown did not include assumption audit")
     if evidence_ledger["id"] not in lineage["markdown_export"]:
@@ -839,6 +871,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea progress did not count evidence ledgers")
     if progress["artifact_counts"]["evidence_follow_up_tasks"] < 1:
         raise RuntimeError("idea progress did not count evidence follow-up tasks")
+    if progress["artifact_counts"].get("claim_validation_follow_up_tasks", 0) < 1:
+        raise RuntimeError("idea progress did not count claim validation follow-up tasks")
     if progress["latest_artifacts"]["evidence_ledger"]["id"] != evidence_ledger["id"]:
         raise RuntimeError("idea progress did not expose latest evidence ledger")
     if "Idea Progress" not in progress["markdown_export"]:
@@ -855,6 +889,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea research packet markdown did not include evidence ledger")
     if evidence_tasks["tasks"][0]["id"] not in research_packet["markdown_export"]:
         raise RuntimeError("idea research packet markdown did not include evidence ledger task")
+    if claim_queue_tasks["tasks"][0]["id"] not in research_packet["markdown_export"]:
+        raise RuntimeError("idea research packet markdown did not include claim queue task")
     timeline = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/timeline"),
         "idea timeline",
@@ -1613,8 +1649,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "claim_validation_action_count": len(claim_packet["validation_actions"]),
         "claim_validation_queue_count": len(claim_queue["items"]),
         "claim_validation_queue_critical": claim_queue["summary"]["critical_count"],
+        "claim_validation_queue_task_count": len(claim_queue_tasks["tasks"]),
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
         "evidence_ledger_task_graph_edge_count": len(ledger_task_edges),
+        "claim_queue_task_graph_edge_count": len(claim_queue_task_edges),
         "lineage_task_count": len(lineage["research_tasks"]),
         "lineage_graph_edge_types": len(lineage["graph_edge_summary"]),
         "progress_open_task_count": progress["artifact_counts"]["open_tasks"],

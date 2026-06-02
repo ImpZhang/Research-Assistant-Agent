@@ -1056,6 +1056,30 @@ async function loadClaimValidationQueue() {
   }
 }
 
+async function createClaimValidationQueueTasks() {
+  renderResult("workflowResult", "Creating claim validation queue tasks...", "warn");
+  try {
+    const body = await api("/research/claims/validation-queue/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        idea_id: state.latestIdeaId || null,
+        limit: 5,
+        priority_filter: ["critical", "high"],
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskIds = body.tasks.map((task) => task.id);
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Claim validation tasks", body.tasks.slice(0, 8), (task) => `${task.priority} ${task.status}: ${task.title}`)}`,
+    );
+    await loadTaskBoard();
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadIdeaLineage() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -1672,6 +1696,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("evidenceLedgerTasksButton").addEventListener("click", createEvidenceLedgerTasks);
   $("claimPacketButton").addEventListener("click", loadClaimValidationPacket);
   $("claimQueueButton").addEventListener("click", loadClaimValidationQueue);
+  $("claimQueueTasksButton").addEventListener("click", createClaimValidationQueueTasks);
   $("lineageButton").addEventListener("click", loadIdeaLineage);
   $("timelineButton").addEventListener("click", loadIdeaTimeline);
   $("progressButton").addEventListener("click", loadIdeaProgress);

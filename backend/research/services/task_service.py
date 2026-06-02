@@ -418,6 +418,104 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_claim_validation_queue(
+        self,
+        queue_items: list[dict],
+        *,
+        limit: int = 5,
+        priority_filter: list[str] | None = None,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        allowed_priorities = {str(priority) for priority in (priority_filter or [])}
+        candidates = [
+            item
+            for item in queue_items
+            if not allowed_priorities or str(item.get("priority") or "") in allowed_priorities
+        ]
+        if not candidates and allowed_priorities:
+            candidates = list(queue_items)
+
+        tasks = []
+        for idx, item in enumerate(candidates[:limit], start=1):
+            idea = item.get("idea") or {}
+            idea_id = str(idea.get("id") or item.get("idea_id") or "")
+            if not idea_id:
+                continue
+            ledger_id = str(item.get("ledger_id") or "")
+            claim_id = str(item.get("claim_id") or f"claim_{idx}")
+            action = str(
+                item.get("recommended_action")
+                or item.get("next_validation")
+                or item.get("claim")
+                or "Validate this claim before advancing the idea."
+            )
+            source_id = f"{ledger_id}:{claim_id}" if ledger_id else claim_id
+            tasks.append(
+                ResearchTask(
+                    idea_id=idea_id,
+                    owner_type="claim_validation_queue",
+                    owner_id=ledger_id or "claim_validation_queue",
+                    source_type="claim_validation_queue_item",
+                    source_id=source_id,
+                    title=self._claim_queue_task_title(action, item, idx),
+                    description=action,
+                    priority=self._claim_queue_task_priority(str(item.get("priority") or "")),
+                    status="todo",
+                    due_phase="claim_validation_follow_up",
+                    metadata_json={
+                        "ledger_id": ledger_id,
+                        "claim_id": claim_id,
+                        "claim": item.get("claim", ""),
+                        "claim_type": item.get("claim_type", ""),
+                        "support_level": item.get("support_level", ""),
+                        "queue_priority": item.get("priority", ""),
+                        "urgency_score": item.get("urgency_score", 0.0),
+                        "supporting_evidence_count": item.get("supporting_evidence_count", 0),
+                        "missing_evidence_count": item.get("missing_evidence_count", 0),
+                        "counterevidence_count": item.get("counterevidence_count", 0),
+                        "related_task_count": item.get("related_task_count", 0),
+                        "source_rank": idx,
+                    },
+                    created_by=created_by or "system",
+                )
+            )
+
+        tasks = self._deduplicate_claim_queue_tasks(tasks)[:limit]
+        if not tasks:
+            return []
+
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from claim validation queue.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "queue_priority": (task.metadata_json or {}).get("queue_priority", ""),
+                        "urgency_score": (task.metadata_json or {}).get("urgency_score", 0.0),
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_claim_validation_queue_tasks(tasks)
+        self.session.commit()
+        return tasks
+
     def create_from_research_plan(
         self,
         plan_id: str,
@@ -1265,6 +1363,27 @@ class ResearchTaskService:
             return "medium"
         return fallback
 
+    def _claim_queue_task_title(self, action: str, item: dict, idx: int) -> str:
+        claim_id = str(item.get("claim_id") or idx)
+        claim = " ".join(str(item.get("claim") or "").split())
+        clean_action = " ".join(str(action).split())
+        if claim:
+            return self._short_task_title(f"Validate claim {claim_id}: {claim}", idx)
+        return self._short_task_title(
+            f"Validate claim {claim_id}: {clean_action}",
+            idx,
+        )
+
+    def _claim_queue_task_priority(self, priority: str) -> str:
+        normalized = str(priority).lower()
+        if normalized == "critical":
+            return "critical"
+        if normalized == "high":
+            return "high"
+        if normalized == "low":
+            return "low"
+        return "medium"
+
     def _unique_commitments(self, commitments: list) -> list[str]:
         unique = []
         seen = set()
@@ -1345,6 +1464,21 @@ class ResearchTaskService:
                 task.idea_id or "",
                 task.owner_id,
                 task.source_type,
+                task.source_id,
+                task.description.lower(),
+            )
+            if key not in seen:
+                unique.append(task)
+                seen.add(key)
+        return unique
+
+    def _deduplicate_claim_queue_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
+        unique = []
+        seen = set()
+        for task in tasks:
+            key = (
+                task.idea_id or "",
+                task.owner_id,
                 task.source_id,
                 task.description.lower(),
             )

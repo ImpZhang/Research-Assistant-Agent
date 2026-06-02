@@ -48,6 +48,7 @@ from backend.research.models import (
 from backend.research.schemas import (
     ClaimValidationQueueItem,
     ClaimValidationQueueResponse,
+    ClaimValidationQueueTaskGenerateRequest,
     ContextSearchRequest,
     ContextSearchResponse,
     EmbeddingRebuildRequest,
@@ -254,6 +255,7 @@ def status() -> ProjectStatus:
             "claim_evidence_graph_links",
             "claim_validation_packets",
             "claim_validation_queue",
+            "claim_validation_queue_task_generation",
             "project_progress_overview",
             "project_triage_brief",
             "project_triage_task_generation",
@@ -588,6 +590,15 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/claims/validation-queue",
             output_model="ClaimValidationQueueResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_claim_validation_queue",
+            description="Turn top claim validation queue items into task-board follow-up tasks.",
+            method="POST",
+            path="/research/claims/validation-queue/tasks",
+            input_model="ClaimValidationQueueTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="refresh_idea_novelty_search",
@@ -2653,6 +2664,7 @@ def get_idea_progress(
     quality_gate_tasks = [task for task in tasks if task.owner_type == "idea_quality_gate"]
     opportunity_tasks = [task for task in tasks if task.owner_type == "opportunity_radar"]
     novelty_tasks = [task for task in tasks if task.owner_type == "novelty_check"]
+    claim_validation_tasks = [task for task in tasks if task.owner_type == "claim_validation_queue"]
     artifact_counts = {
         "related_work_matrices": len(matrices),
         "proposal_drafts": len(drafts),
@@ -2672,6 +2684,7 @@ def get_idea_progress(
         "quality_gate_follow_up_tasks": len(quality_gate_tasks),
         "opportunity_follow_up_tasks": len(opportunity_tasks),
         "novelty_follow_up_tasks": len(novelty_tasks),
+        "claim_validation_follow_up_tasks": len(claim_validation_tasks),
         "analysis_follow_up_tasks": len(analysis_tasks),
         "decision_follow_up_tasks": len(decision_tasks),
         "evidence_follow_up_tasks": len(evidence_tasks),
@@ -2939,6 +2952,8 @@ def _progress_recommendation(
         )
         if open_evidence_items:
             return "Generate follow-up tasks from the latest evidence ledger gaps."
+    if latest_ledger and artifact_counts["claim_validation_follow_up_tasks"] == 0:
+        return "Generate claim validation queue tasks for the highest-priority weak claims."
     if artifact_counts["proposal_revisions"] == 0:
         return "Create a proposal revision from the latest review."
     if artifact_counts["research_tasks"] == 0:
@@ -5065,6 +5080,29 @@ def get_claim_validation_queue(
     )
 
 
+@router.post("/claims/validation-queue/tasks", response_model=ResearchTaskGenerationResponse)
+def create_tasks_from_claim_validation_queue(
+    payload: ClaimValidationQueueTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    queue_limit = max(20, min(payload.limit * 4, 100))
+    queue = get_claim_validation_queue(
+        idea_id=payload.idea_id,
+        limit=queue_limit,
+        session=session,
+    )
+    tasks = ResearchTaskService(session).create_from_claim_validation_queue(
+        jsonable_encoder(queue.items),
+        limit=payload.limit,
+        priority_filter=list(payload.priority_filter or []),
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} claim validation queue follow-up tasks.",
+    )
+
+
 def _latest_evidence_ledgers_for_queue(
     session: Session,
     *,
@@ -5473,6 +5511,9 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "evidence_ledger_tracks_claim",
         "evidence_supports_claim",
         "evidence_ledger_creates_task",
+        "idea_has_claim_validation_queue",
+        "claim_validation_queue_prioritizes_claim",
+        "claim_validation_queue_creates_task",
         "research_plan_creates_task",
         "idea_has_readiness_assessment",
         "idea_readiness_creates_task",
