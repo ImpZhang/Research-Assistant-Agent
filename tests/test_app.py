@@ -60,6 +60,7 @@ def test_research_status() -> None:
     assert "idea_evidence_task_generation" in body["implemented_capabilities"]
     assert "claim_evidence_graph_links" in body["implemented_capabilities"]
     assert "claim_validation_packets" in body["implemented_capabilities"]
+    assert "claim_validation_queue" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
     assert "project_triage_task_generation" in body["implemented_capabilities"]
@@ -119,6 +120,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "list_idea_evidence_ledgers" in names
     assert "create_tasks_from_idea_evidence_ledger" in names
     assert "get_idea_claim_validation_packet" in names
+    assert "get_claim_validation_queue" in names
     assert "refresh_idea_novelty_search" in names
     assert "create_tasks_from_idea_novelty_check" in names
     assert "create_advisor_brief" in names
@@ -379,6 +381,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "evidenceLedgerButton" in response.text
     assert "evidenceLedgerTasksButton" in response.text
     assert "claimPacketButton" in response.text
+    assert "claimQueueButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -432,6 +435,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert (
         "/research/ideas/${state.latestIdeaId}/evidence-ledgers/${state.latestEvidenceLedgerId}/claims/${claimId}/validation-packet"
     ) in script.text
+    assert "/research/claims/validation-queue?${params.toString()}" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
     assert "/research/triage/brief/export/markdown" in script.text
@@ -1273,6 +1277,17 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert claim_packet_body["validation_actions"]
     assert "evidence_ledger_tracks_claim" in claim_packet_body["graph_edge_summary"]
     assert "# Claim Validation Packet:" in claim_packet_body["markdown_export"]
+
+    claim_queue = client.get(f"/research/claims/validation-queue?idea_id={idea_id}&limit=20")
+    assert claim_queue.status_code == 200
+    claim_queue_body = claim_queue.json()
+    assert claim_queue_body["items"]
+    assert claim_queue_body["summary"]["item_count"] == len(claim_queue_body["items"])
+    assert any(
+        item["ledger_id"] == evidence_ledger_body["id"] and item["claim_id"] == claim_id
+        for item in claim_queue_body["items"]
+    )
+    assert "# Claim Validation Queue" in claim_queue_body["markdown_export"]
 
     graph_edge_types = [
         "idea_has_proposal_draft",

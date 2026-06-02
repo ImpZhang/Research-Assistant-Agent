@@ -46,6 +46,8 @@ from backend.research.models import (
     TaskBoardSnapshot,
 )
 from backend.research.schemas import (
+    ClaimValidationQueueItem,
+    ClaimValidationQueueResponse,
     ContextSearchRequest,
     ContextSearchResponse,
     EmbeddingRebuildRequest,
@@ -251,6 +253,7 @@ def status() -> ProjectStatus:
             "idea_evidence_task_generation",
             "claim_evidence_graph_links",
             "claim_validation_packets",
+            "claim_validation_queue",
             "project_progress_overview",
             "project_triage_brief",
             "project_triage_task_generation",
@@ -577,6 +580,13 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/ideas/{idea_id}/evidence-ledgers/{ledger_id}/claims/{claim_id}/validation-packet",
             output_model="IdeaClaimValidationPacketResponse",
+        ),
+        ToolManifestItem(
+            name="get_claim_validation_queue",
+            description="Rank weak ledger claims across latest evidence ledgers for validation work.",
+            method="GET",
+            path="/research/claims/validation-queue",
+            output_model="ClaimValidationQueueResponse",
         ),
         ToolManifestItem(
             name="refresh_idea_novelty_search",
@@ -5012,6 +5022,212 @@ def get_idea_claim_validation_packet(
             f"from ledger {ledger.id}."
         ),
     )
+
+
+@router.get("/claims/validation-queue", response_model=ClaimValidationQueueResponse)
+def get_claim_validation_queue(
+    idea_id: str | None = None,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+) -> ClaimValidationQueueResponse:
+    limit = max(1, min(limit, 100))
+    ledgers = _latest_evidence_ledgers_for_queue(session, idea_id=idea_id, limit=limit)
+    idea_ids = [ledger.idea_id for ledger in ledgers]
+    ideas = session.query(Idea).filter(Idea.id.in_(idea_ids)).all() if idea_ids else []
+    ideas_by_id = {idea.id: idea for idea in ideas}
+
+    items: list[ClaimValidationQueueItem] = []
+    for ledger in ledgers:
+        idea = ideas_by_id.get(ledger.idea_id)
+        if idea is None:
+            continue
+        for claim in ledger.claims_json or []:
+            item = _claim_validation_queue_item(session, idea=idea, ledger=ledger, claim=claim)
+            items.append(item)
+    items = sorted(
+        items,
+        key=lambda item: (
+            -item.urgency_score,
+            item.priority,
+            item.ledger_created_at,
+            item.idea.id,
+            item.claim_id,
+        ),
+    )[:limit]
+    summary = _claim_validation_queue_summary(items)
+    markdown_export = _render_claim_validation_queue_markdown(items=items, summary=summary)
+    return ClaimValidationQueueResponse(
+        items=items,
+        summary=summary,
+        markdown_export=markdown_export,
+        message=f"Loaded {len(items)} claim validation queue items.",
+    )
+
+
+def _latest_evidence_ledgers_for_queue(
+    session: Session,
+    *,
+    idea_id: str | None,
+    limit: int,
+) -> list[IdeaEvidenceLedger]:
+    scan_limit = max(limit * 10, 100)
+    query = session.query(IdeaEvidenceLedger).order_by(IdeaEvidenceLedger.created_at.desc())
+    if idea_id:
+        query = query.filter(IdeaEvidenceLedger.idea_id == idea_id)
+    ledgers = query.limit(scan_limit).all()
+    latest_by_idea: dict[str, IdeaEvidenceLedger] = {}
+    for ledger in ledgers:
+        if ledger.idea_id not in latest_by_idea:
+            latest_by_idea[ledger.idea_id] = ledger
+    return list(latest_by_idea.values())
+
+
+def _claim_validation_queue_item(
+    session: Session,
+    *,
+    idea: Idea,
+    ledger: IdeaEvidenceLedger,
+    claim: dict,
+) -> ClaimValidationQueueItem:
+    claim_id = str(claim.get("claim_id") or "")
+    support_ids = [str(evidence_id) for evidence_id in claim.get("supporting_evidence_ids") or []]
+    missing = _claim_packet_missing_evidence(ledger, claim)
+    related_tasks = _claim_packet_related_tasks(session, ledger, claim)
+    counter_count = len(claim.get("challenge_signals") or [])
+    if claim.get("support_level") in {"unsupported", "partially_supported", "challenged"}:
+        counter_count += len(ledger.counterevidence_json or [])
+    urgency_score = _claim_validation_urgency_score(
+        support_level=str(claim.get("support_level") or ""),
+        supporting_evidence_count=len(support_ids),
+        missing_evidence_count=len(missing),
+        counterevidence_count=counter_count,
+        related_task_count=len([task for task in related_tasks if task.status != "done"]),
+    )
+    priority = _claim_validation_priority(urgency_score)
+    next_validation = str(claim.get("next_validation") or "")
+    recommended_action = _claim_queue_recommended_action(
+        claim=claim,
+        missing_evidence_count=len(missing),
+        related_tasks=related_tasks,
+    )
+    return ClaimValidationQueueItem(
+        idea=_serialize_idea(idea),
+        ledger_id=ledger.id,
+        ledger_created_at=ledger.created_at,
+        claim_id=claim_id,
+        claim=str(claim.get("claim") or ""),
+        claim_type=str(claim.get("claim_type") or ""),
+        support_level=str(claim.get("support_level") or ""),
+        priority=priority,
+        urgency_score=urgency_score,
+        supporting_evidence_count=len(support_ids),
+        missing_evidence_count=len(missing),
+        counterevidence_count=counter_count,
+        related_task_count=len(related_tasks),
+        next_validation=next_validation,
+        recommended_action=recommended_action,
+    )
+
+
+def _claim_validation_urgency_score(
+    *,
+    support_level: str,
+    supporting_evidence_count: int,
+    missing_evidence_count: int,
+    counterevidence_count: int,
+    related_task_count: int,
+) -> float:
+    base = {
+        "challenged": 0.95,
+        "unsupported": 0.9,
+        "partially_supported": 0.7,
+        "supported": 0.35,
+    }.get(support_level, 0.55)
+    score = (
+        base
+        + min(missing_evidence_count, 4) * 0.08
+        + min(counterevidence_count, 4) * 0.06
+        + min(related_task_count, 4) * 0.03
+        - min(supporting_evidence_count, 4) * 0.04
+    )
+    return round(max(0.0, min(1.0, score)), 4)
+
+
+def _claim_validation_priority(urgency_score: float) -> str:
+    if urgency_score >= 0.85:
+        return "critical"
+    if urgency_score >= 0.65:
+        return "high"
+    if urgency_score >= 0.4:
+        return "medium"
+    return "low"
+
+
+def _claim_queue_recommended_action(
+    *,
+    claim: dict,
+    missing_evidence_count: int,
+    related_tasks: list[ResearchTask],
+) -> str:
+    open_tasks = [task for task in related_tasks if task.status in {"todo", "doing", "blocked"}]
+    if open_tasks:
+        task = sorted(open_tasks, key=_progress_task_order)[0]
+        return f"Work linked task `{task.id}`: {task.title}"
+    if missing_evidence_count:
+        return f"Collect missing evidence for claim {claim.get('claim_id', '')}."
+    next_validation = str(claim.get("next_validation") or "").strip()
+    if next_validation:
+        return next_validation
+    return "Review this claim with the latest evidence ledger before advancing the idea."
+
+
+def _claim_validation_queue_summary(items: list[ClaimValidationQueueItem]) -> dict[str, Any]:
+    priorities = Counter(item.priority for item in items)
+    support_levels = Counter(item.support_level for item in items)
+    idea_count = len({item.idea.id for item in items})
+    return {
+        "item_count": len(items),
+        "idea_count": idea_count,
+        "by_priority": dict(priorities),
+        "by_support_level": dict(support_levels),
+        "critical_count": priorities.get("critical", 0),
+        "high_count": priorities.get("high", 0),
+    }
+
+
+def _render_claim_validation_queue_markdown(
+    *,
+    items: list[ClaimValidationQueueItem],
+    summary: dict[str, Any],
+) -> str:
+    lines = [
+        "# Claim Validation Queue",
+        "",
+        f"- Item Count: {summary.get('item_count', 0)}",
+        f"- Idea Count: {summary.get('idea_count', 0)}",
+        f"- By Priority: {summary.get('by_priority', {})}",
+        f"- By Support Level: {summary.get('by_support_level', {})}",
+        "",
+        "## Queue",
+        "",
+    ]
+    if not items:
+        lines.append("- No evidence-ledger claims found.")
+    for item in items:
+        lines.append(
+            f"- `{item.priority}` score={item.urgency_score} idea=`{item.idea.id}` "
+            f"ledger=`{item.ledger_id}` claim=`{item.claim_id}` "
+            f"support=`{item.support_level}`: {item.claim}"
+        )
+        lines.append(f"  - action: {item.recommended_action}")
+        lines.append(
+            "  - counts: "
+            f"support={item.supporting_evidence_count}, "
+            f"missing={item.missing_evidence_count}, "
+            f"counter={item.counterevidence_count}, "
+            f"tasks={item.related_task_count}"
+        )
+    return "\n".join(lines).strip() + "\n"
 
 
 def _find_ledger_claim(ledger: IdeaEvidenceLedger, claim_id: str) -> dict | None:

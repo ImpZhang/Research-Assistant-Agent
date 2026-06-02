@@ -215,6 +215,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include claim evidence graph links")
     if "claim_validation_packets" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include claim validation packets")
+    if "claim_validation_queue" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include claim validation queue")
     if "advisor_brief_evidence_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief evidence context")
     if "project_triage_brief" not in status["implemented_capabilities"]:
@@ -321,6 +323,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include evidence ledger task tool")
     if "get_idea_claim_validation_packet" not in manifest_names:
         raise RuntimeError("tool manifest did not include claim validation packet tool")
+    if "get_claim_validation_queue" not in manifest_names:
+        raise RuntimeError("tool manifest did not include claim validation queue tool")
     if "refresh_idea_novelty_search" not in manifest_names:
         raise RuntimeError("tool manifest did not include novelty refresh tool")
     if "create_tasks_from_idea_novelty_check" not in manifest_names:
@@ -755,6 +759,21 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("claim validation packet did not include validation actions")
     if "Claim Validation Packet" not in claim_packet["markdown_export"]:
         raise RuntimeError("claim validation packet markdown did not include title")
+    claim_queue = require_ok(
+        client.get(f"/research/claims/validation-queue?idea_id={refined_idea['id']}&limit=20"),
+        "claim validation queue",
+    )
+    if not claim_queue["items"]:
+        raise RuntimeError("claim validation queue returned no items")
+    if claim_queue["summary"]["item_count"] != len(claim_queue["items"]):
+        raise RuntimeError("claim validation queue summary count did not match items")
+    if not any(
+        item["ledger_id"] == evidence_ledger["id"] and item["claim_id"] == claim_id
+        for item in claim_queue["items"]
+    ):
+        raise RuntimeError("claim validation queue did not include the smoke ledger claim")
+    if "Claim Validation Queue" not in claim_queue["markdown_export"]:
+        raise RuntimeError("claim validation queue markdown did not include title")
     proposal_graph_edges = require_ok(
         client.get("/research/graph/edges?edge_type=proposal_revision_creates_task"),
         "proposal task graph edges",
@@ -1560,6 +1579,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "claim_validation_claim_id": claim_packet["claim"]["claim_id"],
         "claim_validation_support_count": len(claim_packet["supporting_evidence"]),
         "claim_validation_action_count": len(claim_packet["validation_actions"]),
+        "claim_validation_queue_count": len(claim_queue["items"]),
+        "claim_validation_queue_critical": claim_queue["summary"]["critical_count"],
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
         "evidence_ledger_task_graph_edge_count": len(ledger_task_edges),
         "lineage_task_count": len(lineage["research_tasks"]),

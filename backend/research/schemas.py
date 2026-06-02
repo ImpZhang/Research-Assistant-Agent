@@ -664,6 +664,31 @@ class IdeaClaimValidationPacketResponse(BaseModel):
     message: str
 
 
+class ClaimValidationQueueItem(BaseModel):
+    idea: "IdeaRead"
+    ledger_id: str
+    ledger_created_at: datetime
+    claim_id: str
+    claim: str
+    claim_type: str = ""
+    support_level: str = ""
+    priority: str = "medium"
+    urgency_score: float = 0.0
+    supporting_evidence_count: int = 0
+    missing_evidence_count: int = 0
+    counterevidence_count: int = 0
+    related_task_count: int = 0
+    next_validation: str = ""
+    recommended_action: str = ""
+
+
+class ClaimValidationQueueResponse(BaseModel):
+    items: list[ClaimValidationQueueItem] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+    markdown_export: str = ""
+    message: str
+
+
 class IdeaLineageResponse(BaseModel):
     idea: IdeaRead
     research_plans: list["ResearchPlanRead"] = Field(default_factory=list)
