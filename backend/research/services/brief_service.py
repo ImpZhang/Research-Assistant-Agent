@@ -12,6 +12,7 @@ from backend.research.models import (
     ResearchPlanSnapshot,
     ResearchProfile,
     ResearchTask,
+    ResearchTaskEvent,
 )
 from backend.research.services.triage_snapshot_service import ProjectTriageSnapshotService
 
@@ -38,6 +39,7 @@ class ResearchBriefService:
         readiness_signals = self._load_readiness_signals([idea.id for idea in ideas])
         evidence_signals = self._load_evidence_signals([idea.id for idea in ideas])
         claim_queue_signals = self._load_claim_queue_signals([idea.id for idea in ideas])
+        claim_result_signals = self._load_claim_result_signals([idea.id for idea in ideas])
         triage_signals = self._load_triage_signals([idea.id for idea in ideas])
         triage_snapshot_comparison = self._load_triage_snapshot_comparison()
         summary = self._summary(
@@ -49,6 +51,7 @@ class ResearchBriefService:
             readiness_signals,
             evidence_signals,
             claim_queue_signals,
+            claim_result_signals,
             triage_signals,
             triage_snapshot_comparison,
         )
@@ -71,6 +74,7 @@ class ResearchBriefService:
             readiness_signals,
             evidence_signals,
             claim_queue_signals,
+            claim_result_signals,
             triage_signals,
             triage_snapshot_comparison,
         )
@@ -284,6 +288,44 @@ class ResearchBriefService:
             },
         }
 
+    def _load_claim_result_signals(self, idea_ids: list[str]) -> dict:
+        if not idea_ids:
+            return {"event_count": 0, "by_status": {}, "recent_results": []}
+        events = (
+            self.session.query(ResearchTaskEvent)
+            .filter(
+                ResearchTaskEvent.idea_id.in_(idea_ids),
+                ResearchTaskEvent.event_type == "claim_validation_result",
+            )
+            .order_by(ResearchTaskEvent.created_at.desc())
+            .limit(100)
+            .all()
+        )
+        by_status = Counter(
+            str((event.metadata_json or {}).get("validation_status") or "unknown")
+            for event in events
+        )
+        return {
+            "event_count": len(events),
+            "by_status": dict(by_status),
+            "recent_results": [
+                {
+                    "id": event.id,
+                    "task_id": event.task_id,
+                    "idea_id": event.idea_id,
+                    "validation_status": (event.metadata_json or {}).get(
+                        "validation_status", "unknown"
+                    ),
+                    "claim_id": (event.metadata_json or {}).get("claim_id", ""),
+                    "ledger_id": (event.metadata_json or {}).get("ledger_id", ""),
+                    "next_action": (event.metadata_json or {}).get("next_action", ""),
+                    "note": event.note,
+                    "created_at": event.created_at.isoformat(),
+                }
+                for event in events[:10]
+            ],
+        }
+
     def _claim_queue_item(
         self,
         *,
@@ -412,6 +454,7 @@ class ResearchBriefService:
         readiness_signals: list[dict],
         evidence_signals: list[dict],
         claim_queue_signals: dict,
+        claim_result_signals: dict,
         triage_signals: dict,
         triage_snapshot_comparison: dict,
     ) -> dict:
@@ -438,6 +481,7 @@ class ResearchBriefService:
             "readiness_signals": readiness_signals,
             "evidence_signals": evidence_signals,
             "claim_validation_queue": claim_queue_signals,
+            "claim_validation_results": claim_result_signals,
             "triage_signals": triage_signals,
             "triage_snapshot_comparison": triage_snapshot_comparison,
         }
@@ -453,6 +497,7 @@ class ResearchBriefService:
         readiness_signals: list[dict],
         evidence_signals: list[dict],
         claim_queue_signals: dict,
+        claim_result_signals: dict,
         triage_signals: dict,
         triage_snapshot_comparison: dict,
     ) -> str:
@@ -468,6 +513,7 @@ class ResearchBriefService:
             f"- Blocked Tasks: {summary.get('blocked_task_count', 0)}",
             f"- Research Plans: {summary.get('research_plan_count', 0)}",
             f"- Research Plan Open Tasks: {summary.get('research_plan_open_task_count', 0)}",
+            f"- Claim Validation Results: {claim_result_signals.get('event_count', 0)}",
             "",
             "## Research Profile",
             "",
@@ -558,6 +604,31 @@ class ResearchBriefService:
                 lines.append(f"  - action: {item['recommended_action']}")
         else:
             lines.append("- No claim validation queue items available.")
+
+        lines.extend(["", "## Claim Validation Results", ""])
+        claim_results = claim_result_signals.get("recent_results") or []
+        if claim_result_signals.get("event_count", 0):
+            lines.extend(
+                [
+                    f"- Result Events: {claim_result_signals.get('event_count', 0)}",
+                    f"- By Status: {claim_result_signals.get('by_status', {})}",
+                    "",
+                    "### Recent Results",
+                    "",
+                ]
+            )
+            for result in claim_results[:8]:
+                lines.append(
+                    f"- `{result['validation_status']}` task=`{result['task_id']}` "
+                    f"idea=`{result['idea_id']}` claim=`{result['claim_id']}` "
+                    f"ledger=`{result['ledger_id']}`"
+                )
+                if result.get("next_action"):
+                    lines.append(f"  - next: {result['next_action']}")
+                if result.get("note"):
+                    lines.append(f"  - note: {result['note']}")
+        else:
+            lines.append("- No claim validation results recorded.")
 
         lines.extend(["", "## Triage Signals", ""])
         if triage_signals.get("task_count", 0):

@@ -1460,6 +1460,12 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "claim_validation_result" in claim_task_event_types
     assert "task_updated" in claim_task_event_types
 
+    progress_after_claim_result = client.get(f"/research/ideas/{idea_id}/progress")
+    assert progress_after_claim_result.status_code == 200
+    assert (
+        progress_after_claim_result.json()["artifact_counts"]["claim_validation_result_events"] >= 1
+    )
+
     readiness = client.get(f"/research/ideas/{idea_id}/readiness")
     assert readiness.status_code == 200
     readiness_body = readiness.json()
@@ -1738,9 +1744,17 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert overview_body["idea_count"] >= 1
     assert overview_body["task_summary"]["open_task_count"] >= 1
     assert overview_body["task_summary"]["claim_validation_task_count"] >= 1
+    assert overview_body["task_summary"]["claim_validation_result_count"] >= 1
+    assert (
+        overview_body["task_summary"]["claim_validation_results"]["by_status"][
+            "needs_more_evidence"
+        ]
+        >= 1
+    )
     assert overview_body["recent_experiment_analyses"]
     assert overview_body["recommended_actions"]
     assert "# Research Progress Overview" in overview_body["markdown_export"]
+    assert "## Recent Claim Validation Results" in overview_body["markdown_export"]
 
     radar = client.get("/research/opportunities/radar?limit=5")
     assert radar.status_code == 200
@@ -1788,6 +1802,10 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert brief_body["summary"]["evidence_signals"][0]["ledger_id"] == evidence_ledger_body["id"]
     assert brief_body["summary"]["evidence_signals"][0]["claim_count"] >= 1
     assert brief_body["summary"]["claim_validation_queue"]["summary"]["item_count"] >= 1
+    assert brief_body["summary"]["claim_validation_results"]["event_count"] >= 1
+    assert (
+        brief_body["summary"]["claim_validation_results"]["by_status"]["needs_more_evidence"] >= 1
+    )
     assert any(
         item["ledger_id"] == evidence_ledger_body["id"] and item["claim_id"] == claim_id
         for item in brief_body["summary"]["claim_validation_queue"]["items"]
@@ -1801,6 +1819,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "# Pytest Advisor Brief" in brief_body["markdown_export"]
     assert "## Evidence Signals" in brief_body["markdown_export"]
     assert "## Claim Validation Queue" in brief_body["markdown_export"]
+    assert "## Claim Validation Results" in brief_body["markdown_export"]
     assert "## Triage Signals" in brief_body["markdown_export"]
     assert "Claim Validation Tasks" in brief_body["markdown_export"]
     assert "## Triage Snapshot Changes" in brief_body["markdown_export"]
@@ -1819,6 +1838,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "## Highest Priority Open Tasks" in brief_export.text
     assert "## Evidence Signals" in brief_export.text
     assert "## Claim Validation Queue" in brief_export.text
+    assert "## Claim Validation Results" in brief_export.text
     assert "Claim Validation Tasks" in brief_export.text
     assert "## Triage Snapshot Changes" in brief_export.text
 

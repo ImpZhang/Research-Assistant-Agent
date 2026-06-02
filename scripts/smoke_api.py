@@ -926,6 +926,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         event["event_type"] for event in claim_validation_task_events
     }:
         raise RuntimeError("claim validation task events did not include result event")
+    progress_after_claim_result = require_ok(
+        client.get(f"/research/ideas/{refined_idea['id']}/progress"),
+        "idea progress after claim validation result",
+    )
+    if progress_after_claim_result["artifact_counts"].get("claim_validation_result_events", 0) < 1:
+        raise RuntimeError("idea progress did not count claim validation result events")
     timeline = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/timeline"),
         "idea timeline",
@@ -1052,6 +1058,17 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research overview did not include ideas")
     if overview["task_summary"].get("claim_validation_task_count", 0) < 1:
         raise RuntimeError("research overview did not count claim validation tasks")
+    if overview["task_summary"].get("claim_validation_result_count", 0) < 1:
+        raise RuntimeError("research overview did not count claim validation results")
+    if (
+        overview["task_summary"]["claim_validation_results"]["by_status"].get(
+            "needs_more_evidence", 0
+        )
+        < 1
+    ):
+        raise RuntimeError("research overview did not summarize claim validation statuses")
+    if "Recent Claim Validation Results" not in overview["markdown_export"]:
+        raise RuntimeError("research overview markdown did not include claim validation results")
     if not overview["recommended_actions"]:
         raise RuntimeError("research overview did not include recommended actions")
     readiness_overview = require_ok(
@@ -1285,6 +1302,15 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     claim_queue_summary = advisor_brief["summary"]["claim_validation_queue"]["summary"]
     if claim_queue_summary["item_count"] < 1:
         raise RuntimeError("advisor brief did not include claim validation queue items")
+    if advisor_brief["summary"]["claim_validation_results"].get("event_count", 0) < 1:
+        raise RuntimeError("advisor brief did not include claim validation result signals")
+    if (
+        advisor_brief["summary"]["claim_validation_results"]["by_status"].get(
+            "needs_more_evidence", 0
+        )
+        < 1
+    ):
+        raise RuntimeError("advisor brief did not summarize claim validation result statuses")
     if not any(
         item["ledger_id"] == evidence_ledger["id"] and item["claim_id"] == claim_id
         for item in advisor_brief["summary"]["claim_validation_queue"]["items"]
@@ -1296,6 +1322,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("advisor brief markdown did not include evidence signals")
     if "## Claim Validation Queue" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include claim validation queue")
+    if "## Claim Validation Results" not in advisor_brief_markdown:
+        raise RuntimeError("advisor brief markdown did not include claim validation results")
     if "Claim Validation Tasks" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include claim validation task signals")
     if "## Triage Snapshot Changes" not in advisor_brief_markdown:
@@ -1692,6 +1720,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "claim_validation_queue_critical": claim_queue["summary"]["critical_count"],
         "claim_validation_queue_task_count": len(claim_queue_tasks["tasks"]),
         "claim_validation_result_event_id": claim_validation_result["id"],
+        "claim_validation_result_status": claim_validation_result["metadata"]["validation_status"],
         "claim_validation_task_status_after_result": claim_validation_task_after_result["status"],
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
         "evidence_ledger_task_graph_edge_count": len(ledger_task_edges),
@@ -1699,6 +1728,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "lineage_task_count": len(lineage["research_tasks"]),
         "lineage_graph_edge_types": len(lineage["graph_edge_summary"]),
         "progress_open_task_count": progress["artifact_counts"]["open_tasks"],
+        "progress_claim_validation_result_count": progress_after_claim_result["artifact_counts"][
+            "claim_validation_result_events"
+        ],
         "progress_recommended_next_step": progress["recommended_next_step"],
         "research_packet_markdown_chars": len(research_packet["markdown_export"]),
         "timeline_event_count": len(timeline["events"]),
@@ -1732,6 +1764,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "overview_claim_validation_task_count": overview["task_summary"][
             "claim_validation_task_count"
         ],
+        "overview_claim_validation_result_count": overview["task_summary"][
+            "claim_validation_result_count"
+        ],
         "readiness_overview_idea_count": readiness_overview["idea_count"],
         "readiness_overview_average": readiness_overview["average_readiness"],
         "opportunity_radar_count": len(radar["top_opportunities"]),
@@ -1744,6 +1779,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "advisor_brief_claim_validation_task_count": advisor_brief["summary"]["triage_signals"][
             "claim_validation_task_count"
         ],
+        "advisor_brief_claim_validation_result_count": advisor_brief["summary"][
+            "claim_validation_results"
+        ]["event_count"],
         "advisor_brief_triage_snapshot_candidate": advisor_brief["summary"][
             "triage_snapshot_comparison"
         ]["candidate_snapshot_id"],

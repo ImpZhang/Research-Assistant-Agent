@@ -888,8 +888,19 @@ def get_research_progress_overview(
         .limit(30)
         .all()
     )
+    claim_result_events = (
+        session.query(ResearchTaskEvent)
+        .filter(ResearchTaskEvent.event_type == "claim_validation_result")
+        .order_by(ResearchTaskEvent.created_at.desc())
+        .limit(100)
+        .all()
+    )
     status_counts = dict(Counter(idea.status for idea in ideas))
     task_summary = _overview_task_summary(tasks)
+    task_summary["claim_validation_results"] = _claim_validation_result_summary(claim_result_events)
+    task_summary["claim_validation_result_count"] = task_summary["claim_validation_results"][
+        "event_count"
+    ]
     recent_experiment_analyses = [
         {
             "id": analysis.id,
@@ -951,6 +962,7 @@ def _overview_task_summary(tasks: list[ResearchTask]) -> dict:
         "open_task_count": len(open_tasks),
         "research_plan_task_count": by_owner_type.get("research_plan", 0),
         "claim_validation_task_count": by_owner_type.get("claim_validation_queue", 0),
+        "claim_validation_result_count": 0,
         "by_status": dict(by_status),
         "by_priority": dict(by_priority),
         "by_owner_type": dict(by_owner_type),
@@ -964,6 +976,31 @@ def _overview_task_summary(tasks: list[ResearchTask]) -> dict:
                 "owner_type": task.owner_type,
             }
             for task in top_open_tasks
+        ],
+    }
+
+
+def _claim_validation_result_summary(events: list[ResearchTaskEvent]) -> dict[str, Any]:
+    by_status = Counter(
+        str((event.metadata_json or {}).get("validation_status") or "unknown") for event in events
+    )
+    return {
+        "event_count": len(events),
+        "by_status": dict(by_status),
+        "recent_results": [
+            {
+                "id": event.id,
+                "task_id": event.task_id,
+                "idea_id": event.idea_id,
+                "validation_status": (event.metadata_json or {}).get(
+                    "validation_status", "unknown"
+                ),
+                "claim_id": (event.metadata_json or {}).get("claim_id", ""),
+                "ledger_id": (event.metadata_json or {}).get("ledger_id", ""),
+                "next_action": (event.metadata_json or {}).get("next_action", ""),
+                "created_at": event.created_at.isoformat(),
+            }
+            for event in events[:10]
         ],
     }
 
@@ -1009,6 +1046,10 @@ def _render_research_overview_markdown(
         f"- Status Counts: {status_counts}",
         f"- Open Tasks: {task_summary.get('open_task_count', 0)}",
         f"- Research Plan Tasks: {task_summary.get('research_plan_task_count', 0)}",
+        f"- Claim Validation Tasks: {task_summary.get('claim_validation_task_count', 0)}",
+        f"- Claim Validation Results: {task_summary.get('claim_validation_result_count', 0)}",
+        "- Claim Validation Results By Status: "
+        f"{(task_summary.get('claim_validation_results') or {}).get('by_status', {})}",
         f"- Tasks By Owner Type: {task_summary.get('by_owner_type', {})}",
         "",
         "## Top Open Tasks",
@@ -1037,6 +1078,18 @@ def _render_research_overview_markdown(
             lines.append(f"- `{task['id']}` `{task['priority']}` {task['title']}")
     else:
         lines.append("- No blocked tasks.")
+    lines.extend(["", "## Recent Claim Validation Results", ""])
+    claim_result_summary = task_summary.get("claim_validation_results") or {}
+    recent_claim_results = claim_result_summary.get("recent_results") or []
+    if recent_claim_results:
+        for result in recent_claim_results:
+            lines.append(
+                f"- `{result['validation_status']}` task=`{result['task_id']}` "
+                f"idea=`{result['idea_id']}` claim=`{result['claim_id']}` "
+                f"ledger=`{result['ledger_id']}` next=`{result['next_action'] or 'none'}`"
+            )
+    else:
+        lines.append("- No claim validation results recorded.")
     lines.extend(["", "## Recommended Actions", ""])
     lines.extend(f"- {action}" for action in recommended_actions)
     return "\n".join(lines).strip() + "\n"
@@ -2645,6 +2698,11 @@ def get_idea_progress(
     evidence_ledgers = _latest_for_idea(session, IdeaEvidenceLedger, idea_id, 20)
     research_plans = _latest_research_plans_for_idea(session, idea_id, 20)
     tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
+    claim_validation_result_events = [
+        event
+        for event in _latest_for_idea(session, ResearchTaskEvent, idea_id, 50)
+        if event.event_type == "claim_validation_result"
+    ]
     snapshots = _latest_for_idea(session, TaskBoardSnapshot, idea_id, 20)
 
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
@@ -2697,6 +2755,7 @@ def get_idea_progress(
         "opportunity_follow_up_tasks": len(opportunity_tasks),
         "novelty_follow_up_tasks": len(novelty_tasks),
         "claim_validation_follow_up_tasks": len(claim_validation_tasks),
+        "claim_validation_result_events": len(claim_validation_result_events),
         "analysis_follow_up_tasks": len(analysis_tasks),
         "decision_follow_up_tasks": len(decision_tasks),
         "evidence_follow_up_tasks": len(evidence_tasks),
