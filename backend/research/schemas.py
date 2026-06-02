@@ -477,6 +477,20 @@ class ResearchTaskEventCreate(BaseModel):
     created_by: str = "system"
 
 
+class ClaimValidationResultCreate(BaseModel):
+    validation_status: Literal[
+        "supported",
+        "challenged",
+        "needs_more_evidence",
+        "inconclusive",
+    ] = "inconclusive"
+    evidence_ids: list[str] = Field(default_factory=list)
+    notes: str = ""
+    next_action: str = ""
+    mark_task_done: bool = True
+    created_by: str = "system"
+
+
 class ResearchTaskEventRead(BaseModel):
     id: str
     task_id: str

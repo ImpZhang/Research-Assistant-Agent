@@ -741,6 +741,7 @@ idea 需要支持 evidence ledger：
 - evidence ledger 需要支持单条 claim validation packet：输入 ledger id 和 claim id，返回 claim、supporting evidence、evidence links、counterevidence、missing evidence、related tasks、validation actions、graph edge summary 和 Markdown，用于导师讨论或 MCP agent 下钻验证。
 - 系统需要支持 claim validation queue：从最新 evidence ledgers 中抽取薄弱 claim，按 support level、missing evidence、counterevidence 和相关任务排优先级，输出项目级 Markdown 队列，回答“今天最该验证哪些科研主张”。
 - claim validation queue 需要能一键转成 task board 任务：从 critical/high queue items 创建 `owner_type=claim_validation_queue`、`due_phase=claim_validation_follow_up` 的任务，并写入 `claim_validation_queue_creates_task` 图边。这样“发现薄弱主张 -> 指定验证行动 -> 任务追踪”形成闭环。
+- claim validation follow-up task 需要支持记录验证结果：研究者或后续 agent 可以写入 validation_status、evidence_ids、notes、next_action，并默认把任务标记为 done。这样 claim validation 不只是创建任务，而能留下“验证结论是什么、用了哪些证据、下一步怎么处理”的可追踪事件。
 
 proposal、review、revision、experiment run、experiment analysis、task 和 task snapshot 都需要进入 GraphRAG-lite：
 

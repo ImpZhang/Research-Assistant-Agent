@@ -219,6 +219,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include claim validation queue")
     if "claim_validation_queue_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include claim validation queue task generation")
+    if "claim_validation_result_tracking" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include claim validation result tracking")
     if "advisor_brief_evidence_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief evidence context")
     if "advisor_brief_claim_validation_context" not in status["implemented_capabilities"]:
@@ -331,6 +333,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include claim validation queue tool")
     if "create_tasks_from_claim_validation_queue" not in manifest_names:
         raise RuntimeError("tool manifest did not include claim validation queue task tool")
+    if "record_claim_validation_result" not in manifest_names:
+        raise RuntimeError("tool manifest did not include claim validation result tool")
     if "refresh_idea_novelty_search" not in manifest_names:
         raise RuntimeError("tool manifest did not include novelty refresh tool")
     if "create_tasks_from_idea_novelty_check" not in manifest_names:
@@ -891,6 +895,37 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea research packet markdown did not include evidence ledger task")
     if claim_queue_tasks["tasks"][0]["id"] not in research_packet["markdown_export"]:
         raise RuntimeError("idea research packet markdown did not include claim queue task")
+    claim_validation_result = require_ok(
+        client.post(
+            f"/research/tasks/{claim_queue_tasks['tasks'][0]['id']}/claim-validation-result",
+            json_body={
+                "validation_status": "needs_more_evidence",
+                "evidence_ids": [claim_packet["supporting_evidence"][0]["id"]],
+                "notes": "Smoke result: claim needs one more independent support source.",
+                "next_action": "Run a targeted validation search for this claim.",
+                "created_by": "smoke_api",
+            },
+        ),
+        "claim validation result",
+    )
+    if claim_validation_result["event_type"] != "claim_validation_result":
+        raise RuntimeError("claim validation result used the wrong event type")
+    if claim_validation_result["metadata"]["validation_status"] != "needs_more_evidence":
+        raise RuntimeError("claim validation result did not persist the validation status")
+    claim_validation_task_after_result = require_ok(
+        client.get(f"/research/tasks/{claim_queue_tasks['tasks'][0]['id']}"),
+        "claim validation task after result",
+    )
+    if claim_validation_task_after_result["status"] != "done":
+        raise RuntimeError("claim validation result did not mark the task done")
+    claim_validation_task_events = require_ok(
+        client.get(f"/research/tasks/{claim_queue_tasks['tasks'][0]['id']}/events"),
+        "claim validation task events",
+    )
+    if "claim_validation_result" not in {
+        event["event_type"] for event in claim_validation_task_events
+    }:
+        raise RuntimeError("claim validation task events did not include result event")
     timeline = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/timeline"),
         "idea timeline",
@@ -1656,6 +1691,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "claim_validation_queue_count": len(claim_queue["items"]),
         "claim_validation_queue_critical": claim_queue["summary"]["critical_count"],
         "claim_validation_queue_task_count": len(claim_queue_tasks["tasks"]),
+        "claim_validation_result_event_id": claim_validation_result["id"],
+        "claim_validation_task_status_after_result": claim_validation_task_after_result["status"],
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
         "evidence_ledger_task_graph_edge_count": len(ledger_task_edges),
         "claim_queue_task_graph_edge_count": len(claim_queue_task_edges),

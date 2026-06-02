@@ -62,6 +62,7 @@ def test_research_status() -> None:
     assert "claim_validation_packets" in body["implemented_capabilities"]
     assert "claim_validation_queue" in body["implemented_capabilities"]
     assert "claim_validation_queue_task_generation" in body["implemented_capabilities"]
+    assert "claim_validation_result_tracking" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
@@ -124,6 +125,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_idea_claim_validation_packet" in names
     assert "get_claim_validation_queue" in names
     assert "create_tasks_from_claim_validation_queue" in names
+    assert "record_claim_validation_result" in names
     assert "refresh_idea_novelty_search" in names
     assert "create_tasks_from_idea_novelty_check" in names
     assert "create_advisor_brief" in names
@@ -379,6 +381,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "readinessTasksButton" in response.text
     assert "taskBoardButton" in response.text
     assert "taskSelect" in response.text
+    assert "claimResultButton" in response.text
     assert "timelineButton" in response.text
     assert "projectBundleButton" in response.text
     assert "evidenceLedgerButton" in response.text
@@ -414,6 +417,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/tasks/snapshots" in script.text
     assert "/research/tasks?${params.toString()}" in script.text
     assert "/research/tasks/${taskId}" in script.text
+    assert "/research/tasks/${taskId}/claim-validation-result" in script.text
     assert "/research/experiment-plans/${state.latestExperimentPlanId}/runs" in script.text
     assert "/research/experiment-runs/${state.latestExperimentRunId}/analysis" in script.text
     assert "/research/experiment-analyses/${state.latestExperimentAnalysisId}/tasks" in script.text
@@ -1429,6 +1433,32 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "claim_validation_queue_creates_task" in packet_body["graph_edge_summary"]
     assert "# Idea Research Packet:" in packet_body["markdown_export"]
     assert "## Packet Use" in packet_body["markdown_export"]
+
+    claim_validation_result = client.post(
+        f"/research/tasks/{claim_queue_task_id}/claim-validation-result",
+        json={
+            "validation_status": "needs_more_evidence",
+            "evidence_ids": [claim_packet_body["supporting_evidence"][0]["id"]],
+            "notes": "Need one more independent support source before advisor discussion.",
+            "next_action": "Run a targeted literature search for an independent validation.",
+            "created_by": "pytest",
+        },
+    )
+    assert claim_validation_result.status_code == 200
+    claim_validation_result_body = claim_validation_result.json()
+    assert claim_validation_result_body["event_type"] == "claim_validation_result"
+    assert claim_validation_result_body["metadata"]["validation_status"] == "needs_more_evidence"
+    assert claim_validation_result_body["metadata"]["claim_id"]
+
+    updated_claim_task = client.get(f"/research/tasks/{claim_queue_task_id}")
+    assert updated_claim_task.status_code == 200
+    assert updated_claim_task.json()["status"] == "done"
+
+    claim_task_events = client.get(f"/research/tasks/{claim_queue_task_id}/events")
+    assert claim_task_events.status_code == 200
+    claim_task_event_types = {event["event_type"] for event in claim_task_events.json()}
+    assert "claim_validation_result" in claim_task_event_types
+    assert "task_updated" in claim_task_event_types
 
     readiness = client.get(f"/research/ideas/{idea_id}/readiness")
     assert readiness.status_code == 200

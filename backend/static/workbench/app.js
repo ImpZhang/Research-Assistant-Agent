@@ -809,6 +809,35 @@ async function updateSelectedTask(status) {
   }
 }
 
+async function recordClaimValidationResult() {
+  const taskId = $("taskSelect").value || state.latestTaskIds[0];
+  if (!taskId) {
+    renderResult("workflowResult", "Load a claim validation task first.", "warn");
+    return;
+  }
+  renderResult("workflowResult", `Recording claim result for <code>${escapeHtml(taskId)}</code>...`, "warn");
+  try {
+    const event = await api(`/research/tasks/${taskId}/claim-validation-result`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        validation_status: "needs_more_evidence",
+        evidence_ids: [],
+        notes: $("refineFocus").value.trim() || "Workbench claim validation result.",
+        next_action: "Collect one independent support source or counterexample.",
+        created_by: "workbench",
+      }),
+    });
+    renderResult(
+      "workflowResult",
+      `Recorded claim result <code>${escapeHtml(event.id)}</code>: ${escapeHtml(event.metadata.validation_status)}.`,
+    );
+    await loadTaskBoard();
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function createExperimentRun() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -1686,6 +1715,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("startTaskButton").addEventListener("click", () => updateSelectedTask("doing"));
   $("completeTaskButton").addEventListener("click", () => updateSelectedTask("done"));
   $("blockTaskButton").addEventListener("click", () => updateSelectedTask("blocked"));
+  $("claimResultButton").addEventListener("click", recordClaimValidationResult);
   $("experimentRunButton").addEventListener("click", createExperimentRun);
   $("experimentAnalysisButton").addEventListener("click", analyzeExperimentRun);
   $("analysisTasksButton").addEventListener("click", createAnalysisTasks);

@@ -49,6 +49,7 @@ from backend.research.schemas import (
     ClaimValidationQueueItem,
     ClaimValidationQueueResponse,
     ClaimValidationQueueTaskGenerateRequest,
+    ClaimValidationResultCreate,
     ContextSearchRequest,
     ContextSearchResponse,
     EmbeddingRebuildRequest,
@@ -256,6 +257,7 @@ def status() -> ProjectStatus:
             "claim_validation_packets",
             "claim_validation_queue",
             "claim_validation_queue_task_generation",
+            "claim_validation_result_tracking",
             "project_progress_overview",
             "project_triage_brief",
             "project_triage_task_generation",
@@ -598,6 +600,15 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/claims/validation-queue/tasks",
             input_model="ClaimValidationQueueTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="record_claim_validation_result",
+            description="Record a validation outcome for a claim validation task.",
+            method="POST",
+            path="/research/tasks/{task_id}/claim-validation-result",
+            input_model="ClaimValidationResultCreate",
+            output_model="ResearchTaskEventRead",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -6038,6 +6049,52 @@ def get_research_task(
     if task is None:
         raise HTTPException(status_code=404, detail="Research task not found")
     return _serialize_research_task(task)
+
+
+@router.post("/tasks/{task_id}/claim-validation-result", response_model=ResearchTaskEventRead)
+def record_claim_validation_result(
+    task_id: str,
+    payload: ClaimValidationResultCreate,
+    session: Session = Depends(get_session),
+) -> ResearchTaskEventRead:
+    service = ResearchTaskService(session)
+    task = service.get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Research task not found")
+    if task.owner_type not in {"claim_validation_queue", "idea_evidence_ledger"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Task is not a claim validation follow-up task",
+        )
+    if task.owner_type == "idea_evidence_ledger" and task.source_type != "claim_validation":
+        raise HTTPException(
+            status_code=400,
+            detail="Evidence ledger task is not claim-specific",
+        )
+    task_metadata = task.metadata_json or {}
+    event = service.create_event(
+        task_id,
+        event_type="claim_validation_result",
+        note=payload.notes or f"Claim validation result recorded as {payload.validation_status}.",
+        metadata={
+            "validation_status": payload.validation_status,
+            "evidence_ids": payload.evidence_ids,
+            "next_action": payload.next_action,
+            "claim_id": task_metadata.get("claim_id", ""),
+            "ledger_id": task_metadata.get("ledger_id", task.owner_id),
+            "support_level": task_metadata.get("support_level", ""),
+            "source_task_owner_type": task.owner_type,
+        },
+        created_by=payload.created_by,
+    )
+    if payload.mark_task_done and task.status != "done":
+        service.update_task(
+            task_id,
+            status="done",
+            note=f"Claim validation result: {payload.validation_status}.",
+            created_by=payload.created_by,
+        )
+    return _serialize_research_task_event(event)
 
 
 @router.post("/tasks/{task_id}/events", response_model=ResearchTaskEventRead)
