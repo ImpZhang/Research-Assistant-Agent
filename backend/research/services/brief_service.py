@@ -12,6 +12,7 @@ from backend.research.models import (
     ResearchProfile,
     ResearchTask,
 )
+from backend.research.services.triage_snapshot_service import ProjectTriageSnapshotService
 
 
 class ResearchBriefService:
@@ -35,6 +36,7 @@ class ResearchBriefService:
         plan_summaries = self._load_plan_summaries([idea.id for idea in ideas])
         readiness_signals = self._load_readiness_signals([idea.id for idea in ideas])
         triage_signals = self._load_triage_signals([idea.id for idea in ideas])
+        triage_snapshot_comparison = self._load_triage_snapshot_comparison()
         summary = self._summary(
             ideas,
             tasks,
@@ -43,6 +45,7 @@ class ResearchBriefService:
             plan_summaries,
             readiness_signals,
             triage_signals,
+            triage_snapshot_comparison,
         )
         brief = ResearchBrief(
             title=title or "Advisor Research Brief",
@@ -62,6 +65,7 @@ class ResearchBriefService:
             plan_summaries,
             readiness_signals,
             triage_signals,
+            triage_snapshot_comparison,
         )
         self.session.commit()
         self.session.refresh(brief)
@@ -237,6 +241,14 @@ class ResearchBriefService:
             ],
         }
 
+    def _load_triage_snapshot_comparison(self) -> dict:
+        service = ProjectTriageSnapshotService(self.session)
+        snapshots = service.list_snapshots(limit=2)
+        if len(snapshots) < 2:
+            return {}
+        comparison = service.compare_snapshots(snapshots[1].id, snapshots[0].id)
+        return {key: value for key, value in comparison.items() if key != "markdown_export"}
+
     def _summary(
         self,
         ideas: list[Idea],
@@ -246,6 +258,7 @@ class ResearchBriefService:
         plan_summaries: list[dict],
         readiness_signals: list[dict],
         triage_signals: dict,
+        triage_snapshot_comparison: dict,
     ) -> dict:
         open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
         blocked_tasks = [task for task in tasks if task.status == "blocked"]
@@ -269,6 +282,7 @@ class ResearchBriefService:
             ),
             "readiness_signals": readiness_signals,
             "triage_signals": triage_signals,
+            "triage_snapshot_comparison": triage_snapshot_comparison,
         }
 
     def _render_markdown(
@@ -281,6 +295,7 @@ class ResearchBriefService:
         plan_summaries: list[dict],
         readiness_signals: list[dict],
         triage_signals: dict,
+        triage_snapshot_comparison: dict,
     ) -> str:
         summary = brief.summary_json or {}
         lines = [
@@ -384,6 +399,40 @@ class ResearchBriefService:
         else:
             lines.append("- No triage task signals recorded.")
 
+        lines.extend(["", "## Triage Snapshot Changes", ""])
+        if triage_snapshot_comparison:
+            lines.extend(
+                [
+                    f"- Baseline: `{triage_snapshot_comparison['baseline_snapshot_id']}` "
+                    f"{triage_snapshot_comparison['baseline_title']}",
+                    f"- Candidate: `{triage_snapshot_comparison['candidate_snapshot_id']}` "
+                    f"{triage_snapshot_comparison['candidate_title']}",
+                    f"- Summary: {triage_snapshot_comparison['summary']}",
+                    "",
+                    "### Metric Delta",
+                    "",
+                ]
+            )
+            for key, value in (triage_snapshot_comparison.get("metric_delta") or {}).items():
+                lines.append(f"- {key}: {value}")
+            lines.extend(["", "### Added Focus", ""])
+            _append_brief_change_items(
+                lines,
+                triage_snapshot_comparison.get("added_focus") or [],
+            )
+            lines.extend(["", "### Added Risks", ""])
+            _append_brief_change_items(
+                lines,
+                triage_snapshot_comparison.get("added_risks") or [],
+            )
+            lines.extend(["", "### Added Next Actions", ""])
+            _append_brief_change_items(
+                lines,
+                triage_snapshot_comparison.get("added_next_actions") or [],
+            )
+        else:
+            lines.append("- No saved triage snapshot comparison available.")
+
         lines.extend(["", "## Highest Priority Open Tasks", ""])
         open_tasks = sorted(
             [task for task in tasks if task.status in {"todo", "doing", "blocked"}],
@@ -428,6 +477,13 @@ class ResearchBriefService:
 
 def _join_profile_items(items: list | None) -> str:
     return ", ".join(str(item) for item in (items or [])) or "none"
+
+
+def _append_brief_change_items(lines: list[str], items: list[str]) -> None:
+    if not items:
+        lines.append("- none")
+        return
+    lines.extend(f"- {item}" for item in items[:8])
 
 
 def _first_by_idea(records: list) -> dict[str, object]:

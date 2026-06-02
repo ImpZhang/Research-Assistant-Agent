@@ -179,6 +179,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief triage context")
+    if "advisor_brief_triage_snapshot_comparison_context" not in status["implemented_capabilities"]:
+        raise RuntimeError(
+            "research status did not include advisor brief triage snapshot comparison context"
+        )
     if "mcp_tool_bridge_spec" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include MCP tool bridge spec")
     if "mcp_stdio_http_bridge" not in status["implemented_capabilities"]:
@@ -1038,8 +1042,15 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         client.get(f"/research/briefs/{advisor_brief['id']}/export/markdown"),
         "advisor research brief markdown",
     )
+    if (
+        advisor_brief["summary"]["triage_snapshot_comparison"]["candidate_snapshot_id"]
+        != triage_snapshot["id"]
+    ):
+        raise RuntimeError("advisor brief did not include latest triage snapshot comparison")
     if "## Triage Signals" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include triage signals")
+    if "## Triage Snapshot Changes" not in advisor_brief_markdown:
+        raise RuntimeError("advisor brief markdown did not include triage snapshot changes")
     if "## Discussion Prompts" not in advisor_brief_markdown:
         raise RuntimeError("advisor brief markdown did not include discussion prompts")
     research_plan = require_ok(
@@ -1441,6 +1452,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "opportunity_radar_task_count": len(radar_tasks["tasks"]),
         "advisor_brief_id": advisor_brief["id"],
         "advisor_brief_markdown_chars": len(advisor_brief_markdown),
+        "advisor_brief_triage_snapshot_candidate": advisor_brief["summary"][
+            "triage_snapshot_comparison"
+        ]["candidate_snapshot_id"],
         "plan_advisor_brief_id": plan_advisor_brief["id"],
         "plan_advisor_brief_plan_count": plan_advisor_brief["summary"]["research_plan_count"],
         "project_bundle_file_count": len(project_bundle_files),

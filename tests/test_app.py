@@ -50,6 +50,7 @@ def test_research_status() -> None:
     assert "project_handoff_bundle_export" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_context" in body["implemented_capabilities"]
+    assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
     assert "mcp_stdio_http_bridge" in body["implemented_capabilities"]
     assert "mcp_bridge_policy_controls" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
@@ -1558,8 +1559,13 @@ Future work should preserve proposal drafts as reviewable artifacts.
     brief_body = brief.json()
     assert brief_body["idea_ids"] == [idea_id]
     assert brief_body["summary"]["idea_count"] == 1
+    assert (
+        brief_body["summary"]["triage_snapshot_comparison"]["candidate_snapshot_id"]
+        == triage_snapshot_body["id"]
+    )
     assert "# Pytest Advisor Brief" in brief_body["markdown_export"]
     assert "## Triage Signals" in brief_body["markdown_export"]
+    assert "## Triage Snapshot Changes" in brief_body["markdown_export"]
     assert "## Discussion Prompts" in brief_body["markdown_export"]
 
     briefs = client.get("/research/briefs")
@@ -1573,6 +1579,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
     brief_export = client.get(f"/research/briefs/{brief_body['id']}/export/markdown")
     assert brief_export.status_code == 200
     assert "## Highest Priority Open Tasks" in brief_export.text
+    assert "## Triage Snapshot Changes" in brief_export.text
 
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200
