@@ -118,6 +118,7 @@ from backend.research.schemas import (
     ProposalReviewRead,
     ProjectQualityGateOverviewResponse,
     ProjectQualityGateTaskGenerateRequest,
+    ProjectCockpitResponse,
     ProjectReadinessOverviewResponse,
     ProjectStatus,
     ProjectTriageBriefResponse,
@@ -261,6 +262,7 @@ def status() -> ProjectStatus:
             "claim_validation_result_decision_signals",
             "claim_validation_result_ranking_adjustments",
             "project_progress_overview",
+            "project_cockpit_dashboard",
             "project_triage_brief",
             "project_triage_task_generation",
             "project_triage_snapshots",
@@ -637,6 +639,23 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/progress/overview",
             output_model="ResearchOverviewResponse",
+        ),
+        ToolManifestItem(
+            name="get_project_cockpit",
+            description=(
+                "Load a customer-facing project cockpit with phase, readiness, metrics, "
+                "risks, highlights, and quick actions."
+            ),
+            method="GET",
+            path="/research/cockpit",
+            output_model="ProjectCockpitResponse",
+        ),
+        ToolManifestItem(
+            name="export_project_cockpit_markdown",
+            description="Export the project cockpit as text/markdown.",
+            method="GET",
+            path="/research/cockpit/export/markdown",
+            output_model="text/markdown",
         ),
         ToolManifestItem(
             name="get_project_triage_brief",
@@ -1199,6 +1218,615 @@ def _render_research_overview_markdown(
         lines.append("- No claim validation results recorded.")
     lines.extend(["", "## Recommended Actions", ""])
     lines.extend(f"- {action}" for action in recommended_actions)
+    return "\n".join(lines).strip() + "\n"
+
+
+@router.get("/cockpit", response_model=ProjectCockpitResponse)
+def get_project_cockpit(
+    idea_limit: int = 50,
+    opportunity_limit: int = 5,
+    session: Session = Depends(get_session),
+) -> ProjectCockpitResponse:
+    idea_limit = max(1, min(idea_limit, 200))
+    opportunity_limit = max(1, min(opportunity_limit, 20))
+    generated_at = datetime.now(timezone.utc)
+    profile = ResearchProfileService(session).get_profile()
+    metrics = _project_cockpit_metrics(session)
+    overview = get_research_progress_overview(idea_limit=idea_limit, session=session)
+    readiness = get_project_readiness_overview(limit=idea_limit, session=session)
+    quality = get_project_quality_gate_overview(limit=idea_limit, session=session)
+    radar = get_research_opportunity_radar(limit=opportunity_limit, session=session)
+    recommended_focus = _triage_recommended_focus(readiness, quality, radar)
+    risk_focus = _triage_risk_focus(overview, readiness, quality)
+    next_actions = _triage_next_actions(overview, quality, radar)
+
+    metrics.update(
+        {
+            "open_task_count": overview.task_summary.get("open_task_count", 0),
+            "blocked_task_count": len(overview.blocked_tasks),
+            "average_readiness": readiness.average_readiness,
+            "average_quality_gate_score": quality.average_gate_score,
+            "opportunity_count": radar.opportunity_count,
+            "claim_validation_result_count": overview.task_summary.get(
+                "claim_validation_result_count", 0
+            ),
+            "advance_candidate_count": len(quality.advance_candidates),
+            "de_risk_candidate_count": len(quality.de_risk_candidates),
+            "revision_candidate_count": len(quality.revision_candidates),
+        }
+    )
+    phase = _project_cockpit_phase(metrics, overview, quality, radar)
+    readiness_level = _project_cockpit_readiness_level(metrics, readiness, quality, radar)
+    primary_next_action = _project_cockpit_primary_action(metrics, overview, quality, radar)
+    quick_actions = _project_cockpit_quick_actions(
+        metrics=metrics,
+        overview=overview,
+        quality=quality,
+        radar=radar,
+        next_actions=next_actions,
+        risk_focus=risk_focus,
+    )
+    workflow_stages = _project_cockpit_workflow_stages(metrics, profile)
+    setup_status = _project_cockpit_setup_status(metrics, profile)
+    risk_alerts = _project_cockpit_risk_alerts(metrics, risk_focus, radar)
+    highlights = _project_cockpit_highlights(metrics, recommended_focus, radar)
+    source_summaries = _project_cockpit_source_summaries(
+        overview=overview,
+        readiness=readiness,
+        quality=quality,
+        radar=radar,
+        next_actions=next_actions,
+    )
+    markdown_export = _render_project_cockpit_markdown(
+        generated_at=generated_at,
+        phase=phase,
+        readiness_level=readiness_level,
+        metrics=metrics,
+        primary_next_action=primary_next_action,
+        quick_actions=quick_actions,
+        workflow_stages=workflow_stages,
+        setup_status=setup_status,
+        risk_alerts=risk_alerts,
+        highlights=highlights,
+        source_summaries=source_summaries,
+    )
+    return ProjectCockpitResponse(
+        generated_at=generated_at,
+        phase=phase,
+        readiness_level=readiness_level,
+        primary_next_action=primary_next_action,
+        quick_actions=quick_actions,
+        workflow_stages=workflow_stages,
+        setup_status=setup_status,
+        project_metrics=metrics,
+        risk_alerts=risk_alerts,
+        highlights=highlights,
+        source_summaries=source_summaries,
+        markdown_export=markdown_export,
+        message=(
+            "Built project cockpit from progress, readiness, quality gates, "
+            "opportunity radar, and validation signals."
+        ),
+    )
+
+
+@router.get(
+    "/cockpit/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_cockpit_markdown(
+    idea_limit: int = 50,
+    opportunity_limit: int = 5,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    cockpit = get_project_cockpit(
+        idea_limit=idea_limit,
+        opportunity_limit=opportunity_limit,
+        session=session,
+    )
+    return PlainTextResponse(cockpit.markdown_export, media_type="text/markdown")
+
+
+def _project_cockpit_metrics(session: Session) -> dict[str, Any]:
+    return {
+        "paper_count": session.query(Paper).count(),
+        "evidence_count": session.query(Evidence).count(),
+        "paper_card_count": session.query(PaperCard).count(),
+        "gap_count": session.query(ResearchGap).count(),
+        "idea_count": session.query(Idea).count(),
+        "task_count": session.query(ResearchTask).count(),
+        "brief_count": session.query(ResearchBrief).count(),
+        "research_plan_count": session.query(ResearchPlanSnapshot).count(),
+        "related_work_matrix_count": session.query(RelatedWorkMatrix).count(),
+        "proposal_draft_count": session.query(ProposalDraft).count(),
+        "proposal_review_count": session.query(ProposalReview).count(),
+        "experiment_plan_count": session.query(ExperimentPlan).count(),
+        "experiment_run_count": session.query(ExperimentRun).count(),
+        "experiment_analysis_count": session.query(ExperimentAnalysis).count(),
+        "decision_memo_count": session.query(IdeaDecisionMemo).count(),
+        "assumption_audit_count": session.query(IdeaAssumptionAudit).count(),
+        "evidence_ledger_count": session.query(IdeaEvidenceLedger).count(),
+        "triage_snapshot_count": session.query(ProjectTriageSnapshot).count(),
+    }
+
+
+def _project_cockpit_phase(
+    metrics: dict[str, Any],
+    overview: ResearchOverviewResponse,
+    quality: ProjectQualityGateOverviewResponse,
+    radar: ResearchOpportunityRadarResponse,
+) -> str:
+    if metrics["paper_count"] == 0:
+        return "setup"
+    if metrics["idea_count"] == 0:
+        return "literature_to_ideas"
+    if overview.blocked_tasks:
+        return "unblock_execution"
+    if quality.advance_candidates:
+        return "execution_ready"
+    if quality.de_risk_candidates or metrics["claim_validation_result_count"] == 0:
+        return "validation"
+    if radar.top_opportunities:
+        return "prioritization"
+    return "ideation"
+
+
+def _project_cockpit_readiness_level(
+    metrics: dict[str, Any],
+    readiness: ProjectReadinessOverviewResponse,
+    quality: ProjectQualityGateOverviewResponse,
+    radar: ResearchOpportunityRadarResponse,
+) -> str:
+    if metrics["paper_count"] == 0:
+        return "getting_started"
+    if metrics["idea_count"] == 0:
+        return "literature_loaded"
+    if quality.advance_candidates and quality.average_gate_score >= 0.6:
+        return "execution_ready"
+    if readiness.average_readiness >= 0.6 and quality.average_gate_score >= 0.5:
+        return "shortlist_ready"
+    if radar.top_opportunities or readiness.average_readiness >= 0.35:
+        return "shaping"
+    return "needs_foundation"
+
+
+def _project_cockpit_primary_action(
+    metrics: dict[str, Any],
+    overview: ResearchOverviewResponse,
+    quality: ProjectQualityGateOverviewResponse,
+    radar: ResearchOpportunityRadarResponse,
+) -> dict[str, Any]:
+    if metrics["paper_count"] == 0:
+        return _project_cockpit_action(
+            "Upload first papers",
+            "POST",
+            "/research/papers/upload",
+            "No papers are indexed yet, so the project needs literature evidence first.",
+        )
+    if metrics["idea_count"] == 0:
+        return _project_cockpit_action(
+            "Run literature-to-ideas workflow",
+            "POST",
+            "/research/workflows/literature-to-ideas/async",
+            "Papers are available, but no research ideas have been generated.",
+        )
+    if overview.blocked_tasks:
+        return _project_cockpit_action(
+            "Resolve blocked research tasks",
+            "GET",
+            "/research/tasks?status=blocked",
+            f"{len(overview.blocked_tasks)} tasks are blocked and need human attention.",
+        )
+    if quality.de_risk_candidates or quality.revision_candidates:
+        return _project_cockpit_action(
+            "Create project quality-gate tasks",
+            "POST",
+            "/research/quality/overview/tasks",
+            "The quality gate found candidates that need de-risking or targeted revision.",
+        )
+    if radar.top_opportunities:
+        return _project_cockpit_action(
+            "Convert opportunity radar into tasks",
+            "POST",
+            "/research/opportunities/radar/tasks",
+            "There are ranked opportunities with next actions ready to enter execution.",
+        )
+    return _project_cockpit_action(
+        "Open project triage brief",
+        "GET",
+        "/research/triage/brief",
+        "Use the triage brief to decide the next project focus.",
+    )
+
+
+def _project_cockpit_action(
+    label: str,
+    method: str,
+    path: str,
+    reason: str,
+    *,
+    enabled: bool = True,
+) -> dict[str, Any]:
+    return {
+        "label": label,
+        "method": method,
+        "path": path,
+        "enabled": enabled,
+        "reason": reason,
+    }
+
+
+def _project_cockpit_quick_actions(
+    *,
+    metrics: dict[str, Any],
+    overview: ResearchOverviewResponse,
+    quality: ProjectQualityGateOverviewResponse,
+    radar: ResearchOpportunityRadarResponse,
+    next_actions: list[str],
+    risk_focus: list[str],
+) -> list[dict[str, Any]]:
+    return [
+        _project_cockpit_action(
+            "Edit research profile",
+            "PUT",
+            "/research/profile",
+            "Tune domains, questions, venues, constraints, and ranking weights.",
+        ),
+        _project_cockpit_action(
+            "Upload papers",
+            "POST",
+            "/research/papers/upload",
+            "Add literature evidence for the assistant to reason over.",
+        ),
+        _project_cockpit_action(
+            "Run literature-to-ideas",
+            "POST",
+            "/research/workflows/literature-to-ideas/async",
+            "Generate gaps, ideas, novelty checks, reviews, and experiment plans from a paper.",
+            enabled=metrics["paper_count"] > 0,
+        ),
+        _project_cockpit_action(
+            "Open task board",
+            "GET",
+            "/research/tasks",
+            "Inspect open, doing, blocked, and completed research tasks.",
+            enabled=metrics["task_count"] > 0,
+        ),
+        _project_cockpit_action(
+            "Generate gate tasks",
+            "POST",
+            "/research/quality/overview/tasks",
+            "Turn quality-gate de-risking and revision actions into task-board work.",
+            enabled=bool(quality.de_risk_candidates or quality.revision_candidates),
+        ),
+        _project_cockpit_action(
+            "Generate triage tasks",
+            "POST",
+            "/research/triage/brief/tasks",
+            "Turn project-level focus, risks, and next actions into execution tasks.",
+            enabled=bool(next_actions or risk_focus),
+        ),
+        _project_cockpit_action(
+            "Generate radar tasks",
+            "POST",
+            "/research/opportunities/radar/tasks",
+            "Convert top opportunity radar actions into task-board items.",
+            enabled=bool(radar.top_opportunities),
+        ),
+        _project_cockpit_action(
+            "Create advisor brief",
+            "POST",
+            "/research/briefs",
+            "Produce a persisted Markdown brief for advisor or group review.",
+            enabled=metrics["idea_count"] > 0,
+        ),
+        _project_cockpit_action(
+            "Export project bundle",
+            "GET",
+            "/research/export/project-bundle",
+            "Download project handoff artifacts, Markdown, and metadata.",
+            enabled=metrics["idea_count"] > 0,
+        ),
+    ]
+
+
+def _project_cockpit_setup_status(
+    metrics: dict[str, Any],
+    profile: ResearchProfile | None,
+) -> list[dict[str, Any]]:
+    profile_ready = _project_cockpit_profile_ready(profile)
+    return [
+        {
+            "name": "research_profile",
+            "status": "complete" if profile_ready else "pending",
+            "count": 1 if profile_ready else 0,
+            "detail": "Research goals and constraints are configured."
+            if profile_ready
+            else "Configure domains, active questions, venues, constraints, and risk tolerance.",
+        },
+        {
+            "name": "literature_corpus",
+            "status": "complete" if metrics["paper_count"] else "pending",
+            "count": metrics["paper_count"],
+            "detail": f"{metrics['paper_count']} papers indexed.",
+        },
+        {
+            "name": "evidence_base",
+            "status": "complete" if metrics["evidence_count"] else "pending",
+            "count": metrics["evidence_count"],
+            "detail": f"{metrics['evidence_count']} evidence records available.",
+        },
+        {
+            "name": "idea_portfolio",
+            "status": "complete" if metrics["idea_count"] else "pending",
+            "count": metrics["idea_count"],
+            "detail": f"{metrics['idea_count']} ideas generated.",
+        },
+        {
+            "name": "validation_loop",
+            "status": "complete"
+            if metrics["claim_validation_result_count"]
+            else ("ready" if metrics["evidence_ledger_count"] else "pending"),
+            "count": metrics["claim_validation_result_count"],
+            "detail": (
+                f"{metrics['claim_validation_result_count']} claim validation results recorded."
+            ),
+        },
+    ]
+
+
+def _project_cockpit_workflow_stages(
+    metrics: dict[str, Any],
+    profile: ResearchProfile | None,
+) -> list[dict[str, Any]]:
+    profile_ready = _project_cockpit_profile_ready(profile)
+    return [
+        {
+            "name": "profile",
+            "status": "complete" if profile_ready else "pending",
+            "count": 1 if profile_ready else 0,
+            "summary": "Research direction, venues, constraints, and scoring preferences.",
+        },
+        {
+            "name": "ingest",
+            "status": "complete" if metrics["evidence_count"] else "pending",
+            "count": metrics["paper_count"],
+            "summary": (
+                f"{metrics['paper_count']} papers, {metrics['paper_card_count']} paper cards, "
+                f"{metrics['evidence_count']} evidence records."
+            ),
+        },
+        {
+            "name": "gap_mining",
+            "status": "complete" if metrics["gap_count"] else "pending",
+            "count": metrics["gap_count"],
+            "summary": f"{metrics['gap_count']} research gaps available for ideation.",
+        },
+        {
+            "name": "ideation",
+            "status": "complete" if metrics["idea_count"] else "pending",
+            "count": metrics["idea_count"],
+            "summary": f"{metrics['idea_count']} generated or refined ideas in the portfolio.",
+        },
+        {
+            "name": "validation",
+            "status": "complete"
+            if metrics["claim_validation_result_count"]
+            else ("active" if metrics["evidence_ledger_count"] else "pending"),
+            "count": metrics["claim_validation_result_count"],
+            "summary": (
+                f"{metrics['evidence_ledger_count']} evidence ledgers and "
+                f"{metrics['claim_validation_result_count']} claim validation results."
+            ),
+        },
+        {
+            "name": "execution",
+            "status": "active"
+            if metrics["experiment_plan_count"] or metrics["task_count"]
+            else "pending",
+            "count": metrics["task_count"],
+            "summary": (
+                f"{metrics['experiment_plan_count']} experiment plans, "
+                f"{metrics['experiment_run_count']} runs, "
+                f"{metrics['experiment_analysis_count']} analyses, "
+                f"{metrics['task_count']} tasks."
+            ),
+        },
+        {
+            "name": "handoff",
+            "status": "active"
+            if metrics["brief_count"] or metrics["research_plan_count"]
+            else "pending",
+            "count": metrics["brief_count"] + metrics["research_plan_count"],
+            "summary": (
+                f"{metrics['brief_count']} advisor briefs, "
+                f"{metrics['research_plan_count']} research plans, "
+                f"{metrics['triage_snapshot_count']} triage snapshots."
+            ),
+        },
+    ]
+
+
+def _project_cockpit_profile_ready(profile: ResearchProfile | None) -> bool:
+    if profile is None:
+        return False
+    return bool(
+        (profile.primary_domains_json or [])
+        or (profile.active_questions_json or [])
+        or (profile.target_venues_json or [])
+        or (profile.methodological_preferences_json or [])
+        or (profile.resource_constraints_json or [])
+        or (profile.notes or "").strip()
+    )
+
+
+def _project_cockpit_risk_alerts(
+    metrics: dict[str, Any],
+    risk_focus: list[str],
+    radar: ResearchOpportunityRadarResponse,
+) -> list[str]:
+    alerts = [*risk_focus]
+    if metrics["blocked_task_count"]:
+        alerts.append(f"{metrics['blocked_task_count']} blocked tasks need owner review.")
+    if metrics["evidence_ledger_count"] and metrics["claim_validation_result_count"] == 0:
+        alerts.append("Evidence-ledger claims exist, but no claim validation result is recorded.")
+    for item in radar.risk_watchlist[:3]:
+        if item.blocking_risks:
+            alerts.append(f"Radar risk `{item.idea_id}`: {item.blocking_risks[0]}")
+    return _dedupe_strings(alerts)[:10]
+
+
+def _project_cockpit_highlights(
+    metrics: dict[str, Any],
+    recommended_focus: list[str],
+    radar: ResearchOpportunityRadarResponse,
+) -> list[str]:
+    highlights = [
+        f"{metrics['paper_count']} papers and {metrics['evidence_count']} evidence records indexed.",
+        f"{metrics['idea_count']} ideas with {metrics['opportunity_count']} radar opportunities.",
+    ]
+    if metrics["advance_candidate_count"]:
+        highlights.append(
+            f"{metrics['advance_candidate_count']} ideas are quality-gate advance candidates."
+        )
+    if metrics["claim_validation_result_count"]:
+        highlights.append(
+            f"{metrics['claim_validation_result_count']} claim validation results feed decision signals."
+        )
+    highlights.extend(recommended_focus[:5])
+    highlights.extend(radar.recommended_sequence[:3])
+    return _dedupe_strings(highlights)[:10]
+
+
+def _project_cockpit_source_summaries(
+    *,
+    overview: ResearchOverviewResponse,
+    readiness: ProjectReadinessOverviewResponse,
+    quality: ProjectQualityGateOverviewResponse,
+    radar: ResearchOpportunityRadarResponse,
+    next_actions: list[str],
+) -> dict[str, Any]:
+    return {
+        "overview": {
+            "idea_count": overview.idea_count,
+            "status_counts": overview.status_counts,
+            "open_task_count": overview.task_summary.get("open_task_count", 0),
+            "blocked_task_count": len(overview.blocked_tasks),
+            "recommended_actions": overview.recommended_actions[:5],
+            "claim_validation_results": overview.task_summary.get("claim_validation_results", {}),
+        },
+        "readiness": {
+            "idea_count": readiness.idea_count,
+            "average_readiness": readiness.average_readiness,
+            "decision_counts": readiness.decision_counts,
+            "top_ready": [item.model_dump() for item in readiness.top_ready[:5]],
+            "needs_work": [item.model_dump() for item in readiness.needs_work[:5]],
+        },
+        "quality": {
+            "idea_count": quality.idea_count,
+            "average_gate_score": quality.average_gate_score,
+            "decision_counts": quality.decision_counts,
+            "advance_candidates": [item.model_dump() for item in quality.advance_candidates[:5]],
+            "de_risk_candidates": [item.model_dump() for item in quality.de_risk_candidates[:5]],
+            "revision_candidates": [item.model_dump() for item in quality.revision_candidates[:5]],
+        },
+        "opportunity_radar": {
+            "profile_name": radar.profile_name,
+            "opportunity_count": radar.opportunity_count,
+            "top_opportunities": [item.model_dump() for item in radar.top_opportunities[:5]],
+            "risk_watchlist": [item.model_dump() for item in radar.risk_watchlist[:5]],
+            "recommended_sequence": radar.recommended_sequence[:5],
+        },
+        "next_actions": next_actions[:10],
+    }
+
+
+def _render_project_cockpit_markdown(
+    *,
+    generated_at: datetime,
+    phase: str,
+    readiness_level: str,
+    metrics: dict[str, Any],
+    primary_next_action: dict[str, Any],
+    quick_actions: list[dict[str, Any]],
+    workflow_stages: list[dict[str, Any]],
+    setup_status: list[dict[str, Any]],
+    risk_alerts: list[str],
+    highlights: list[str],
+    source_summaries: dict[str, Any],
+) -> str:
+    lines = [
+        "# Project Cockpit",
+        "",
+        f"- Generated At: `{generated_at.isoformat()}`",
+        f"- Phase: `{phase}`",
+        f"- Readiness Level: `{readiness_level}`",
+        (
+            "- Primary Next Action: "
+            f"{primary_next_action['label']} "
+            f"(`{primary_next_action['method']} {primary_next_action['path']}`) - "
+            f"{primary_next_action['reason']}"
+        ),
+        "",
+        "## Metrics",
+        "",
+    ]
+    for key in [
+        "paper_count",
+        "evidence_count",
+        "gap_count",
+        "idea_count",
+        "open_task_count",
+        "blocked_task_count",
+        "average_readiness",
+        "average_quality_gate_score",
+        "opportunity_count",
+        "claim_validation_result_count",
+        "brief_count",
+        "research_plan_count",
+    ]:
+        lines.append(f"- {key}: {metrics.get(key, 0)}")
+    lines.extend(["", "## Setup Status", ""])
+    for item in setup_status:
+        lines.append(
+            f"- `{item['status']}` {item['name']}: {item['detail']} (count={item['count']})"
+        )
+    lines.extend(["", "## Workflow Stages", ""])
+    for stage in workflow_stages:
+        lines.append(
+            f"- `{stage['status']}` {stage['name']} (count={stage['count']}): {stage['summary']}"
+        )
+    lines.extend(["", "## Highlights", ""])
+    if highlights:
+        lines.extend(f"- {item}" for item in highlights)
+    else:
+        lines.append("- No highlights yet.")
+    lines.extend(["", "## Risk Alerts", ""])
+    if risk_alerts:
+        lines.extend(f"- {item}" for item in risk_alerts)
+    else:
+        lines.append("- No major risks detected.")
+    lines.extend(["", "## Quick Actions", ""])
+    for action in quick_actions:
+        state = "enabled" if action["enabled"] else "disabled"
+        lines.append(
+            f"- `{state}` {action['label']}: "
+            f"`{action['method']} {action['path']}` - {action['reason']}"
+        )
+    lines.extend(["", "## Source Snapshot", ""])
+    overview = source_summaries["overview"]
+    readiness = source_summaries["readiness"]
+    quality = source_summaries["quality"]
+    radar = source_summaries["opportunity_radar"]
+    lines.extend(
+        [
+            f"- Idea Status Counts: {overview['status_counts']}",
+            f"- Readiness Decisions: {readiness['decision_counts']}",
+            f"- Quality Decisions: {quality['decision_counts']}",
+            f"- Radar Opportunities: {radar['opportunity_count']}",
+            f"- Next Action Count: {len(source_summaries['next_actions'])}",
+        ]
+    )
     return "\n".join(lines).strip() + "\n"
 
 

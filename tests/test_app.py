@@ -65,6 +65,7 @@ def test_research_status() -> None:
     assert "claim_validation_result_tracking" in body["implemented_capabilities"]
     assert "claim_validation_result_decision_signals" in body["implemented_capabilities"]
     assert "claim_validation_result_ranking_adjustments" in body["implemented_capabilities"]
+    assert "project_cockpit_dashboard" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
@@ -92,6 +93,8 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_tasks_from_research_plan" in names
     assert "get_research_plan_progress" in names
     assert "get_project_progress_overview" in names
+    assert "get_project_cockpit" in names
+    assert "export_project_cockpit_markdown" in names
     assert "get_project_triage_brief" in names
     assert "export_project_triage_brief_markdown" in names
     assert "create_tasks_from_project_triage_brief" in names
@@ -391,6 +394,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "claimPacketButton" in response.text
     assert "claimQueueButton" in response.text
     assert "claimQueueTasksButton" in response.text
+    assert "cockpitButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -447,6 +451,7 @@ def test_workbench_static_assets_are_served() -> None:
     ) in script.text
     assert "/research/claims/validation-queue?${params.toString()}" in script.text
     assert "/research/claims/validation-queue/tasks" in script.text
+    assert "/research/cockpit" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
     assert "/research/triage/brief/export/markdown" in script.text
@@ -1804,6 +1809,24 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert radar_body["top_opportunities"][0]["next_actions"]
     assert radar_body["recommended_sequence"]
     assert "# Research Opportunity Radar" in radar_body["markdown_export"]
+
+    cockpit = client.get("/research/cockpit?idea_limit=20&opportunity_limit=5")
+    assert cockpit.status_code == 200
+    cockpit_body = cockpit.json()
+    assert cockpit_body["project_metrics"]["paper_count"] >= 1
+    assert cockpit_body["project_metrics"]["idea_count"] >= 1
+    assert cockpit_body["project_metrics"]["claim_validation_result_count"] >= 1
+    assert cockpit_body["primary_next_action"]["label"]
+    assert cockpit_body["quick_actions"]
+    assert cockpit_body["workflow_stages"]
+    assert cockpit_body["setup_status"]
+    assert cockpit_body["source_summaries"]["quality"]["decision_counts"]
+    assert "# Project Cockpit" in cockpit_body["markdown_export"]
+
+    cockpit_markdown = client.get("/research/cockpit/export/markdown")
+    assert cockpit_markdown.status_code == 200
+    assert "text/markdown" in cockpit_markdown.headers["content-type"]
+    assert "# Project Cockpit" in cockpit_markdown.text
 
     radar_tasks = client.post(
         "/research/opportunities/radar/tasks",

@@ -167,6 +167,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project quality gate overview")
     if "project_quality_gate_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project quality gate task generation")
+    if "project_cockpit_dashboard" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project cockpit dashboard")
     if "research_opportunity_radar" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research opportunity radar")
     if "opportunity_radar_task_generation" not in status["implemented_capabilities"]:
@@ -269,6 +271,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include research plan progress tool")
     if "get_project_progress_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project progress overview tool")
+    if "get_project_cockpit" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project cockpit tool")
+    if "export_project_cockpit_markdown" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project cockpit markdown export")
     if "get_project_triage_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage brief tool")
     if "export_project_triage_brief_markdown" not in manifest_names:
@@ -352,6 +358,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool bridge spec did not include idea bundle export")
     if research_profile["id"] != "default":
         raise RuntimeError("research profile endpoint did not return the default profile")
+    if "cockpitButton" not in workbench:
+        raise RuntimeError("workbench did not include the project cockpit button")
     bundle_bridge = next(
         tool for tool in tool_bridge["tools"] if tool["name"] == "export_idea_bundle"
     )
@@ -1124,6 +1132,32 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project quality gate overview did not include decision counts")
     if "Project Quality Gate Overview" not in quality_overview["markdown_export"]:
         raise RuntimeError("project quality gate overview markdown did not include title")
+    cockpit = require_ok(
+        client.get("/research/cockpit?idea_limit=50&opportunity_limit=5"),
+        "project cockpit",
+    )
+    if cockpit["project_metrics"].get("paper_count", 0) < 1:
+        raise RuntimeError("project cockpit did not include indexed papers")
+    if cockpit["project_metrics"].get("idea_count", 0) < 1:
+        raise RuntimeError("project cockpit did not include ideas")
+    if cockpit["project_metrics"].get("claim_validation_result_count", 0) < 1:
+        raise RuntimeError("project cockpit did not include claim validation results")
+    if not cockpit["primary_next_action"].get("label"):
+        raise RuntimeError("project cockpit did not include a primary next action")
+    if not cockpit["quick_actions"]:
+        raise RuntimeError("project cockpit did not include quick actions")
+    if not cockpit["workflow_stages"]:
+        raise RuntimeError("project cockpit did not include workflow stages")
+    if not cockpit["source_summaries"]["quality"]["decision_counts"]:
+        raise RuntimeError("project cockpit did not include quality source summary")
+    if "Project Cockpit" not in cockpit["markdown_export"]:
+        raise RuntimeError("project cockpit markdown did not include title")
+    cockpit_markdown = require_ok(
+        client.get("/research/cockpit/export/markdown"),
+        "project cockpit markdown export",
+    )
+    if "Project Cockpit" not in cockpit_markdown:
+        raise RuntimeError("project cockpit markdown export did not include title")
     triage_brief = require_ok(
         client.get("/research/triage/brief?idea_limit=50&opportunity_limit=5"),
         "project triage brief",
@@ -1819,6 +1853,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "overview_claim_validation_result_count": overview["task_summary"][
             "claim_validation_result_count"
         ],
+        "cockpit_phase": cockpit["phase"],
+        "cockpit_readiness_level": cockpit["readiness_level"],
+        "cockpit_primary_action": cockpit["primary_next_action"]["label"],
+        "cockpit_quick_action_count": len(cockpit["quick_actions"]),
         "readiness_overview_idea_count": readiness_overview["idea_count"],
         "readiness_overview_average": readiness_overview["average_readiness"],
         "opportunity_radar_count": len(radar["top_opportunities"]),

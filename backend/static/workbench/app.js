@@ -1286,6 +1286,21 @@ async function createReadinessTasks() {
   }
 }
 
+async function loadProjectCockpit() {
+  renderResult("workflowResult", "Loading project cockpit...", "warn");
+  try {
+    const body = await api("/research/cockpit");
+    const primaryAction = body.primary_next_action?.label || "No primary action";
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Cockpit phase <code>${escapeHtml(body.phase)}</code>, readiness <code>${escapeHtml(body.readiness_level)}</code>.<br />Primary: ${escapeHtml(primaryAction)}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectOverview() {
   renderResult("workflowResult", "Loading project overview...", "warn");
   try {
@@ -1737,6 +1752,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("qualityGateButton").addEventListener("click", loadIdeaQualityGate);
   $("qualityGateTasksButton").addEventListener("click", createQualityGateTasks);
   $("readinessTasksButton").addEventListener("click", createReadinessTasks);
+  $("cockpitButton").addEventListener("click", loadProjectCockpit);
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("triageBriefButton").addEventListener("click", loadProjectTriageBrief);
   $("triageMarkdownButton").addEventListener("click", loadProjectTriageMarkdown);

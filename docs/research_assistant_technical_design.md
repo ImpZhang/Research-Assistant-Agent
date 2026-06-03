@@ -1168,6 +1168,10 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/progress/overview` 聚合项目级进度：idea status counts、open task summary、blocked tasks、recent experiment analyses、claim validation result summary、recommended actions 和 Markdown overview。它用于 dashboard 首页和后续 MCP/agent planner 的第一跳入口。
 
+`/cockpit` 是面向客户入口的 project dashboard 聚合 API。它复用 `/progress/overview`、`/readiness/overview`、`/quality/overview` 和 `/opportunities/radar` 的计算结果，同时直接统计 papers、evidence、gaps、ideas、tasks、briefs、plans、proposal/experiment artifacts、evidence ledgers、claim validation results 和 triage snapshots。响应包含 phase、readiness_level、primary_next_action、quick_actions、workflow_stages、setup_status、project_metrics、risk_alerts、highlights、source_summaries 和 Markdown export。它把“当前项目在哪一步、下一步做什么、风险在哪里”压缩成前端第一屏和后续 agent planner 的单一入口。
+
+`/cockpit/export/markdown` 返回同一份 cockpit 的 `text/markdown` 表示，供导师会、客户汇报、周报和下游只消费 Markdown 的 MCP/agent 工具使用。`/tools/manifest` 同步暴露 `get_project_cockpit` 与 `export_project_cockpit_markdown`，让 DeerFlow、MCP adapter 或自研 planner 可以把 cockpit 作为默认 project-state tool，而不是分别调用多个 overview endpoint 后自行拼接。
+
 `/triage/brief` 组合 `/progress/overview`、`/readiness/overview`、`/quality/overview` 和 `/opportunities/radar`，输出 recommended focus、risk focus、next actions 与 Markdown brief。它是更高层的“科研驾驶舱”入口：外部 agent 不需要自己拼多个 endpoint，就能拿到今天该推进什么、卡在哪里、下一步怎么做的压缩上下文。
 
 `/triage/brief/export/markdown` 返回同一份 project triage brief 的 `text/markdown` 表示，方便导师会、纯文本备份和只消费 Markdown 的 MCP/agent 工具使用。
@@ -1244,6 +1248,8 @@ GET  /research/readiness/overview
 GET  /research/quality/overview
 POST /research/quality/overview/tasks
 GET  /research/progress/overview
+GET  /research/cockpit
+GET  /research/cockpit/export/markdown
 GET  /research/triage/brief
 GET  /research/triage/brief/export/markdown
 POST /research/triage/brief/tasks

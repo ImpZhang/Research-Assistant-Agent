@@ -904,6 +904,22 @@ class ProjectTriageBriefResponse(BaseModel):
     message: str
 
 
+class ProjectCockpitResponse(BaseModel):
+    generated_at: datetime
+    phase: str = "setup"
+    readiness_level: str = "getting_started"
+    primary_next_action: dict[str, Any] = Field(default_factory=dict)
+    quick_actions: list[dict[str, Any]] = Field(default_factory=list)
+    workflow_stages: list[dict[str, Any]] = Field(default_factory=list)
+    setup_status: list[dict[str, Any]] = Field(default_factory=list)
+    project_metrics: dict[str, Any] = Field(default_factory=dict)
+    risk_alerts: list[str] = Field(default_factory=list)
+    highlights: list[str] = Field(default_factory=list)
+    source_summaries: dict[str, Any] = Field(default_factory=dict)
+    markdown_export: str = ""
+    message: str
+
+
 class ProjectTriageTaskGenerateRequest(BaseModel):
     limit: int = Field(default=8, ge=1, le=20)
     include_risks: bool = True
