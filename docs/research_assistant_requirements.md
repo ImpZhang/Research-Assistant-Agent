@@ -741,7 +741,7 @@ idea 需要支持 evidence ledger：
 - evidence ledger 需要支持单条 claim validation packet：输入 ledger id 和 claim id，返回 claim、supporting evidence、evidence links、counterevidence、missing evidence、related tasks、validation actions、graph edge summary 和 Markdown，用于导师讨论或 MCP agent 下钻验证。
 - 系统需要支持 claim validation queue：从最新 evidence ledgers 中抽取薄弱 claim，按 support level、missing evidence、counterevidence 和相关任务排优先级，输出项目级 Markdown 队列，回答“今天最该验证哪些科研主张”。
 - claim validation queue 需要能一键转成 task board 任务：从 critical/high queue items 创建 `owner_type=claim_validation_queue`、`due_phase=claim_validation_follow_up` 的任务，并写入 `claim_validation_queue_creates_task` 图边。这样“发现薄弱主张 -> 指定验证行动 -> 任务追踪”形成闭环。
-- claim validation follow-up task 需要支持记录验证结果：研究者或后续 agent 可以写入 validation_status、evidence_ids、notes、next_action，并默认把任务标记为 done。这样 claim validation 不只是创建任务，而能留下“验证结论是什么、用了哪些证据、下一步怎么处理”的可追踪事件，并在 idea progress、project overview 和 advisor brief 中形成结果汇总。
+- claim validation follow-up task 需要支持记录验证结果：研究者或后续 agent 可以写入 validation_status、evidence_ids、notes、next_action，并默认把任务标记为 done。这样 claim validation 不只是创建任务，而能留下“验证结论是什么、用了哪些证据、下一步怎么处理”的可追踪事件，并在 idea progress、project overview 和 advisor brief 中形成结果汇总，同时进入 readiness scoring 和 quality gate 的 score breakdown、blockers、required evidence 与 recommended actions。
 
 proposal、review、revision、experiment run、experiment analysis、task 和 task snapshot 都需要进入 GraphRAG-lite：
 
@@ -781,13 +781,15 @@ proposal、review、revision、experiment run、experiment analysis、task 和 t
 
 系统需要提供 idea readiness scoring：
 
-- 综合 evidence、novelty、proposal review、experiment analysis、decision memo、assumption audit、evidence ledger 和 task health。
+- 综合 evidence、novelty、proposal review、experiment analysis、decision memo、assumption audit、evidence ledger、claim validation result impact 和 task health。
+- claim validation result impact 需要把 supported、challenged、needs_more_evidence、inconclusive 转成可解释 score、status distribution、blocker 和 next action。
 - 输出总分、决策标签、score breakdown、blockers 和 Markdown report。
 - 用于判断一个 idea 是否 ready_for_execution，还是需要 targeted work、park 或 reject。
 
 系统需要提供 idea quality gate：
 
-- 综合 novelty refresh、readiness、proposal review、experiment analysis、decision memo、assumption audit、evidence ledger 和 task health。
+- 综合 novelty refresh、readiness、proposal review、experiment analysis、decision memo、assumption audit、evidence ledger、claim validation result impact 和 task health。
+- claim validation result impact 需要影响 go/no-go decision：challenged claim 不能直接 advance，needs_more_evidence 应进入 targeted revision / de-risk action。
 - 输出 gate score、advance/revise/de-risk/park/reject 决策、required evidence、blocking risks、recommended actions 和 Markdown report。
 - 用于回答“这个 idea 现在是否值得继续投入实验/写作资源”，比 readiness 更接近 go/no-go 决策。
 

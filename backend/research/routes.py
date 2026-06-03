@@ -258,6 +258,7 @@ def status() -> ProjectStatus:
             "claim_validation_queue",
             "claim_validation_queue_task_generation",
             "claim_validation_result_tracking",
+            "claim_validation_result_decision_signals",
             "project_progress_overview",
             "project_triage_brief",
             "project_triage_task_generation",
@@ -1002,6 +1003,111 @@ def _claim_validation_result_summary(events: list[ResearchTaskEvent]) -> dict[st
             }
             for event in events[:10]
         ],
+    }
+
+
+def _claim_validation_impact_for_idea(
+    session: Session,
+    idea_id: str,
+    *,
+    latest_ledger: IdeaEvidenceLedger | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    events = (
+        session.query(ResearchTaskEvent)
+        .filter(
+            ResearchTaskEvent.idea_id == idea_id,
+            ResearchTaskEvent.event_type == "claim_validation_result",
+        )
+        .order_by(ResearchTaskEvent.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    by_status = Counter(
+        str((event.metadata_json or {}).get("validation_status") or "unknown") for event in events
+    )
+    status_scores = {
+        "supported": 1.0,
+        "inconclusive": 0.45,
+        "needs_more_evidence": 0.35,
+        "challenged": 0.1,
+        "unknown": 0.35,
+    }
+    score = (
+        _clamp(
+            sum(
+                status_scores.get(
+                    str((event.metadata_json or {}).get("validation_status") or "unknown"),
+                    0.35,
+                )
+                for event in events
+            )
+            / len(events)
+        )
+        if events
+        else (0.25 if latest_ledger and latest_ledger.claims_json else 0.4)
+    )
+    blockers: list[str] = []
+    recommended_actions: list[str] = []
+    if latest_ledger and latest_ledger.claims_json and not events:
+        blockers.append("No claim validation result has been recorded for evidence-ledger claims.")
+        recommended_actions.append(
+            "Record claim validation results for the highest-risk evidence-ledger claims."
+        )
+    if by_status.get("challenged", 0):
+        blockers.append(
+            f"Claim validation challenged {by_status['challenged']} evidence-ledger claims."
+        )
+        recommended_actions.append(
+            "Revise or reject challenged claims before advisor-facing execution."
+        )
+    if by_status.get("needs_more_evidence", 0):
+        blockers.append(
+            f"Claim validation found evidence gaps for {by_status['needs_more_evidence']} claims."
+        )
+        for event in events:
+            metadata = event.metadata_json or {}
+            if metadata.get("validation_status") == "needs_more_evidence":
+                next_action = str(metadata.get("next_action") or "").strip()
+                if next_action:
+                    recommended_actions.append(next_action)
+                else:
+                    recommended_actions.append(
+                        "Collect independent supporting evidence for claims marked "
+                        "needs_more_evidence."
+                    )
+    recent_results = [
+        {
+            "id": event.id,
+            "task_id": event.task_id,
+            "idea_id": event.idea_id,
+            "validation_status": (event.metadata_json or {}).get("validation_status", "unknown"),
+            "claim_id": (event.metadata_json or {}).get("claim_id", ""),
+            "ledger_id": (event.metadata_json or {}).get("ledger_id", ""),
+            "next_action": (event.metadata_json or {}).get("next_action", ""),
+            "created_at": event.created_at.isoformat(),
+        }
+        for event in events[:5]
+    ]
+    claim_count = len(latest_ledger.claims_json or []) if latest_ledger else 0
+    signal = (
+        f"{len(events)} claim validation result events; statuses={dict(by_status)}"
+        if events
+        else (
+            f"0 claim validation result events for {claim_count} ledger claims"
+            if claim_count
+            else "no evidence-ledger claims require validation yet"
+        )
+    )
+    return {
+        "score": score,
+        "signal": signal,
+        "event_count": len(events),
+        "claim_count": claim_count,
+        "by_status": dict(by_status),
+        "blockers": list(dict.fromkeys(blockers))[:5],
+        "recommended_actions": list(dict.fromkeys(recommended_actions))[:5],
+        "recent_results": recent_results,
     }
 
 
@@ -3568,6 +3674,7 @@ def get_idea_readiness(
     experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 5)
     decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea_id, 5)
     assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea_id, 5)
+    evidence_ledgers = _latest_for_idea(session, IdeaEvidenceLedger, idea_id, 5)
     novelty_checks = _latest_for_idea(session, NoveltyCheck, idea_id, 5)
     tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
 
@@ -3576,7 +3683,13 @@ def get_idea_readiness(
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
     latest_memo = decision_memos[0] if decision_memos else None
     latest_audit = assumption_audits[0] if assumption_audits else None
+    latest_ledger = evidence_ledgers[0] if evidence_ledgers else None
     latest_novelty = novelty_checks[0] if novelty_checks else None
+    claim_validation = _claim_validation_impact_for_idea(
+        session,
+        idea_id,
+        latest_ledger=latest_ledger,
+    )
 
     evidence_count = len(idea.evidence_ids_json or [])
     missing_search_count = len(latest_matrix.missing_searches_json or []) if latest_matrix else 0
@@ -3592,39 +3705,46 @@ def get_idea_readiness(
         "evidence": {
             "score": _clamp(evidence_count / 3),
             "signal": f"{evidence_count} linked evidence records",
-            "weight": 0.15,
+            "weight": 0.12,
         },
         "novelty": {
             "score": _readiness_novelty_score(latest_matrix, latest_novelty),
             "signal": _readiness_novelty_signal(latest_matrix, latest_novelty),
-            "weight": 0.15,
+            "weight": 0.14,
         },
         "proposal": {
             "score": latest_review.readiness_score if latest_review else (0.45 if drafts else 0.1),
             "signal": latest_review.decision if latest_review else "no proposal review",
-            "weight": 0.18,
+            "weight": 0.16,
         },
         "experiment": {
             "score": latest_analysis.confidence
             if latest_analysis
             else (0.45 if experiment_runs else (0.3 if experiment_plans else 0.1)),
             "signal": latest_analysis.decision if latest_analysis else "no experiment analysis",
-            "weight": 0.18,
+            "weight": 0.16,
         },
         "decision": {
             "score": _readiness_decision_score(latest_memo),
             "signal": latest_memo.decision if latest_memo else "no decision memo",
-            "weight": 0.14,
+            "weight": 0.13,
         },
         "assumptions": {
             "score": _readiness_assumption_score(latest_audit),
             "signal": f"{len(high_risk_assumptions)} high-risk assumptions",
-            "weight": 0.12,
+            "weight": 0.11,
         },
         "task_health": {
             "score": _readiness_task_score(open_tasks, blocked_tasks),
             "signal": f"{len(blocked_tasks)} blocked of {len(open_tasks)} open tasks",
             "weight": 0.08,
+        },
+        "claim_validation": {
+            "score": claim_validation["score"],
+            "signal": claim_validation["signal"],
+            "weight": 0.10,
+            "by_status": claim_validation["by_status"],
+            "event_count": claim_validation["event_count"],
         },
     }
     readiness_score = round(
@@ -3640,6 +3760,7 @@ def get_idea_readiness(
         blocked_tasks=blocked_tasks,
         missing_search_count=missing_search_count,
         high_risk_assumptions=high_risk_assumptions,
+        claim_validation=claim_validation,
     )
     decision = _readiness_decision(readiness_score, latest_memo, blockers)
     markdown_export = _render_idea_readiness_markdown(
@@ -3758,6 +3879,7 @@ def _readiness_blockers(
     blocked_tasks: list[ResearchTask],
     missing_search_count: int,
     high_risk_assumptions: list[dict],
+    claim_validation: dict[str, Any] | None = None,
 ) -> list[str]:
     blockers = []
     if latest_matrix is None:
@@ -3776,6 +3898,8 @@ def _readiness_blockers(
         blockers.append("No assumption audit has exposed falsification conditions.")
     if high_risk_assumptions:
         blockers.append(f"{len(high_risk_assumptions)} high-risk assumptions remain open.")
+    if claim_validation:
+        blockers.extend(claim_validation.get("blockers") or [])
     for task in blocked_tasks[:5]:
         blockers.append(f"Blocked task: {task.title}")
     return blockers[:12]
@@ -3841,6 +3965,7 @@ def get_idea_quality_gate(
     experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea_id, 5)
     decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea_id, 5)
     assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea_id, 5)
+    evidence_ledgers = _latest_for_idea(session, IdeaEvidenceLedger, idea_id, 5)
     tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
 
     latest_novelty = novelty_checks[0] if novelty_checks else None
@@ -3848,6 +3973,12 @@ def get_idea_quality_gate(
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
     latest_memo = decision_memos[0] if decision_memos else None
     latest_audit = assumption_audits[0] if assumption_audits else None
+    latest_ledger = evidence_ledgers[0] if evidence_ledgers else None
+    claim_validation = _claim_validation_impact_for_idea(
+        session,
+        idea_id,
+        latest_ledger=latest_ledger,
+    )
     open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
     blocked_tasks = [task for task in tasks if task.status == "blocked"]
     high_risk_assumptions = [
@@ -3864,6 +3995,7 @@ def get_idea_quality_gate(
         latest_memo=latest_memo,
         open_tasks=open_tasks,
         blocked_tasks=blocked_tasks,
+        claim_validation=claim_validation,
     )
     gate_score = round(
         sum(item["score"] * item["weight"] for item in score_breakdown.values()),
@@ -3875,6 +4007,7 @@ def get_idea_quality_gate(
         latest_analysis=latest_analysis,
         latest_memo=latest_memo,
         latest_audit=latest_audit,
+        claim_validation=claim_validation,
     )
     blocking_risks = _quality_gate_blocking_risks(
         readiness=readiness,
@@ -3883,12 +4016,14 @@ def get_idea_quality_gate(
         high_risk_assumptions=high_risk_assumptions,
         blocked_tasks=blocked_tasks,
         required_evidence=required_evidence,
+        claim_validation=claim_validation,
     )
     decision = _quality_gate_decision(
         gate_score=gate_score,
         latest_novelty=latest_novelty,
         latest_memo=latest_memo,
         blocking_risks=blocking_risks,
+        claim_validation=claim_validation,
     )
     recommended_actions = _quality_gate_recommended_actions(
         decision=decision,
@@ -3896,6 +4031,7 @@ def get_idea_quality_gate(
         latest_novelty=latest_novelty,
         required_evidence=required_evidence,
         blocked_tasks=blocked_tasks,
+        claim_validation=claim_validation,
     )
     latest_artifacts = {
         "novelty_check": _quality_artifact(latest_novelty, ["status", "risk_level"]),
@@ -3903,6 +4039,16 @@ def get_idea_quality_gate(
         "experiment_analysis": _quality_artifact(latest_analysis, ["decision", "confidence"]),
         "decision_memo": _quality_artifact(latest_memo, ["decision"]),
         "assumption_audit": _quality_artifact(latest_audit, ["status"]),
+        "evidence_ledger": _quality_artifact(
+            latest_ledger,
+            ["coverage_score", "status"],
+        ),
+        "claim_validation": {
+            "score": claim_validation["score"],
+            "event_count": claim_validation["event_count"],
+            "by_status": claim_validation["by_status"],
+            "recent_results": claim_validation["recent_results"],
+        },
         "progress": {
             "recommended_next_step": progress.recommended_next_step,
             "open_tasks": progress.artifact_counts.get("open_tasks", 0),
@@ -3970,37 +4116,45 @@ def _quality_gate_breakdown(
     latest_memo: IdeaDecisionMemo | None,
     open_tasks: list[ResearchTask],
     blocked_tasks: list[ResearchTask],
+    claim_validation: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
     return {
         "readiness": {
             "score": readiness.readiness_score,
-            "weight": 0.32,
+            "weight": 0.28,
             "signal": readiness.decision,
         },
         "novelty": {
             "score": _quality_novelty_score(latest_novelty),
-            "weight": 0.2,
+            "weight": 0.18,
             "signal": latest_novelty.risk_level if latest_novelty else "no novelty check",
         },
         "proposal": {
             "score": latest_review.readiness_score if latest_review else 0.15,
-            "weight": 0.16,
+            "weight": 0.14,
             "signal": latest_review.decision if latest_review else "no proposal review",
         },
         "experiment": {
             "score": latest_analysis.confidence if latest_analysis else 0.2,
-            "weight": 0.14,
+            "weight": 0.13,
             "signal": latest_analysis.decision if latest_analysis else "no experiment analysis",
         },
         "decision": {
             "score": _readiness_decision_score(latest_memo),
-            "weight": 0.1,
+            "weight": 0.09,
             "signal": latest_memo.decision if latest_memo else "no decision memo",
         },
         "task_health": {
             "score": _readiness_task_score(open_tasks, blocked_tasks),
             "weight": 0.08,
             "signal": f"{len(blocked_tasks)} blocked of {len(open_tasks)} open tasks",
+        },
+        "claim_validation": {
+            "score": claim_validation["score"],
+            "weight": 0.10,
+            "signal": claim_validation["signal"],
+            "by_status": claim_validation["by_status"],
+            "event_count": claim_validation["event_count"],
         },
     }
 
@@ -4026,7 +4180,9 @@ def _quality_gate_required_evidence(
     latest_analysis: ExperimentAnalysis | None,
     latest_memo: IdeaDecisionMemo | None,
     latest_audit: IdeaAssumptionAudit | None,
+    claim_validation: dict[str, Any],
 ) -> list[dict[str, Any]]:
+    claim_validation_required = claim_validation.get("claim_count", 0) > 0
     checks = [
         ("novelty_refresh", latest_novelty is not None, "Refresh novelty/collision signals."),
         ("proposal_review", latest_review is not None, "Run proposal readiness review."),
@@ -4037,6 +4193,11 @@ def _quality_gate_required_evidence(
         ),
         ("decision_memo", latest_memo is not None, "Record pursue/revise/park/reject decision."),
         ("assumption_audit", latest_audit is not None, "Audit falsifiable assumptions."),
+        (
+            "claim_validation_result",
+            (not claim_validation_required) or claim_validation.get("event_count", 0) > 0,
+            "Record claim validation results for evidence-ledger claims.",
+        ),
     ]
     return [
         {"name": name, "satisfied": satisfied, "action": action}
@@ -4052,6 +4213,7 @@ def _quality_gate_blocking_risks(
     high_risk_assumptions: list[dict],
     blocked_tasks: list[ResearchTask],
     required_evidence: list[dict[str, Any]],
+    claim_validation: dict[str, Any],
 ) -> list[str]:
     risks = []
     if latest_novelty is None:
@@ -4066,6 +4228,7 @@ def _quality_gate_blocking_risks(
         risks.append(f"Latest decision memo says to {latest_memo.decision}.")
     if high_risk_assumptions:
         risks.append(f"{len(high_risk_assumptions)} high-risk assumptions remain open.")
+    risks.extend(claim_validation.get("blockers") or [])
     for blocker in readiness.blockers[:3]:
         risks.append(blocker)
     for task in blocked_tasks[:3]:
@@ -4082,11 +4245,17 @@ def _quality_gate_decision(
     latest_novelty: NoveltyCheck | None,
     latest_memo: IdeaDecisionMemo | None,
     blocking_risks: list[str],
+    claim_validation: dict[str, Any],
 ) -> str:
     if latest_memo and latest_memo.decision in {"reject", "park"}:
         return latest_memo.decision
     if latest_novelty and latest_novelty.risk_level == "high":
         return "de_risk_novelty"
+    by_status = claim_validation.get("by_status") or {}
+    if by_status.get("challenged", 0):
+        return "revise_before_investment"
+    if by_status.get("needs_more_evidence", 0) and gate_score >= 0.58:
+        return "needs_targeted_revision"
     if gate_score >= 0.76 and len(blocking_risks) <= 2:
         return "advance_to_execution"
     if gate_score >= 0.58:
@@ -4101,6 +4270,7 @@ def _quality_gate_recommended_actions(
     latest_novelty: NoveltyCheck | None,
     required_evidence: list[dict[str, Any]],
     blocked_tasks: list[ResearchTask],
+    claim_validation: dict[str, Any],
 ) -> list[str]:
     actions = []
     for item in required_evidence:
@@ -4108,6 +4278,7 @@ def _quality_gate_recommended_actions(
             actions.append(item["action"])
     if latest_novelty and latest_novelty.risk_level in {"medium", "high", "unknown"}:
         actions.extend(latest_novelty.recommended_actions_json[:3])
+    actions.extend(claim_validation.get("recommended_actions") or [])
     actions.extend(f"Clear readiness blocker: {blocker}" for blocker in readiness.blockers[:3])
     actions.extend(f"Unblock task `{task.id}`: {task.title}" for task in blocked_tasks[:3])
     if decision == "advance_to_execution":
@@ -4413,6 +4584,7 @@ def _readiness_summary_for_idea(session: Session, idea: Idea) -> IdeaReadinessSu
     experiment_analyses = _latest_for_idea(session, ExperimentAnalysis, idea.id, 1)
     decision_memos = _latest_for_idea(session, IdeaDecisionMemo, idea.id, 1)
     assumption_audits = _latest_for_idea(session, IdeaAssumptionAudit, idea.id, 1)
+    evidence_ledgers = _latest_for_idea(session, IdeaEvidenceLedger, idea.id, 1)
     novelty_checks = _latest_for_idea(session, NoveltyCheck, idea.id, 1)
     tasks = _latest_for_idea(session, ResearchTask, idea.id, 200)
 
@@ -4421,7 +4593,13 @@ def _readiness_summary_for_idea(session: Session, idea: Idea) -> IdeaReadinessSu
     latest_analysis = experiment_analyses[0] if experiment_analyses else None
     latest_memo = decision_memos[0] if decision_memos else None
     latest_audit = assumption_audits[0] if assumption_audits else None
+    latest_ledger = evidence_ledgers[0] if evidence_ledgers else None
     latest_novelty = novelty_checks[0] if novelty_checks else None
+    claim_validation = _claim_validation_impact_for_idea(
+        session,
+        idea.id,
+        latest_ledger=latest_ledger,
+    )
     open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
     blocked_tasks = [task for task in tasks if task.status == "blocked"]
     missing_search_count = len(latest_matrix.missing_searches_json or []) if latest_matrix else 0
@@ -4431,26 +4609,30 @@ def _readiness_summary_for_idea(session: Session, idea: Idea) -> IdeaReadinessSu
         if item.get("risk_level") == "high"
     ]
     breakdown = {
-        "evidence": {"score": _clamp(len(idea.evidence_ids_json or []) / 3), "weight": 0.15},
+        "evidence": {"score": _clamp(len(idea.evidence_ids_json or []) / 3), "weight": 0.12},
         "novelty": {
             "score": _readiness_novelty_score(latest_matrix, latest_novelty),
-            "weight": 0.15,
+            "weight": 0.14,
         },
         "proposal": {
             "score": latest_review.readiness_score if latest_review else (0.45 if drafts else 0.1),
-            "weight": 0.18,
+            "weight": 0.16,
         },
         "experiment": {
             "score": latest_analysis.confidence
             if latest_analysis
             else (0.45 if experiment_runs else (0.3 if experiment_plans else 0.1)),
-            "weight": 0.18,
+            "weight": 0.16,
         },
-        "decision": {"score": _readiness_decision_score(latest_memo), "weight": 0.14},
-        "assumptions": {"score": _readiness_assumption_score(latest_audit), "weight": 0.12},
+        "decision": {"score": _readiness_decision_score(latest_memo), "weight": 0.13},
+        "assumptions": {"score": _readiness_assumption_score(latest_audit), "weight": 0.11},
         "task_health": {
             "score": _readiness_task_score(open_tasks, blocked_tasks),
             "weight": 0.08,
+        },
+        "claim_validation": {
+            "score": claim_validation["score"],
+            "weight": 0.10,
         },
     }
     readiness_score = round(
@@ -4466,6 +4648,7 @@ def _readiness_summary_for_idea(session: Session, idea: Idea) -> IdeaReadinessSu
         blocked_tasks=blocked_tasks,
         missing_search_count=missing_search_count,
         high_risk_assumptions=high_risk_assumptions,
+        claim_validation=claim_validation,
     )
     return IdeaReadinessSummary(
         idea_id=idea.id,

@@ -63,6 +63,7 @@ def test_research_status() -> None:
     assert "claim_validation_queue" in body["implemented_capabilities"]
     assert "claim_validation_queue_task_generation" in body["implemented_capabilities"]
     assert "claim_validation_result_tracking" in body["implemented_capabilities"]
+    assert "claim_validation_result_decision_signals" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
@@ -1479,6 +1480,14 @@ Future work should preserve proposal drafts as reviewable artifacts.
         "reject",
     }
     assert "proposal" in readiness_body["score_breakdown"]
+    assert "claim_validation" in readiness_body["score_breakdown"]
+    assert (
+        readiness_body["score_breakdown"]["claim_validation"]["by_status"]["needs_more_evidence"]
+        >= 1
+    )
+    assert any(
+        "Claim validation found evidence gaps" in item for item in readiness_body["blockers"]
+    )
     assert "# Idea Readiness:" in readiness_body["markdown_export"]
 
     quality_gate = client.get(f"/research/ideas/{idea_id}/quality-gate")
@@ -1495,6 +1504,23 @@ Future work should preserve proposal drafts as reviewable artifacts.
         "reject",
     }
     assert "novelty" in quality_gate_body["score_breakdown"]
+    assert "claim_validation" in quality_gate_body["score_breakdown"]
+    assert (
+        quality_gate_body["score_breakdown"]["claim_validation"]["by_status"]["needs_more_evidence"]
+        >= 1
+    )
+    assert any(
+        item["name"] == "claim_validation_result" and item["satisfied"]
+        for item in quality_gate_body["required_evidence"]
+    )
+    assert any(
+        "Claim validation found evidence gaps" in item
+        for item in quality_gate_body["blocking_risks"]
+    )
+    assert any(
+        "targeted literature search" in item.lower()
+        for item in quality_gate_body["recommended_actions"]
+    )
     assert quality_gate_body["required_evidence"]
     assert quality_gate_body["recommended_actions"]
     assert "# Idea Quality Gate:" in quality_gate_body["markdown_export"]

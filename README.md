@@ -67,8 +67,8 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
 - Idea progress summaries that aggregate proposal, experiment, analysis, evidence-ledger follow-up, task, blocker, and recommended-next-step state.
 - Idea research packets that bundle the latest artifacts, open tasks, graph edge summary, and Markdown context for a single idea.
-- Idea readiness scoring that explains whether an idea is ready for deeper execution.
-- Idea quality gate that combines novelty, readiness, proposal review, experiment evidence, decision memo, and task health into a go/no-go decision.
+- Idea readiness scoring that combines evidence, novelty, proposal review, experiment evidence, decision memo, assumptions, task health, and claim validation result impact.
+- Idea quality gate that combines novelty, readiness, proposal review, experiment evidence, decision memo, task health, and claim validation result impact into a go/no-go decision.
 - Task generation from idea quality-gate actions so go/no-go decisions become concrete de-risking work.
 - Task generation from idea readiness blockers so readiness gaps become trackable follow-up work.
 - Configurable novelty refresh for rerunning local and optional external literature collision checks on an idea.
@@ -80,7 +80,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Idea decision memos that record pursue/revise/park/reject rationale, risks, evidence, next commitments, and graph links.
 - Follow-up task generation from idea decision memo commitments.
 - Idea assumption audits that expose falsifiable assumptions, validation signals, risk levels, and source artifacts.
-- Idea evidence ledgers that map claims to supporting evidence, counterevidence, missing evidence, risks, coverage scores, Markdown exports, claim/evidence graph links, follow-up task generation, per-claim validation packets, project-level claim validation queues, queue-driven validation task generation, and validation result reporting across progress views and advisor briefs.
+- Idea evidence ledgers that map claims to supporting evidence, counterevidence, missing evidence, risks, coverage scores, Markdown exports, claim/evidence graph links, follow-up task generation, per-claim validation packets, project-level claim validation queues, queue-driven validation task generation, validation result reporting, and validation-result impact signals for readiness and quality gates.
 - Project progress overview that aggregates all ideas, open tasks, blockers, recent analyses, and recommended actions.
 - Project triage brief that combines progress, readiness, quality gates, and opportunity radar into one daily decision view.
 - Task generation from project triage brief next actions and risks for daily execution.
@@ -203,7 +203,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, evidence ledger, evidence-ledger follow-up tasks, claim validation packet, claim validation queue, claim queue follow-up tasks, claim validation result tracking and reporting, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, quality-gate follow-up tasks, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project triage brief, project triage tasks, persisted project triage snapshots, triage snapshot comparison, triage comparison tasks, project quality-gate tasks, project overview, project bundle export with claim validation queue metadata, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, evidence ledger, evidence-ledger follow-up tasks, claim validation packet, claim validation queue, claim queue follow-up tasks, claim validation result tracking/reporting/decision signals, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, quality-gate follow-up tasks, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project triage brief, project triage tasks, persisted project triage snapshots, triage snapshot comparison, triage comparison tasks, project quality-gate tasks, project overview, project bundle export with claim validation queue metadata, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints

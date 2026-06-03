@@ -221,6 +221,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include claim validation queue task generation")
     if "claim_validation_result_tracking" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include claim validation result tracking")
+    if "claim_validation_result_decision_signals" not in status["implemented_capabilities"]:
+        raise RuntimeError(
+            "research status did not include claim validation result decision signals"
+        )
     if "advisor_brief_evidence_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief evidence context")
     if "advisor_brief_claim_validation_context" not in status["implemented_capabilities"]:
@@ -951,6 +955,15 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if readiness["readiness_score"] <= 0:
         raise RuntimeError("idea readiness did not return a positive score")
+    if "claim_validation" not in readiness["score_breakdown"]:
+        raise RuntimeError("idea readiness did not include claim validation signals")
+    if (
+        readiness["score_breakdown"]["claim_validation"]["by_status"].get("needs_more_evidence", 0)
+        < 1
+    ):
+        raise RuntimeError("idea readiness did not summarize claim validation result statuses")
+    if not any("Claim validation found evidence gaps" in item for item in readiness["blockers"]):
+        raise RuntimeError("idea readiness did not expose claim validation blockers")
     if "## Score Breakdown" not in readiness["markdown_export"]:
         raise RuntimeError("idea readiness markdown did not include score breakdown")
     quality_gate = require_ok(
@@ -959,6 +972,24 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if quality_gate["gate_score"] < 0:
         raise RuntimeError("idea quality gate returned an invalid score")
+    if "claim_validation" not in quality_gate["score_breakdown"]:
+        raise RuntimeError("idea quality gate did not include claim validation signals")
+    if (
+        quality_gate["score_breakdown"]["claim_validation"]["by_status"].get(
+            "needs_more_evidence", 0
+        )
+        < 1
+    ):
+        raise RuntimeError("idea quality gate did not summarize validation statuses")
+    if not any(
+        item["name"] == "claim_validation_result" and item["satisfied"]
+        for item in quality_gate["required_evidence"]
+    ):
+        raise RuntimeError("idea quality gate did not require claim validation results")
+    if not any(
+        "Claim validation found evidence gaps" in item for item in quality_gate["blocking_risks"]
+    ):
+        raise RuntimeError("idea quality gate did not expose claim validation risks")
     if not quality_gate["recommended_actions"]:
         raise RuntimeError("idea quality gate did not include recommended actions")
     if "Idea Quality Gate" not in quality_gate["markdown_export"]:
@@ -1737,8 +1768,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "timeline_markdown_chars": len(timeline["markdown_export"]),
         "readiness_score": readiness["readiness_score"],
         "readiness_decision": readiness["decision"],
+        "readiness_claim_validation_score": readiness["score_breakdown"]["claim_validation"][
+            "score"
+        ],
         "quality_gate_score": quality_gate["gate_score"],
         "quality_gate_decision": quality_gate["decision"],
+        "quality_gate_claim_validation_score": quality_gate["score_breakdown"]["claim_validation"][
+            "score"
+        ],
         "quality_gate_task_count": len(quality_gate_tasks["tasks"]),
         "quality_gate_progress_task_count": progress_after_quality_gate_tasks["artifact_counts"][
             "quality_gate_follow_up_tasks"
