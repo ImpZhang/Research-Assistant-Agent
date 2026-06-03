@@ -119,6 +119,7 @@ from backend.research.schemas import (
     ProjectQualityGateOverviewResponse,
     ProjectQualityGateTaskGenerateRequest,
     ProjectCockpitResponse,
+    ProjectCockpitTaskGenerateRequest,
     ProjectReadinessOverviewResponse,
     ProjectStatus,
     ProjectTriageBriefResponse,
@@ -263,6 +264,7 @@ def status() -> ProjectStatus:
             "claim_validation_result_ranking_adjustments",
             "project_progress_overview",
             "project_cockpit_dashboard",
+            "project_cockpit_task_generation",
             "project_triage_brief",
             "project_triage_task_generation",
             "project_triage_snapshots",
@@ -656,6 +658,18 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/cockpit/export/markdown",
             output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_cockpit",
+            description=(
+                "Turn project cockpit primary action, next actions, risks, and highlights "
+                "into project-level task-board tasks."
+            ),
+            method="POST",
+            path="/research/cockpit/tasks",
+            input_model="ProjectCockpitTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_project_triage_brief",
@@ -1325,6 +1339,34 @@ def export_project_cockpit_markdown(
         session=session,
     )
     return PlainTextResponse(cockpit.markdown_export, media_type="text/markdown")
+
+
+@router.post("/cockpit/tasks", response_model=ResearchTaskGenerationResponse)
+def create_tasks_from_project_cockpit(
+    payload: ProjectCockpitTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    cockpit = get_project_cockpit(
+        idea_limit=50,
+        opportunity_limit=5,
+        session=session,
+    )
+    tasks = ResearchTaskService(session).create_from_project_cockpit(
+        cockpit.model_dump(mode="json"),
+        limit=payload.limit,
+        include_primary_action=payload.include_primary_action,
+        include_next_actions=payload.include_next_actions,
+        include_risks=payload.include_risks,
+        include_highlights=payload.include_highlights,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} project cockpit tasks from phase "
+            f"{cockpit.phase} and readiness {cockpit.readiness_level}."
+        ),
+    )
 
 
 def _project_cockpit_metrics(session: Session) -> dict[str, Any]:
@@ -6402,6 +6444,7 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "idea_readiness_creates_task",
         "idea_has_quality_gate",
         "quality_gate_creates_task",
+        "project_cockpit_creates_task",
         "project_triage_creates_task",
         "idea_has_opportunity_radar",
         "opportunity_radar_creates_task",

@@ -920,6 +920,15 @@ class ProjectCockpitResponse(BaseModel):
     message: str
 
 
+class ProjectCockpitTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=8, ge=1, le=20)
+    include_primary_action: bool = True
+    include_next_actions: bool = True
+    include_risks: bool = True
+    include_highlights: bool = False
+    created_by: str = "system"
+
+
 class ProjectTriageTaskGenerateRequest(BaseModel):
     limit: int = Field(default=8, ge=1, le=20)
     include_risks: bool = True

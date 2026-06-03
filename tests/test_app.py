@@ -66,6 +66,7 @@ def test_research_status() -> None:
     assert "claim_validation_result_decision_signals" in body["implemented_capabilities"]
     assert "claim_validation_result_ranking_adjustments" in body["implemented_capabilities"]
     assert "project_cockpit_dashboard" in body["implemented_capabilities"]
+    assert "project_cockpit_task_generation" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
@@ -95,6 +96,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_progress_overview" in names
     assert "get_project_cockpit" in names
     assert "export_project_cockpit_markdown" in names
+    assert "create_tasks_from_project_cockpit" in names
     assert "get_project_triage_brief" in names
     assert "export_project_triage_brief_markdown" in names
     assert "create_tasks_from_project_triage_brief" in names
@@ -395,6 +397,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "claimQueueButton" in response.text
     assert "claimQueueTasksButton" in response.text
     assert "cockpitButton" in response.text
+    assert "cockpitTasksButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -452,6 +455,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/claims/validation-queue?${params.toString()}" in script.text
     assert "/research/claims/validation-queue/tasks" in script.text
     assert "/research/cockpit" in script.text
+    assert "/research/cockpit/tasks" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
     assert "/research/triage/brief/export/markdown" in script.text
@@ -1827,6 +1831,26 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert cockpit_markdown.status_code == 200
     assert "text/markdown" in cockpit_markdown.headers["content-type"]
     assert "# Project Cockpit" in cockpit_markdown.text
+
+    cockpit_tasks = client.post(
+        "/research/cockpit/tasks",
+        json={
+            "limit": 5,
+            "include_primary_action": True,
+            "include_next_actions": True,
+            "include_risks": True,
+            "created_by": "pytest",
+        },
+    )
+    assert cockpit_tasks.status_code == 200
+    cockpit_task_body = cockpit_tasks.json()
+    assert cockpit_task_body["tasks"]
+    assert all(task["owner_type"] == "project_cockpit" for task in cockpit_task_body["tasks"])
+    assert all(task["due_phase"] == "cockpit_follow_up" for task in cockpit_task_body["tasks"])
+
+    cockpit_task_edges = client.get("/research/graph/edges?edge_type=project_cockpit_creates_task")
+    assert cockpit_task_edges.status_code == 200
+    assert cockpit_task_edges.json()
 
     radar_tasks = client.post(
         "/research/opportunities/radar/tasks",

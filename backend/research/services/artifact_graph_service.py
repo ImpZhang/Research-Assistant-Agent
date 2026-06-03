@@ -497,6 +497,37 @@ class ArtifactGraphService:
                 payload={"source": task.source_type},
             )
 
+    def link_project_cockpit_tasks(self, cockpit: dict, tasks: list[ResearchTask]) -> None:
+        cockpit_node = self.graph.get_or_create_node(
+            node_type="project_cockpit",
+            label="Project cockpit",
+            canonical_key="project_cockpit:latest",
+            payload={
+                "phase": cockpit.get("phase", ""),
+                "readiness_level": cockpit.get("readiness_level", ""),
+                "task_count": len(tasks),
+                "owner_type": "project_cockpit",
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=cockpit_node,
+                target_node=task_node,
+                edge_type="project_cockpit_creates_task",
+                payload={"source": task.source_type},
+            )
+
     def link_project_triage_comparison_tasks(
         self,
         comparison: dict,

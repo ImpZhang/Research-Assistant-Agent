@@ -169,6 +169,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project quality gate task generation")
     if "project_cockpit_dashboard" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project cockpit dashboard")
+    if "project_cockpit_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project cockpit task generation")
     if "research_opportunity_radar" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research opportunity radar")
     if "opportunity_radar_task_generation" not in status["implemented_capabilities"]:
@@ -275,6 +277,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project cockpit tool")
     if "export_project_cockpit_markdown" not in manifest_names:
         raise RuntimeError("tool manifest did not include project cockpit markdown export")
+    if "create_tasks_from_project_cockpit" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project cockpit task tool")
     if "get_project_triage_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage brief tool")
     if "export_project_triage_brief_markdown" not in manifest_names:
@@ -1158,6 +1162,29 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "Project Cockpit" not in cockpit_markdown:
         raise RuntimeError("project cockpit markdown export did not include title")
+    cockpit_tasks = require_ok(
+        client.post(
+            "/research/cockpit/tasks",
+            json_body={
+                "limit": 5,
+                "include_primary_action": True,
+                "include_next_actions": True,
+                "include_risks": True,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project cockpit tasks",
+    )
+    if not cockpit_tasks["tasks"]:
+        raise RuntimeError("project cockpit task generation returned no tasks")
+    if cockpit_tasks["tasks"][0]["owner_type"] != "project_cockpit":
+        raise RuntimeError("project cockpit tasks used the wrong owner type")
+    cockpit_task_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=project_cockpit_creates_task"),
+        "project cockpit task graph edges",
+    )
+    if not cockpit_task_edges:
+        raise RuntimeError("project cockpit task generation did not create graph edges")
     triage_brief = require_ok(
         client.get("/research/triage/brief?idea_limit=50&opportunity_limit=5"),
         "project triage brief",
@@ -1857,6 +1884,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "cockpit_readiness_level": cockpit["readiness_level"],
         "cockpit_primary_action": cockpit["primary_next_action"]["label"],
         "cockpit_quick_action_count": len(cockpit["quick_actions"]),
+        "cockpit_task_count": len(cockpit_tasks["tasks"]),
         "readiness_overview_idea_count": readiness_overview["idea_count"],
         "readiness_overview_average": readiness_overview["average_readiness"],
         "opportunity_radar_count": len(radar["top_opportunities"]),

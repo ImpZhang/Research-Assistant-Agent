@@ -800,6 +800,112 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_cockpit(
+        self,
+        cockpit: dict,
+        *,
+        limit: int = 8,
+        include_primary_action: bool = True,
+        include_next_actions: bool = True,
+        include_risks: bool = True,
+        include_highlights: bool = False,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        phase = str(cockpit.get("phase") or "")
+        readiness_level = str(cockpit.get("readiness_level") or "")
+        source_summaries = cockpit.get("source_summaries") or {}
+        items: list[tuple[str, str, dict]] = []
+        if include_primary_action:
+            primary = cockpit.get("primary_next_action") or {}
+            label = str(primary.get("label") or "").strip()
+            reason = str(primary.get("reason") or "").strip()
+            if label:
+                items.append(
+                    (
+                        "cockpit_primary_action",
+                        f"{label}. {reason}".strip(),
+                        {
+                            "method": primary.get("method", ""),
+                            "path": primary.get("path", ""),
+                            "enabled": primary.get("enabled", True),
+                        },
+                    )
+                )
+        if include_next_actions:
+            for action in self._unique_commitments(source_summaries.get("next_actions") or []):
+                items.append(("cockpit_next_action", action, {}))
+        if include_risks:
+            for risk in self._unique_commitments(cockpit.get("risk_alerts") or []):
+                items.append(("cockpit_risk_alert", risk, {}))
+        if include_highlights:
+            for highlight in self._unique_commitments(cockpit.get("highlights") or []):
+                items.append(("cockpit_highlight", highlight, {}))
+
+        items = self._deduplicate_cockpit_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "cockpit_review",
+                    "Review the project cockpit and define the next customer-facing research action.",
+                    {},
+                )
+            ]
+
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_cockpit",
+                owner_id="project_cockpit",
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._cockpit_task_title(action, idx, source_type=source_type),
+                description=action,
+                priority=self._cockpit_task_priority(source_type, action, phase),
+                status="todo",
+                due_phase="cockpit_follow_up",
+                metadata_json={
+                    "cockpit_phase": phase,
+                    "cockpit_readiness_level": readiness_level,
+                    "cockpit_source_type": source_type,
+                    "source_rank": idx,
+                    **metadata,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project cockpit.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "cockpit_phase": phase,
+                        "cockpit_readiness_level": readiness_level,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_cockpit_tasks(cockpit, tasks)
+        self.session.commit()
+        return tasks
+
     def create_from_project_triage_comparison(
         self,
         comparison: dict,
@@ -1283,6 +1389,39 @@ class ResearchTaskService:
             return "high"
         return "medium"
 
+    def _cockpit_task_title(self, action: str, idx: int, *, source_type: str) -> str:
+        clean = " ".join(str(action).split())
+        lower = clean.lower()
+        if source_type == "cockpit_primary_action":
+            return self._short_task_title(clean or "Work cockpit primary action", idx)
+        if source_type == "cockpit_risk_alert":
+            return self._short_task_title(f"Resolve cockpit risk {idx}: {clean}", idx)
+        if "blocked" in lower:
+            return self._short_task_title(clean.replace("Blocked", "Unblock", 1), idx)
+        if "de-risk" in lower or "risk" in lower:
+            return self._short_task_title(f"De-risk cockpit item {idx}: {clean}", idx)
+        if source_type == "cockpit_highlight":
+            return self._short_task_title(f"Review cockpit highlight {idx}: {clean}", idx)
+        return self._short_task_title(clean or f"Work cockpit action {idx}", idx)
+
+    def _cockpit_task_priority(self, source_type: str, action: str, phase: str) -> str:
+        lower = str(action).lower()
+        if source_type == "cockpit_risk_alert":
+            return "critical"
+        if "blocked" in lower or "critical" in lower or "high-risk" in lower:
+            return "critical"
+        if (
+            "de-risk" in lower
+            or "quality-gate" in lower
+            or phase in {"validation", "unblock_execution"}
+        ):
+            return "high"
+        if source_type == "cockpit_primary_action":
+            return "high"
+        if source_type == "cockpit_highlight":
+            return "medium"
+        return "medium"
+
     def _triage_comparison_task_title(self, action: str, idx: int) -> str:
         clean = " ".join(str(action).split())
         if "risk" in clean.lower() or "de-risk" in clean.lower():
@@ -1403,6 +1542,19 @@ class ResearchTaskService:
             key = clean.lower()
             if clean and key not in seen:
                 unique.append((source_type, clean))
+                seen.add(key)
+        return unique
+
+    def _deduplicate_cockpit_items(
+        self, items: list[tuple[str, str, dict]]
+    ) -> list[tuple[str, str, dict]]:
+        unique = []
+        seen = set()
+        for source_type, action, metadata in items:
+            clean = " ".join(str(action).split())
+            key = clean.lower()
+            if clean and key not in seen:
+                unique.append((source_type, clean, metadata))
                 seen.add(key)
         return unique
 

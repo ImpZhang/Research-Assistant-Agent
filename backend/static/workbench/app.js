@@ -1301,6 +1301,24 @@ async function loadProjectCockpit() {
   }
 }
 
+async function createProjectCockpitTasks() {
+  renderResult("workflowResult", "Creating project cockpit tasks...", "warn");
+  try {
+    const body = await api("/research/cockpit/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limit: 8, include_risks: true, created_by: "workbench" }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Cockpit tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectOverview() {
   renderResult("workflowResult", "Loading project overview...", "warn");
   try {
@@ -1753,6 +1771,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("qualityGateTasksButton").addEventListener("click", createQualityGateTasks);
   $("readinessTasksButton").addEventListener("click", createReadinessTasks);
   $("cockpitButton").addEventListener("click", loadProjectCockpit);
+  $("cockpitTasksButton").addEventListener("click", createProjectCockpitTasks);
   $("overviewButton").addEventListener("click", loadProjectOverview);
   $("triageBriefButton").addEventListener("click", loadProjectTriageBrief);
   $("triageMarkdownButton").addEventListener("click", loadProjectTriageMarkdown);

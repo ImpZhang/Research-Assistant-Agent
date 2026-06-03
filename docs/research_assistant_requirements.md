@@ -1071,6 +1071,8 @@ research execution plan 需要提供 progress report：按 plan 读取生成的 
 
 project cockpit 需要同时提供结构化 JSON 和 Markdown export。结构化 JSON 供前端 dashboard、MCP/DeerFlow planner 和自动化 agent 消费；Markdown 供导师会、客户汇报、周报和项目备份使用。quick actions 必须包含 method/path/enabled/reason，便于后续前端把建议直接映射成按钮或 agent tool call。
 
+project cockpit 需要能一键转成 task board 任务：从 primary action、next actions、risk alerts 和必要 highlights 创建 `owner_type=project_cockpit`、`due_phase=cockpit_follow_up` 的任务，并写入 `project_cockpit_creates_task` 图边。这样客户第一屏不是静态 dashboard，而是可以直接驱动下一轮执行。
+
 验收标准：
 
 - 能通过关键词找相关论文。
