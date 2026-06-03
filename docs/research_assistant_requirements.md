@@ -1073,6 +1073,8 @@ project cockpit 需要同时提供结构化 JSON 和 Markdown export。结构化
 
 project cockpit 需要能一键转成 task board 任务：从 primary action、next actions、risk alerts 和必要 highlights 创建 `owner_type=project_cockpit`、`due_phase=cockpit_follow_up` 的任务，并写入 `project_cockpit_creates_task` 图边。这样客户第一屏不是静态 dashboard，而是可以直接驱动下一轮执行。
 
+系统需要提供 project advisor chat，作为客户的自然语言项目入口。用户可以直接问“现在项目怎么样”“下一步做什么”“哪个风险最重要”“哪个 idea 最值得推进”，系统必须基于 cockpit、retrieved evidence、gaps、ideas 和 GraphRAG-lite context 生成回答，而不是泛泛聊天。回答需要包含 intent、Markdown answer、recommended actions、risk alerts、引用的 evidence/gap/idea、source summaries 和 tool suggestions，便于前端展示、导师会复盘和后续 agent 接管。
+
 验收标准：
 
 - 能通过关键词找相关论文。

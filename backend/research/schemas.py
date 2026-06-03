@@ -1251,6 +1251,33 @@ class ContextSearchResponse(BaseModel):
     graph_edges: list[ResearchEdgeRead] = Field(default_factory=list)
 
 
+class AdvisorChatRequest(BaseModel):
+    question: str = Field(min_length=1)
+    idea_id: str | None = None
+    paper_ids: list[str] = Field(default_factory=list)
+    include_cockpit: bool = True
+    include_context: bool = True
+    context_limit: int = Field(default=5, ge=1, le=15)
+    created_by: str = "researcher"
+
+
+class AdvisorChatResponse(BaseModel):
+    question: str
+    intent: str = "project_status"
+    answer: str
+    answer_markdown: str = ""
+    cockpit_phase: str = ""
+    readiness_level: str = ""
+    recommended_actions: list[str] = Field(default_factory=list)
+    risk_alerts: list[str] = Field(default_factory=list)
+    tool_suggestions: list[dict[str, Any]] = Field(default_factory=list)
+    cited_evidences: list[ScoredEvidenceRead] = Field(default_factory=list)
+    cited_gaps: list[ScoredResearchGapRead] = Field(default_factory=list)
+    cited_ideas: list[ScoredIdeaRead] = Field(default_factory=list)
+    source_summaries: dict[str, Any] = Field(default_factory=dict)
+    message: str
+
+
 class LiteratureSearchRequest(BaseModel):
     query: str
     limit: int = 8

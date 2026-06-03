@@ -1174,6 +1174,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/cockpit/tasks` 将 cockpit 的 primary action、source summary next actions、risk alerts 和可选 highlights 写入 `ResearchTask`，使用 `owner_type=project_cockpit`、`due_phase=cockpit_follow_up`，并写入 `project_cockpit_creates_task` 图边。它让客户第一屏具备执行闭环：dashboard 判断下一步，task endpoint 把下一步落到任务板、task events、GraphRAG-lite 和后续 handoff 链路。
 
+`/advisor/chat` 是第一版自然语言项目顾问入口。请求包含 question、可选 idea_id/paper_ids、include_cockpit、include_context 和 context_limit；响应包含 intent、answer、answer_markdown、cockpit_phase、readiness_level、recommended_actions、risk_alerts、tool_suggestions、cited_evidences、cited_gaps、cited_ideas 和 source_summaries。当前实现是 deterministic advisor composer：先读取 cockpit，再用 RetrievalService 做 lexical/vector/GraphRAG-lite context search，最后生成 Markdown answer 和 tool suggestions。后续接入 LLM 时应复用这份 response contract，把 cockpit/context 作为 prompt 输入，而不是把聊天逻辑和内部 route 拼接写死在前端。
+
 `/triage/brief` 组合 `/progress/overview`、`/readiness/overview`、`/quality/overview` 和 `/opportunities/radar`，输出 recommended focus、risk focus、next actions 与 Markdown brief。它是更高层的“科研驾驶舱”入口：外部 agent 不需要自己拼多个 endpoint，就能拿到今天该推进什么、卡在哪里、下一步怎么做的压缩上下文。
 
 `/triage/brief/export/markdown` 返回同一份 project triage brief 的 `text/markdown` 表示，方便导师会、纯文本备份和只消费 Markdown 的 MCP/agent 工具使用。
@@ -1253,6 +1255,7 @@ GET  /research/progress/overview
 GET  /research/cockpit
 GET  /research/cockpit/export/markdown
 POST /research/cockpit/tasks
+POST /research/advisor/chat
 GET  /research/triage/brief
 GET  /research/triage/brief/export/markdown
 POST /research/triage/brief/tasks

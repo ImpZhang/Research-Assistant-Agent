@@ -84,6 +84,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Project progress overview that aggregates all ideas, open tasks, blockers, recent analyses, and recommended actions.
 - Project cockpit dashboard that compresses setup state, workflow stages, metrics, readiness, quality gates, opportunity radar, risks, highlights, quick actions, and Markdown export into one customer-facing entry point.
 - Task generation from project cockpit primary action, next actions, risks, and highlights so the customer-facing entry point can drive the task board directly.
+- Advisor chat endpoint that answers project-level questions from cockpit state, retrieved evidence, gaps, ideas, and GraphRAG-lite context, with Markdown output, citations, recommended actions, and tool suggestions.
 - Project triage brief that combines progress, readiness, quality gates, and opportunity radar into one daily decision view.
 - Task generation from project triage brief next actions and risks for daily execution.
 - Persisted project triage snapshots that freeze daily decision state, source task ids, and Markdown exports for later review.
@@ -117,7 +118,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
 - Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.
 - Job cancellation and retry controls for failed or interrupted workflow runs.
-- Browser workbench for profile editing, upload, workflow launch, job tracking/cancel/retry, search, cockpit, readiness, quality gates, decision, audit, bundle export, and dossier preview.
+- Browser workbench for profile editing, upload, workflow launch, job tracking/cancel/retry, search, advisor chat, cockpit, readiness, quality gates, decision, audit, bundle export, and dossier preview.
 - End-to-end smoke test covering the current research workflow.
 
 ## Repository Layout
@@ -205,7 +206,7 @@ Run the same smoke workflow against a live server:
 uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
 ```
 
-The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, evidence ledger, evidence-ledger follow-up tasks, claim validation packet, claim validation queue, claim queue follow-up tasks, claim validation result tracking/reporting/decision signals, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, quality-gate follow-up tasks, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project cockpit dashboard, project cockpit tasks, project triage brief, project triage tasks, persisted project triage snapshots, triage snapshot comparison, triage comparison tasks, project quality-gate tasks, project overview, project bundle export with claim validation queue metadata, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
+The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, evidence ledger, evidence-ledger follow-up tasks, claim validation packet, claim validation queue, claim queue follow-up tasks, claim validation result tracking/reporting/decision signals, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, quality-gate follow-up tasks, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project cockpit dashboard, project advisor chat, project cockpit tasks, project triage brief, project triage tasks, persisted project triage snapshots, triage snapshot comparison, triage comparison tasks, project quality-gate tasks, project overview, project bundle export with claim validation queue metadata, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
 It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools.
 
 ## Useful Endpoints
@@ -226,6 +227,7 @@ GET  /research/progress/overview
 GET  /research/cockpit
 GET  /research/cockpit/export/markdown
 POST /research/cockpit/tasks
+POST /research/advisor/chat
 GET  /research/triage/brief
 GET  /research/triage/brief/export/markdown
 POST /research/triage/brief/tasks

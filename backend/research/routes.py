@@ -46,6 +46,8 @@ from backend.research.models import (
     TaskBoardSnapshot,
 )
 from backend.research.schemas import (
+    AdvisorChatRequest,
+    AdvisorChatResponse,
     ClaimValidationQueueItem,
     ClaimValidationQueueResponse,
     ClaimValidationQueueTaskGenerateRequest,
@@ -265,6 +267,7 @@ def status() -> ProjectStatus:
             "project_progress_overview",
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
+            "project_advisor_chat",
             "project_triage_brief",
             "project_triage_task_generation",
             "project_triage_snapshots",
@@ -670,6 +673,17 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="ProjectCockpitTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="ask_project_advisor",
+            description=(
+                "Ask a project-level advisor question grounded in cockpit state, "
+                "retrieved evidence, gaps, ideas, and GraphRAG-lite context."
+            ),
+            method="POST",
+            path="/research/advisor/chat",
+            input_model="AdvisorChatRequest",
+            output_model="AdvisorChatResponse",
         ),
         ToolManifestItem(
             name="get_project_triage_brief",
@@ -1367,6 +1381,398 @@ def create_tasks_from_project_cockpit(
             f"{cockpit.phase} and readiness {cockpit.readiness_level}."
         ),
     )
+
+
+@router.post("/advisor/chat", response_model=AdvisorChatResponse)
+def ask_project_advisor(
+    payload: AdvisorChatRequest,
+    session: Session = Depends(get_session),
+) -> AdvisorChatResponse:
+    question = " ".join(payload.question.split())
+    if not question:
+        raise HTTPException(status_code=400, detail="Question must not be empty")
+    selected_idea = None
+    if payload.idea_id:
+        selected_idea = session.get(Idea, payload.idea_id)
+        if selected_idea is None:
+            raise HTTPException(status_code=404, detail="Idea not found")
+
+    cockpit = (
+        get_project_cockpit(idea_limit=50, opportunity_limit=5, session=session)
+        if payload.include_cockpit
+        else None
+    )
+    context = (
+        _advisor_chat_context_response(payload, selected_idea, session)
+        if payload.include_context
+        else None
+    )
+    intent = _advisor_chat_intent(question)
+    recommended_actions = _advisor_chat_recommended_actions(intent, cockpit, context)
+    risk_alerts = (cockpit.risk_alerts if cockpit else [])[:10]
+    tool_suggestions = _advisor_chat_tool_suggestions(intent, cockpit, selected_idea)
+    source_summaries = _advisor_chat_source_summaries(cockpit, context, selected_idea)
+    answer_markdown = _render_advisor_chat_markdown(
+        question=question,
+        intent=intent,
+        cockpit=cockpit,
+        context=context,
+        selected_idea=selected_idea,
+        recommended_actions=recommended_actions,
+        risk_alerts=risk_alerts,
+        tool_suggestions=tool_suggestions,
+    )
+    answer = _advisor_chat_plain_answer(
+        intent=intent,
+        cockpit=cockpit,
+        recommended_actions=recommended_actions,
+        risk_alerts=risk_alerts,
+    )
+    return AdvisorChatResponse(
+        question=question,
+        intent=intent,
+        answer=answer,
+        answer_markdown=answer_markdown,
+        cockpit_phase=cockpit.phase if cockpit else "",
+        readiness_level=cockpit.readiness_level if cockpit else "",
+        recommended_actions=recommended_actions,
+        risk_alerts=risk_alerts,
+        tool_suggestions=tool_suggestions,
+        cited_evidences=context.evidences if context else [],
+        cited_gaps=context.gaps if context else [],
+        cited_ideas=context.ideas if context else [],
+        source_summaries=source_summaries,
+        message=(
+            "Answered advisor chat question from project cockpit, retrieved context, "
+            "and deterministic research workflow signals."
+        ),
+    )
+
+
+def _advisor_chat_context_response(
+    payload: AdvisorChatRequest,
+    selected_idea: Idea | None,
+    session: Session,
+) -> ContextSearchResponse:
+    search_query = _advisor_chat_search_query(payload.question, selected_idea)
+    try:
+        result = RetrievalService(session).search_context(
+            query=search_query,
+            paper_ids=payload.paper_ids,
+            limit=payload.context_limit,
+            include_graph=True,
+        )
+    except ValueError:
+        result = RetrievalService(session).search_context(
+            query="research evidence idea risk experiment novelty",
+            paper_ids=payload.paper_ids,
+            limit=payload.context_limit,
+            include_graph=True,
+        )
+    return ContextSearchResponse(
+        query=search_query,
+        retrieval_method="advisor_chat_lexical_vector_graph_rag_lite_v0",
+        answer_brief=result.answer_brief,
+        evidences=[
+            ScoredEvidenceRead(
+                evidence=_serialize_evidence(scored.item),
+                score=scored.score,
+                matched_terms=scored.matched_terms,
+            )
+            for scored in result.evidences
+        ],
+        gaps=[
+            ScoredResearchGapRead(
+                gap=_serialize_gap(scored.item),
+                score=scored.score,
+                matched_terms=scored.matched_terms,
+            )
+            for scored in result.gaps
+        ],
+        ideas=[
+            ScoredIdeaRead(
+                idea=_serialize_idea(scored.item),
+                score=scored.score,
+                matched_terms=scored.matched_terms,
+            )
+            for scored in result.ideas
+        ],
+        graph_nodes=[_serialize_node(node) for node in result.graph_nodes],
+        graph_edges=[_serialize_edge(edge) for edge in result.graph_edges],
+    )
+
+
+def _advisor_chat_search_query(question: str, selected_idea: Idea | None) -> str:
+    query = " ".join(question.split())
+    if selected_idea is not None:
+        query = " ".join(
+            [
+                query,
+                selected_idea.title,
+                selected_idea.research_question,
+                selected_idea.core_hypothesis,
+            ]
+        )
+    has_ascii_term = any(char.isascii() and char.isalnum() for char in query)
+    if has_ascii_term:
+        return query
+    return f"{query} research evidence idea risk experiment novelty"
+
+
+def _advisor_chat_intent(question: str) -> str:
+    lower = question.lower()
+    if any(token in lower for token in ["risk", "block", "blocked", "风险", "卡", "阻塞"]):
+        return "risk_review"
+    if any(token in lower for token in ["idea", "选题", "方向", "值得", "推进"]):
+        return "idea_selection"
+    if any(token in lower for token in ["evidence", "claim", "证据", "主张", "验证"]):
+        return "evidence_review"
+    if any(token in lower for token in ["experiment", "实验", "ablation", "baseline"]):
+        return "experiment_planning"
+    if any(token in lower for token in ["next", "action", "下一步", "做什么", "计划"]):
+        return "next_actions"
+    return "project_status"
+
+
+def _advisor_chat_recommended_actions(
+    intent: str,
+    cockpit: ProjectCockpitResponse | None,
+    context: ContextSearchResponse | None,
+) -> list[str]:
+    actions: list[str] = []
+    if cockpit:
+        primary = cockpit.primary_next_action or {}
+        if primary.get("label"):
+            actions.append(f"{primary['label']}: {primary.get('reason', '')}".strip())
+        next_actions = (cockpit.source_summaries or {}).get("next_actions") or []
+        actions.extend(next_actions[:5])
+        if intent in {"risk_review", "evidence_review"}:
+            actions.extend(cockpit.risk_alerts[:5])
+        if intent == "idea_selection":
+            radar = (cockpit.source_summaries or {}).get("opportunity_radar") or {}
+            actions.extend(radar.get("recommended_sequence") or [])
+    if context:
+        if context.ideas:
+            actions.append(f"Inspect the top cited idea: {context.ideas[0].idea.title}.")
+        if context.gaps and intent in {"idea_selection", "project_status"}:
+            actions.append(
+                f"Use the top cited gap as ideation pressure: {context.gaps[0].gap.title}."
+            )
+        if context.evidences and intent in {"evidence_review", "risk_review"}:
+            actions.append("Review cited evidence before locking the next decision.")
+    return _dedupe_strings(actions)[:10]
+
+
+def _advisor_chat_tool_suggestions(
+    intent: str,
+    cockpit: ProjectCockpitResponse | None,
+    selected_idea: Idea | None,
+) -> list[dict[str, Any]]:
+    suggestions = [
+        {
+            "name": "get_project_cockpit",
+            "method": "GET",
+            "path": "/research/cockpit",
+            "reason": "Refresh the project phase, readiness, primary action, risks, and quick actions.",
+        }
+    ]
+    if intent in {"next_actions", "project_status", "risk_review"}:
+        suggestions.append(
+            {
+                "name": "create_tasks_from_project_cockpit",
+                "method": "POST",
+                "path": "/research/cockpit/tasks",
+                "reason": "Turn the advisor answer into task-board work.",
+            }
+        )
+    if intent in {"risk_review", "evidence_review"}:
+        suggestions.extend(
+            [
+                {
+                    "name": "get_claim_validation_queue",
+                    "method": "GET",
+                    "path": "/research/claims/validation-queue",
+                    "reason": "Find the weakest claim-evidence links before advancing.",
+                },
+                {
+                    "name": "get_project_quality_gate_overview",
+                    "method": "GET",
+                    "path": "/research/quality/overview",
+                    "reason": "Compare which ideas need de-risking or targeted revision.",
+                },
+            ]
+        )
+    if intent == "idea_selection":
+        suggestions.extend(
+            [
+                {
+                    "name": "get_research_opportunity_radar",
+                    "method": "GET",
+                    "path": "/research/opportunities/radar",
+                    "reason": "Prioritize ideas by readiness, blockers, ranking, and next actions.",
+                },
+                {
+                    "name": "rank_ideas",
+                    "method": "POST",
+                    "path": "/research/ideas/rank",
+                    "reason": "Run profile-aware portfolio ranking before committing effort.",
+                },
+            ]
+        )
+    if intent == "experiment_planning" and selected_idea:
+        suggestions.append(
+            {
+                "name": "create_experiment_run",
+                "method": "POST",
+                "path": "/research/experiment-plans/{plan_id}/runs",
+                "reason": f"Record execution evidence for selected idea {selected_idea.id}.",
+            }
+        )
+    suggestions.append(
+        {
+            "name": "create_advisor_brief",
+            "method": "POST",
+            "path": "/research/briefs",
+            "reason": "Persist the answer context as an advisor or group-meeting brief.",
+        }
+    )
+    return suggestions[:6]
+
+
+def _advisor_chat_source_summaries(
+    cockpit: ProjectCockpitResponse | None,
+    context: ContextSearchResponse | None,
+    selected_idea: Idea | None,
+) -> dict[str, Any]:
+    return {
+        "selected_idea": {
+            "id": selected_idea.id,
+            "title": selected_idea.title,
+            "status": selected_idea.status,
+        }
+        if selected_idea
+        else {},
+        "cockpit": {
+            "phase": cockpit.phase,
+            "readiness_level": cockpit.readiness_level,
+            "project_metrics": cockpit.project_metrics,
+            "primary_next_action": cockpit.primary_next_action,
+        }
+        if cockpit
+        else {},
+        "context": {
+            "query": context.query,
+            "evidence_count": len(context.evidences),
+            "gap_count": len(context.gaps),
+            "idea_count": len(context.ideas),
+            "graph_node_count": len(context.graph_nodes),
+            "graph_edge_count": len(context.graph_edges),
+        }
+        if context
+        else {},
+    }
+
+
+def _advisor_chat_plain_answer(
+    *,
+    intent: str,
+    cockpit: ProjectCockpitResponse | None,
+    recommended_actions: list[str],
+    risk_alerts: list[str],
+) -> str:
+    if cockpit:
+        base = f"The project is in `{cockpit.phase}` with readiness `{cockpit.readiness_level}`."
+    else:
+        base = "The answer is based on retrieved research context."
+    if intent == "risk_review" and risk_alerts:
+        return f"{base} The main risk to handle is: {risk_alerts[0]}"
+    if recommended_actions:
+        return f"{base} The next useful move is: {recommended_actions[0]}"
+    return base
+
+
+def _render_advisor_chat_markdown(
+    *,
+    question: str,
+    intent: str,
+    cockpit: ProjectCockpitResponse | None,
+    context: ContextSearchResponse | None,
+    selected_idea: Idea | None,
+    recommended_actions: list[str],
+    risk_alerts: list[str],
+    tool_suggestions: list[dict[str, Any]],
+) -> str:
+    lines = [
+        "# Advisor Chat Answer",
+        "",
+        f"- Question: {question}",
+        f"- Intent: `{intent}`",
+    ]
+    if selected_idea:
+        lines.append(f"- Selected Idea: `{selected_idea.id}` {selected_idea.title}")
+    if cockpit:
+        lines.extend(
+            [
+                f"- Project Phase: `{cockpit.phase}`",
+                f"- Readiness Level: `{cockpit.readiness_level}`",
+                (
+                    "- Primary Next Action: "
+                    f"{cockpit.primary_next_action.get('label', 'none')} - "
+                    f"{cockpit.primary_next_action.get('reason', '')}"
+                ),
+            ]
+        )
+    lines.extend(["", "## Recommendation", ""])
+    if recommended_actions:
+        lines.extend(f"- {action}" for action in recommended_actions)
+    else:
+        lines.append(
+            "- No concrete next action is available yet. Upload papers or generate ideas first."
+        )
+    lines.extend(["", "## Risks To Watch", ""])
+    if risk_alerts:
+        lines.extend(f"- {risk}" for risk in risk_alerts[:8])
+    else:
+        lines.append("- No major risk alert is currently surfaced by the cockpit.")
+    if context:
+        lines.extend(["", "## Retrieved Evidence", ""])
+        if context.evidences:
+            for item in context.evidences[:5]:
+                evidence = item.evidence
+                summary = evidence.summary or evidence.text
+                lines.append(
+                    f"- `{evidence.id}` score={item.score:.4f} "
+                    f"{evidence.evidence_type}: {_truncate_text(summary, 180)}"
+                )
+        else:
+            lines.append("- No evidence matched the question.")
+        lines.extend(["", "## Retrieved Gaps", ""])
+        if context.gaps:
+            lines.extend(
+                f"- `{item.gap.id}` score={item.score:.4f} {item.gap.title}"
+                for item in context.gaps[:5]
+            )
+        else:
+            lines.append("- No gaps matched the question.")
+        lines.extend(["", "## Retrieved Ideas", ""])
+        if context.ideas:
+            lines.extend(
+                f"- `{item.idea.id}` score={item.score:.4f} {item.idea.title}"
+                for item in context.ideas[:5]
+            )
+        else:
+            lines.append("- No ideas matched the question.")
+    lines.extend(["", "## Suggested Tools", ""])
+    for tool in tool_suggestions:
+        lines.append(f"- `{tool['name']}` {tool['method']} `{tool['path']}`: {tool['reason']}")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _truncate_text(value: str, limit: int) -> str:
+    clean = " ".join(str(value).split())
+    if len(clean) <= limit:
+        return clean
+    return clean[: max(0, limit - 3)].rstrip() + "..."
 
 
 def _project_cockpit_metrics(session: Session) -> dict[str, Any]:

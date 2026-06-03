@@ -375,6 +375,35 @@ async function searchLiterature(event) {
   }
 }
 
+async function askAdvisorChat(event) {
+  event.preventDefault();
+  const question = $("advisorQuestion").value.trim();
+  if (!question) return;
+  renderResult("advisorChatResult", "Asking project advisor...", "warn");
+  try {
+    const body = await api("/research/advisor/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        idea_id: state.latestIdeaId || null,
+        paper_ids: state.paperId ? [state.paperId] : [],
+        include_cockpit: true,
+        include_context: true,
+        context_limit: 5,
+        created_by: "workbench",
+      }),
+    });
+    $("dossierPreview").textContent = body.answer_markdown;
+    renderResult(
+      "advisorChatResult",
+      `<strong>${escapeHtml(body.intent)}</strong> phase <code>${escapeHtml(body.cockpit_phase || "n/a")}</code>, readiness <code>${escapeHtml(body.readiness_level || "n/a")}</code>.<br />${escapeHtml(body.answer)}<br />Actions: ${body.recommended_actions.length}; citations: ${body.cited_evidences.length + body.cited_gaps.length + body.cited_ideas.length}.`,
+    );
+  } catch (error) {
+    renderResult("advisorChatResult", escapeHtml(error.message), "error");
+  }
+}
+
 function renderList(title, items, mapper) {
   if (!items || !items.length) {
     return `<h4>${escapeHtml(title)}</h4><div class="empty-state">No records.</div>`;
@@ -1732,6 +1761,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("previewProfileButton").addEventListener("click", previewResearchProfile);
   $("contextSearchForm").addEventListener("submit", searchContext);
   $("literatureSearchForm").addEventListener("submit", searchLiterature);
+  $("advisorChatForm").addEventListener("submit", askAdvisorChat);
   $("refreshJobsButton").addEventListener("click", refreshJobs);
   $("jobsTable").addEventListener("click", handleJobAction);
   $("loadDossierButton").addEventListener("click", loadDossier);

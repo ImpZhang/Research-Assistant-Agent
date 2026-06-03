@@ -171,6 +171,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project cockpit dashboard")
     if "project_cockpit_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project cockpit task generation")
+    if "project_advisor_chat" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project advisor chat")
     if "research_opportunity_radar" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research opportunity radar")
     if "opportunity_radar_task_generation" not in status["implemented_capabilities"]:
@@ -279,6 +281,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project cockpit markdown export")
     if "create_tasks_from_project_cockpit" not in manifest_names:
         raise RuntimeError("tool manifest did not include project cockpit task tool")
+    if "ask_project_advisor" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project advisor chat tool")
     if "get_project_triage_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage brief tool")
     if "export_project_triage_brief_markdown" not in manifest_names:
@@ -364,6 +368,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research profile endpoint did not return the default profile")
     if "cockpitButton" not in workbench:
         raise RuntimeError("workbench did not include the project cockpit button")
+    if "advisorChatForm" not in workbench:
+        raise RuntimeError("workbench did not include advisor chat form")
     bundle_bridge = next(
         tool for tool in tool_bridge["tools"] if tool["name"] == "export_idea_bundle"
     )
@@ -1162,6 +1168,36 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "Project Cockpit" not in cockpit_markdown:
         raise RuntimeError("project cockpit markdown export did not include title")
+    advisor_chat = require_ok(
+        client.post(
+            "/research/advisor/chat",
+            json_body={
+                "question": "What should I do next, and which evidence risk matters most?",
+                "idea_id": refined_idea["id"],
+                "paper_ids": [paper_id],
+                "include_cockpit": True,
+                "include_context": True,
+                "context_limit": 5,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project advisor chat",
+    )
+    if not advisor_chat["answer"]:
+        raise RuntimeError("advisor chat did not return an answer")
+    if not advisor_chat["recommended_actions"]:
+        raise RuntimeError("advisor chat did not return recommended actions")
+    if not advisor_chat["tool_suggestions"]:
+        raise RuntimeError("advisor chat did not return tool suggestions")
+    if "Advisor Chat Answer" not in advisor_chat["answer_markdown"]:
+        raise RuntimeError("advisor chat markdown did not include title")
+    advisor_citation_count = (
+        len(advisor_chat["cited_evidences"])
+        + len(advisor_chat["cited_gaps"])
+        + len(advisor_chat["cited_ideas"])
+    )
+    if advisor_citation_count < 1:
+        raise RuntimeError("advisor chat did not cite any retrieved context")
     cockpit_tasks = require_ok(
         client.post(
             "/research/cockpit/tasks",
@@ -1885,6 +1921,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "cockpit_primary_action": cockpit["primary_next_action"]["label"],
         "cockpit_quick_action_count": len(cockpit["quick_actions"]),
         "cockpit_task_count": len(cockpit_tasks["tasks"]),
+        "advisor_chat_intent": advisor_chat["intent"],
+        "advisor_chat_action_count": len(advisor_chat["recommended_actions"]),
+        "advisor_chat_citation_count": advisor_citation_count,
+        "advisor_chat_tool_suggestion_count": len(advisor_chat["tool_suggestions"]),
         "readiness_overview_idea_count": readiness_overview["idea_count"],
         "readiness_overview_average": readiness_overview["average_readiness"],
         "opportunity_radar_count": len(radar["top_opportunities"]),

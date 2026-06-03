@@ -67,6 +67,7 @@ def test_research_status() -> None:
     assert "claim_validation_result_ranking_adjustments" in body["implemented_capabilities"]
     assert "project_cockpit_dashboard" in body["implemented_capabilities"]
     assert "project_cockpit_task_generation" in body["implemented_capabilities"]
+    assert "project_advisor_chat" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
@@ -97,6 +98,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_cockpit" in names
     assert "export_project_cockpit_markdown" in names
     assert "create_tasks_from_project_cockpit" in names
+    assert "ask_project_advisor" in names
     assert "get_project_triage_brief" in names
     assert "export_project_triage_brief_markdown" in names
     assert "create_tasks_from_project_triage_brief" in names
@@ -398,6 +400,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "claimQueueTasksButton" in response.text
     assert "cockpitButton" in response.text
     assert "cockpitTasksButton" in response.text
+    assert "advisorChatForm" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -456,6 +459,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/claims/validation-queue/tasks" in script.text
     assert "/research/cockpit" in script.text
     assert "/research/cockpit/tasks" in script.text
+    assert "/research/advisor/chat" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
     assert "/research/triage/brief/export/markdown" in script.text
@@ -1831,6 +1835,38 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert cockpit_markdown.status_code == 200
     assert "text/markdown" in cockpit_markdown.headers["content-type"]
     assert "# Project Cockpit" in cockpit_markdown.text
+
+    advisor_chat = client.post(
+        "/research/advisor/chat",
+        json={
+            "question": "What should I do next, and which evidence risk matters most?",
+            "idea_id": idea_id,
+            "paper_ids": [paper_id],
+            "include_cockpit": True,
+            "include_context": True,
+            "context_limit": 5,
+            "created_by": "pytest",
+        },
+    )
+    assert advisor_chat.status_code == 200
+    advisor_chat_body = advisor_chat.json()
+    assert advisor_chat_body["intent"] in {
+        "next_actions",
+        "risk_review",
+        "evidence_review",
+        "project_status",
+    }
+    assert advisor_chat_body["answer"]
+    assert advisor_chat_body["recommended_actions"]
+    assert advisor_chat_body["tool_suggestions"]
+    assert advisor_chat_body["cockpit_phase"]
+    assert advisor_chat_body["readiness_level"]
+    assert "# Advisor Chat Answer" in advisor_chat_body["answer_markdown"]
+    assert (
+        advisor_chat_body["cited_evidences"]
+        or advisor_chat_body["cited_gaps"]
+        or advisor_chat_body["cited_ideas"]
+    )
 
     cockpit_tasks = client.post(
         "/research/cockpit/tasks",
