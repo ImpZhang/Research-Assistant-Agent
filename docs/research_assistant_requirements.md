@@ -914,6 +914,7 @@ overall_score: 1-5
 - 主要风险。
 - 如何提升分数。
 - 依赖哪些证据。
+- 排序阶段需要读取 claim validation result：supported 可提升信心，needs_more_evidence / challenged / inconclusive 需要作为 weighted score adjustment 和 rationale 写回 portfolio ranking。
 
 验收标准：
 

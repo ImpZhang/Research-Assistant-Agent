@@ -64,6 +64,7 @@ def test_research_status() -> None:
     assert "claim_validation_queue_task_generation" in body["implemented_capabilities"]
     assert "claim_validation_result_tracking" in body["implemented_capabilities"]
     assert "claim_validation_result_decision_signals" in body["implemented_capabilities"]
+    assert "claim_validation_result_ranking_adjustments" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
@@ -1465,6 +1466,18 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert progress_after_claim_result.status_code == 200
     assert (
         progress_after_claim_result.json()["artifact_counts"]["claim_validation_result_events"] >= 1
+    )
+
+    ranking_after_claim_result = client.post(
+        "/research/ideas/rank",
+        json={"idea_ids": [idea_id], "deduplicate_lineage": False},
+    )
+    assert ranking_after_claim_result.status_code == 200
+    ranked_after_claim = ranking_after_claim_result.json()["ranked_ideas"][0]
+    assert ranked_after_claim["score_breakdown"]["claim_validation_needs_more_evidence"] >= 1
+    assert ranked_after_claim["score_breakdown"]["claim_validation_adjustment"] < 0
+    assert any(
+        "Claim validation found evidence gaps" in item for item in ranked_after_claim["rationale"]
     )
 
     readiness = client.get(f"/research/ideas/{idea_id}/readiness")

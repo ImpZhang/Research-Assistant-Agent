@@ -1,3 +1,4 @@
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -6,9 +7,11 @@ from sqlalchemy.orm import Session
 from backend.research.models import (
     ExperimentPlan,
     Idea,
+    IdeaEvidenceLedger,
     IdeaFeedback,
     NoveltyCheck,
     ResearchProfile,
+    ResearchTaskEvent,
     Review,
 )
 
@@ -117,9 +120,10 @@ class IdeaRankingService:
         weighted = sum(components[key] * weights[key] for key in weights)
         weighted = weighted / sum(weights.values())
 
-        adjustment, rationale = self._adjustments(idea, profile)
+        adjustment, rationale, adjustment_breakdown = self._adjustments(idea, profile)
         weighted_score = round(max(0.0, min(5.0, weighted + adjustment)), 3)
         breakdown = {key: round(value, 3) for key, value in components.items()}
+        breakdown.update(adjustment_breakdown)
         breakdown["adjustment"] = round(adjustment, 3)
         return RankedIdea(
             rank=0,
@@ -133,13 +137,19 @@ class IdeaRankingService:
         self,
         idea: Idea,
         profile: ResearchProfile | None,
-    ) -> tuple[float, list[str]]:
+    ) -> tuple[float, list[str], dict[str, float]]:
         adjustment = 0.0
         rationale = []
+        adjustment_breakdown: dict[str, float] = {}
         check = self._latest_for_idea_or_parent(NoveltyCheck, idea)
         review = self._latest_for_idea_or_parent(Review, idea)
         plan = self._latest_for_idea_or_parent(ExperimentPlan, idea)
         feedback_items = self._feedback_for_idea_or_parent(idea)
+        (
+            claim_adjustment,
+            claim_rationale,
+            claim_breakdown,
+        ) = self._claim_validation_adjustment(idea)
 
         if idea.parent_idea_id:
             adjustment += 0.15
@@ -170,6 +180,9 @@ class IdeaRankingService:
             else:
                 adjustment -= 0.05
                 rationale.append("Unknown novelty risk needs more literature search.")
+        adjustment += claim_adjustment
+        rationale.extend(claim_rationale)
+        adjustment_breakdown.update(claim_breakdown)
         if feedback_items:
             feedback_adjustment, feedback_rationale = self._feedback_adjustment(feedback_items)
             adjustment += feedback_adjustment
@@ -182,7 +195,7 @@ class IdeaRankingService:
             rationale.append(
                 "Ranked from intrinsic idea score only; add review and novelty checks."
             )
-        return adjustment, rationale
+        return adjustment, rationale, adjustment_breakdown
 
     def _profile_adjustment(
         self,
@@ -247,10 +260,80 @@ class IdeaRankingService:
             rationale.append("High risk tolerance allows more speculative ideas.")
         return adjustment, rationale
 
-    def _latest_for_idea_or_parent(self, model, idea: Idea):
+    def _claim_validation_adjustment(
+        self,
+        idea: Idea,
+    ) -> tuple[float, list[str], dict[str, float]]:
+        idea_ids = self._idea_and_parent_ids(idea)
+        latest_ledger = (
+            self.session.query(IdeaEvidenceLedger)
+            .filter(IdeaEvidenceLedger.idea_id.in_(idea_ids))
+            .order_by(IdeaEvidenceLedger.created_at.desc())
+            .first()
+        )
+        events = (
+            self.session.query(ResearchTaskEvent)
+            .filter(
+                ResearchTaskEvent.idea_id.in_(idea_ids),
+                ResearchTaskEvent.event_type == "claim_validation_result",
+            )
+            .order_by(ResearchTaskEvent.created_at.desc())
+            .limit(50)
+            .all()
+        )
+        by_status = Counter(
+            str((event.metadata_json or {}).get("validation_status") or "unknown")
+            for event in events
+        )
+        adjustment = 0.0
+        rationale: list[str] = []
+        if latest_ledger and latest_ledger.claims_json and not events:
+            adjustment -= 0.12
+            rationale.append(
+                "Evidence ledger claims have no recorded claim validation results yet."
+            )
+        if by_status.get("supported", 0):
+            adjustment += min(by_status["supported"], 3) * 0.08
+            rationale.append(
+                f"Claim validation supports {by_status['supported']} evidence-ledger claims."
+            )
+        if by_status.get("needs_more_evidence", 0):
+            adjustment -= min(by_status["needs_more_evidence"], 3) * 0.12
+            rationale.append(
+                "Claim validation found evidence gaps for "
+                f"{by_status['needs_more_evidence']} claims."
+            )
+        if by_status.get("challenged", 0):
+            adjustment -= min(by_status["challenged"], 3) * 0.28
+            rationale.append(f"Claim validation challenged {by_status['challenged']} claims.")
+        if by_status.get("inconclusive", 0):
+            adjustment -= min(by_status["inconclusive"], 3) * 0.05
+            rationale.append(
+                f"Claim validation is inconclusive for {by_status['inconclusive']} claims."
+            )
+        return (
+            adjustment,
+            rationale,
+            {
+                "claim_validation_adjustment": round(adjustment, 3),
+                "claim_validation_result_count": float(len(events)),
+                "claim_validation_supported": float(by_status.get("supported", 0)),
+                "claim_validation_needs_more_evidence": float(
+                    by_status.get("needs_more_evidence", 0)
+                ),
+                "claim_validation_challenged": float(by_status.get("challenged", 0)),
+                "claim_validation_inconclusive": float(by_status.get("inconclusive", 0)),
+            },
+        )
+
+    def _idea_and_parent_ids(self, idea: Idea) -> list[str]:
         idea_ids = [idea.id]
         if idea.parent_idea_id:
             idea_ids.append(idea.parent_idea_id)
+        return idea_ids
+
+    def _latest_for_idea_or_parent(self, model, idea: Idea):
+        idea_ids = self._idea_and_parent_ids(idea)
         return (
             self.session.query(model)
             .filter(model.idea_id.in_(idea_ids))
@@ -259,9 +342,7 @@ class IdeaRankingService:
         )
 
     def _feedback_for_idea_or_parent(self, idea: Idea) -> list[IdeaFeedback]:
-        idea_ids = [idea.id]
-        if idea.parent_idea_id:
-            idea_ids.append(idea.parent_idea_id)
+        idea_ids = self._idea_and_parent_ids(idea)
         return (
             self.session.query(IdeaFeedback)
             .filter(IdeaFeedback.idea_id.in_(idea_ids))

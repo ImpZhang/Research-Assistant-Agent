@@ -98,7 +98,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - MCP-ready HTTP tool bridge spec generated from the stable tool manifest.
 - Lightweight stdio MCP-to-HTTP bridge script for exposing the stable HTTP tools to MCP clients without extra SDK dependencies.
 - MCP bridge policy controls for read-only mode, allow/deny tool filters, and deployment health checks.
-- Research idea portfolio ranking with profile-aware weighting, lineage deduplication, and weighted score breakdowns.
+- Research idea portfolio ranking with profile-aware weighting, lineage deduplication, claim validation result adjustments, and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.
 - Persisted idea portfolio snapshots for saved shortlist/ranking review states.

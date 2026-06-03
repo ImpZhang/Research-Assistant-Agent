@@ -225,6 +225,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "research status did not include claim validation result decision signals"
         )
+    if "claim_validation_result_ranking_adjustments" not in status["implemented_capabilities"]:
+        raise RuntimeError(
+            "research status did not include claim validation result ranking adjustments"
+        )
     if "advisor_brief_evidence_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief evidence context")
     if "advisor_brief_claim_validation_context" not in status["implemented_capabilities"]:
@@ -1557,6 +1561,17 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("idea ranking did not include the refined idea")
     if source_idea_id in ranked_ids:
         raise RuntimeError("idea ranking did not deduplicate the source idea lineage")
+    ranked_refined = next(
+        item for item in ranking["ranked_ideas"] if item["idea"]["id"] == refined_idea["id"]
+    )
+    if ranked_refined["score_breakdown"].get("claim_validation_needs_more_evidence", 0) < 1:
+        raise RuntimeError("idea ranking did not count claim validation evidence gaps")
+    if ranked_refined["score_breakdown"].get("claim_validation_adjustment", 0) >= 0:
+        raise RuntimeError("idea ranking did not penalize needs-more-evidence claim results")
+    if not any(
+        "Claim validation found evidence gaps" in item for item in ranked_refined["rationale"]
+    ):
+        raise RuntimeError("idea ranking did not explain claim validation impact")
     portfolio_markdown = require_ok(
         client.post(
             "/research/ideas/rank/export/markdown",
@@ -1849,6 +1864,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "ranked_idea_count": len(ranking["ranked_ideas"]),
         "top_ranked_idea_id": ranking["ranked_ideas"][0]["idea"]["id"],
         "top_ranked_idea_score": ranking["ranked_ideas"][0]["weighted_score"],
+        "ranking_claim_validation_adjustment": ranked_refined["score_breakdown"][
+            "claim_validation_adjustment"
+        ],
         "portfolio_markdown_chars": len(portfolio_markdown),
         "portfolio_snapshot_id": portfolio_snapshot["id"],
         "portfolio_snapshot_idea_count": len(portfolio_snapshot["idea_ids"]),

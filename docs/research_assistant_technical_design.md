@@ -1192,7 +1192,7 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 外部 literature search adapter 第一阶段支持 OpenAlex、arXiv 与 Semantic Scholar。三者都通过 `EXTERNAL_LITERATURE_SEARCH_ENABLED` 控制，`EXTERNAL_LITERATURE_PROVIDERS=openalex,arxiv,semantic_scholar` 选择 provider；默认测试环境关闭外部检索，避免工作流依赖公网。
 
-`/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。
+`/rank` 是第一版 portfolio selection：它按 idea score、novelty risk、review state、experiment readiness、evidence support 和 resource efficiency 生成 weighted ranking，并默认对 parent/refined lineage 去重，避免同一个方向的初稿和修订稿同时挤占候选列表。ranking adjustment 会读取当前 idea/parent idea 的 claim validation result events：supported 提供小幅加分，needs_more_evidence、challenged 和 inconclusive 会扣分并写入 rationale 与 score_breakdown。
 
 `/rank/export/markdown` 使用同一套 ranking 参数导出选题组合报告，包含 rank、score breakdown、rationale、parent lineage、research question、hypothesis 和 method sketch，用于组会讨论、导师 review 或手动归档。
 

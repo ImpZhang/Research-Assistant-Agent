@@ -259,6 +259,7 @@ def status() -> ProjectStatus:
             "claim_validation_queue_task_generation",
             "claim_validation_result_tracking",
             "claim_validation_result_decision_signals",
+            "claim_validation_result_ranking_adjustments",
             "project_progress_overview",
             "project_triage_brief",
             "project_triage_task_generation",
