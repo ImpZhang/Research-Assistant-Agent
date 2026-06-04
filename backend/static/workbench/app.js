@@ -328,6 +328,38 @@ async function comparePilotReportSnapshots() {
   }
 }
 
+async function createPilotReportSnapshotComparisonTasks() {
+  renderResult("onboardingResult", "Creating pilot report comparison tasks...", "warn");
+  try {
+    const snapshots = await api("/research/pilot/report/snapshots?limit=2");
+    if (snapshots.length < 2) {
+      renderResult("onboardingResult", "Save at least two pilot report snapshots first.", "warn");
+      return;
+    }
+    const [candidate, baseline] = snapshots;
+    const body = await api("/research/pilot/report/snapshots/compare/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseline_snapshot_id: baseline.id,
+        candidate_snapshot_id: candidate.id,
+        limit: 8,
+        include_risks: true,
+        include_next_actions: true,
+        include_quick_actions: true,
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "onboardingResult",
+      `${escapeHtml(body.message)}<br />${renderList("Pilot report comparison tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("onboardingResult", escapeHtml(error.message), "error");
+  }
+}
+
 function fillProfileForm(profile) {
   $("profileName").value = profile.name || "Default Research Profile";
   $("profileDomains").value = formatCsv(profile.primary_domains);
@@ -2118,6 +2150,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("pilotReportSnapshotCompareButton").addEventListener(
     "click",
     comparePilotReportSnapshots,
+  );
+  $("pilotReportSnapshotComparisonTasksButton").addEventListener(
+    "click",
+    createPilotReportSnapshotComparisonTasks,
   );
   $("apiKeyInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {

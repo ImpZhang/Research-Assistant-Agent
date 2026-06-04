@@ -566,6 +566,46 @@ class ArtifactGraphService:
                 payload={"source": task.source_type},
             )
 
+    def link_project_pilot_report_snapshot_comparison_tasks(
+        self,
+        comparison: dict,
+        tasks: list[ResearchTask],
+    ) -> None:
+        comparison_node = self.graph.get_or_create_node(
+            node_type="project_pilot_report_snapshot_comparison",
+            label="Project pilot report snapshot comparison",
+            canonical_key=(
+                f"{comparison.get('baseline_snapshot_id', '')}:"
+                f"{comparison.get('candidate_snapshot_id', '')}"
+            ),
+            payload={
+                "baseline_snapshot_id": comparison.get("baseline_snapshot_id", ""),
+                "candidate_snapshot_id": comparison.get("candidate_snapshot_id", ""),
+                "added_risk_count": len(comparison.get("added_risks") or []),
+                "added_next_action_count": len(comparison.get("added_next_actions") or []),
+                "added_quick_action_count": len(comparison.get("added_quick_actions") or []),
+                "task_count": len(tasks),
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=comparison_node,
+                target_node=task_node,
+                edge_type="project_pilot_report_comparison_creates_task",
+                payload={"source": task.source_type},
+            )
+
     def link_project_onboarding_tasks(
         self,
         readiness: dict,

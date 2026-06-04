@@ -1024,6 +1024,100 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_pilot_report_snapshot_comparison(
+        self,
+        comparison: dict,
+        *,
+        limit: int = 8,
+        include_risks: bool = True,
+        include_next_actions: bool = True,
+        include_quick_actions: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        items: list[tuple[str, str, dict]] = []
+        if include_risks:
+            for risk in self._unique_commitments(comparison.get("added_risks") or []):
+                items.append(("pilot_report_comparison_added_risk", risk, {}))
+        if include_next_actions:
+            for action in self._unique_commitments(comparison.get("added_next_actions") or []):
+                items.append(("pilot_report_comparison_added_next_action", action, {}))
+        if include_quick_actions:
+            for action in self._unique_commitments(comparison.get("added_quick_actions") or []):
+                items.append(("pilot_report_comparison_added_quick_action", action, {}))
+
+        items = self._deduplicate_pilot_report_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "pilot_report_comparison_review",
+                    comparison.get("summary")
+                    or "Review the latest pilot report snapshot comparison.",
+                    {},
+                )
+            ]
+
+        candidate_id = str(comparison.get("candidate_snapshot_id") or "")
+        baseline_id = str(comparison.get("baseline_snapshot_id") or "")
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_pilot_report_snapshot_comparison",
+                owner_id=candidate_id or "project_pilot_report_snapshot_comparison",
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._pilot_report_comparison_task_title(
+                    action,
+                    idx,
+                    source_type=source_type,
+                ),
+                description=action,
+                priority=self._pilot_report_comparison_task_priority(source_type, action),
+                status="todo",
+                due_phase="pilot_report_change_follow_up",
+                metadata_json={
+                    "baseline_snapshot_id": baseline_id,
+                    "candidate_snapshot_id": candidate_id,
+                    "comparison_source_type": source_type,
+                    "source_rank": idx,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, _metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project pilot report snapshot comparison.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "baseline_snapshot_id": baseline_id,
+                        "candidate_snapshot_id": candidate_id,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(
+            GraphService(self.session)
+        ).link_project_pilot_report_snapshot_comparison_tasks(comparison, tasks)
+        self.session.commit()
+        return tasks
+
     def create_from_project_onboarding(
         self,
         readiness: dict,
@@ -1784,6 +1878,43 @@ class ResearchTaskService:
             return "high"
         if source_type == "pilot_report_quick_action":
             return "medium"
+        return "medium"
+
+    def _pilot_report_comparison_task_title(
+        self,
+        action: str,
+        idx: int,
+        *,
+        source_type: str,
+    ) -> str:
+        clean = " ".join(str(action).split())
+        lower = clean.lower()
+        if source_type == "pilot_report_comparison_added_risk":
+            return self._short_task_title(f"Resolve new pilot report risk {idx}: {clean}", idx)
+        if source_type == "pilot_report_comparison_added_quick_action":
+            return self._short_task_title(clean or f"Run new report quick action {idx}", idx)
+        if "blocked" in lower:
+            return self._short_task_title(clean.replace("Blocked", "Unblock", 1), idx)
+        if "de-risk" in lower or "risk" in lower:
+            return self._short_task_title(f"De-risk report change {idx}: {clean}", idx)
+        return self._short_task_title(clean or f"Work pilot report change {idx}", idx)
+
+    def _pilot_report_comparison_task_priority(
+        self,
+        source_type: str,
+        action: str,
+    ) -> str:
+        lower = str(action).lower()
+        if source_type == "pilot_report_comparison_added_risk":
+            return "critical"
+        if "blocked" in lower or "critical" in lower or "high-risk" in lower:
+            return "critical"
+        if (
+            source_type == "pilot_report_comparison_added_next_action"
+            or "de-risk" in lower
+            or "risk" in lower
+        ):
+            return "high"
         return "medium"
 
     def _onboarding_task_title(self, item: dict, idx: int) -> str:

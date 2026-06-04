@@ -186,6 +186,13 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "research status did not include project pilot report snapshot comparison"
         )
+    if (
+        "project_pilot_report_snapshot_comparison_task_generation"
+        not in status["implemented_capabilities"]
+    ):
+        raise RuntimeError(
+            "research status did not include project pilot report snapshot comparison task generation"
+        )
     if "project_pilot_report_snapshot_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError(
             "research status did not include project pilot report snapshot task generation"
@@ -322,6 +329,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "tool manifest did not include project pilot report snapshot comparison export"
         )
+    if "create_tasks_from_project_pilot_report_snapshot_comparison" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project pilot report snapshot comparison task tool"
+        )
     if "create_tasks_from_project_pilot_report_snapshot" not in manifest_names:
         raise RuntimeError("tool manifest did not include project pilot report snapshot task tool")
     if "get_project_cockpit" not in manifest_names:
@@ -433,6 +444,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workbench did not include the pilot report snapshot button")
     if "pilotReportSnapshotCompareButton" not in workbench:
         raise RuntimeError("workbench did not include the pilot report snapshot compare button")
+    if "pilotReportSnapshotComparisonTasksButton" not in workbench:
+        raise RuntimeError(
+            "workbench did not include the pilot report snapshot comparison task button"
+        )
     if "pilotReportSnapshotTasksButton" not in workbench:
         raise RuntimeError("workbench did not include the pilot report snapshot task button")
     if "setupWizardForm" not in workbench or "setupWizardButton" not in workbench:
@@ -610,6 +625,32 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "Project Pilot Report Snapshot Comparison" not in pilot_report_snapshot_comparison_markdown:
         raise RuntimeError("project pilot report snapshot comparison export missing title")
+    pilot_report_snapshot_comparison_tasks = require_ok(
+        client.post(
+            "/research/pilot/report/snapshots/compare/tasks",
+            json_body={
+                "baseline_snapshot_id": pilot_report_snapshot["id"],
+                "candidate_snapshot_id": candidate_pilot_report_snapshot["id"],
+                "limit": 6,
+                "include_risks": True,
+                "include_next_actions": True,
+                "include_quick_actions": True,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project pilot report snapshot comparison tasks",
+    )
+    if not pilot_report_snapshot_comparison_tasks["tasks"]:
+        raise RuntimeError(
+            "project pilot report snapshot comparison task generation returned no tasks"
+        )
+    if (
+        pilot_report_snapshot_comparison_tasks["tasks"][0]["owner_id"]
+        != candidate_pilot_report_snapshot["id"]
+    ):
+        raise RuntimeError(
+            "project pilot report snapshot comparison task owner did not match candidate"
+        )
     onboarding_start = require_ok(
         client.get("/research/onboarding/readiness"),
         "project onboarding readiness",
@@ -2140,6 +2181,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         ),
         "pilot_report_snapshot_comparison_markdown_chars": len(
             pilot_report_snapshot_comparison_markdown
+        ),
+        "pilot_report_snapshot_comparison_task_count": len(
+            pilot_report_snapshot_comparison_tasks["tasks"]
         ),
         "onboarding_start_level": onboarding_start["readiness_level"],
         "onboarding_readiness_level": onboarding_after_workflow["readiness_level"],

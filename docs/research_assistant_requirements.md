@@ -1077,6 +1077,8 @@ pilot status report 需要支持持久化 snapshot：用户可以保存当前报
 
 pilot status report snapshot 需要支持 comparison：输入 baseline snapshot 和 candidate snapshot，输出 report_status、readiness_level、cockpit_phase、key metrics、risks、next actions、quick actions 的变化，并提供 Markdown comparison report。这样客户周报可以回答“这一轮相比上一轮有哪些风险新增/消失、下一步行动是否变化、关键指标是否改善”。
 
+pilot status report snapshot comparison 需要支持任务生成：系统需要把 comparison 中新增的 risks、next actions 和 quick actions 转换为 project-level tasks，使用 `owner_type=project_pilot_report_snapshot_comparison`，并写入 GraphRAG-lite trace。这样周报变化不只是复盘材料，而能直接进入下一轮执行计划。
+
 pilot status report snapshot 需要支持任务生成：用户可以从某次已保存周报/导师会报告中提取 risks、next actions 和 quick actions，生成 `owner_type=project_pilot_report_snapshot` 的 project-level tasks，并写入 GraphRAG-lite trace。这样“汇报结论”可以直接进入执行面板，避免客户同步后行动项散落在 Markdown 文档里。
 
 系统需要保存研究者画像/项目约束：包括 primary domains、active research questions、target venues、methodological preferences、resource constraints、risk tolerance、negative preferences 和 ranking weights。ranking、advisor brief、后续 planner 应优先读取这份画像，避免生成“看起来不错但不适合当前资源和投稿目标”的 idea。

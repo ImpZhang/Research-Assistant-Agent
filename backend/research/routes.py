@@ -132,6 +132,7 @@ from backend.research.schemas import (
     ProjectPilotReportResponse,
     ProjectPilotReportSnapshotComparisonRequest,
     ProjectPilotReportSnapshotComparisonResponse,
+    ProjectPilotReportSnapshotComparisonTaskGenerateRequest,
     ProjectPilotReportSnapshotCreate,
     ProjectPilotReportSnapshotTaskGenerateRequest,
     ProjectSetupWizardRequest,
@@ -286,6 +287,7 @@ def status() -> ProjectStatus:
             "project_pilot_status_report",
             "project_pilot_report_snapshots",
             "project_pilot_report_snapshot_comparison",
+            "project_pilot_report_snapshot_comparison_task_generation",
             "project_pilot_report_snapshot_task_generation",
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
@@ -757,6 +759,18 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/pilot/report/snapshots/compare/export/markdown",
             input_model="ProjectPilotReportSnapshotComparisonRequest",
             output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_pilot_report_snapshot_comparison",
+            description=(
+                "Turn added risks, next actions, and quick actions from a pilot "
+                "report snapshot comparison into project-level task-board work."
+            ),
+            method="POST",
+            path="/research/pilot/report/snapshots/compare/tasks",
+            input_model="ProjectPilotReportSnapshotComparisonTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_project_pilot_report_snapshot",
@@ -1683,6 +1697,38 @@ def export_project_pilot_report_snapshot_comparison_markdown(
 ) -> PlainTextResponse:
     comparison = compare_project_pilot_report_snapshots(payload, session)
     return PlainTextResponse(comparison.markdown_export, media_type="text/markdown")
+
+
+@router.post(
+    "/pilot/report/snapshots/compare/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_pilot_report_snapshot_comparison(
+    payload: ProjectPilotReportSnapshotComparisonTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    comparison = compare_project_pilot_report_snapshots(
+        ProjectPilotReportSnapshotComparisonRequest(
+            baseline_snapshot_id=payload.baseline_snapshot_id,
+            candidate_snapshot_id=payload.candidate_snapshot_id,
+        ),
+        session,
+    )
+    tasks = ResearchTaskService(session).create_from_project_pilot_report_snapshot_comparison(
+        comparison.model_dump(mode="json"),
+        limit=payload.limit,
+        include_risks=payload.include_risks,
+        include_next_actions=payload.include_next_actions,
+        include_quick_actions=payload.include_quick_actions,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} pilot report comparison tasks from snapshots "
+            f"{payload.baseline_snapshot_id} -> {payload.candidate_snapshot_id}."
+        ),
+    )
 
 
 @router.get("/pilot/report/snapshots/{snapshot_id}", response_model=ResearchBriefDetail)
