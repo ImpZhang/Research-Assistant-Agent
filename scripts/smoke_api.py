@@ -140,6 +140,9 @@ def require_ok(response: ResponseAdapter, label: str) -> Any:
 
 def run_smoke(client: InProcessClient | HttpClient) -> dict:
     health = require_ok(client.get("/health"), "health")
+    service_readiness = require_ok(client.get("/health/ready"), "readiness")
+    if service_readiness["status"] != "ready":
+        raise RuntimeError("readiness check did not report ready")
     status = require_ok(client.get("/research/status"), "research status")
     tool_manifest = require_ok(client.get("/research/tools/manifest"), "tool manifest")
     tool_bridge = require_ok(client.get("/research/tools/mcp-spec"), "tool bridge spec")
@@ -1876,6 +1879,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
 
     return {
         "health": health,
+        "service_readiness": service_readiness,
         "phase": status["phase"],
         "tool_manifest_count": len(tool_manifest["tools"]),
         "tool_bridge_count": len(tool_bridge["tools"]),

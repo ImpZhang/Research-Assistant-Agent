@@ -1,5 +1,6 @@
 import io
 import json
+from pathlib import Path
 import time
 import zipfile
 from xml.etree import ElementTree
@@ -17,6 +18,54 @@ def test_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_health_ready_checks_database_and_storage() -> None:
+    client = TestClient(create_app())
+    response = client.get("/health/ready")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["checks"]["database"]["ok"] is True
+    assert body["checks"]["paper_upload_dir"]["ok"] is True
+
+
+def test_optional_api_key_guard_protects_research_routes(monkeypatch) -> None:
+    monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
+    monkeypatch.setenv("API_KEY", "pytest-secret")
+
+    client = TestClient(create_app())
+
+    health = client.get("/health")
+    missing = client.get("/research/status")
+    wrong = client.get("/research/status", headers={"X-Research-Assistant-Key": "wrong"})
+    header_ok = client.get(
+        "/research/status",
+        headers={"X-Research-Assistant-Key": "pytest-secret"},
+    )
+    bearer_ok = client.get(
+        "/research/status",
+        headers={"Authorization": "Bearer pytest-secret"},
+    )
+
+    assert health.status_code == 200
+    assert missing.status_code == 401
+    assert wrong.status_code == 401
+    assert header_ok.status_code == 200
+    assert bearer_ok.status_code == 200
+
+
+def test_deployment_artifacts_document_customer_runtime() -> None:
+    root = Path(__file__).resolve().parents[1]
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
+    deployment = (root / "docs" / "deployment.md").read_text(encoding="utf-8")
+
+    assert "uvicorn backend.app:app" in dockerfile
+    assert "API_KEY_AUTH_ENABLED" in compose
+    assert "/health/ready" in compose
+    assert "X-Research-Assistant-Key" in deployment
+    assert "MCP bridge" in deployment
 
 
 def test_research_status() -> None:

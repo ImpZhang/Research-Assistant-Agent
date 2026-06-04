@@ -18,6 +18,14 @@ class Settings:
     paper_upload_dir: str = os.getenv("PAPER_UPLOAD_DIR", "./data/papers")
     graph_rag_lite_enabled: bool = os.getenv("GRAPH_RAG_LITE_ENABLED", "true").lower() != "false"
     mcp_enabled: bool = os.getenv("MCP_ENABLED", "false").lower() == "true"
+    api_key_auth_enabled: bool = os.getenv("API_KEY_AUTH_ENABLED", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    api_key: str = os.getenv("API_KEY") or os.getenv("RESEARCH_ASSISTANT_API_KEY", "")
+    api_key_header_name: str = os.getenv("API_KEY_HEADER_NAME", "X-Research-Assistant-Key")
     external_literature_search_enabled: bool = (
         os.getenv("EXTERNAL_LITERATURE_SEARCH_ENABLED", "false").lower() == "true"
     )

@@ -42,6 +42,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 ## Implemented Capabilities
 
 - FastAPI API layer with OpenAPI docs.
+- Production-readiness checks with `/health/ready`, optional API-key protection for `/research/*`, Dockerfile, and docker-compose pilot deployment.
 - SQLite/SQLAlchemy research database.
 - Research profile for durable domains, goals, constraints, risk tolerance, target venues, and ranking weights.
 - Upload and ingest `.txt`, `.md`, and `.pdf` papers.
@@ -102,7 +103,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - MCP/tool-ready manifest for stable research workflow APIs.
 - MCP-ready HTTP tool bridge spec generated from the stable tool manifest.
 - Lightweight stdio MCP-to-HTTP bridge script for exposing the stable HTTP tools to MCP clients without extra SDK dependencies.
-- MCP bridge policy controls for read-only mode, allow/deny tool filters, and deployment health checks.
+- MCP bridge policy controls for read-only mode, allow/deny tool filters, API-key forwarding, and deployment health checks.
 - Research idea portfolio ranking with profile-aware weighting, lineage deduplication, claim validation result adjustments, and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.
@@ -214,6 +215,8 @@ It also validates the job artifact snapshot endpoint used by the workbench and f
 ## Useful Endpoints
 
 ```http
+GET  /health
+GET  /health/ready
 POST /research/papers/upload
 GET  /research/papers
 GET  /research/papers/{paper_id}
@@ -377,7 +380,20 @@ uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000 --allo
 uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000 --health-check
 ```
 
+When `/research/*` API-key protection is enabled, forward the same key with `--api-key`, `MCP_BRIDGE_API_KEY`, `RESEARCH_ASSISTANT_API_KEY`, or `API_KEY`.
 The same policy can be configured with `MCP_BRIDGE_READ_ONLY`, `MCP_BRIDGE_ALLOW_TOOLS`, and `MCP_BRIDGE_DENY_TOOLS`.
+
+## Deployment
+
+For a single-container internal pilot:
+
+```bash
+cp .env.example .env
+# set API_KEY to a long random value
+docker compose up --build
+```
+
+See `docs/deployment.md` for the runtime contract, ready checks, API key calls, MCP bridge auth forwarding, and backup notes.
 
 ## Near-Term Roadmap
 
@@ -385,7 +401,7 @@ The same policy can be configured with `MCP_BRIDGE_READ_ONLY`, `MCP_BRIDGE_ALLOW
 - Add external novelty search through OpenAlex/Semantic Scholar/arXiv adapters.
 - Add durable worker queues, richer retry policies, and resumable workflow state.
 - Expand the research workbench into a full review/edit loop.
-- Add auth, deployment packaging, and richer binary artifact handling around the lightweight MCP bridge.
+- Harden auth, deployment observability, and richer binary artifact handling around the lightweight MCP bridge.
 - Introduce LangGraph/DeerFlow-style explicit workflow graphs once the service boundaries stabilize.
 
 ## Design Documents

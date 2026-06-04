@@ -33,10 +33,16 @@ class BridgePolicy:
     read_only: bool = False
 
 
-def load_tool_spec(base_url: str, timeout: float = 30.0) -> JSON:
+@dataclass(frozen=True)
+class BridgeAuth:
+    api_key: str = ""
+    header_name: str = "X-Research-Assistant-Key"
+
+
+def load_tool_spec(base_url: str, timeout: float = 30.0, auth: BridgeAuth | None = None) -> JSON:
     request = urllib.request.Request(
         _join_url(base_url, "/research/tools/mcp-spec"),
-        headers={"Accept": "application/json"},
+        headers={"Accept": "application/json", **_auth_headers(auth)},
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
@@ -63,7 +69,7 @@ def tool_allowed(tool: JSON, policy: BridgePolicy) -> bool:
     return True
 
 
-def bridge_health(spec: JSON, policy: BridgePolicy) -> JSON:
+def bridge_health(spec: JSON, policy: BridgePolicy, auth: BridgeAuth | None = None) -> JSON:
     filtered = filter_spec_tools(spec, policy)
     all_names = sorted(tool.get("name", "") for tool in spec.get("tools", []) if tool.get("name"))
     exposed_names = sorted(
@@ -79,6 +85,10 @@ def bridge_health(spec: JSON, policy: BridgePolicy) -> JSON:
             "read_only": policy.read_only,
             "allow_tools": sorted(policy.allow_tools),
             "deny_tools": sorted(policy.deny_tools),
+        },
+        "auth": {
+            "api_key_configured": bool(auth and auth.api_key),
+            "header_name": auth.header_name if auth else "X-Research-Assistant-Key",
         },
         "tools": exposed_names,
         "blocked": blocked_names,
@@ -99,13 +109,19 @@ def tool_list_result(spec: JSON) -> JSON:
     }
 
 
-def call_tool(base_url: str, tool: JSON, arguments: JSON, timeout: float = 60.0) -> JSON:
+def call_tool(
+    base_url: str,
+    tool: JSON,
+    arguments: JSON,
+    timeout: float = 60.0,
+    auth: BridgeAuth | None = None,
+) -> JSON:
     method = tool.get("http", {}).get("method", "GET")
     path = fill_path_parameters(tool.get("http", {}).get("path", ""), arguments)
     url = _join_url(base_url, path)
     content_type = tool.get("http", {}).get("content_type", "")
     body = arguments.get("body", {})
-    headers = {"Accept": "application/json, text/plain, application/zip"}
+    headers = {"Accept": "application/json, text/plain, application/zip", **_auth_headers(auth)}
     data: bytes | None = None
 
     if content_type == "multipart/form-data":
@@ -136,7 +152,14 @@ def fill_path_parameters(path: str, arguments: JSON) -> str:
     return rendered
 
 
-def handle_request(message: JSON, *, base_url: str, spec: JSON, timeout: float) -> JSON | None:
+def handle_request(
+    message: JSON,
+    *,
+    base_url: str,
+    spec: JSON,
+    timeout: float,
+    auth: BridgeAuth | None = None,
+) -> JSON | None:
     method = message.get("method")
     request_id = message.get("id")
     try:
@@ -162,15 +185,21 @@ def handle_request(message: JSON, *, base_url: str, spec: JSON, timeout: float) 
             name = params.get("name")
             if name not in tools:
                 raise ValueError(f"Unknown tool: {name}")
-            result = call_tool(base_url, tools[name], params.get("arguments", {}), timeout)
+            result = call_tool(
+                base_url,
+                tools[name],
+                params.get("arguments", {}),
+                timeout,
+                auth=auth,
+            )
             return _response(request_id, result)
         raise ValueError(f"Unsupported method: {method}")
     except Exception as exc:  # MCP transports expect errors as JSON-RPC payloads.
         return _error(request_id, str(exc))
 
 
-def serve_stdio(base_url: str, timeout: float, policy: BridgePolicy) -> None:
-    spec = filter_spec_tools(load_tool_spec(base_url, timeout=timeout), policy)
+def serve_stdio(base_url: str, timeout: float, policy: BridgePolicy, auth: BridgeAuth) -> None:
+    spec = filter_spec_tools(load_tool_spec(base_url, timeout=timeout, auth=auth), policy)
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -179,6 +208,7 @@ def serve_stdio(base_url: str, timeout: float, policy: BridgePolicy) -> None:
             base_url=base_url,
             spec=spec,
             timeout=timeout,
+            auth=auth,
         )
         if response is not None:
             sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
@@ -225,12 +255,34 @@ def _error(request_id: Any, message: str) -> JSON:
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": message}}
 
 
+def _auth_headers(auth: BridgeAuth | None) -> dict[str, str]:
+    if not auth or not auth.api_key:
+        return {}
+    return {auth.header_name: auth.api_key}
+
+
 def _build_policy(args: argparse.Namespace) -> BridgePolicy:
     return BridgePolicy(
         allow_tools=_parse_tool_names(args.allow_tool, os.environ.get("MCP_BRIDGE_ALLOW_TOOLS")),
         deny_tools=_parse_tool_names(args.deny_tool, os.environ.get("MCP_BRIDGE_DENY_TOOLS")),
         read_only=args.read_only or _env_flag("MCP_BRIDGE_READ_ONLY"),
     )
+
+
+def _build_auth(args: argparse.Namespace) -> BridgeAuth:
+    api_key = (
+        args.api_key
+        or os.environ.get("MCP_BRIDGE_API_KEY", "")
+        or os.environ.get("RESEARCH_ASSISTANT_API_KEY", "")
+        or os.environ.get("API_KEY", "")
+    )
+    header_name = (
+        args.api_key_header
+        or os.environ.get("MCP_BRIDGE_API_KEY_HEADER", "")
+        or os.environ.get("API_KEY_HEADER_NAME", "")
+        or "X-Research-Assistant-Key"
+    )
+    return BridgeAuth(api_key=api_key, header_name=header_name)
 
 
 def _parse_tool_names(values: list[str], env_value: str | None) -> frozenset[str]:
@@ -270,15 +322,26 @@ def main() -> None:
         action="store_true",
         help="Load the bridge spec, print filtered tool counts as JSON, and exit.",
     )
+    parser.add_argument(
+        "--api-key",
+        default="",
+        help="API key forwarded to protected Research Assistant HTTP routes.",
+    )
+    parser.add_argument(
+        "--api-key-header",
+        default="",
+        help="Header name used for API key forwarding.",
+    )
     args = parser.parse_args()
     policy = _build_policy(args)
+    auth = _build_auth(args)
     if args.health_check:
-        spec = load_tool_spec(args.base_url, timeout=args.timeout)
+        spec = load_tool_spec(args.base_url, timeout=args.timeout, auth=auth)
         sys.stdout.write(
-            json.dumps(bridge_health(spec, policy), ensure_ascii=False, indent=2) + "\n"
+            json.dumps(bridge_health(spec, policy, auth), ensure_ascii=False, indent=2) + "\n"
         )
         return
-    serve_stdio(args.base_url, args.timeout, policy)
+    serve_stdio(args.base_url, args.timeout, policy, auth)
 
 
 if __name__ == "__main__":

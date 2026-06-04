@@ -108,6 +108,7 @@ def test_bridge_health_reports_policy_counts() -> None:
     health = mcp_http_bridge.bridge_health(
         spec,
         mcp_http_bridge.BridgePolicy(read_only=True),
+        mcp_http_bridge.BridgeAuth(api_key="secret"),
     )
 
     assert health["status"] == "ok"
@@ -115,6 +116,8 @@ def test_bridge_health_reports_policy_counts() -> None:
     assert health["exposed_tools"] == 1
     assert health["blocked_tools"] == 1
     assert health["policy"]["read_only"] is True
+    assert health["auth"]["api_key_configured"] is True
+    assert health["auth"]["header_name"] == "X-Research-Assistant-Key"
     assert health["tools"] == ["get_project_progress"]
     assert health["blocked"] == ["create_research_plan"]
 
@@ -141,3 +144,13 @@ def test_zip_tool_content_is_base64_text() -> None:
 
     assert payload["content_type"] == "application/zip"
     assert payload["base64"]
+
+
+def test_bridge_auth_headers_forward_api_key() -> None:
+    headers = mcp_http_bridge._auth_headers(
+        mcp_http_bridge.BridgeAuth(api_key="secret", header_name="X-Test-Key")
+    )
+    empty = mcp_http_bridge._auth_headers(mcp_http_bridge.BridgeAuth())
+
+    assert headers == {"X-Test-Key": "secret"}
+    assert empty == {}
