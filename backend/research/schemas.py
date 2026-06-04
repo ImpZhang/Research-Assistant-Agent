@@ -1278,6 +1278,13 @@ class AdvisorChatResponse(BaseModel):
     message: str
 
 
+class AdvisorChatTaskGenerateRequest(AdvisorChatRequest):
+    limit: int = Field(default=8, ge=1, le=20)
+    include_recommendations: bool = True
+    include_risks: bool = True
+    include_tool_suggestions: bool = False
+
+
 class LiteratureSearchRequest(BaseModel):
     query: str
     limit: int = 8

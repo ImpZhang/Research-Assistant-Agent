@@ -48,6 +48,7 @@ from backend.research.models import (
 from backend.research.schemas import (
     AdvisorChatRequest,
     AdvisorChatResponse,
+    AdvisorChatTaskGenerateRequest,
     ClaimValidationQueueItem,
     ClaimValidationQueueResponse,
     ClaimValidationQueueTaskGenerateRequest,
@@ -268,6 +269,7 @@ def status() -> ProjectStatus:
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
             "project_advisor_chat",
+            "project_advisor_chat_task_generation",
             "project_triage_brief",
             "project_triage_task_generation",
             "project_triage_snapshots",
@@ -684,6 +686,18 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/advisor/chat",
             input_model="AdvisorChatRequest",
             output_model="AdvisorChatResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_advisor_chat",
+            description=(
+                "Ask the project advisor and turn the answer's recommendations, risks, "
+                "and optional tool suggestions into task-board work."
+            ),
+            method="POST",
+            path="/research/advisor/chat/tasks",
+            input_model="AdvisorChatTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_project_triage_brief",
@@ -1446,6 +1460,35 @@ def ask_project_advisor(
             "Answered advisor chat question from project cockpit, retrieved context, "
             "and deterministic research workflow signals."
         ),
+    )
+
+
+@router.post("/advisor/chat/tasks", response_model=ResearchTaskGenerationResponse)
+def create_tasks_from_project_advisor_chat(
+    payload: AdvisorChatTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    chat_payload = AdvisorChatRequest(
+        question=payload.question,
+        idea_id=payload.idea_id,
+        paper_ids=payload.paper_ids,
+        include_cockpit=payload.include_cockpit,
+        include_context=payload.include_context,
+        context_limit=payload.context_limit,
+        created_by=payload.created_by,
+    )
+    chat = ask_project_advisor(chat_payload, session=session)
+    tasks = ResearchTaskService(session).create_from_project_advisor_chat(
+        chat.model_dump(mode="json"),
+        limit=payload.limit,
+        include_recommendations=payload.include_recommendations,
+        include_risks=payload.include_risks,
+        include_tool_suggestions=payload.include_tool_suggestions,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(f"Created {len(tasks)} project advisor chat tasks from intent {chat.intent}."),
     )
 
 
@@ -6851,6 +6894,7 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "idea_has_quality_gate",
         "quality_gate_creates_task",
         "project_cockpit_creates_task",
+        "project_advisor_chat_creates_task",
         "project_triage_creates_task",
         "idea_has_opportunity_radar",
         "opportunity_radar_creates_task",

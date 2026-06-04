@@ -906,6 +906,114 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_advisor_chat(
+        self,
+        chat: dict,
+        *,
+        limit: int = 8,
+        include_recommendations: bool = True,
+        include_risks: bool = True,
+        include_tool_suggestions: bool = False,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        question = str(chat.get("question") or "")
+        intent = str(chat.get("intent") or "project_status")
+        cockpit_phase = str(chat.get("cockpit_phase") or "")
+        readiness_level = str(chat.get("readiness_level") or "")
+        items: list[tuple[str, str, dict]] = []
+        if include_recommendations:
+            for action in self._unique_commitments(chat.get("recommended_actions") or []):
+                items.append(("advisor_recommended_action", action, {}))
+        if include_risks:
+            for risk in self._unique_commitments(chat.get("risk_alerts") or []):
+                items.append(("advisor_risk_alert", risk, {}))
+        if include_tool_suggestions:
+            for idx, tool in enumerate(chat.get("tool_suggestions") or [], start=1):
+                name = str(tool.get("name") or f"tool_{idx}")
+                reason = str(tool.get("reason") or "")
+                action = f"Use {name}: {reason}".strip()
+                items.append(
+                    (
+                        "advisor_tool_suggestion",
+                        action,
+                        {
+                            "tool_name": name,
+                            "method": tool.get("method", ""),
+                            "path": tool.get("path", ""),
+                        },
+                    )
+                )
+
+        items = self._deduplicate_advisor_chat_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "advisor_chat_review",
+                    "Review the advisor chat answer and define the next research action.",
+                    {},
+                )
+            ]
+
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_advisor_chat",
+                owner_id="project_advisor_chat",
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._advisor_chat_task_title(action, idx, source_type=source_type),
+                description=action,
+                priority=self._advisor_chat_task_priority(source_type, action, intent),
+                status="todo",
+                due_phase="advisor_chat_follow_up",
+                metadata_json={
+                    "advisor_question": question,
+                    "advisor_intent": intent,
+                    "cockpit_phase": cockpit_phase,
+                    "readiness_level": readiness_level,
+                    "advisor_source_type": source_type,
+                    "source_rank": idx,
+                    **metadata,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project advisor chat.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "advisor_intent": intent,
+                        "cockpit_phase": cockpit_phase,
+                        "readiness_level": readiness_level,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_advisor_chat_tasks(
+            chat, tasks
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_project_triage_comparison(
         self,
         comparison: dict,
@@ -1422,6 +1530,35 @@ class ResearchTaskService:
             return "medium"
         return "medium"
 
+    def _advisor_chat_task_title(self, action: str, idx: int, *, source_type: str) -> str:
+        clean = " ".join(str(action).split())
+        lower = clean.lower()
+        if source_type == "advisor_risk_alert":
+            return self._short_task_title(f"Resolve advisor risk {idx}: {clean}", idx)
+        if source_type == "advisor_tool_suggestion":
+            return self._short_task_title(clean or f"Use advisor suggested tool {idx}", idx)
+        if "blocked" in lower:
+            return self._short_task_title(clean.replace("Blocked", "Unblock", 1), idx)
+        if "de-risk" in lower or "risk" in lower:
+            return self._short_task_title(f"De-risk advisor item {idx}: {clean}", idx)
+        return self._short_task_title(clean or f"Work advisor recommendation {idx}", idx)
+
+    def _advisor_chat_task_priority(self, source_type: str, action: str, intent: str) -> str:
+        lower = str(action).lower()
+        if source_type == "advisor_risk_alert":
+            return "critical"
+        if "blocked" in lower or "critical" in lower or "high-risk" in lower:
+            return "critical"
+        if (
+            "de-risk" in lower
+            or "claim validation" in lower
+            or intent in {"risk_review", "evidence_review"}
+        ):
+            return "high"
+        if source_type == "advisor_recommended_action":
+            return "high"
+        return "medium"
+
     def _triage_comparison_task_title(self, action: str, idx: int) -> str:
         clean = " ".join(str(action).split())
         if "risk" in clean.lower() or "de-risk" in clean.lower():
@@ -1546,6 +1683,19 @@ class ResearchTaskService:
         return unique
 
     def _deduplicate_cockpit_items(
+        self, items: list[tuple[str, str, dict]]
+    ) -> list[tuple[str, str, dict]]:
+        unique = []
+        seen = set()
+        for source_type, action, metadata in items:
+            clean = " ".join(str(action).split())
+            key = clean.lower()
+            if clean and key not in seen:
+                unique.append((source_type, clean, metadata))
+                seen.add(key)
+        return unique
+
+    def _deduplicate_advisor_chat_items(
         self, items: list[tuple[str, str, dict]]
     ) -> list[tuple[str, str, dict]]:
         unique = []

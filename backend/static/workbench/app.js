@@ -404,6 +404,37 @@ async function askAdvisorChat(event) {
   }
 }
 
+async function createAdvisorChatTasks() {
+  const question = $("advisorQuestion").value.trim();
+  if (!question) return;
+  renderResult("advisorChatResult", "Creating advisor chat tasks...", "warn");
+  try {
+    const body = await api("/research/advisor/chat/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        idea_id: state.latestIdeaId || null,
+        paper_ids: state.paperId ? [state.paperId] : [],
+        include_cockpit: true,
+        include_context: true,
+        context_limit: 5,
+        limit: 8,
+        include_recommendations: true,
+        include_risks: true,
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "advisorChatResult",
+      `${escapeHtml(body.message)}<br />${renderList("Advisor tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("advisorChatResult", escapeHtml(error.message), "error");
+  }
+}
+
 function renderList(title, items, mapper) {
   if (!items || !items.length) {
     return `<h4>${escapeHtml(title)}</h4><div class="empty-state">No records.</div>`;
@@ -1762,6 +1793,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("contextSearchForm").addEventListener("submit", searchContext);
   $("literatureSearchForm").addEventListener("submit", searchLiterature);
   $("advisorChatForm").addEventListener("submit", askAdvisorChat);
+  $("advisorChatTasksButton").addEventListener("click", createAdvisorChatTasks);
   $("refreshJobsButton").addEventListener("click", refreshJobs);
   $("jobsTable").addEventListener("click", handleJobAction);
   $("loadDossierButton").addEventListener("click", loadDossier);

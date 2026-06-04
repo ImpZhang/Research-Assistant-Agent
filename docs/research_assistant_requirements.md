@@ -1075,6 +1075,8 @@ project cockpit 需要能一键转成 task board 任务：从 primary action、n
 
 系统需要提供 project advisor chat，作为客户的自然语言项目入口。用户可以直接问“现在项目怎么样”“下一步做什么”“哪个风险最重要”“哪个 idea 最值得推进”，系统必须基于 cockpit、retrieved evidence、gaps、ideas 和 GraphRAG-lite context 生成回答，而不是泛泛聊天。回答需要包含 intent、Markdown answer、recommended actions、risk alerts、引用的 evidence/gap/idea、source summaries 和 tool suggestions，便于前端展示、导师会复盘和后续 agent 接管。
 
+project advisor chat 需要能一键转成 task board 任务：从 recommended actions、risk alerts 和可选 tool suggestions 创建 `owner_type=project_advisor_chat`、`due_phase=advisor_chat_follow_up` 的任务，并写入 `project_advisor_chat_creates_task` 图边。这样自然语言入口不是只回答问题，而能直接形成可追踪执行项。
+
 验收标准：
 
 - 能通过关键词找相关论文。
