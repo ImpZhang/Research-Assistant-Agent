@@ -1001,6 +1001,14 @@ class ProjectPilotReportSnapshotCreate(BaseModel):
     created_by: str = "researcher"
 
 
+class ProjectPilotReportSnapshotTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=8, ge=1, le=20)
+    include_risks: bool = True
+    include_next_actions: bool = True
+    include_quick_actions: bool = True
+    created_by: str = "system"
+
+
 class ProjectCockpitTaskGenerateRequest(BaseModel):
     limit: int = Field(default=8, ge=1, le=20)
     include_primary_action: bool = True

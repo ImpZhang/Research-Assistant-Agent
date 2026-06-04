@@ -182,6 +182,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project pilot status report")
     if "project_pilot_report_snapshots" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project pilot report snapshots")
+    if "project_pilot_report_snapshot_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError(
+            "research status did not include project pilot report snapshot task generation"
+        )
     if "project_cockpit_dashboard" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project cockpit dashboard")
     if "project_cockpit_task_generation" not in status["implemented_capabilities"]:
@@ -308,6 +312,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project pilot report snapshot creator")
     if "list_project_pilot_report_snapshots" not in manifest_names:
         raise RuntimeError("tool manifest did not include project pilot report snapshot lister")
+    if "create_tasks_from_project_pilot_report_snapshot" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project pilot report snapshot task tool")
     if "get_project_cockpit" not in manifest_names:
         raise RuntimeError("tool manifest did not include project cockpit tool")
     if "export_project_cockpit_markdown" not in manifest_names:
@@ -415,6 +421,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workbench did not include the pilot report button")
     if "pilotReportSnapshotButton" not in workbench:
         raise RuntimeError("workbench did not include the pilot report snapshot button")
+    if "pilotReportSnapshotTasksButton" not in workbench:
+        raise RuntimeError("workbench did not include the pilot report snapshot task button")
     if "setupWizardForm" not in workbench or "setupWizardButton" not in workbench:
         raise RuntimeError("workbench did not include the project setup wizard")
     if "cockpitButton" not in workbench:
@@ -539,6 +547,23 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "Project Pilot Status Report" not in pilot_report_snapshot_markdown:
         raise RuntimeError("project pilot report snapshot export did not include title")
+    pilot_report_snapshot_tasks = require_ok(
+        client.post(
+            f"/research/pilot/report/snapshots/{pilot_report_snapshot['id']}/tasks",
+            json_body={
+                "limit": 6,
+                "include_risks": True,
+                "include_next_actions": True,
+                "include_quick_actions": True,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project pilot report snapshot tasks",
+    )
+    if not pilot_report_snapshot_tasks["tasks"]:
+        raise RuntimeError("project pilot report snapshot task generation returned no tasks")
+    if pilot_report_snapshot_tasks["tasks"][0]["owner_id"] != pilot_report_snapshot["id"]:
+        raise RuntimeError("project pilot report snapshot task owner did not match snapshot")
     onboarding_start = require_ok(
         client.get("/research/onboarding/readiness"),
         "project onboarding readiness",
@@ -2063,6 +2088,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "pilot_report_next_action_count": len(pilot_report["next_actions"]),
         "pilot_report_snapshot_id": pilot_report_snapshot["id"],
         "pilot_report_snapshot_markdown_chars": len(pilot_report_snapshot_markdown),
+        "pilot_report_snapshot_task_count": len(pilot_report_snapshot_tasks["tasks"]),
         "onboarding_start_level": onboarding_start["readiness_level"],
         "onboarding_readiness_level": onboarding_after_workflow["readiness_level"],
         "onboarding_score": onboarding_after_workflow["readiness_score"],

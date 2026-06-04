@@ -11,6 +11,7 @@ from backend.research.models import (
     ProposalDraft,
     ProposalReview,
     ProposalRevision,
+    ResearchBrief,
     ResearchPlanSnapshot,
     ResearchTask,
     TaskBoardSnapshot,
@@ -525,6 +526,43 @@ class ArtifactGraphService:
                 source_node=cockpit_node,
                 target_node=task_node,
                 edge_type="project_cockpit_creates_task",
+                payload={"source": task.source_type},
+            )
+
+    def link_project_pilot_report_snapshot_tasks(
+        self,
+        snapshot: ResearchBrief,
+        tasks: list[ResearchTask],
+    ) -> None:
+        summary = snapshot.summary_json or {}
+        snapshot_node = self.graph.get_or_create_node(
+            node_type="project_pilot_report_snapshot",
+            label=snapshot.title,
+            canonical_key=snapshot.id,
+            payload={
+                "report_status": summary.get("report_status", ""),
+                "readiness_level": summary.get("readiness_level", ""),
+                "cockpit_phase": summary.get("cockpit_phase", ""),
+                "task_count": len(tasks),
+                "owner_type": "project_pilot_report_snapshot",
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=snapshot_node,
+                target_node=task_node,
+                edge_type="project_pilot_report_snapshot_creates_task",
                 payload={"source": task.source_type},
             )
 

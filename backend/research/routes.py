@@ -131,6 +131,7 @@ from backend.research.schemas import (
     ProjectOnboardingTaskGenerateRequest,
     ProjectPilotReportResponse,
     ProjectPilotReportSnapshotCreate,
+    ProjectPilotReportSnapshotTaskGenerateRequest,
     ProjectSetupWizardRequest,
     ProjectSetupWizardResponse,
     ProjectReadinessOverviewResponse,
@@ -282,6 +283,7 @@ def status() -> ProjectStatus:
             "project_onboarding_progress_tracking",
             "project_pilot_status_report",
             "project_pilot_report_snapshots",
+            "project_pilot_report_snapshot_task_generation",
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
             "project_advisor_chat",
@@ -747,6 +749,18 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/pilot/report/snapshots/{snapshot_id}/export/markdown",
             output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_pilot_report_snapshot",
+            description=(
+                "Turn a saved pilot report snapshot's risks, next actions, "
+                "and quick actions into project-level task-board work."
+            ),
+            method="POST",
+            path="/research/pilot/report/snapshots/{snapshot_id}/tasks",
+            input_model="ProjectPilotReportSnapshotTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_project_cockpit",
@@ -1636,6 +1650,30 @@ def export_project_pilot_report_snapshot_markdown(
 ) -> PlainTextResponse:
     snapshot = _get_project_pilot_report_snapshot_or_404(snapshot_id, session)
     return PlainTextResponse(snapshot.markdown_export or "", media_type="text/markdown")
+
+
+@router.post(
+    "/pilot/report/snapshots/{snapshot_id}/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_pilot_report_snapshot(
+    snapshot_id: str,
+    payload: ProjectPilotReportSnapshotTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    snapshot = _get_project_pilot_report_snapshot_or_404(snapshot_id, session)
+    tasks = ResearchTaskService(session).create_from_project_pilot_report_snapshot(
+        snapshot,
+        limit=payload.limit,
+        include_risks=payload.include_risks,
+        include_next_actions=payload.include_next_actions,
+        include_quick_actions=payload.include_quick_actions,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(f"Created {len(tasks)} project tasks from pilot report snapshot {snapshot.id}."),
+    )
 
 
 @router.get("/cockpit", response_model=ProjectCockpitResponse)

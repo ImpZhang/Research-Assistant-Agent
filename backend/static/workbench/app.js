@@ -19,6 +19,7 @@ const state = {
   taskBoardItems: [],
   latestTaskSnapshotId: "",
   latestTriageSnapshotId: "",
+  latestPilotReportSnapshotId: "",
   latestResearchPlanId: "",
   researchProfile: null,
   onboardingReadiness: null,
@@ -258,10 +259,42 @@ async function savePilotReportSnapshot() {
         created_by: "workbench",
       }),
     });
+    state.latestPilotReportSnapshotId = body.id;
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "onboardingResult",
       `Saved pilot report snapshot <code>${escapeHtml(body.id)}</code> with ${body.markdown_export_chars} Markdown chars.`,
+    );
+  } catch (error) {
+    renderResult("onboardingResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createPilotReportSnapshotTasks() {
+  if (!state.latestPilotReportSnapshotId) {
+    renderResult("onboardingResult", "Save a pilot report snapshot first.", "warn");
+    return;
+  }
+  renderResult("onboardingResult", "Creating pilot report snapshot tasks...", "warn");
+  try {
+    const body = await api(
+      `/research/pilot/report/snapshots/${state.latestPilotReportSnapshotId}/tasks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          limit: 8,
+          include_risks: true,
+          include_next_actions: true,
+          include_quick_actions: true,
+          created_by: "workbench",
+        }),
+      },
+    );
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "onboardingResult",
+      `${escapeHtml(body.message)}<br />${renderList("Pilot report tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
     renderResult("onboardingResult", escapeHtml(error.message), "error");
@@ -2051,6 +2084,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("onboardingProgressButton").addEventListener("click", loadOnboardingProgress);
   $("pilotReportButton").addEventListener("click", loadPilotReport);
   $("pilotReportSnapshotButton").addEventListener("click", savePilotReportSnapshot);
+  $("pilotReportSnapshotTasksButton").addEventListener(
+    "click",
+    createPilotReportSnapshotTasks,
+  );
   $("apiKeyInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();

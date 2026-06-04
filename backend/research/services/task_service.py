@@ -7,6 +7,7 @@ from backend.research.models import (
     IdeaEvidenceLedger,
     NoveltyCheck,
     ProposalRevision,
+    ResearchBrief,
     ResearchPlanSnapshot,
     ResearchTask,
     ResearchTaskEvent,
@@ -906,6 +907,123 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_pilot_report_snapshot(
+        self,
+        snapshot: ResearchBrief,
+        *,
+        limit: int = 8,
+        include_risks: bool = True,
+        include_next_actions: bool = True,
+        include_quick_actions: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        summary = snapshot.summary_json or {}
+        report_status = str(summary.get("report_status") or "")
+        readiness_level = str(summary.get("readiness_level") or "")
+        cockpit_phase = str(summary.get("cockpit_phase") or "")
+        items: list[tuple[str, str, dict]] = []
+
+        if include_risks:
+            for risk in self._unique_commitments(summary.get("risks") or []):
+                items.append(("pilot_report_risk", risk, {}))
+        if include_next_actions:
+            for action in self._unique_commitments(summary.get("next_actions") or []):
+                items.append(("pilot_report_next_action", action, {}))
+        if include_quick_actions:
+            for action in summary.get("quick_actions") or []:
+                if not isinstance(action, dict):
+                    text = " ".join(str(action).split())
+                    metadata = {}
+                else:
+                    label = str(action.get("label") or "Pilot report quick action").strip()
+                    reason = str(action.get("reason") or "").strip()
+                    text = f"{label}: {reason}" if reason else label
+                    metadata = {
+                        "method": action.get("method", ""),
+                        "path": action.get("path", ""),
+                        "enabled": action.get("enabled", True),
+                    }
+                if text:
+                    items.append(("pilot_report_quick_action", text, metadata))
+
+        items = self._deduplicate_pilot_report_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "pilot_report_review",
+                    "Review the saved pilot report snapshot and define the next customer-facing action.",
+                    {},
+                )
+            ]
+
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_pilot_report_snapshot",
+                owner_id=snapshot.id,
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._pilot_report_snapshot_task_title(
+                    action,
+                    idx,
+                    source_type=source_type,
+                ),
+                description=action,
+                priority=self._pilot_report_snapshot_task_priority(
+                    source_type,
+                    action,
+                    report_status,
+                ),
+                status="todo",
+                due_phase="pilot_report_follow_up",
+                metadata_json={
+                    "snapshot_id": snapshot.id,
+                    "snapshot_title": snapshot.title,
+                    "report_status": report_status,
+                    "readiness_level": readiness_level,
+                    "cockpit_phase": cockpit_phase,
+                    "source_rank": idx,
+                    **metadata,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project pilot report snapshot.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "snapshot_id": snapshot.id,
+                        "report_status": report_status,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_pilot_report_snapshot_tasks(
+            snapshot,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_project_onboarding(
         self,
         readiness: dict,
@@ -1628,6 +1746,46 @@ class ResearchTaskService:
             return "medium"
         return "medium"
 
+    def _pilot_report_snapshot_task_title(
+        self,
+        action: str,
+        idx: int,
+        *,
+        source_type: str,
+    ) -> str:
+        clean = " ".join(str(action).split())
+        lower = clean.lower()
+        if source_type == "pilot_report_risk":
+            return self._short_task_title(f"Resolve pilot report risk {idx}: {clean}", idx)
+        if source_type == "pilot_report_quick_action":
+            return self._short_task_title(clean or f"Run pilot report quick action {idx}", idx)
+        if "blocked" in lower:
+            return self._short_task_title(clean.replace("Blocked", "Unblock", 1), idx)
+        if "de-risk" in lower or "risk" in lower:
+            return self._short_task_title(f"De-risk pilot report item {idx}: {clean}", idx)
+        return self._short_task_title(clean or f"Work pilot report action {idx}", idx)
+
+    def _pilot_report_snapshot_task_priority(
+        self,
+        source_type: str,
+        action: str,
+        report_status: str,
+    ) -> str:
+        lower = str(action).lower()
+        if source_type == "pilot_report_risk":
+            return "critical"
+        if "blocked" in lower or "critical" in lower or "high-risk" in lower:
+            return "critical"
+        if (
+            source_type == "pilot_report_next_action"
+            or "de-risk" in lower
+            or report_status in {"blocked_pilot", "at_risk_pilot"}
+        ):
+            return "high"
+        if source_type == "pilot_report_quick_action":
+            return "medium"
+        return "medium"
+
     def _onboarding_task_title(self, item: dict, idx: int) -> str:
         check_id = str(item.get("id") or "")
         label = str(item.get("label") or "")
@@ -1828,6 +1986,19 @@ class ResearchTaskService:
         return unique
 
     def _deduplicate_cockpit_items(
+        self, items: list[tuple[str, str, dict]]
+    ) -> list[tuple[str, str, dict]]:
+        unique = []
+        seen = set()
+        for source_type, action, metadata in items:
+            clean = " ".join(str(action).split())
+            key = clean.lower()
+            if clean and key not in seen:
+                unique.append((source_type, clean, metadata))
+                seen.add(key)
+        return unique
+
+    def _deduplicate_pilot_report_items(
         self, items: list[tuple[str, str, dict]]
     ) -> list[tuple[str, str, dict]]:
         unique = []
