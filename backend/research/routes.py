@@ -126,6 +126,7 @@ from backend.research.schemas import (
     ProjectCockpitResponse,
     ProjectCockpitTaskGenerateRequest,
     ProjectOnboardingChecklistItem,
+    ProjectOnboardingProgressResponse,
     ProjectOnboardingReadinessResponse,
     ProjectOnboardingTaskGenerateRequest,
     ProjectSetupWizardRequest,
@@ -276,6 +277,7 @@ def status() -> ProjectStatus:
             "project_onboarding_readiness",
             "project_onboarding_setup_wizard",
             "project_onboarding_task_generation",
+            "project_onboarding_progress_tracking",
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
             "project_advisor_chat",
@@ -691,6 +693,16 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="ProjectOnboardingTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="get_project_onboarding_progress",
+            description=(
+                "Track onboarding task completion, blockers, next tasks, "
+                "and current pilot readiness."
+            ),
+            method="GET",
+            path="/research/onboarding/progress",
+            output_model="ProjectOnboardingProgressResponse",
         ),
         ToolManifestItem(
             name="get_project_cockpit",
@@ -1420,6 +1432,51 @@ def create_tasks_from_project_onboarding(
         message=(
             f"Created {len(tasks)} onboarding tasks from readiness {readiness.readiness_level}."
         ),
+    )
+
+
+@router.get("/onboarding/progress", response_model=ProjectOnboardingProgressResponse)
+def get_project_onboarding_progress(
+    limit: int = 100,
+    session: Session = Depends(get_session),
+) -> ProjectOnboardingProgressResponse:
+    limit = max(1, min(limit, 500))
+    generated_at = datetime.now(timezone.utc)
+    readiness = get_project_onboarding_readiness(session=session)
+    tasks = (
+        session.query(ResearchTask)
+        .filter(ResearchTask.owner_type == "project_onboarding")
+        .order_by(ResearchTask.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    task_summary = _project_onboarding_progress_task_summary(tasks)
+    blocked_tasks = [
+        task for task in sorted(tasks, key=_progress_task_order) if task.status == "blocked"
+    ][:10]
+    next_tasks = [
+        task
+        for task in sorted(tasks, key=_progress_task_order)
+        if task.status in {"todo", "doing", "blocked"}
+    ][:10]
+    next_action = _project_onboarding_progress_next_action(readiness, task_summary, next_tasks)
+    markdown_export = _render_project_onboarding_progress_markdown(
+        generated_at=generated_at,
+        readiness=readiness,
+        task_summary=task_summary,
+        next_action=next_action,
+        blocked_tasks=blocked_tasks,
+        next_tasks=next_tasks,
+    )
+    return ProjectOnboardingProgressResponse(
+        generated_at=generated_at,
+        readiness=readiness,
+        task_summary=task_summary,
+        next_action=next_action,
+        blocked_tasks=[_serialize_research_task(task) for task in blocked_tasks],
+        next_tasks=[_serialize_research_task(task) for task in next_tasks],
+        markdown_export=markdown_export,
+        message="Loaded project onboarding progress from readiness and task-board state.",
     )
 
 
@@ -2546,6 +2603,43 @@ def _project_onboarding_quick_actions(
     return quick_actions
 
 
+def _project_onboarding_progress_task_summary(tasks: list[ResearchTask]) -> dict[str, Any]:
+    by_status = Counter(task.status for task in tasks)
+    by_priority = Counter(task.priority for task in tasks)
+    by_source_type = Counter(task.source_type for task in tasks)
+    total_count = len(tasks)
+    done_count = by_status.get("done", 0) + by_status.get("archived", 0)
+    open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
+    return {
+        "task_count": total_count,
+        "open_task_count": len(open_tasks),
+        "blocked_task_count": by_status.get("blocked", 0),
+        "done_task_count": done_count,
+        "completion_ratio": round(done_count / total_count, 4) if total_count else 0.0,
+        "by_status": dict(by_status),
+        "by_priority": dict(by_priority),
+        "by_source_type": dict(by_source_type),
+        "latest_task_id": tasks[0].id if tasks else "",
+    }
+
+
+def _project_onboarding_progress_next_action(
+    readiness: ProjectOnboardingReadinessResponse,
+    task_summary: dict[str, Any],
+    next_tasks: list[ResearchTask],
+) -> str:
+    if task_summary.get("task_count", 0) == 0:
+        return "Create onboarding tasks from readiness gaps."
+    if task_summary.get("blocked_task_count", 0):
+        return "Resolve blocked onboarding tasks before advancing the pilot."
+    if next_tasks:
+        first = next_tasks[0]
+        return f"Work onboarding task `{first.id}`: {first.title}"
+    if readiness.readiness_level == "pilot_ready":
+        return "Open project cockpit and continue with the first execution cycle."
+    return "Refresh onboarding readiness and generate any newly missing setup tasks."
+
+
 def _project_onboarding_readiness_level(
     readiness_score: float,
     metrics: dict[str, Any],
@@ -2598,6 +2692,53 @@ def _render_project_onboarding_markdown(
     lines.extend(["", "## Project Metrics", ""])
     for key in sorted(metrics):
         lines.append(f"- {key}: {metrics[key]}")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _render_project_onboarding_progress_markdown(
+    *,
+    generated_at: datetime,
+    readiness: ProjectOnboardingReadinessResponse,
+    task_summary: dict[str, Any],
+    next_action: str,
+    blocked_tasks: list[ResearchTask],
+    next_tasks: list[ResearchTask],
+) -> str:
+    lines = [
+        "# Project Onboarding Progress",
+        "",
+        f"- Generated at: {generated_at.isoformat()}",
+        f"- Readiness level: `{readiness.readiness_level}`",
+        f"- Readiness score: {readiness.readiness_score:.0%}",
+        f"- Task count: {task_summary.get('task_count', 0)}",
+        f"- Open tasks: {task_summary.get('open_task_count', 0)}",
+        f"- Blocked tasks: {task_summary.get('blocked_task_count', 0)}",
+        f"- Completion ratio: {task_summary.get('completion_ratio', 0.0)}",
+        f"- Next action: {next_action}",
+        "",
+        "## Status Breakdown",
+        "",
+        f"- By status: {task_summary.get('by_status', {})}",
+        f"- By priority: {task_summary.get('by_priority', {})}",
+        f"- By source type: {task_summary.get('by_source_type', {})}",
+        "",
+        "## Blocked Tasks",
+        "",
+    ]
+    if blocked_tasks:
+        lines.extend(
+            f"- `{task.id}` `{task.priority}` {task.title}: {task.description}"
+            for task in blocked_tasks
+        )
+    else:
+        lines.append("- None.")
+    lines.extend(["", "## Next Tasks", ""])
+    if next_tasks:
+        lines.extend(
+            f"- `{task.id}` `{task.priority}` `{task.status}` {task.title}" for task in next_tasks
+        )
+    else:
+        lines.append("- No open onboarding tasks.")
     return "\n".join(lines).strip() + "\n"
 
 

@@ -969,6 +969,17 @@ class ProjectOnboardingTaskGenerateRequest(BaseModel):
     created_by: str = "system"
 
 
+class ProjectOnboardingProgressResponse(BaseModel):
+    generated_at: datetime
+    readiness: ProjectOnboardingReadinessResponse
+    task_summary: dict[str, Any] = Field(default_factory=dict)
+    next_action: str = ""
+    blocked_tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    next_tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ProjectCockpitTaskGenerateRequest(BaseModel):
     limit: int = Field(default=8, ge=1, le=20)
     include_primary_action: bool = True

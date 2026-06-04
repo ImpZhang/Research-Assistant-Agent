@@ -117,6 +117,7 @@ def test_research_status() -> None:
     assert "project_onboarding_readiness" in body["implemented_capabilities"]
     assert "project_onboarding_setup_wizard" in body["implemented_capabilities"]
     assert "project_onboarding_task_generation" in body["implemented_capabilities"]
+    assert "project_onboarding_progress_tracking" in body["implemented_capabilities"]
     assert "project_cockpit_dashboard" in body["implemented_capabilities"]
     assert "project_cockpit_task_generation" in body["implemented_capabilities"]
     assert "project_advisor_chat" in body["implemented_capabilities"]
@@ -152,6 +153,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_onboarding_readiness" in names
     assert "run_project_setup_wizard" in names
     assert "create_tasks_from_project_onboarding" in names
+    assert "get_project_onboarding_progress" in names
     assert "get_project_cockpit" in names
     assert "export_project_cockpit_markdown" in names
     assert "create_tasks_from_project_cockpit" in names
@@ -243,6 +245,11 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     assert onboarding_tasks["http"]["path"] == "/research/onboarding/tasks"
     assert onboarding_tasks["input_schema"]["required"] == ["body"]
     assert onboarding_tasks["annotations"]["sideEffectHint"] is True
+
+    onboarding_progress = tools["get_project_onboarding_progress"]
+    assert onboarding_progress["http"]["method"] == "GET"
+    assert onboarding_progress["http"]["path"] == "/research/onboarding/progress"
+    assert onboarding_progress["annotations"]["readOnlyHint"] is True
 
 
 def test_research_profile_guides_ranking_and_advisor_briefs() -> None:
@@ -480,6 +487,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "onboardingButton" in response.text
     assert "onboardingMarkdownButton" in response.text
     assert "onboardingTasksButton" in response.text
+    assert "onboardingProgressButton" in response.text
     assert "setupWizardForm" in response.text
     assert "setupWizardButton" in response.text
 
@@ -493,9 +501,11 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/onboarding/readiness" in script.text
     assert "/research/onboarding/setup" in script.text
     assert "/research/onboarding/tasks" in script.text
+    assert "/research/onboarding/progress" in script.text
     assert "loadOnboardingReadiness" in script.text
     assert "runProjectSetupWizard" in script.text
     assert "createOnboardingTasks" in script.text
+    assert "loadOnboardingProgress" in script.text
     assert "/research/profile/export/markdown" in script.text
     assert "saveResearchProfile" in script.text
     assert "/research/plans" in script.text
@@ -671,6 +681,39 @@ def test_project_onboarding_tasks_create_task_board_items_and_graph_edges() -> N
     edges = client.get("/research/graph/edges?edge_type=project_onboarding_creates_task")
     assert edges.status_code == 200
     assert edges.json()
+
+
+def test_project_onboarding_progress_tracks_task_completion() -> None:
+    client = TestClient(create_app())
+    created = client.post(
+        "/research/onboarding/tasks",
+        json={"limit": 4, "include_optional": True, "created_by": "pytest"},
+    )
+    assert created.status_code == 200
+    tasks = created.json()["tasks"]
+    assert tasks
+
+    initial = client.get("/research/onboarding/progress")
+    assert initial.status_code == 200
+    initial_body = initial.json()
+    assert "Project Onboarding Progress" in initial_body["markdown_export"]
+    assert initial_body["task_summary"]["task_count"] >= len(tasks)
+    assert initial_body["next_action"]
+
+    update = client.patch(
+        f"/research/tasks/{tasks[0]['id']}",
+        json={"status": "done", "note": "pytest completed onboarding task"},
+    )
+    assert update.status_code == 200
+
+    after = client.get("/research/onboarding/progress")
+    assert after.status_code == 200
+    after_body = after.json()
+    assert after_body["task_summary"]["done_task_count"] >= 1
+    assert (
+        after_body["task_summary"]["completion_ratio"]
+        >= initial_body["task_summary"]["completion_ratio"]
+    )
 
 
 def test_upload_text_paper() -> None:
