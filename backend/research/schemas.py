@@ -980,6 +980,22 @@ class ProjectOnboardingProgressResponse(BaseModel):
     message: str
 
 
+class ProjectPilotReportResponse(BaseModel):
+    generated_at: datetime
+    report_status: str = "draft"
+    executive_summary: str = ""
+    readiness_level: str = "not_ready"
+    cockpit_phase: str = "setup"
+    onboarding: ProjectOnboardingProgressResponse
+    cockpit: ProjectCockpitResponse
+    key_metrics: dict[str, Any] = Field(default_factory=dict)
+    risks: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+    quick_actions: list[dict[str, Any]] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ProjectCockpitTaskGenerateRequest(BaseModel):
     limit: int = Field(default=8, ge=1, le=20)
     include_primary_action: bool = True

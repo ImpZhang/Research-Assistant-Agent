@@ -129,6 +129,7 @@ from backend.research.schemas import (
     ProjectOnboardingProgressResponse,
     ProjectOnboardingReadinessResponse,
     ProjectOnboardingTaskGenerateRequest,
+    ProjectPilotReportResponse,
     ProjectSetupWizardRequest,
     ProjectSetupWizardResponse,
     ProjectReadinessOverviewResponse,
@@ -278,6 +279,7 @@ def status() -> ProjectStatus:
             "project_onboarding_setup_wizard",
             "project_onboarding_task_generation",
             "project_onboarding_progress_tracking",
+            "project_pilot_status_report",
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
             "project_advisor_chat",
@@ -703,6 +705,16 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/onboarding/progress",
             output_model="ProjectOnboardingProgressResponse",
+        ),
+        ToolManifestItem(
+            name="get_project_pilot_report",
+            description=(
+                "Generate a customer-facing pilot status report from onboarding "
+                "progress, readiness, cockpit state, risks, and next actions."
+            ),
+            method="GET",
+            path="/research/pilot/report",
+            output_model="ProjectPilotReportResponse",
         ),
         ToolManifestItem(
             name="get_project_cockpit",
@@ -1477,6 +1489,53 @@ def get_project_onboarding_progress(
         next_tasks=[_serialize_research_task(task) for task in next_tasks],
         markdown_export=markdown_export,
         message="Loaded project onboarding progress from readiness and task-board state.",
+    )
+
+
+@router.get("/pilot/report", response_model=ProjectPilotReportResponse)
+def get_project_pilot_report(
+    session: Session = Depends(get_session),
+) -> ProjectPilotReportResponse:
+    generated_at = datetime.now(timezone.utc)
+    onboarding = get_project_onboarding_progress(session=session)
+    cockpit = get_project_cockpit(idea_limit=50, opportunity_limit=5, session=session)
+    key_metrics = _project_pilot_report_key_metrics(onboarding, cockpit)
+    risks = _project_pilot_report_risks(onboarding, cockpit)
+    next_actions = _project_pilot_report_next_actions(onboarding, cockpit)
+    quick_actions = _project_pilot_report_quick_actions(onboarding, cockpit)
+    report_status = _project_pilot_report_status(onboarding, cockpit)
+    executive_summary = _project_pilot_report_summary(
+        onboarding=onboarding,
+        cockpit=cockpit,
+        report_status=report_status,
+        risks=risks,
+        next_actions=next_actions,
+    )
+    markdown_export = _render_project_pilot_report_markdown(
+        generated_at=generated_at,
+        report_status=report_status,
+        executive_summary=executive_summary,
+        onboarding=onboarding,
+        cockpit=cockpit,
+        key_metrics=key_metrics,
+        risks=risks,
+        next_actions=next_actions,
+        quick_actions=quick_actions,
+    )
+    return ProjectPilotReportResponse(
+        generated_at=generated_at,
+        report_status=report_status,
+        executive_summary=executive_summary,
+        readiness_level=onboarding.readiness.readiness_level,
+        cockpit_phase=cockpit.phase,
+        onboarding=onboarding,
+        cockpit=cockpit,
+        key_metrics=key_metrics,
+        risks=risks,
+        next_actions=next_actions,
+        quick_actions=quick_actions,
+        markdown_export=markdown_export,
+        message="Built customer-facing pilot report from onboarding and cockpit state.",
     )
 
 
@@ -2739,6 +2798,187 @@ def _render_project_onboarding_progress_markdown(
         )
     else:
         lines.append("- No open onboarding tasks.")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _project_pilot_report_status(
+    onboarding: ProjectOnboardingProgressResponse,
+    cockpit: ProjectCockpitResponse,
+) -> str:
+    if onboarding.task_summary.get("blocked_task_count", 0) or cockpit.phase == "unblock_execution":
+        return "blocked"
+    if onboarding.readiness.readiness_level != "pilot_ready":
+        return "setup_incomplete"
+    if cockpit.phase in {"validation", "prioritization", "execution_ready"}:
+        return "active_pilot"
+    if cockpit.project_metrics.get("idea_count", 0):
+        return "ideation_ready"
+    return "setup"
+
+
+def _project_pilot_report_key_metrics(
+    onboarding: ProjectOnboardingProgressResponse,
+    cockpit: ProjectCockpitResponse,
+) -> dict[str, Any]:
+    metrics = cockpit.project_metrics or {}
+    task_summary = onboarding.task_summary or {}
+    return {
+        "readiness_score": onboarding.readiness.readiness_score,
+        "readiness_level": onboarding.readiness.readiness_level,
+        "cockpit_phase": cockpit.phase,
+        "onboarding_task_count": task_summary.get("task_count", 0),
+        "onboarding_completion_ratio": task_summary.get("completion_ratio", 0.0),
+        "onboarding_open_task_count": task_summary.get("open_task_count", 0),
+        "onboarding_blocked_task_count": task_summary.get("blocked_task_count", 0),
+        "paper_count": metrics.get("paper_count", 0),
+        "evidence_count": metrics.get("evidence_count", 0),
+        "idea_count": metrics.get("idea_count", 0),
+        "project_open_task_count": metrics.get("open_task_count", 0),
+        "project_blocked_task_count": metrics.get("blocked_task_count", 0),
+        "average_readiness": metrics.get("average_readiness", 0.0),
+        "average_quality_gate_score": metrics.get("average_quality_gate_score", 0.0),
+        "claim_validation_result_count": metrics.get("claim_validation_result_count", 0),
+    }
+
+
+def _project_pilot_report_risks(
+    onboarding: ProjectOnboardingProgressResponse,
+    cockpit: ProjectCockpitResponse,
+) -> list[str]:
+    risks: list[str] = []
+    if onboarding.readiness.missing_required:
+        risks.append(
+            "Missing required onboarding checks: "
+            + ", ".join(onboarding.readiness.missing_required)
+        )
+    if onboarding.task_summary.get("blocked_task_count", 0):
+        risks.append(
+            f"{onboarding.task_summary['blocked_task_count']} onboarding tasks are blocked."
+        )
+    if onboarding.task_summary.get("task_count", 0) == 0:
+        risks.append("No onboarding tasks have been generated yet.")
+    risks.extend(cockpit.risk_alerts[:8])
+    return _dedupe_strings(risks)[:10]
+
+
+def _project_pilot_report_next_actions(
+    onboarding: ProjectOnboardingProgressResponse,
+    cockpit: ProjectCockpitResponse,
+) -> list[str]:
+    actions = [onboarding.next_action]
+    primary = cockpit.primary_next_action or {}
+    if primary.get("label"):
+        reason = str(primary.get("reason") or "").strip()
+        actions.append(f"{primary['label']}: {reason}" if reason else str(primary["label"]))
+    source_summaries = cockpit.source_summaries or {}
+    actions.extend(source_summaries.get("next_actions") or [])
+    actions.extend(onboarding.readiness.recommended_actions[:4])
+    return _dedupe_strings(actions)[:10]
+
+
+def _project_pilot_report_quick_actions(
+    onboarding: ProjectOnboardingProgressResponse,
+    cockpit: ProjectCockpitResponse,
+) -> list[dict[str, Any]]:
+    actions = [
+        {
+            "label": "Refresh onboarding progress",
+            "method": "GET",
+            "path": "/research/onboarding/progress",
+            "enabled": True,
+            "reason": "Reload setup-task completion and blockers.",
+        },
+        {
+            "label": "Open project cockpit",
+            "method": "GET",
+            "path": "/research/cockpit",
+            "enabled": True,
+            "reason": "Inspect current project phase, risks, and primary next action.",
+        },
+    ]
+    actions.extend(onboarding.readiness.quick_actions[:6])
+    actions.extend(cockpit.quick_actions[:6])
+    unique: list[dict[str, Any]] = []
+    seen = set()
+    for action in actions:
+        key = (str(action.get("label", "")), str(action.get("path", "")))
+        if key not in seen:
+            unique.append(action)
+            seen.add(key)
+    return unique[:12]
+
+
+def _project_pilot_report_summary(
+    *,
+    onboarding: ProjectOnboardingProgressResponse,
+    cockpit: ProjectCockpitResponse,
+    report_status: str,
+    risks: list[str],
+    next_actions: list[str],
+) -> str:
+    task_summary = onboarding.task_summary or {}
+    return (
+        f"Pilot status `{report_status}`. Onboarding readiness is "
+        f"`{onboarding.readiness.readiness_level}` at "
+        f"{onboarding.readiness.readiness_score:.0%}; setup-task completion is "
+        f"{task_summary.get('completion_ratio', 0.0):.0%}. The project cockpit is in "
+        f"`{cockpit.phase}` with readiness `{cockpit.readiness_level}`. "
+        f"Top risk count: {len(risks)}. Next action: "
+        f"{next_actions[0] if next_actions else 'review project cockpit'}."
+    )
+
+
+def _render_project_pilot_report_markdown(
+    *,
+    generated_at: datetime,
+    report_status: str,
+    executive_summary: str,
+    onboarding: ProjectOnboardingProgressResponse,
+    cockpit: ProjectCockpitResponse,
+    key_metrics: dict[str, Any],
+    risks: list[str],
+    next_actions: list[str],
+    quick_actions: list[dict[str, Any]],
+) -> str:
+    lines = [
+        "# Project Pilot Status Report",
+        "",
+        f"- Generated at: {generated_at.isoformat()}",
+        f"- Report status: `{report_status}`",
+        f"- Onboarding readiness: `{onboarding.readiness.readiness_level}`",
+        f"- Cockpit phase: `{cockpit.phase}`",
+        "",
+        "## Executive Summary",
+        "",
+        executive_summary,
+        "",
+        "## Key Metrics",
+        "",
+    ]
+    for key in sorted(key_metrics):
+        lines.append(f"- {key}: {key_metrics[key]}")
+    lines.extend(["", "## Risks", ""])
+    if risks:
+        lines.extend(f"- {risk}" for risk in risks)
+    else:
+        lines.append("- No major pilot risk surfaced.")
+    lines.extend(["", "## Next Actions", ""])
+    if next_actions:
+        lines.extend(f"- {action}" for action in next_actions)
+    else:
+        lines.append("- Review the project cockpit and define the next customer-facing action.")
+    lines.extend(["", "## Quick Actions", ""])
+    for action in quick_actions:
+        lines.append(
+            f"- `{action.get('method', 'GET')}` `{action.get('path', '')}` "
+            f"{action.get('label', 'Action')}: {action.get('reason', '')}"
+        )
+    lines.extend(["", "## Onboarding Progress", ""])
+    lines.append(f"- Next action: {onboarding.next_action}")
+    lines.append(f"- Task summary: {onboarding.task_summary}")
+    lines.extend(["", "## Cockpit Primary Action", ""])
+    primary = cockpit.primary_next_action or {}
+    lines.append(f"- {primary.get('label', 'No primary action')}: {primary.get('reason', '')}")
     return "\n".join(lines).strip() + "\n"
 
 

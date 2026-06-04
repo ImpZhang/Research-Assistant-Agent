@@ -233,6 +233,20 @@ async function loadOnboardingProgress() {
   }
 }
 
+async function loadPilotReport() {
+  renderResult("onboardingResult", "Loading pilot report...", "warn");
+  try {
+    const body = await api("/research/pilot/report");
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "onboardingResult",
+      `Pilot report <code>${escapeHtml(body.report_status)}</code>. Phase <code>${escapeHtml(body.cockpit_phase)}</code>; readiness <code>${escapeHtml(body.readiness_level)}</code>.<br />${escapeHtml(body.executive_summary)}`,
+    );
+  } catch (error) {
+    renderResult("onboardingResult", escapeHtml(error.message), "error");
+  }
+}
+
 function fillProfileForm(profile) {
   $("profileName").value = profile.name || "Default Research Profile";
   $("profileDomains").value = formatCsv(profile.primary_domains);
@@ -2014,6 +2028,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("onboardingMarkdownButton").addEventListener("click", () => loadOnboardingReadiness(true));
   $("onboardingTasksButton").addEventListener("click", createOnboardingTasks);
   $("onboardingProgressButton").addEventListener("click", loadOnboardingProgress);
+  $("pilotReportButton").addEventListener("click", loadPilotReport);
   $("apiKeyInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();

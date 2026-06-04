@@ -178,6 +178,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project onboarding task generation")
     if "project_onboarding_progress_tracking" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project onboarding progress tracking")
+    if "project_pilot_status_report" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project pilot status report")
     if "project_cockpit_dashboard" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project cockpit dashboard")
     if "project_cockpit_task_generation" not in status["implemented_capabilities"]:
@@ -298,6 +300,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project onboarding task tool")
     if "get_project_onboarding_progress" not in manifest_names:
         raise RuntimeError("tool manifest did not include project onboarding progress tool")
+    if "get_project_pilot_report" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project pilot report tool")
     if "get_project_cockpit" not in manifest_names:
         raise RuntimeError("tool manifest did not include project cockpit tool")
     if "export_project_cockpit_markdown" not in manifest_names:
@@ -401,6 +405,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workbench did not include the onboarding task button")
     if "onboardingProgressButton" not in workbench:
         raise RuntimeError("workbench did not include the onboarding progress button")
+    if "pilotReportButton" not in workbench:
+        raise RuntimeError("workbench did not include the pilot report button")
     if "setupWizardForm" not in workbench or "setupWizardButton" not in workbench:
         raise RuntimeError("workbench did not include the project setup wizard")
     if "cockpitButton" not in workbench:
@@ -479,6 +485,18 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project onboarding progress markdown did not include title")
     if not onboarding_progress["next_action"]:
         raise RuntimeError("project onboarding progress did not include a next action")
+    pilot_report = require_ok(
+        client.get("/research/pilot/report"),
+        "project pilot report",
+    )
+    if "Project Pilot Status Report" not in pilot_report["markdown_export"]:
+        raise RuntimeError("project pilot report markdown did not include title")
+    if not pilot_report["executive_summary"]:
+        raise RuntimeError("project pilot report did not include executive summary")
+    if not pilot_report["next_actions"]:
+        raise RuntimeError("project pilot report did not include next actions")
+    if pilot_report["key_metrics"].get("readiness_level") != pilot_report["readiness_level"]:
+        raise RuntimeError("project pilot report key metrics did not include readiness level")
     onboarding_start = require_ok(
         client.get("/research/onboarding/readiness"),
         "project onboarding readiness",
@@ -1999,6 +2017,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "onboarding_task_count": len(onboarding_tasks["tasks"]),
         "onboarding_progress_completion": onboarding_progress["task_summary"]["completion_ratio"],
         "onboarding_progress_open_count": onboarding_progress["task_summary"]["open_task_count"],
+        "pilot_report_status": pilot_report["report_status"],
+        "pilot_report_next_action_count": len(pilot_report["next_actions"]),
         "onboarding_start_level": onboarding_start["readiness_level"],
         "onboarding_readiness_level": onboarding_after_workflow["readiness_level"],
         "onboarding_score": onboarding_after_workflow["readiness_score"],

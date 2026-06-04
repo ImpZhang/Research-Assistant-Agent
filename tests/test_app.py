@@ -118,6 +118,7 @@ def test_research_status() -> None:
     assert "project_onboarding_setup_wizard" in body["implemented_capabilities"]
     assert "project_onboarding_task_generation" in body["implemented_capabilities"]
     assert "project_onboarding_progress_tracking" in body["implemented_capabilities"]
+    assert "project_pilot_status_report" in body["implemented_capabilities"]
     assert "project_cockpit_dashboard" in body["implemented_capabilities"]
     assert "project_cockpit_task_generation" in body["implemented_capabilities"]
     assert "project_advisor_chat" in body["implemented_capabilities"]
@@ -154,6 +155,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "run_project_setup_wizard" in names
     assert "create_tasks_from_project_onboarding" in names
     assert "get_project_onboarding_progress" in names
+    assert "get_project_pilot_report" in names
     assert "get_project_cockpit" in names
     assert "export_project_cockpit_markdown" in names
     assert "create_tasks_from_project_cockpit" in names
@@ -250,6 +252,11 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     assert onboarding_progress["http"]["method"] == "GET"
     assert onboarding_progress["http"]["path"] == "/research/onboarding/progress"
     assert onboarding_progress["annotations"]["readOnlyHint"] is True
+
+    pilot_report = tools["get_project_pilot_report"]
+    assert pilot_report["http"]["method"] == "GET"
+    assert pilot_report["http"]["path"] == "/research/pilot/report"
+    assert pilot_report["annotations"]["readOnlyHint"] is True
 
 
 def test_research_profile_guides_ranking_and_advisor_briefs() -> None:
@@ -488,6 +495,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "onboardingMarkdownButton" in response.text
     assert "onboardingTasksButton" in response.text
     assert "onboardingProgressButton" in response.text
+    assert "pilotReportButton" in response.text
     assert "setupWizardForm" in response.text
     assert "setupWizardButton" in response.text
 
@@ -502,10 +510,12 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/onboarding/setup" in script.text
     assert "/research/onboarding/tasks" in script.text
     assert "/research/onboarding/progress" in script.text
+    assert "/research/pilot/report" in script.text
     assert "loadOnboardingReadiness" in script.text
     assert "runProjectSetupWizard" in script.text
     assert "createOnboardingTasks" in script.text
     assert "loadOnboardingProgress" in script.text
+    assert "loadPilotReport" in script.text
     assert "/research/profile/export/markdown" in script.text
     assert "saveResearchProfile" in script.text
     assert "/research/plans" in script.text
@@ -714,6 +724,40 @@ def test_project_onboarding_progress_tracks_task_completion() -> None:
         after_body["task_summary"]["completion_ratio"]
         >= initial_body["task_summary"]["completion_ratio"]
     )
+
+
+def test_project_pilot_report_combines_onboarding_and_cockpit_state() -> None:
+    client = TestClient(create_app())
+    setup = client.post(
+        "/research/onboarding/setup",
+        json={
+            "name": f"Pilot Report {time.time_ns()}",
+            "primary_domains": ["research assistants"],
+            "active_questions": ["How can the system report pilot readiness?"],
+            "target_venues": ["ACL"],
+            "methodological_preferences": ["evidence-grounded reporting"],
+            "resource_constraints": ["small pilot"],
+            "success_criteria": ["customer-readable report"],
+            "first_milestone": "Generate pilot status report.",
+            "created_by": "pytest",
+        },
+    )
+    assert setup.status_code == 200
+    tasks = client.post(
+        "/research/onboarding/tasks",
+        json={"limit": 4, "include_optional": True, "created_by": "pytest"},
+    )
+    assert tasks.status_code == 200
+
+    report = client.get("/research/pilot/report")
+    assert report.status_code == 200
+    body = report.json()
+    assert "Project Pilot Status Report" in body["markdown_export"]
+    assert body["executive_summary"]
+    assert body["onboarding"]["task_summary"]["task_count"] >= len(tasks.json()["tasks"])
+    assert body["cockpit"]["project_metrics"]
+    assert body["key_metrics"]["readiness_level"] == body["readiness_level"]
+    assert body["next_actions"]
 
 
 def test_upload_text_paper() -> None:
