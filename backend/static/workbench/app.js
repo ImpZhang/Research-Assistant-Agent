@@ -301,6 +301,33 @@ async function createPilotReportSnapshotTasks() {
   }
 }
 
+async function comparePilotReportSnapshots() {
+  renderResult("onboardingResult", "Comparing latest pilot report snapshots...", "warn");
+  try {
+    const snapshots = await api("/research/pilot/report/snapshots?limit=2");
+    if (snapshots.length < 2) {
+      renderResult("onboardingResult", "Save at least two pilot report snapshots first.", "warn");
+      return;
+    }
+    const [candidate, baseline] = snapshots;
+    const body = await api("/research/pilot/report/snapshots/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseline_snapshot_id: baseline.id,
+        candidate_snapshot_id: candidate.id,
+      }),
+    });
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "onboardingResult",
+      `${escapeHtml(body.summary)}<br />Risks +${body.added_risks.length}/-${body.removed_risks.length}; next actions +${body.added_next_actions.length}/-${body.removed_next_actions.length}.`,
+    );
+  } catch (error) {
+    renderResult("onboardingResult", escapeHtml(error.message), "error");
+  }
+}
+
 function fillProfileForm(profile) {
   $("profileName").value = profile.name || "Default Research Profile";
   $("profileDomains").value = formatCsv(profile.primary_domains);
@@ -2087,6 +2114,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("pilotReportSnapshotTasksButton").addEventListener(
     "click",
     createPilotReportSnapshotTasks,
+  );
+  $("pilotReportSnapshotCompareButton").addEventListener(
+    "click",
+    comparePilotReportSnapshots,
   );
   $("apiKeyInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {

@@ -120,6 +120,7 @@ def test_research_status() -> None:
     assert "project_onboarding_progress_tracking" in body["implemented_capabilities"]
     assert "project_pilot_status_report" in body["implemented_capabilities"]
     assert "project_pilot_report_snapshots" in body["implemented_capabilities"]
+    assert "project_pilot_report_snapshot_comparison" in body["implemented_capabilities"]
     assert "project_pilot_report_snapshot_task_generation" in body["implemented_capabilities"]
     assert "project_cockpit_dashboard" in body["implemented_capabilities"]
     assert "project_cockpit_task_generation" in body["implemented_capabilities"]
@@ -162,6 +163,8 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "list_project_pilot_report_snapshots" in names
     assert "get_project_pilot_report_snapshot" in names
     assert "export_project_pilot_report_snapshot_markdown" in names
+    assert "compare_project_pilot_report_snapshots" in names
+    assert "export_project_pilot_report_snapshot_comparison_markdown" in names
     assert "create_tasks_from_project_pilot_report_snapshot" in names
     assert "get_project_cockpit" in names
     assert "export_project_cockpit_markdown" in names
@@ -275,6 +278,23 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     assert pilot_snapshot_list["http"]["method"] == "GET"
     assert pilot_snapshot_list["http"]["path"] == "/research/pilot/report/snapshots"
     assert pilot_snapshot_list["annotations"]["readOnlyHint"] is True
+
+    pilot_snapshot_compare = tools["compare_project_pilot_report_snapshots"]
+    assert pilot_snapshot_compare["http"]["method"] == "POST"
+    assert pilot_snapshot_compare["http"]["path"] == "/research/pilot/report/snapshots/compare"
+    assert pilot_snapshot_compare["input_schema"]["required"] == ["body"]
+    assert pilot_snapshot_compare["annotations"]["sideEffectHint"] is False
+
+    pilot_snapshot_compare_export = tools[
+        "export_project_pilot_report_snapshot_comparison_markdown"
+    ]
+    assert pilot_snapshot_compare_export["http"]["method"] == "POST"
+    assert (
+        pilot_snapshot_compare_export["http"]["path"]
+        == "/research/pilot/report/snapshots/compare/export/markdown"
+    )
+    assert pilot_snapshot_compare_export["input_schema"]["required"] == ["body"]
+    assert pilot_snapshot_compare_export["annotations"]["sideEffectHint"] is False
 
     pilot_snapshot_tasks = tools["create_tasks_from_project_pilot_report_snapshot"]
     assert pilot_snapshot_tasks["http"]["method"] == "POST"
@@ -524,6 +544,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "onboardingProgressButton" in response.text
     assert "pilotReportButton" in response.text
     assert "pilotReportSnapshotButton" in response.text
+    assert "pilotReportSnapshotCompareButton" in response.text
     assert "pilotReportSnapshotTasksButton" in response.text
     assert "setupWizardForm" in response.text
     assert "setupWizardButton" in response.text
@@ -541,6 +562,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/onboarding/progress" in script.text
     assert "/research/pilot/report" in script.text
     assert "/research/pilot/report/snapshots" in script.text
+    assert "/research/pilot/report/snapshots/compare" in script.text
     assert (
         "/research/pilot/report/snapshots/${state.latestPilotReportSnapshotId}/tasks" in script.text
     )
@@ -550,6 +572,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "loadOnboardingProgress" in script.text
     assert "loadPilotReport" in script.text
     assert "savePilotReportSnapshot" in script.text
+    assert "comparePilotReportSnapshots" in script.text
     assert "createPilotReportSnapshotTasks" in script.text
     assert "/research/profile/export/markdown" in script.text
     assert "saveResearchProfile" in script.text
@@ -845,6 +868,39 @@ def test_project_pilot_report_snapshots_persist_and_export_markdown() -> None:
         "pilot_report_quick_action",
         "pilot_report_review",
     }
+
+    candidate = client.post(
+        "/research/pilot/report/snapshots",
+        json={"title": f"{title} Candidate", "created_by": "pytest"},
+    )
+    assert candidate.status_code == 200
+    candidate_body = candidate.json()
+
+    comparison = client.post(
+        "/research/pilot/report/snapshots/compare",
+        json={
+            "baseline_snapshot_id": body["id"],
+            "candidate_snapshot_id": candidate_body["id"],
+        },
+    )
+    assert comparison.status_code == 200
+    comparison_body = comparison.json()
+    assert comparison_body["baseline_snapshot_id"] == body["id"]
+    assert comparison_body["candidate_snapshot_id"] == candidate_body["id"]
+    assert "Compared pilot report snapshots" in comparison_body["summary"]
+    assert "Project Pilot Report Snapshot Comparison" in comparison_body["markdown_export"]
+    assert comparison_body["kept_next_actions"]
+
+    comparison_markdown = client.post(
+        "/research/pilot/report/snapshots/compare/export/markdown",
+        json={
+            "baseline_snapshot_id": body["id"],
+            "candidate_snapshot_id": candidate_body["id"],
+        },
+    )
+    assert comparison_markdown.status_code == 200
+    assert comparison_markdown.headers["content-type"].startswith("text/markdown")
+    assert "## Next Action Changes" in comparison_markdown.text
 
 
 def test_upload_text_paper() -> None:

@@ -1009,6 +1009,31 @@ class ProjectPilotReportSnapshotTaskGenerateRequest(BaseModel):
     created_by: str = "system"
 
 
+class ProjectPilotReportSnapshotComparisonRequest(BaseModel):
+    baseline_snapshot_id: str
+    candidate_snapshot_id: str
+
+
+class ProjectPilotReportSnapshotComparisonResponse(BaseModel):
+    baseline_snapshot_id: str
+    candidate_snapshot_id: str
+    baseline_title: str
+    candidate_title: str
+    status_change: dict[str, Any] = Field(default_factory=dict)
+    metric_delta: dict[str, Any] = Field(default_factory=dict)
+    added_risks: list[str] = Field(default_factory=list)
+    removed_risks: list[str] = Field(default_factory=list)
+    kept_risks: list[str] = Field(default_factory=list)
+    added_next_actions: list[str] = Field(default_factory=list)
+    removed_next_actions: list[str] = Field(default_factory=list)
+    kept_next_actions: list[str] = Field(default_factory=list)
+    added_quick_actions: list[str] = Field(default_factory=list)
+    removed_quick_actions: list[str] = Field(default_factory=list)
+    kept_quick_actions: list[str] = Field(default_factory=list)
+    summary: str
+    markdown_export: str = ""
+
+
 class ProjectCockpitTaskGenerateRequest(BaseModel):
     limit: int = Field(default=8, ge=1, le=20)
     include_primary_action: bool = True

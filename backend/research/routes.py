@@ -130,6 +130,8 @@ from backend.research.schemas import (
     ProjectOnboardingReadinessResponse,
     ProjectOnboardingTaskGenerateRequest,
     ProjectPilotReportResponse,
+    ProjectPilotReportSnapshotComparisonRequest,
+    ProjectPilotReportSnapshotComparisonResponse,
     ProjectPilotReportSnapshotCreate,
     ProjectPilotReportSnapshotTaskGenerateRequest,
     ProjectSetupWizardRequest,
@@ -283,6 +285,7 @@ def status() -> ProjectStatus:
             "project_onboarding_progress_tracking",
             "project_pilot_status_report",
             "project_pilot_report_snapshots",
+            "project_pilot_report_snapshot_comparison",
             "project_pilot_report_snapshot_task_generation",
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
@@ -735,6 +738,25 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/pilot/report/snapshots",
             output_model="list[ResearchBriefRead]",
+        ),
+        ToolManifestItem(
+            name="compare_project_pilot_report_snapshots",
+            description=(
+                "Compare two saved pilot status report snapshots for status, "
+                "metric, risk, next-action, and quick-action changes."
+            ),
+            method="POST",
+            path="/research/pilot/report/snapshots/compare",
+            input_model="ProjectPilotReportSnapshotComparisonRequest",
+            output_model="ProjectPilotReportSnapshotComparisonResponse",
+        ),
+        ToolManifestItem(
+            name="export_project_pilot_report_snapshot_comparison_markdown",
+            description="Export a pilot report snapshot comparison as Markdown.",
+            method="POST",
+            path="/research/pilot/report/snapshots/compare/export/markdown",
+            input_model="ProjectPilotReportSnapshotComparisonRequest",
+            output_model="text/markdown",
         ),
         ToolManifestItem(
             name="get_project_pilot_report_snapshot",
@@ -1629,6 +1651,38 @@ def list_project_pilot_report_snapshots(
         .all()
     )
     return [_serialize_research_brief(snapshot) for snapshot in snapshots]
+
+
+@router.post(
+    "/pilot/report/snapshots/compare",
+    response_model=ProjectPilotReportSnapshotComparisonResponse,
+)
+def compare_project_pilot_report_snapshots(
+    payload: ProjectPilotReportSnapshotComparisonRequest,
+    session: Session = Depends(get_session),
+) -> ProjectPilotReportSnapshotComparisonResponse:
+    baseline = _get_project_pilot_report_snapshot_or_404(
+        payload.baseline_snapshot_id,
+        session,
+    )
+    candidate = _get_project_pilot_report_snapshot_or_404(
+        payload.candidate_snapshot_id,
+        session,
+    )
+    comparison = _compare_project_pilot_report_snapshots(baseline, candidate)
+    return ProjectPilotReportSnapshotComparisonResponse(**comparison)
+
+
+@router.post(
+    "/pilot/report/snapshots/compare/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_pilot_report_snapshot_comparison_markdown(
+    payload: ProjectPilotReportSnapshotComparisonRequest,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    comparison = compare_project_pilot_report_snapshots(payload, session)
+    return PlainTextResponse(comparison.markdown_export, media_type="text/markdown")
 
 
 @router.get("/pilot/report/snapshots/{snapshot_id}", response_model=ResearchBriefDetail)
@@ -3117,6 +3171,198 @@ def _render_project_pilot_report_markdown(
     primary = cockpit.primary_next_action or {}
     lines.append(f"- {primary.get('label', 'No primary action')}: {primary.get('reason', '')}")
     return "\n".join(lines).strip() + "\n"
+
+
+def _compare_project_pilot_report_snapshots(
+    baseline: ResearchBrief,
+    candidate: ResearchBrief,
+) -> dict[str, Any]:
+    baseline_summary = baseline.summary_json or {}
+    candidate_summary = candidate.summary_json or {}
+    risk_delta = _pilot_report_list_delta(
+        "risks",
+        baseline_summary.get("risks") or [],
+        candidate_summary.get("risks") or [],
+    )
+    next_action_delta = _pilot_report_list_delta(
+        "next_actions",
+        baseline_summary.get("next_actions") or [],
+        candidate_summary.get("next_actions") or [],
+    )
+    quick_action_delta = _pilot_report_list_delta(
+        "quick_actions",
+        _pilot_report_quick_action_labels(baseline_summary.get("quick_actions") or []),
+        _pilot_report_quick_action_labels(candidate_summary.get("quick_actions") or []),
+    )
+    comparison = {
+        "baseline_snapshot_id": baseline.id,
+        "candidate_snapshot_id": candidate.id,
+        "baseline_title": baseline.title,
+        "candidate_title": candidate.title,
+        "status_change": {
+            "report_status": {
+                "baseline": baseline_summary.get("report_status", ""),
+                "candidate": candidate_summary.get("report_status", ""),
+            },
+            "readiness_level": {
+                "baseline": baseline_summary.get("readiness_level", ""),
+                "candidate": candidate_summary.get("readiness_level", ""),
+            },
+            "cockpit_phase": {
+                "baseline": baseline_summary.get("cockpit_phase", ""),
+                "candidate": candidate_summary.get("cockpit_phase", ""),
+            },
+        },
+        "metric_delta": _pilot_report_metric_delta(
+            baseline_summary.get("key_metrics") or {},
+            candidate_summary.get("key_metrics") or {},
+        ),
+        **risk_delta,
+        **next_action_delta,
+        **quick_action_delta,
+    }
+    comparison["summary"] = (
+        "Compared pilot report snapshots: "
+        f"{len(comparison['added_risks'])} risks added, "
+        f"{len(comparison['added_next_actions'])} next actions added, "
+        f"{len(comparison['added_quick_actions'])} quick actions added."
+    )
+    comparison["markdown_export"] = _render_project_pilot_report_snapshot_comparison_markdown(
+        comparison
+    )
+    return comparison
+
+
+def _pilot_report_metric_delta(
+    baseline_metrics: dict[str, Any],
+    candidate_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    delta: dict[str, Any] = {}
+    for key in sorted(set(baseline_metrics) | set(candidate_metrics)):
+        baseline_value = baseline_metrics.get(key)
+        candidate_value = candidate_metrics.get(key)
+        if baseline_value == candidate_value:
+            continue
+        item = {"baseline": baseline_value, "candidate": candidate_value}
+        if isinstance(baseline_value, (int, float)) and isinstance(candidate_value, (int, float)):
+            item["delta"] = candidate_value - baseline_value
+        delta[key] = item
+    return delta
+
+
+def _pilot_report_list_delta(
+    prefix: str,
+    baseline_items: list[str],
+    candidate_items: list[str],
+) -> dict[str, list[str]]:
+    baseline = _ordered_string_map(baseline_items)
+    candidate = _ordered_string_map(candidate_items)
+    return {
+        f"added_{prefix}": [item for key, item in candidate.items() if key not in baseline],
+        f"removed_{prefix}": [item for key, item in baseline.items() if key not in candidate],
+        f"kept_{prefix}": [item for key, item in candidate.items() if key in baseline],
+    }
+
+
+def _ordered_string_map(items: list[str]) -> dict[str, str]:
+    ordered: dict[str, str] = {}
+    for item in items:
+        clean = " ".join(str(item).split())
+        key = clean.lower()
+        if clean and key not in ordered:
+            ordered[key] = clean
+    return ordered
+
+
+def _pilot_report_quick_action_labels(actions: list) -> list[str]:
+    labels = []
+    for action in actions:
+        if not isinstance(action, dict):
+            labels.append(" ".join(str(action).split()))
+            continue
+        label = str(action.get("label") or "Action").strip()
+        method = str(action.get("method") or "GET").strip()
+        path = str(action.get("path") or "").strip()
+        if path:
+            labels.append(f"{label} ({method} {path})")
+        else:
+            labels.append(label)
+    return labels
+
+
+def _render_project_pilot_report_snapshot_comparison_markdown(
+    comparison: dict[str, Any],
+) -> str:
+    lines = [
+        "# Project Pilot Report Snapshot Comparison",
+        "",
+        f"- Baseline: `{comparison['baseline_snapshot_id']}` {comparison['baseline_title']}",
+        f"- Candidate: `{comparison['candidate_snapshot_id']}` {comparison['candidate_title']}",
+        f"- Summary: {comparison['summary']}",
+        "",
+        "## Status Change",
+        "",
+    ]
+    for key, value in (comparison.get("status_change") or {}).items():
+        lines.append(f"- {key}: `{value.get('baseline', '')}` -> `{value.get('candidate', '')}`")
+    lines.extend(["", "## Metric Delta", ""])
+    if comparison.get("metric_delta"):
+        for key, value in comparison["metric_delta"].items():
+            suffix = f", delta={value['delta']}" if "delta" in value else ""
+            lines.append(
+                f"- {key}: `{value.get('baseline')}` -> `{value.get('candidate')}`{suffix}"
+            )
+    else:
+        lines.append("- No key metric changed.")
+    lines.extend(["", "## Risk Changes", ""])
+    _append_pilot_report_change_group(lines, "Added", comparison.get("added_risks") or [])
+    _append_pilot_report_change_group(lines, "Removed", comparison.get("removed_risks") or [])
+    _append_pilot_report_change_group(lines, "Kept", comparison.get("kept_risks") or [])
+    lines.extend(["", "## Next Action Changes", ""])
+    _append_pilot_report_change_group(
+        lines,
+        "Added",
+        comparison.get("added_next_actions") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Removed",
+        comparison.get("removed_next_actions") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Kept",
+        comparison.get("kept_next_actions") or [],
+    )
+    lines.extend(["", "## Quick Action Changes", ""])
+    _append_pilot_report_change_group(
+        lines,
+        "Added",
+        comparison.get("added_quick_actions") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Removed",
+        comparison.get("removed_quick_actions") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Kept",
+        comparison.get("kept_quick_actions") or [],
+    )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _append_pilot_report_change_group(
+    lines: list[str],
+    label: str,
+    items: list[str],
+) -> None:
+    lines.append(f"### {label}")
+    if not items:
+        lines.append("- None.")
+        return
+    lines.extend(f"- {item}" for item in items)
 
 
 def _get_project_pilot_report_snapshot_or_404(
