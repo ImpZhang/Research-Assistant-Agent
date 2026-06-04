@@ -21,6 +21,7 @@ const state = {
   latestTriageSnapshotId: "",
   latestResearchPlanId: "",
   researchProfile: null,
+  onboardingReadiness: null,
   pollTimer: null,
 };
 
@@ -169,6 +170,34 @@ async function checkHealth() {
     setConnection(true, `${body.service} ready`);
   } catch (error) {
     setConnection(false, error.message);
+  }
+}
+
+async function loadOnboardingReadiness(previewMarkdown = false) {
+  renderResult("onboardingResult", "Checking onboarding readiness...", "warn");
+  try {
+    const body = await api("/research/onboarding/readiness");
+    state.onboardingReadiness = body;
+    if (previewMarkdown) {
+      $("dossierPreview").textContent = body.markdown_export || "";
+    }
+    const score = Math.round((body.readiness_score || 0) * 100);
+    const checklist = renderList(
+      "Checklist",
+      body.checklist || [],
+      (item) => `${String(item.status).toUpperCase()} ${item.label}: ${item.detail}`,
+    );
+    const actions = renderList(
+      "Recommended actions",
+      body.recommended_actions || [],
+      (action) => action,
+    );
+    renderResult(
+      "onboardingResult",
+      `Readiness <code>${escapeHtml(body.readiness_level)}</code> ${score}%. Required ${body.required_done}/${body.required_total}; missing ${body.missing_required.length}.<br />${checklist}${actions}`,
+    );
+  } catch (error) {
+    renderResult("onboardingResult", escapeHtml(error.message), "error");
   }
 }
 
@@ -1891,6 +1920,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("profileForm").addEventListener("submit", saveResearchProfile);
   $("saveApiKeyButton").addEventListener("click", saveApiKey);
   $("clearApiKeyButton").addEventListener("click", clearApiKey);
+  $("onboardingButton").addEventListener("click", () => loadOnboardingReadiness(false));
+  $("onboardingMarkdownButton").addEventListener("click", () => loadOnboardingReadiness(true));
   $("apiKeyInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();

@@ -1198,6 +1198,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/export/project-bundle` produces an `application/zip` handoff package for the whole project. It includes project triage brief, persisted triage snapshots, latest triage snapshot comparison, project progress overview, readiness overview, quality gate overview, opportunity radar, claim validation queue, recent task board state, persisted advisor briefs, research execution plans, plan progress reports, and JSON metadata. The bundle writes `06-claim-validation-queue.md` plus `metadata/claim-validation-queue.json`, and exposes queue counts, critical/high counts, priority buckets, and support-level buckets in `metadata/manifest.json`. It is the project-level counterpart to idea bundle export, meant for backups, advisor meetings, and downstream MCP/agent handoff.
 
+`/onboarding/readiness` is the first-run customer pilot readiness gate. It is read-only and does not create new database tables: the route reads `ResearchProfile`, `Paper`, `Evidence`, `Idea`, `ResearchTask`, `TaskBoardSnapshot`, `ResearchBrief`, `ResearchPlanSnapshot`, `Job`, plus runtime settings such as API-key auth, MCP, and GraphRAG-lite. The response returns required and optional checklist items, readiness score/level, missing required checks, quick actions with method/path mapping, project metrics, and a Markdown report. This endpoint sits before project cockpit: onboarding answers whether the pilot is prepared, while cockpit answers how to drive an already-running project.
+
 `/briefs` 将项目级或 idea-set 状态保存为 `ResearchBrief` artifact，包含 idea list、recent experiment decisions、highest-priority open tasks、discussion prompts 和 Markdown export。它还会读取包含这些 ideas 的 research execution plans，汇总 plan task count/open/blocked/completion ratio，并加入 latest proposal review / decision memo signals、latest evidence ledger signals、claim validation queue signals、claim validation task signals、claim validation result signals、project triage / quality gate / opportunity / readiness task signals，以及 latest triage snapshot comparison。它是组会、导师沟通和后续 MCP 报告导出的稳定快照。
 
 `/tools/manifest` 是 runtime-neutral tool registry：返回 tool name、method/path、input/output schema 和 side-effect 标记。它不要求当前服务直接运行 MCP server，但为后续 MCP adapter、DeerFlow graph node 或自研 planner 提供同一份能力契约，避免外部编排层把 FastAPI 路由写死。
@@ -1283,6 +1285,7 @@ GET  /research/tools/mcp-spec
 GET  /research/profile
 PUT  /research/profile
 GET  /research/profile/export/markdown
+GET  /research/onboarding/readiness
 GET  /research/export/project-bundle
 POST /research/briefs
 GET  /research/briefs

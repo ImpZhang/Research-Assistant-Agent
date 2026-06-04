@@ -125,6 +125,8 @@ from backend.research.schemas import (
     ProjectQualityGateTaskGenerateRequest,
     ProjectCockpitResponse,
     ProjectCockpitTaskGenerateRequest,
+    ProjectOnboardingChecklistItem,
+    ProjectOnboardingReadinessResponse,
     ProjectReadinessOverviewResponse,
     ProjectStatus,
     ProjectTriageBriefResponse,
@@ -268,6 +270,7 @@ def status() -> ProjectStatus:
             "claim_validation_result_decision_signals",
             "claim_validation_result_ranking_adjustments",
             "project_progress_overview",
+            "project_onboarding_readiness",
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
             "project_advisor_chat",
@@ -649,6 +652,16 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/progress/overview",
             output_model="ResearchOverviewResponse",
+        ),
+        ToolManifestItem(
+            name="get_project_onboarding_readiness",
+            description=(
+                "Summarize first-run pilot readiness, setup gaps, "
+                "and customer onboarding next actions."
+            ),
+            method="GET",
+            path="/research/onboarding/readiness",
+            output_model="ProjectOnboardingReadinessResponse",
         ),
         ToolManifestItem(
             name="get_project_cockpit",
@@ -1276,6 +1289,52 @@ def _render_research_overview_markdown(
     lines.extend(["", "## Recommended Actions", ""])
     lines.extend(f"- {action}" for action in recommended_actions)
     return "\n".join(lines).strip() + "\n"
+
+
+@router.get(
+    "/onboarding/readiness",
+    response_model=ProjectOnboardingReadinessResponse,
+)
+def get_project_onboarding_readiness(
+    session: Session = Depends(get_session),
+) -> ProjectOnboardingReadinessResponse:
+    generated_at = datetime.now(timezone.utc)
+    profile = ResearchProfileService(session).get_profile()
+    metrics = _project_onboarding_metrics(session)
+    checklist = _project_onboarding_checklist(profile, metrics)
+    required_items = [item for item in checklist if item.required]
+    required_done = sum(1 for item in required_items if item.status == "done")
+    required_total = len(required_items)
+    readiness_score = round(required_done / required_total, 4) if required_total else 1.0
+    missing_required = [item.label for item in required_items if item.status != "done"]
+    recommended_actions = _project_onboarding_recommended_actions(checklist)
+    quick_actions = _project_onboarding_quick_actions(checklist)
+    readiness_level = _project_onboarding_readiness_level(readiness_score, metrics)
+    markdown_export = _render_project_onboarding_markdown(
+        generated_at=generated_at,
+        readiness_score=readiness_score,
+        readiness_level=readiness_level,
+        required_done=required_done,
+        required_total=required_total,
+        missing_required=missing_required,
+        checklist=checklist,
+        recommended_actions=recommended_actions,
+        metrics=metrics,
+    )
+    return ProjectOnboardingReadinessResponse(
+        generated_at=generated_at,
+        readiness_score=readiness_score,
+        readiness_level=readiness_level,
+        required_done=required_done,
+        required_total=required_total,
+        missing_required=missing_required,
+        checklist=checklist,
+        recommended_actions=recommended_actions,
+        quick_actions=quick_actions,
+        project_metrics=metrics,
+        markdown_export=markdown_export,
+        message="Built customer onboarding readiness from current project setup signals.",
+    )
 
 
 @router.get("/cockpit", response_model=ProjectCockpitResponse)
@@ -2122,6 +2181,246 @@ def _project_cockpit_action(
         "enabled": enabled,
         "reason": reason,
     }
+
+
+def _project_onboarding_metrics(session: Session) -> dict[str, Any]:
+    open_statuses = ["todo", "doing", "blocked"]
+    return {
+        "profile_configured": False,
+        "paper_count": session.query(Paper).count(),
+        "evidence_count": session.query(Evidence).count(),
+        "paper_card_count": session.query(PaperCard).count(),
+        "gap_count": session.query(ResearchGap).count(),
+        "idea_count": session.query(Idea).count(),
+        "task_count": session.query(ResearchTask).count(),
+        "open_task_count": session.query(ResearchTask)
+        .filter(ResearchTask.status.in_(open_statuses))
+        .count(),
+        "blocked_task_count": session.query(ResearchTask)
+        .filter(ResearchTask.status == "blocked")
+        .count(),
+        "task_board_snapshot_count": session.query(TaskBoardSnapshot).count(),
+        "brief_count": session.query(ResearchBrief).count(),
+        "research_plan_count": session.query(ResearchPlanSnapshot).count(),
+        "project_bundle_ready": False,
+        "job_count": session.query(Job).count(),
+        "completed_job_count": session.query(Job).filter(Job.status == "completed").count(),
+        "api_key_auth_enabled": settings.api_key_auth_enabled,
+        "mcp_enabled": settings.mcp_enabled,
+        "graph_rag_lite_enabled": settings.graph_rag_lite_enabled,
+    }
+
+
+def _project_onboarding_checklist(
+    profile: ResearchProfile | None,
+    metrics: dict[str, Any],
+) -> list[ProjectOnboardingChecklistItem]:
+    profile_ready = _project_cockpit_profile_ready(profile)
+    metrics["profile_configured"] = profile_ready
+    metrics["project_bundle_ready"] = bool(metrics["idea_count"] and metrics["task_count"])
+    return [
+        ProjectOnboardingChecklistItem(
+            id="profile",
+            label="Research profile configured",
+            status="done" if profile_ready else "todo",
+            detail=(
+                "Research domains, questions, venues, methods, or constraints are configured."
+                if profile_ready
+                else "Set the research direction, constraints, target venues, and ranking preferences."
+            ),
+            action_label="Edit profile",
+            action_method="PUT",
+            action_path="/research/profile",
+        ),
+        ProjectOnboardingChecklistItem(
+            id="paper_ingest",
+            label="Literature and evidence indexed",
+            status="done" if metrics["paper_count"] and metrics["evidence_count"] else "todo",
+            detail=(
+                f"{metrics['paper_count']} papers and {metrics['evidence_count']} evidence "
+                "records are available."
+                if metrics["paper_count"] and metrics["evidence_count"]
+                else "Upload at least one paper so the assistant has evidence to reason over."
+            ),
+            action_label="Upload paper",
+            action_method="POST",
+            action_path="/research/papers/upload",
+        ),
+        ProjectOnboardingChecklistItem(
+            id="workflow",
+            label="First literature-to-ideas workflow run",
+            status="done" if metrics["idea_count"] else "todo",
+            detail=(
+                f"{metrics['idea_count']} ideas have been generated."
+                if metrics["idea_count"]
+                else "Run the workflow after upload to generate gaps, ideas, reviews, and plans."
+            ),
+            action_label="Run workflow",
+            action_method="POST",
+            action_path="/research/workflows/literature-to-ideas/async",
+        ),
+        ProjectOnboardingChecklistItem(
+            id="task_board",
+            label="Task board seeded",
+            status="done" if metrics["task_count"] else "todo",
+            detail=(
+                f"{metrics['task_count']} tasks exist, including {metrics['open_task_count']} open tasks."
+                if metrics["task_count"]
+                else "Generate task-board work from readiness, quality gates, cockpit, or advisor output."
+            ),
+            action_label="Open tasks",
+            action_method="GET",
+            action_path="/research/tasks",
+        ),
+        ProjectOnboardingChecklistItem(
+            id="bundle_export",
+            label="Project handoff bundle ready",
+            status="done" if metrics["project_bundle_ready"] else "todo",
+            detail=(
+                "Project bundle has the minimum idea and task context needed for handoff."
+                if metrics["project_bundle_ready"]
+                else "Create at least one idea and task before exporting a credible project bundle."
+            ),
+            action_label="Export project bundle",
+            action_method="GET",
+            action_path="/research/export/project-bundle",
+        ),
+        ProjectOnboardingChecklistItem(
+            id="advisor_loop",
+            label="Advisor loop exercised",
+            status=(
+                "done"
+                if metrics["task_board_snapshot_count"] or metrics["brief_count"]
+                else ("warning" if metrics["idea_count"] else "todo")
+            ),
+            detail=(
+                "Advisor artifacts or task-board snapshots are available."
+                if metrics["task_board_snapshot_count"] or metrics["brief_count"]
+                else "Run an advisor action session once the first idea exists."
+            ),
+            required=False,
+            action_label="Run action session",
+            action_method="POST",
+            action_path="/research/advisor/action-session",
+        ),
+        ProjectOnboardingChecklistItem(
+            id="pilot_security",
+            label="Pilot API key guard",
+            status="done" if settings.api_key_auth_enabled else "warning",
+            detail=(
+                "API key protection is enabled for /research/* routes."
+                if settings.api_key_auth_enabled
+                else "Enable API_KEY_AUTH_ENABLED=true before exposing a customer pilot."
+            ),
+            required=False,
+            action_label="Read deployment guide",
+            action_method="DOCS",
+            action_path="docs/deployment.md",
+        ),
+        ProjectOnboardingChecklistItem(
+            id="mcp_bridge",
+            label="MCP bridge path",
+            status="done" if settings.mcp_enabled else "warning",
+            detail=(
+                "MCP bridge is enabled and can expose the research tool manifest."
+                if settings.mcp_enabled
+                else "MCP can remain off for the first pilot, but the manifest and bridge spec exist."
+            ),
+            required=False,
+            action_label="Open tool manifest",
+            action_method="GET",
+            action_path="/research/tools/manifest",
+        ),
+    ]
+
+
+def _project_onboarding_recommended_actions(
+    checklist: list[ProjectOnboardingChecklistItem],
+) -> list[str]:
+    actions: list[str] = []
+    for item in checklist:
+        if item.status == "done":
+            continue
+        prefix = "Required" if item.required else "Optional"
+        actions.append(f"{prefix}: {item.label}. {item.detail}")
+    return actions[:8]
+
+
+def _project_onboarding_quick_actions(
+    checklist: list[ProjectOnboardingChecklistItem],
+) -> list[dict[str, Any]]:
+    quick_actions: list[dict[str, Any]] = []
+    for item in checklist:
+        if not item.action_label or not item.action_path:
+            continue
+        quick_actions.append(
+            {
+                "id": item.id,
+                "label": item.action_label,
+                "method": item.action_method,
+                "path": item.action_path,
+                "enabled": item.status != "done",
+                "reason": item.detail,
+                "status": item.status,
+                "required": item.required,
+            }
+        )
+    return quick_actions
+
+
+def _project_onboarding_readiness_level(
+    readiness_score: float,
+    metrics: dict[str, Any],
+) -> str:
+    if readiness_score >= 1.0 and metrics["project_bundle_ready"]:
+        return "pilot_ready"
+    if readiness_score >= 0.8:
+        return "nearly_ready"
+    if readiness_score >= 0.5:
+        return "in_progress"
+    return "not_ready"
+
+
+def _render_project_onboarding_markdown(
+    *,
+    generated_at: datetime,
+    readiness_score: float,
+    readiness_level: str,
+    required_done: int,
+    required_total: int,
+    missing_required: list[str],
+    checklist: list[ProjectOnboardingChecklistItem],
+    recommended_actions: list[str],
+    metrics: dict[str, Any],
+) -> str:
+    lines = [
+        "# Project Onboarding Readiness",
+        "",
+        f"- Generated at: {generated_at.isoformat()}",
+        f"- Readiness level: `{readiness_level}`",
+        f"- Readiness score: {readiness_score:.0%}",
+        f"- Required checks: {required_done}/{required_total}",
+        "",
+        "## Missing Required Checks",
+        "",
+    ]
+    if missing_required:
+        lines.extend(f"- {item}" for item in missing_required)
+    else:
+        lines.append("- None.")
+    lines.extend(["", "## Checklist", ""])
+    for item in checklist:
+        required = "required" if item.required else "optional"
+        lines.append(f"- [{item.status}] {item.label} ({required}): {item.detail}")
+    lines.extend(["", "## Recommended Actions", ""])
+    if recommended_actions:
+        lines.extend(f"- {action}" for action in recommended_actions)
+    else:
+        lines.append("- Project is ready for a guided pilot handoff.")
+    lines.extend(["", "## Project Metrics", ""])
+    for key in sorted(metrics):
+        lines.append(f"- {key}: {metrics[key]}")
+    return "\n".join(lines).strip() + "\n"
 
 
 def _project_cockpit_quick_actions(

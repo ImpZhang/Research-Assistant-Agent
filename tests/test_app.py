@@ -114,6 +114,7 @@ def test_research_status() -> None:
     assert "claim_validation_result_tracking" in body["implemented_capabilities"]
     assert "claim_validation_result_decision_signals" in body["implemented_capabilities"]
     assert "claim_validation_result_ranking_adjustments" in body["implemented_capabilities"]
+    assert "project_onboarding_readiness" in body["implemented_capabilities"]
     assert "project_cockpit_dashboard" in body["implemented_capabilities"]
     assert "project_cockpit_task_generation" in body["implemented_capabilities"]
     assert "project_advisor_chat" in body["implemented_capabilities"]
@@ -146,6 +147,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_tasks_from_research_plan" in names
     assert "get_research_plan_progress" in names
     assert "get_project_progress_overview" in names
+    assert "get_project_onboarding_readiness" in names
     assert "get_project_cockpit" in names
     assert "export_project_cockpit_markdown" in names
     assert "create_tasks_from_project_cockpit" in names
@@ -459,6 +461,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "apiKeyInput" in response.text
     assert "saveApiKeyButton" in response.text
     assert "clearApiKeyButton" in response.text
+    assert "onboardingButton" in response.text
+    assert "onboardingMarkdownButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -467,6 +471,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "X-Research-Assistant-Key" in script.text
     assert "withAuthHeaders" in script.text
     assert "downloadWithAuth" in script.text
+    assert "/research/onboarding/readiness" in script.text
+    assert "loadOnboardingReadiness" in script.text
     assert "/research/profile/export/markdown" in script.text
     assert "saveResearchProfile" in script.text
     assert "/research/plans" in script.text
@@ -540,6 +546,55 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/rank" in script.text
     assert "/research/ideas/rank/export/markdown" in script.text
     assert "/research/ideas/portfolios" in script.text
+
+
+def test_project_onboarding_readiness_tracks_first_run_and_upload() -> None:
+    client = TestClient(create_app())
+    initial = client.get("/research/onboarding/readiness")
+    assert initial.status_code == 200
+    initial_body = initial.json()
+    assert "# Project Onboarding Readiness" in initial_body["markdown_export"]
+    assert initial_body["required_total"] >= 5
+    assert 0 <= initial_body["readiness_score"] <= 1
+    assert {item["id"] for item in initial_body["checklist"]} >= {
+        "profile",
+        "paper_ingest",
+        "workflow",
+        "task_board",
+        "bundle_export",
+        "pilot_security",
+        "mcp_bridge",
+    }
+
+    marker = f"onboarding-readiness-{time.time_ns()}"
+    content = f"""Onboarding Readiness Test {marker}
+
+Abstract
+This paper gives the customer onboarding readiness endpoint evidence to count.
+
+Method
+The assistant indexes sections, chunks, and evidence records for pilot setup.
+
+Conclusion
+Future work should run the first literature-to-ideas workflow.
+""".encode()
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("onboarding_readiness.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+
+    after = client.get("/research/onboarding/readiness")
+    assert after.status_code == 200
+    after_body = after.json()
+    checklist = {item["id"]: item for item in after_body["checklist"]}
+    assert checklist["paper_ingest"]["status"] == "done"
+    assert (
+        after_body["project_metrics"]["paper_count"]
+        >= initial_body["project_metrics"]["paper_count"]
+    )
+    assert after_body["quick_actions"]
+    assert any(action["id"] == "workflow" for action in after_body["quick_actions"])
 
 
 def test_upload_text_paper() -> None:

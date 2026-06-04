@@ -18,6 +18,7 @@
         </div>
 
         <nav class="nav-list" aria-label="Workbench sections">
+          <a href="#onboarding">Onboarding</a>
           <a href="#ingest">Ingest</a>
           <a href="#workflow">Workflow</a>
           <a href="#profile">Profile</a>
@@ -50,6 +51,18 @@
             <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API Docs</a>
           </div>
         </header>
+
+        <section id="onboarding" class="band">
+          <div class="section-heading">
+            <h3>Onboarding</h3>
+            <p>Check pilot setup, missing inputs, and first customer-facing actions.</p>
+          </div>
+          <div class="controls-grid">
+            <button id="onboardingButton" type="button">Check Readiness</button>
+            <button id="onboardingMarkdownButton" type="button">Preview Report</button>
+          </div>
+          <div id="onboardingResult" class="result-block muted">No onboarding check yet.</div>
+        </section>
 
         <section id="ingest" class="band">
           <div class="section-heading">

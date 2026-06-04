@@ -921,6 +921,32 @@ class ProjectCockpitResponse(BaseModel):
     message: str
 
 
+class ProjectOnboardingChecklistItem(BaseModel):
+    id: str
+    label: str
+    status: Literal["done", "todo", "warning"] = "todo"
+    detail: str = ""
+    required: bool = True
+    action_label: str = ""
+    action_method: str = "GET"
+    action_path: str = ""
+
+
+class ProjectOnboardingReadinessResponse(BaseModel):
+    generated_at: datetime
+    readiness_score: float = 0.0
+    readiness_level: str = "not_ready"
+    required_done: int = 0
+    required_total: int = 0
+    missing_required: list[str] = Field(default_factory=list)
+    checklist: list[ProjectOnboardingChecklistItem] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+    quick_actions: list[dict[str, Any]] = Field(default_factory=list)
+    project_metrics: dict[str, Any] = Field(default_factory=dict)
+    markdown_export: str = ""
+    message: str
+
+
 class ProjectCockpitTaskGenerateRequest(BaseModel):
     limit: int = Field(default=8, ge=1, le=20)
     include_primary_action: bool = True

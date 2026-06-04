@@ -1063,6 +1063,8 @@ MCP bridge 需要提供最小托管控制：支持 read-only mode、allow/deny t
 
 Workbench 需要配套 API key 输入、保存和清除能力：客户在浏览器中保存 key 后，所有 `/research/*` 请求自动携带认证 header，避免“后端已开启保护但前端无法使用”的试点断点。
 
+系统需要提供 project onboarding readiness，作为客户第一次进入系统时的准备度检查：聚合 research profile、paper/evidence ingestion、first workflow、task board、project bundle、advisor loop、API key guard 和 MCP bridge setup，输出 readiness score、required checks、missing required checks、recommended actions、quick actions 和 Markdown report。它回答“现在能不能交给客户试用、还差哪几步”，而不是替代后续 project cockpit。
+
 系统需要保存研究者画像/项目约束：包括 primary domains、active research questions、target venues、methodological preferences、resource constraints、risk tolerance、negative preferences 和 ranking weights。ranking、advisor brief、后续 planner 应优先读取这份画像，避免生成“看起来不错但不适合当前资源和投稿目标”的 idea。
 
 系统需要提供 research execution plan snapshot：把 profile、ranked ideas、open/blocked tasks 聚合成 7/14/30 天行动计划，包含 phases、task ids、success checks、source ids 和 Markdown 导出。它回答“接下来一到两周具体做什么”，而不是只输出静态报告。

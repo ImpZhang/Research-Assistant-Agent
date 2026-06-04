@@ -170,6 +170,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project quality gate overview")
     if "project_quality_gate_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project quality gate task generation")
+    if "project_onboarding_readiness" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project onboarding readiness")
     if "project_cockpit_dashboard" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project cockpit dashboard")
     if "project_cockpit_task_generation" not in status["implemented_capabilities"]:
@@ -282,6 +284,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include research plan progress tool")
     if "get_project_progress_overview" not in manifest_names:
         raise RuntimeError("tool manifest did not include project progress overview tool")
+    if "get_project_onboarding_readiness" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project onboarding readiness tool")
     if "get_project_cockpit" not in manifest_names:
         raise RuntimeError("tool manifest did not include project cockpit tool")
     if "export_project_cockpit_markdown" not in manifest_names:
@@ -377,6 +381,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool bridge spec did not include idea bundle export")
     if research_profile["id"] != "default":
         raise RuntimeError("research profile endpoint did not return the default profile")
+    if "onboardingButton" not in workbench:
+        raise RuntimeError("workbench did not include the onboarding readiness button")
+    if "onboardingMarkdownButton" not in workbench:
+        raise RuntimeError("workbench did not include the onboarding markdown button")
     if "cockpitButton" not in workbench:
         raise RuntimeError("workbench did not include the project cockpit button")
     if "advisorChatForm" not in workbench:
@@ -392,6 +400,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if bundle_bridge["input_schema"]["required"] != ["idea_id"]:
         raise RuntimeError("tool bridge spec did not expose idea_id as the bundle input")
+    onboarding_start = require_ok(
+        client.get("/research/onboarding/readiness"),
+        "project onboarding readiness",
+    )
+    if "Project Onboarding Readiness" not in onboarding_start["markdown_export"]:
+        raise RuntimeError("project onboarding readiness markdown did not include title")
+    if not onboarding_start["checklist"]:
+        raise RuntimeError("project onboarding readiness did not include checklist")
 
     upload = require_ok(
         client.post(
@@ -1185,6 +1201,18 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "Project Cockpit" not in cockpit_markdown:
         raise RuntimeError("project cockpit markdown export did not include title")
+    onboarding_after_workflow = require_ok(
+        client.get("/research/onboarding/readiness"),
+        "project onboarding readiness after workflow",
+    )
+    if onboarding_after_workflow["project_metrics"].get("paper_count", 0) < 1:
+        raise RuntimeError("project onboarding readiness did not include indexed papers")
+    if onboarding_after_workflow["project_metrics"].get("idea_count", 0) < 1:
+        raise RuntimeError("project onboarding readiness did not include ideas")
+    if onboarding_after_workflow["required_total"] < 5:
+        raise RuntimeError("project onboarding readiness did not include required checks")
+    if not onboarding_after_workflow["quick_actions"]:
+        raise RuntimeError("project onboarding readiness did not include quick actions")
     advisor_chat = require_ok(
         client.post(
             "/research/advisor/chat",
@@ -1887,6 +1915,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "tool_bridge_count": len(tool_bridge["tools"]),
         "research_profile_name": research_profile["name"],
         "workbench_available": "Research Assistant Workbench" in workbench,
+        "onboarding_start_level": onboarding_start["readiness_level"],
+        "onboarding_readiness_level": onboarding_after_workflow["readiness_level"],
+        "onboarding_score": onboarding_after_workflow["readiness_score"],
+        "onboarding_missing_required_count": len(onboarding_after_workflow["missing_required"]),
         "paper_id": paper_id,
         "literature_result_count": len(literature["items"]),
         "literature_external_status": literature["external_status"],
