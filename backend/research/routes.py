@@ -127,6 +127,8 @@ from backend.research.schemas import (
     ProjectCockpitTaskGenerateRequest,
     ProjectOnboardingChecklistItem,
     ProjectOnboardingReadinessResponse,
+    ProjectSetupWizardRequest,
+    ProjectSetupWizardResponse,
     ProjectReadinessOverviewResponse,
     ProjectStatus,
     ProjectTriageBriefResponse,
@@ -271,6 +273,7 @@ def status() -> ProjectStatus:
             "claim_validation_result_ranking_adjustments",
             "project_progress_overview",
             "project_onboarding_readiness",
+            "project_onboarding_setup_wizard",
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
             "project_advisor_chat",
@@ -662,6 +665,18 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/onboarding/readiness",
             output_model="ProjectOnboardingReadinessResponse",
+        ),
+        ToolManifestItem(
+            name="run_project_setup_wizard",
+            description=(
+                "Save the first-run research profile setup and return updated "
+                "onboarding readiness with next actions."
+            ),
+            method="POST",
+            path="/research/onboarding/setup",
+            input_model="ProjectSetupWizardRequest",
+            output_model="ProjectSetupWizardResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_project_cockpit",
@@ -1334,6 +1349,43 @@ def get_project_onboarding_readiness(
         project_metrics=metrics,
         markdown_export=markdown_export,
         message="Built customer onboarding readiness from current project setup signals.",
+    )
+
+
+@router.post(
+    "/onboarding/setup",
+    response_model=ProjectSetupWizardResponse,
+)
+def run_project_setup_wizard(
+    payload: ProjectSetupWizardRequest,
+    session: Session = Depends(get_session),
+) -> ProjectSetupWizardResponse:
+    generated_at = datetime.now(timezone.utc)
+    profile_payload = _project_setup_profile_payload(payload)
+    profile = ResearchProfileService(session).update_profile(profile_payload)
+    profile_read = _serialize_research_profile(profile)
+    readiness = get_project_onboarding_readiness(session=session)
+    recommended_next_steps = _project_setup_recommended_next_steps(readiness)
+    quick_actions = [
+        action
+        for action in readiness.quick_actions
+        if action.get("enabled") or action.get("id") in {"paper_ingest", "workflow", "task_board"}
+    ][:6]
+    markdown_export = _render_project_setup_wizard_markdown(
+        generated_at=generated_at,
+        profile=profile_read,
+        request=payload,
+        readiness=readiness,
+        recommended_next_steps=recommended_next_steps,
+    )
+    return ProjectSetupWizardResponse(
+        generated_at=generated_at,
+        profile=profile_read,
+        readiness=readiness,
+        recommended_next_steps=recommended_next_steps,
+        quick_actions=quick_actions,
+        markdown_export=markdown_export,
+        message="Saved project setup and refreshed onboarding readiness.",
     )
 
 
@@ -2181,6 +2233,98 @@ def _project_cockpit_action(
         "enabled": enabled,
         "reason": reason,
     }
+
+
+def _project_setup_profile_payload(
+    payload: ProjectSetupWizardRequest,
+) -> ResearchProfileUpdate:
+    note_blocks: list[str] = []
+    if payload.customer_context.strip():
+        note_blocks.extend(["Customer Context", payload.customer_context.strip()])
+    if payload.success_criteria:
+        note_blocks.extend(
+            [
+                "Success Criteria",
+                "\n".join(f"- {item}" for item in payload.success_criteria if item.strip()),
+            ]
+        )
+    if payload.first_milestone.strip():
+        note_blocks.extend(["First Milestone", payload.first_milestone.strip()])
+    if payload.notes.strip():
+        note_blocks.extend(["Research Notes", payload.notes.strip()])
+    return ResearchProfileUpdate(
+        name=payload.name or "Research Pilot",
+        primary_domains=payload.primary_domains,
+        active_questions=payload.active_questions,
+        target_venues=payload.target_venues,
+        methodological_preferences=payload.methodological_preferences,
+        resource_constraints=payload.resource_constraints,
+        risk_tolerance=payload.risk_tolerance,
+        timeline_horizon=payload.timeline_horizon,
+        negative_preferences=payload.negative_preferences,
+        evaluation_weights=payload.evaluation_weights,
+        notes="\n\n".join(block for block in note_blocks if block.strip()),
+        created_by=payload.created_by or "researcher",
+    )
+
+
+def _project_setup_recommended_next_steps(
+    readiness: ProjectOnboardingReadinessResponse,
+) -> list[str]:
+    missing = set(readiness.missing_required)
+    steps: list[str] = []
+    if "Literature and evidence indexed" in missing:
+        steps.append("Upload the first representative paper or research note.")
+    if "First literature-to-ideas workflow run" in missing:
+        steps.append("Run the literature-to-ideas workflow after the first upload.")
+    if "Task board seeded" in missing:
+        steps.append(
+            "Generate task-board work from readiness, quality gate, cockpit, or advisor output."
+        )
+    if "Project handoff bundle ready" in missing:
+        steps.append("Create at least one idea and task before exporting the project bundle.")
+    if not steps:
+        steps.append("Open project cockpit and decide the next execution focus.")
+    optional_actions = [
+        action for action in readiness.recommended_actions if action.startswith("Optional:")
+    ]
+    steps.extend(optional_actions[:2])
+    return _dedupe_strings(steps)[:6]
+
+
+def _render_project_setup_wizard_markdown(
+    *,
+    generated_at: datetime,
+    profile: ResearchProfileRead,
+    request: ProjectSetupWizardRequest,
+    readiness: ProjectOnboardingReadinessResponse,
+    recommended_next_steps: list[str],
+) -> str:
+    lines = [
+        "# Project Setup Wizard",
+        "",
+        f"- Generated at: {generated_at.isoformat()}",
+        f"- Profile: {profile.name}",
+        f"- Readiness level: `{readiness.readiness_level}`",
+        f"- Readiness score: {readiness.readiness_score:.0%}",
+        "",
+        "## Research Direction",
+        "",
+    ]
+    lines.extend(f"- Domain: {item}" for item in profile.primary_domains or ["Not specified."])
+    lines.extend(["", "## Active Questions", ""])
+    lines.extend(f"- {item}" for item in profile.active_questions or ["Not specified."])
+    lines.extend(["", "## Success Criteria", ""])
+    lines.extend(f"- {item}" for item in request.success_criteria or ["Not specified."])
+    lines.extend(["", "## First Milestone", "", request.first_milestone or "Not specified."])
+    lines.extend(["", "## Recommended Next Steps", ""])
+    lines.extend(f"- {step}" for step in recommended_next_steps)
+    lines.extend(["", "## Missing Required Checks", ""])
+    if readiness.missing_required:
+        lines.extend(f"- {item}" for item in readiness.missing_required)
+    else:
+        lines.append("- None.")
+    return "\n".join(lines).strip() + "\n"
 
 
 def _project_onboarding_metrics(session: Session) -> dict[str, Any]:

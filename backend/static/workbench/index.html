@@ -57,6 +57,55 @@
             <h3>Onboarding</h3>
             <p>Check pilot setup, missing inputs, and first customer-facing actions.</p>
           </div>
+          <form id="setupWizardForm" class="profile-grid">
+            <label>
+              Project
+              <input id="setupName" type="text" value="Research Pilot" />
+            </label>
+            <label>
+              Domains
+              <input id="setupDomains" type="text" placeholder="scientific agents, GraphRAG, evaluation" />
+            </label>
+            <label>
+              Target venues
+              <input id="setupVenues" type="text" placeholder="ACL, NeurIPS, CHI" />
+            </label>
+            <label>
+              Risk tolerance
+              <select id="setupRisk">
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <label class="wide-field">
+              Active questions
+              <textarea id="setupQuestions" rows="2">How can an evidence-grounded research assistant generate useful, testable ideas?</textarea>
+            </label>
+            <label class="wide-field">
+              Method preferences
+              <textarea id="setupMethods" rows="2">literature-grounded ideation, lightweight evaluation, task-board execution</textarea>
+            </label>
+            <label class="wide-field">
+              Resource constraints
+              <textarea id="setupConstraints" rows="2">limited GPU budget, reproducible local experiments, small pilot dataset</textarea>
+            </label>
+            <label>
+              Timeline
+              <input id="setupTimeline" type="text" placeholder="30 days" />
+            </label>
+            <label class="wide-field">
+              Success criteria
+              <textarea id="setupCriteria" rows="2">one credible research direction, one executable experiment plan, one advisor-ready report</textarea>
+            </label>
+            <label class="wide-field">
+              First milestone
+              <textarea id="setupMilestone" rows="2">Upload seed papers and run the first literature-to-ideas workflow.</textarea>
+            </label>
+            <div class="profile-actions">
+              <button id="setupWizardButton" type="submit">Save Setup</button>
+            </div>
+          </form>
           <div class="controls-grid">
             <button id="onboardingButton" type="button">Check Readiness</button>
             <button id="onboardingMarkdownButton" type="button">Preview Report</button>

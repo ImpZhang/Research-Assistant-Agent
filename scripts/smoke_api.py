@@ -172,6 +172,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project quality gate task generation")
     if "project_onboarding_readiness" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project onboarding readiness")
+    if "project_onboarding_setup_wizard" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project onboarding setup wizard")
     if "project_cockpit_dashboard" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project cockpit dashboard")
     if "project_cockpit_task_generation" not in status["implemented_capabilities"]:
@@ -286,6 +288,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project progress overview tool")
     if "get_project_onboarding_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include project onboarding readiness tool")
+    if "run_project_setup_wizard" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project setup wizard tool")
     if "get_project_cockpit" not in manifest_names:
         raise RuntimeError("tool manifest did not include project cockpit tool")
     if "export_project_cockpit_markdown" not in manifest_names:
@@ -385,6 +389,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workbench did not include the onboarding readiness button")
     if "onboardingMarkdownButton" not in workbench:
         raise RuntimeError("workbench did not include the onboarding markdown button")
+    if "setupWizardForm" not in workbench or "setupWizardButton" not in workbench:
+        raise RuntimeError("workbench did not include the project setup wizard")
     if "cockpitButton" not in workbench:
         raise RuntimeError("workbench did not include the project cockpit button")
     if "advisorChatForm" not in workbench:
@@ -400,6 +406,40 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if bundle_bridge["input_schema"]["required"] != ["idea_id"]:
         raise RuntimeError("tool bridge spec did not expose idea_id as the bundle input")
+    setup_wizard = require_ok(
+        client.post(
+            "/research/onboarding/setup",
+            json_body={
+                "name": "Smoke Research Pilot",
+                "primary_domains": ["research agents", "GraphRAG", "scientific ideation"],
+                "active_questions": [
+                    "How can an evidence-grounded assistant generate testable research ideas?"
+                ],
+                "target_venues": ["ACL", "NeurIPS"],
+                "methodological_preferences": [
+                    "literature-grounded ideation",
+                    "lightweight evaluation",
+                ],
+                "resource_constraints": ["limited GPU budget", "local reproducible experiments"],
+                "risk_tolerance": "medium",
+                "timeline_horizon": "30 days",
+                "success_criteria": [
+                    "advisor-ready report",
+                    "first executable experiment plan",
+                ],
+                "first_milestone": "Upload seed papers and run the first workflow.",
+                "created_by": "smoke_api",
+            },
+        ),
+        "project setup wizard",
+    )
+    if setup_wizard["profile"]["name"] != "Smoke Research Pilot":
+        raise RuntimeError("project setup wizard did not save the profile")
+    if "Project Setup Wizard" not in setup_wizard["markdown_export"]:
+        raise RuntimeError("project setup wizard markdown did not include title")
+    setup_checklist = {item["id"]: item for item in setup_wizard["readiness"]["checklist"]}
+    if setup_checklist["profile"]["status"] != "done":
+        raise RuntimeError("project setup wizard did not satisfy the profile readiness check")
     onboarding_start = require_ok(
         client.get("/research/onboarding/readiness"),
         "project onboarding readiness",
@@ -1913,8 +1953,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "phase": status["phase"],
         "tool_manifest_count": len(tool_manifest["tools"]),
         "tool_bridge_count": len(tool_bridge["tools"]),
-        "research_profile_name": research_profile["name"],
+        "research_profile_name": setup_wizard["profile"]["name"],
         "workbench_available": "Research Assistant Workbench" in workbench,
+        "setup_wizard_readiness_level": setup_wizard["readiness"]["readiness_level"],
+        "setup_wizard_next_step_count": len(setup_wizard["recommended_next_steps"]),
         "onboarding_start_level": onboarding_start["readiness_level"],
         "onboarding_readiness_level": onboarding_after_workflow["readiness_level"],
         "onboarding_score": onboarding_after_workflow["readiness_score"],

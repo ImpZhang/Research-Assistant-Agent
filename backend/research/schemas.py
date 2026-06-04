@@ -43,6 +43,12 @@ class ResearchProfileRead(BaseModel):
     updated_at: datetime | None = None
 
 
+class ProjectSetupWizardRequest(ResearchProfileUpdate):
+    customer_context: str = ""
+    success_criteria: list[str] = Field(default_factory=list)
+    first_milestone: str = ""
+
+
 class PaperCreate(BaseModel):
     title: str = ""
     authors: list[str] = Field(default_factory=list)
@@ -943,6 +949,16 @@ class ProjectOnboardingReadinessResponse(BaseModel):
     recommended_actions: list[str] = Field(default_factory=list)
     quick_actions: list[dict[str, Any]] = Field(default_factory=list)
     project_metrics: dict[str, Any] = Field(default_factory=dict)
+    markdown_export: str = ""
+    message: str
+
+
+class ProjectSetupWizardResponse(BaseModel):
+    generated_at: datetime
+    profile: ResearchProfileRead
+    readiness: ProjectOnboardingReadinessResponse
+    recommended_next_steps: list[str] = Field(default_factory=list)
+    quick_actions: list[dict[str, Any]] = Field(default_factory=list)
     markdown_export: str = ""
     message: str
 

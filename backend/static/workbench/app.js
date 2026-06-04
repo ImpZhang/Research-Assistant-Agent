@@ -215,6 +215,17 @@ function fillProfileForm(profile) {
   $("profileNotes").value = profile.notes || "";
 }
 
+function fillSetupWizardForm(profile) {
+  $("setupName").value = profile.name || "Research Pilot";
+  $("setupDomains").value = formatCsv(profile.primary_domains);
+  $("setupQuestions").value = formatCsv(profile.active_questions);
+  $("setupVenues").value = formatCsv(profile.target_venues);
+  $("setupMethods").value = formatCsv(profile.methodological_preferences);
+  $("setupConstraints").value = formatCsv(profile.resource_constraints);
+  $("setupRisk").value = profile.risk_tolerance || "medium";
+  $("setupTimeline").value = profile.timeline_horizon || "";
+}
+
 function profilePayload() {
   return {
     name: $("profileName").value.trim() || "Default Research Profile",
@@ -232,12 +243,33 @@ function profilePayload() {
   };
 }
 
+function setupWizardPayload() {
+  return {
+    name: $("setupName").value.trim() || "Research Pilot",
+    primary_domains: parseCsv($("setupDomains").value),
+    active_questions: parseCsv($("setupQuestions").value),
+    target_venues: parseCsv($("setupVenues").value),
+    methodological_preferences: parseCsv($("setupMethods").value),
+    resource_constraints: parseCsv($("setupConstraints").value),
+    risk_tolerance: $("setupRisk").value || "medium",
+    timeline_horizon: $("setupTimeline").value.trim(),
+    negative_preferences: [],
+    evaluation_weights: {},
+    customer_context: "Workbench pilot setup",
+    success_criteria: parseCsv($("setupCriteria").value),
+    first_milestone: $("setupMilestone").value.trim(),
+    notes: "",
+    created_by: "workbench",
+  };
+}
+
 async function loadResearchProfile() {
   renderResult("profileResult", "Loading research profile...", "warn");
   try {
     const body = await api("/research/profile");
     state.researchProfile = body;
     fillProfileForm(body);
+    fillSetupWizardForm(body);
     $("dossierPreview").textContent = body.markdown_export || "No profile markdown yet.";
     renderResult(
       "profileResult",
@@ -259,6 +291,7 @@ async function saveResearchProfile(event) {
     });
     state.researchProfile = body;
     fillProfileForm(body);
+    fillSetupWizardForm(body);
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "profileResult",
@@ -266,6 +299,30 @@ async function saveResearchProfile(event) {
     );
   } catch (error) {
     renderResult("profileResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function runProjectSetupWizard(event) {
+  event.preventDefault();
+  renderResult("onboardingResult", "Saving project setup...", "warn");
+  try {
+    const body = await api("/research/onboarding/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(setupWizardPayload()),
+    });
+    state.researchProfile = body.profile;
+    state.onboardingReadiness = body.readiness;
+    fillProfileForm(body.profile);
+    fillSetupWizardForm(body.profile);
+    $("dossierPreview").textContent = body.markdown_export;
+    const score = Math.round((body.readiness.readiness_score || 0) * 100);
+    renderResult(
+      "onboardingResult",
+      `${escapeHtml(body.message)} Readiness <code>${escapeHtml(body.readiness.readiness_level)}</code> ${score}%.<br />${renderList("Next steps", body.recommended_next_steps, (step) => step)}`,
+    );
+  } catch (error) {
+    renderResult("onboardingResult", escapeHtml(error.message), "error");
   }
 }
 
@@ -1917,6 +1974,7 @@ async function savePortfolio() {
 document.addEventListener("DOMContentLoaded", () => {
   $("uploadForm").addEventListener("submit", uploadPaper);
   $("runWorkflowButton").addEventListener("click", runWorkflow);
+  $("setupWizardForm").addEventListener("submit", runProjectSetupWizard);
   $("profileForm").addEventListener("submit", saveResearchProfile);
   $("saveApiKeyButton").addEventListener("click", saveApiKey);
   $("clearApiKeyButton").addEventListener("click", clearApiKey);

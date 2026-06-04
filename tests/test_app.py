@@ -115,6 +115,7 @@ def test_research_status() -> None:
     assert "claim_validation_result_decision_signals" in body["implemented_capabilities"]
     assert "claim_validation_result_ranking_adjustments" in body["implemented_capabilities"]
     assert "project_onboarding_readiness" in body["implemented_capabilities"]
+    assert "project_onboarding_setup_wizard" in body["implemented_capabilities"]
     assert "project_cockpit_dashboard" in body["implemented_capabilities"]
     assert "project_cockpit_task_generation" in body["implemented_capabilities"]
     assert "project_advisor_chat" in body["implemented_capabilities"]
@@ -148,6 +149,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_research_plan_progress" in names
     assert "get_project_progress_overview" in names
     assert "get_project_onboarding_readiness" in names
+    assert "run_project_setup_wizard" in names
     assert "get_project_cockpit" in names
     assert "export_project_cockpit_markdown" in names
     assert "create_tasks_from_project_cockpit" in names
@@ -227,6 +229,12 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     assert update_profile["http"]["method"] == "PUT"
     assert update_profile["input_schema"]["required"] == ["body"]
     assert update_profile["annotations"]["sideEffectHint"] is True
+
+    setup_wizard = tools["run_project_setup_wizard"]
+    assert setup_wizard["http"]["method"] == "POST"
+    assert setup_wizard["http"]["path"] == "/research/onboarding/setup"
+    assert setup_wizard["input_schema"]["required"] == ["body"]
+    assert setup_wizard["annotations"]["sideEffectHint"] is True
 
 
 def test_research_profile_guides_ranking_and_advisor_briefs() -> None:
@@ -463,6 +471,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "clearApiKeyButton" in response.text
     assert "onboardingButton" in response.text
     assert "onboardingMarkdownButton" in response.text
+    assert "setupWizardForm" in response.text
+    assert "setupWizardButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -472,7 +482,9 @@ def test_workbench_static_assets_are_served() -> None:
     assert "withAuthHeaders" in script.text
     assert "downloadWithAuth" in script.text
     assert "/research/onboarding/readiness" in script.text
+    assert "/research/onboarding/setup" in script.text
     assert "loadOnboardingReadiness" in script.text
+    assert "runProjectSetupWizard" in script.text
     assert "/research/profile/export/markdown" in script.text
     assert "saveResearchProfile" in script.text
     assert "/research/plans" in script.text
@@ -595,6 +607,41 @@ Future work should run the first literature-to-ideas workflow.
     )
     assert after_body["quick_actions"]
     assert any(action["id"] == "workflow" for action in after_body["quick_actions"])
+
+
+def test_project_setup_wizard_saves_profile_and_returns_readiness() -> None:
+    client = TestClient(create_app())
+    marker = f"Setup Wizard {time.time_ns()}"
+    response = client.post(
+        "/research/onboarding/setup",
+        json={
+            "name": marker,
+            "primary_domains": ["research agents", "graph rag"],
+            "active_questions": ["How should an assistant propose testable research ideas?"],
+            "target_venues": ["ACL"],
+            "methodological_preferences": ["evidence-grounded ideation"],
+            "resource_constraints": ["single workstation"],
+            "risk_tolerance": "medium",
+            "timeline_horizon": "30 days",
+            "success_criteria": ["advisor-ready report", "first executable experiment"],
+            "first_milestone": "Upload seed papers and run the first workflow.",
+            "created_by": "pytest",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["profile"]["name"] == marker
+    assert "Project Setup Wizard" in body["markdown_export"]
+    assert body["readiness"]["readiness_score"] >= 0
+    assert body["recommended_next_steps"]
+    checklist = {item["id"]: item for item in body["readiness"]["checklist"]}
+    assert checklist["profile"]["status"] == "done"
+
+    profile = client.get("/research/profile")
+    assert profile.status_code == 200
+    profile_body = profile.json()
+    assert profile_body["name"] == marker
+    assert "advisor-ready report" in profile_body["notes"]
 
 
 def test_upload_text_paper() -> None:
