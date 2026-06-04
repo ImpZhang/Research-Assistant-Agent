@@ -121,7 +121,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
 - Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.
 - Job cancellation and retry controls for failed or interrupted workflow runs.
-- Browser workbench for profile editing, upload, workflow launch, job tracking/cancel/retry, search, advisor chat/action sessions, cockpit, readiness, quality gates, decision, audit, bundle export, and dossier preview.
+- Browser workbench for API-key-backed pilot access, profile editing, upload, workflow launch, job tracking/cancel/retry, search, advisor chat/action sessions, cockpit, readiness, quality gates, decision, audit, bundle export, and dossier preview.
 - End-to-end smoke test covering the current research workflow.
 
 ## Repository Layout
@@ -393,7 +393,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-See `docs/deployment.md` for the runtime contract, ready checks, API key calls, MCP bridge auth forwarding, and backup notes.
+See `docs/deployment.md` for the runtime contract, ready checks, API key calls, Workbench key storage, MCP bridge auth forwarding, and backup notes.
 
 ## Near-Term Roadmap
 

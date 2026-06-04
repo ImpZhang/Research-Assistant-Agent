@@ -40,6 +40,12 @@
             <p id="activePaperLabel">No active paper selected.</p>
           </div>
           <div class="topbar-actions">
+            <div class="api-key-control" aria-label="API key settings">
+              <input id="apiKeyInput" type="password" autocomplete="off" placeholder="API key" />
+              <button id="saveApiKeyButton" type="button">Save Key</button>
+              <button id="clearApiKeyButton" type="button">Clear</button>
+              <span id="apiKeyStatus">No API key saved</span>
+            </div>
             <button id="refreshJobsButton" type="button">Refresh Jobs</button>
             <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API Docs</a>
           </div>

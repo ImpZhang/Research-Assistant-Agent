@@ -206,6 +206,23 @@ button:disabled {
   justify-content: flex-end;
 }
 
+.api-key-control {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.api-key-control input {
+  min-width: 0;
+}
+
+.api-key-control span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .band {
   padding: 20px;
   display: grid;
@@ -410,6 +427,7 @@ code {
   .dossier-actions,
   .controls-grid,
   .profile-grid,
+  .api-key-control,
   .two-column {
     grid-template-columns: 1fr;
   }

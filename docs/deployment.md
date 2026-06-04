@@ -73,6 +73,12 @@ python scripts/mcp_http_bridge.py \
 
 The bridge also accepts `MCP_BRIDGE_API_KEY`, `RESEARCH_ASSISTANT_API_KEY`, or `API_KEY` from the environment.
 
+## Workbench With API Key
+
+The browser workbench is served at `/workbench`. When API protection is enabled, paste the same key into the top-bar API key field and choose `Save Key`. The key is stored in browser local storage and sent only to `/research/*` requests as `X-Research-Assistant-Key`.
+
+Choose `Clear` to remove the key from the browser.
+
 ## Pilot Notes
 
 - Put a reverse proxy in front of `/workbench` for browser users.

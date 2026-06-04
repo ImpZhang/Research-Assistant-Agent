@@ -1224,6 +1224,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 生产化薄层由 `backend/app.py` 负责，而不混入科研 workflow service：`/health/ready` 检查 database 和 paper upload directory，`API_KEY_AUTH_ENABLED=true` 时对 `/research/*` 启用 API key guard，支持 `X-Research-Assistant-Key` 与 `Authorization: Bearer`。`Dockerfile` 和 `docker-compose.yml` 提供单容器客户试点入口，compose 使用 `/app/data` volume 保存 SQLite 与上传文件，并默认要求设置 `API_KEY`。
 
+Workbench 的 `api()` helper 会读取本地保存的 API key，并只对 `/research/*` 自动注入 `X-Research-Assistant-Key`。页面顶栏提供保存和清除按钮，使浏览器试点能与后端 API key guard 和 MCP bridge auth forwarding 使用同一份部署 secret。
+
 `/profile` stores durable researcher/project context: domains, active questions, target venues, methodological preferences, resource constraints, risk tolerance, negative preferences, and ranking weights. Ranking reads this profile by default, while advisor briefs include profile constraints so shortlist decisions are grounded in the user's actual research situation rather than only intrinsic idea scores.
 
 `/plans` creates persisted research execution plan snapshots. Each plan combines the current research profile, profile-aware ranked ideas, and open/blocked tasks into a 7/14+ day action plan with phases, task ids, success checks, source ids, and Markdown export. It is the planning artifact between "idea is promising" and "what should I do this week".

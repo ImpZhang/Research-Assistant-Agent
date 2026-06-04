@@ -385,6 +385,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workbench did not include advisor chat task button")
     if "advisorActionSessionButton" not in workbench:
         raise RuntimeError("workbench did not include advisor action session button")
+    if "apiKeyInput" not in workbench or "saveApiKeyButton" not in workbench:
+        raise RuntimeError("workbench did not include API key controls")
     bundle_bridge = next(
         tool for tool in tool_bridge["tools"] if tool["name"] == "export_idea_bundle"
     )

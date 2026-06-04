@@ -1,4 +1,5 @@
 const state = {
+  apiKey: "",
   paperId: "",
   jobId: "",
   latestIdeaId: "",
@@ -22,6 +23,9 @@ const state = {
   researchProfile: null,
   pollTimer: null,
 };
+
+const API_KEY_STORAGE_KEY = "researchAssistantApiKey";
+const API_KEY_HEADER = "X-Research-Assistant-Key";
 
 const $ = (id) => document.getElementById(id);
 
@@ -82,8 +86,46 @@ function formatWeights(weights) {
     .join(", ");
 }
 
+function loadApiKey() {
+  state.apiKey = localStorage.getItem(API_KEY_STORAGE_KEY) || "";
+  $("apiKeyInput").value = state.apiKey;
+  updateApiKeyStatus();
+}
+
+function saveApiKey() {
+  state.apiKey = $("apiKeyInput").value.trim();
+  if (state.apiKey) {
+    localStorage.setItem(API_KEY_STORAGE_KEY, state.apiKey);
+  } else {
+    localStorage.removeItem(API_KEY_STORAGE_KEY);
+  }
+  updateApiKeyStatus();
+}
+
+function clearApiKey() {
+  state.apiKey = "";
+  localStorage.removeItem(API_KEY_STORAGE_KEY);
+  $("apiKeyInput").value = "";
+  updateApiKeyStatus();
+}
+
+function updateApiKeyStatus() {
+  $("apiKeyStatus").textContent = state.apiKey ? "API key saved" : "No API key saved";
+}
+
+function withAuthHeaders(path, headers = {}) {
+  const merged = new Headers(headers || {});
+  if (state.apiKey && path.startsWith("/research")) {
+    merged.set(API_KEY_HEADER, state.apiKey);
+  }
+  return merged;
+}
+
 async function api(path, options = {}) {
-  const response = await fetch(path, options);
+  const response = await fetch(path, {
+    ...options,
+    headers: withAuthHeaders(path, options.headers),
+  });
   const text = await response.text();
   let body = text;
   try {
@@ -93,9 +135,32 @@ async function api(path, options = {}) {
   }
   if (!response.ok) {
     const detail = body && body.detail ? body.detail : text;
+    if (response.status === 401 && path.startsWith("/research")) {
+      setConnection(false, "API key required");
+    }
     throw new Error(`${response.status} ${detail}`);
   }
   return body;
+}
+
+async function downloadWithAuth(path, filename) {
+  const response = await fetch(path, { headers: withAuthHeaders(path) });
+  if (!response.ok) {
+    const text = await response.text();
+    if (response.status === 401 && path.startsWith("/research")) {
+      setConnection(false, "API key required");
+    }
+    throw new Error(`${response.status} ${text}`);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 async function checkHealth() {
@@ -1274,32 +1339,32 @@ async function loadResearchPacket() {
   }
 }
 
-function downloadIdeaBundle() {
+async function downloadIdeaBundle() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
     return;
   }
   const url = `/research/ideas/${encodeURIComponent(state.latestIdeaId)}/export/bundle`;
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `idea-${state.latestIdeaId}-research-bundle.zip`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  renderResult(
-    "workflowResult",
-    `Started bundle export for idea <code>${escapeHtml(state.latestIdeaId)}</code>.`,
-  );
+  renderResult("workflowResult", "Preparing idea bundle export...", "warn");
+  try {
+    await downloadWithAuth(url, `idea-${state.latestIdeaId}-research-bundle.zip`);
+    renderResult(
+      "workflowResult",
+      `Downloaded bundle export for idea <code>${escapeHtml(state.latestIdeaId)}</code>.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
 }
 
-function downloadProjectBundle() {
-  const link = document.createElement("a");
-  link.href = "/research/export/project-bundle";
-  link.download = "research-project-bundle.zip";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  renderResult("workflowResult", "Started project bundle export.");
+async function downloadProjectBundle() {
+  renderResult("workflowResult", "Preparing project bundle export...", "warn");
+  try {
+    await downloadWithAuth("/research/export/project-bundle", "research-project-bundle.zip");
+    renderResult("workflowResult", "Downloaded project bundle export.");
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
 }
 
 async function loadIdeaReadiness() {
@@ -1824,6 +1889,14 @@ document.addEventListener("DOMContentLoaded", () => {
   $("uploadForm").addEventListener("submit", uploadPaper);
   $("runWorkflowButton").addEventListener("click", runWorkflow);
   $("profileForm").addEventListener("submit", saveResearchProfile);
+  $("saveApiKeyButton").addEventListener("click", saveApiKey);
+  $("clearApiKeyButton").addEventListener("click", clearApiKey);
+  $("apiKeyInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveApiKey();
+    }
+  });
   $("loadProfileButton").addEventListener("click", loadResearchProfile);
   $("previewProfileButton").addEventListener("click", previewResearchProfile);
   $("contextSearchForm").addEventListener("submit", searchContext);
@@ -1893,6 +1966,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("shortlistIdeaButton").addEventListener("click", shortlistLatestIdea);
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);
+  loadApiKey();
   checkHealth();
   loadResearchProfile();
   refreshJobs();

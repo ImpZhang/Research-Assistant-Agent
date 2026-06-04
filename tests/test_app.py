@@ -456,10 +456,17 @@ def test_workbench_static_assets_are_served() -> None:
     assert "advisorChatForm" in response.text
     assert "advisorChatTasksButton" in response.text
     assert "advisorActionSessionButton" in response.text
+    assert "apiKeyInput" in response.text
+    assert "saveApiKeyButton" in response.text
+    assert "clearApiKeyButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
     assert "/research/profile" in script.text
+    assert "researchAssistantApiKey" in script.text
+    assert "X-Research-Assistant-Key" in script.text
+    assert "withAuthHeaders" in script.text
+    assert "downloadWithAuth" in script.text
     assert "/research/profile/export/markdown" in script.text
     assert "saveResearchProfile" in script.text
     assert "/research/plans" in script.text
