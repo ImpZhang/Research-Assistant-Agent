@@ -996,6 +996,11 @@ class ProjectPilotReportResponse(BaseModel):
     message: str
 
 
+class ProjectPilotReportSnapshotCreate(BaseModel):
+    title: str = "Pilot Status Report Snapshot"
+    created_by: str = "researcher"
+
+
 class ProjectCockpitTaskGenerateRequest(BaseModel):
     limit: int = Field(default=8, ge=1, le=20)
     include_primary_action: bool = True

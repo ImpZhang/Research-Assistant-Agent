@@ -119,6 +119,7 @@ def test_research_status() -> None:
     assert "project_onboarding_task_generation" in body["implemented_capabilities"]
     assert "project_onboarding_progress_tracking" in body["implemented_capabilities"]
     assert "project_pilot_status_report" in body["implemented_capabilities"]
+    assert "project_pilot_report_snapshots" in body["implemented_capabilities"]
     assert "project_cockpit_dashboard" in body["implemented_capabilities"]
     assert "project_cockpit_task_generation" in body["implemented_capabilities"]
     assert "project_advisor_chat" in body["implemented_capabilities"]
@@ -156,6 +157,10 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_tasks_from_project_onboarding" in names
     assert "get_project_onboarding_progress" in names
     assert "get_project_pilot_report" in names
+    assert "create_project_pilot_report_snapshot" in names
+    assert "list_project_pilot_report_snapshots" in names
+    assert "get_project_pilot_report_snapshot" in names
+    assert "export_project_pilot_report_snapshot_markdown" in names
     assert "get_project_cockpit" in names
     assert "export_project_cockpit_markdown" in names
     assert "create_tasks_from_project_cockpit" in names
@@ -257,6 +262,17 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     assert pilot_report["http"]["method"] == "GET"
     assert pilot_report["http"]["path"] == "/research/pilot/report"
     assert pilot_report["annotations"]["readOnlyHint"] is True
+
+    pilot_snapshot = tools["create_project_pilot_report_snapshot"]
+    assert pilot_snapshot["http"]["method"] == "POST"
+    assert pilot_snapshot["http"]["path"] == "/research/pilot/report/snapshots"
+    assert pilot_snapshot["input_schema"]["required"] == ["body"]
+    assert pilot_snapshot["annotations"]["sideEffectHint"] is True
+
+    pilot_snapshot_list = tools["list_project_pilot_report_snapshots"]
+    assert pilot_snapshot_list["http"]["method"] == "GET"
+    assert pilot_snapshot_list["http"]["path"] == "/research/pilot/report/snapshots"
+    assert pilot_snapshot_list["annotations"]["readOnlyHint"] is True
 
 
 def test_research_profile_guides_ranking_and_advisor_briefs() -> None:
@@ -496,6 +512,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "onboardingTasksButton" in response.text
     assert "onboardingProgressButton" in response.text
     assert "pilotReportButton" in response.text
+    assert "pilotReportSnapshotButton" in response.text
     assert "setupWizardForm" in response.text
     assert "setupWizardButton" in response.text
 
@@ -511,11 +528,13 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/onboarding/tasks" in script.text
     assert "/research/onboarding/progress" in script.text
     assert "/research/pilot/report" in script.text
+    assert "/research/pilot/report/snapshots" in script.text
     assert "loadOnboardingReadiness" in script.text
     assert "runProjectSetupWizard" in script.text
     assert "createOnboardingTasks" in script.text
     assert "loadOnboardingProgress" in script.text
     assert "loadPilotReport" in script.text
+    assert "savePilotReportSnapshot" in script.text
     assert "/research/profile/export/markdown" in script.text
     assert "saveResearchProfile" in script.text
     assert "/research/plans" in script.text
@@ -758,6 +777,33 @@ def test_project_pilot_report_combines_onboarding_and_cockpit_state() -> None:
     assert body["cockpit"]["project_metrics"]
     assert body["key_metrics"]["readiness_level"] == body["readiness_level"]
     assert body["next_actions"]
+
+
+def test_project_pilot_report_snapshots_persist_and_export_markdown() -> None:
+    client = TestClient(create_app())
+    title = f"Pilot Snapshot {time.time_ns()}"
+    created = client.post(
+        "/research/pilot/report/snapshots",
+        json={"title": title, "created_by": "pytest"},
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert body["title"] == title
+    assert body["scope"] == "pilot_report"
+    assert "Project Pilot Status Report" in body["markdown_export"]
+    assert body["summary"]["report_status"]
+
+    listed = client.get("/research/pilot/report/snapshots")
+    assert listed.status_code == 200
+    assert any(item["id"] == body["id"] for item in listed.json())
+
+    fetched = client.get(f"/research/pilot/report/snapshots/{body['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["markdown_export"] == body["markdown_export"]
+
+    exported = client.get(f"/research/pilot/report/snapshots/{body['id']}/export/markdown")
+    assert exported.status_code == 200
+    assert "Project Pilot Status Report" in exported.text
 
 
 def test_upload_text_paper() -> None:

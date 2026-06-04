@@ -130,6 +130,7 @@ from backend.research.schemas import (
     ProjectOnboardingReadinessResponse,
     ProjectOnboardingTaskGenerateRequest,
     ProjectPilotReportResponse,
+    ProjectPilotReportSnapshotCreate,
     ProjectSetupWizardRequest,
     ProjectSetupWizardResponse,
     ProjectReadinessOverviewResponse,
@@ -280,6 +281,7 @@ def status() -> ProjectStatus:
             "project_onboarding_task_generation",
             "project_onboarding_progress_tracking",
             "project_pilot_status_report",
+            "project_pilot_report_snapshots",
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
             "project_advisor_chat",
@@ -715,6 +717,36 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/pilot/report",
             output_model="ProjectPilotReportResponse",
+        ),
+        ToolManifestItem(
+            name="create_project_pilot_report_snapshot",
+            description="Persist the current pilot status report as a customer-facing snapshot.",
+            method="POST",
+            path="/research/pilot/report/snapshots",
+            input_model="ProjectPilotReportSnapshotCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_project_pilot_report_snapshots",
+            description="List persisted pilot status report snapshots.",
+            method="GET",
+            path="/research/pilot/report/snapshots",
+            output_model="list[ResearchBriefRead]",
+        ),
+        ToolManifestItem(
+            name="get_project_pilot_report_snapshot",
+            description="Load a persisted pilot status report snapshot.",
+            method="GET",
+            path="/research/pilot/report/snapshots/{snapshot_id}",
+            output_model="ResearchBriefDetail",
+        ),
+        ToolManifestItem(
+            name="export_project_pilot_report_snapshot_markdown",
+            description="Export a persisted pilot status report snapshot as Markdown.",
+            method="GET",
+            path="/research/pilot/report/snapshots/{snapshot_id}/export/markdown",
+            output_model="text/markdown",
         ),
         ToolManifestItem(
             name="get_project_cockpit",
@@ -1537,6 +1569,73 @@ def get_project_pilot_report(
         markdown_export=markdown_export,
         message="Built customer-facing pilot report from onboarding and cockpit state.",
     )
+
+
+@router.post("/pilot/report/snapshots", response_model=ResearchBriefDetail)
+def create_project_pilot_report_snapshot(
+    payload: ProjectPilotReportSnapshotCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    report = get_project_pilot_report(session=session)
+    brief = ResearchBrief(
+        title=payload.title or "Pilot Status Report Snapshot",
+        scope="pilot_report",
+        idea_ids_json=[],
+        summary_json={
+            "report_status": report.report_status,
+            "readiness_level": report.readiness_level,
+            "cockpit_phase": report.cockpit_phase,
+            "executive_summary": report.executive_summary,
+            "key_metrics": report.key_metrics,
+            "risks": report.risks,
+            "next_actions": report.next_actions,
+            "quick_actions": report.quick_actions,
+            "generated_at": report.generated_at.isoformat(),
+        },
+        markdown_export=report.markdown_export,
+        created_by=payload.created_by or "researcher",
+    )
+    session.add(brief)
+    session.commit()
+    session.refresh(brief)
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get("/pilot/report/snapshots", response_model=list[ResearchBriefRead])
+def list_project_pilot_report_snapshots(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    limit = max(1, min(limit, 200))
+    snapshots = (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "pilot_report")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_serialize_research_brief(snapshot) for snapshot in snapshots]
+
+
+@router.get("/pilot/report/snapshots/{snapshot_id}", response_model=ResearchBriefDetail)
+def get_project_pilot_report_snapshot(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    snapshot = _get_project_pilot_report_snapshot_or_404(snapshot_id, session)
+    return _serialize_research_brief(snapshot, include_markdown=True)
+
+
+@router.get(
+    "/pilot/report/snapshots/{snapshot_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_pilot_report_snapshot_markdown(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    snapshot = _get_project_pilot_report_snapshot_or_404(snapshot_id, session)
+    return PlainTextResponse(snapshot.markdown_export or "", media_type="text/markdown")
 
 
 @router.get("/cockpit", response_model=ProjectCockpitResponse)
@@ -2980,6 +3079,16 @@ def _render_project_pilot_report_markdown(
     primary = cockpit.primary_next_action or {}
     lines.append(f"- {primary.get('label', 'No primary action')}: {primary.get('reason', '')}")
     return "\n".join(lines).strip() + "\n"
+
+
+def _get_project_pilot_report_snapshot_or_404(
+    snapshot_id: str,
+    session: Session,
+) -> ResearchBrief:
+    snapshot = session.get(ResearchBrief, snapshot_id)
+    if snapshot is None or snapshot.scope != "pilot_report":
+        raise HTTPException(status_code=404, detail="Pilot report snapshot not found")
+    return snapshot
 
 
 def _project_cockpit_quick_actions(

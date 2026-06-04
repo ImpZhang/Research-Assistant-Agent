@@ -180,6 +180,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project onboarding progress tracking")
     if "project_pilot_status_report" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project pilot status report")
+    if "project_pilot_report_snapshots" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project pilot report snapshots")
     if "project_cockpit_dashboard" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project cockpit dashboard")
     if "project_cockpit_task_generation" not in status["implemented_capabilities"]:
@@ -302,6 +304,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project onboarding progress tool")
     if "get_project_pilot_report" not in manifest_names:
         raise RuntimeError("tool manifest did not include project pilot report tool")
+    if "create_project_pilot_report_snapshot" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project pilot report snapshot creator")
+    if "list_project_pilot_report_snapshots" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project pilot report snapshot lister")
     if "get_project_cockpit" not in manifest_names:
         raise RuntimeError("tool manifest did not include project cockpit tool")
     if "export_project_cockpit_markdown" not in manifest_names:
@@ -407,6 +413,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workbench did not include the onboarding progress button")
     if "pilotReportButton" not in workbench:
         raise RuntimeError("workbench did not include the pilot report button")
+    if "pilotReportSnapshotButton" not in workbench:
+        raise RuntimeError("workbench did not include the pilot report snapshot button")
     if "setupWizardForm" not in workbench or "setupWizardButton" not in workbench:
         raise RuntimeError("workbench did not include the project setup wizard")
     if "cockpitButton" not in workbench:
@@ -497,6 +505,40 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project pilot report did not include next actions")
     if pilot_report["key_metrics"].get("readiness_level") != pilot_report["readiness_level"]:
         raise RuntimeError("project pilot report key metrics did not include readiness level")
+    pilot_report_snapshot = require_ok(
+        client.post(
+            "/research/pilot/report/snapshots",
+            json_body={
+                "title": "Smoke Pilot Status Report",
+                "created_by": "smoke_api",
+            },
+        ),
+        "project pilot report snapshot",
+    )
+    if pilot_report_snapshot["scope"] != "pilot_report":
+        raise RuntimeError("project pilot report snapshot used the wrong scope")
+    if "Project Pilot Status Report" not in pilot_report_snapshot["markdown_export"]:
+        raise RuntimeError("project pilot report snapshot markdown did not include title")
+    pilot_report_snapshots = require_ok(
+        client.get("/research/pilot/report/snapshots"),
+        "project pilot report snapshot list",
+    )
+    if not any(item["id"] == pilot_report_snapshot["id"] for item in pilot_report_snapshots):
+        raise RuntimeError("project pilot report snapshot list did not include new snapshot")
+    fetched_pilot_report_snapshot = require_ok(
+        client.get(f"/research/pilot/report/snapshots/{pilot_report_snapshot['id']}"),
+        "project pilot report snapshot detail",
+    )
+    if fetched_pilot_report_snapshot["id"] != pilot_report_snapshot["id"]:
+        raise RuntimeError("project pilot report snapshot detail returned the wrong snapshot")
+    pilot_report_snapshot_markdown = require_ok(
+        client.get(
+            f"/research/pilot/report/snapshots/{pilot_report_snapshot['id']}/export/markdown"
+        ),
+        "project pilot report snapshot markdown export",
+    )
+    if "Project Pilot Status Report" not in pilot_report_snapshot_markdown:
+        raise RuntimeError("project pilot report snapshot export did not include title")
     onboarding_start = require_ok(
         client.get("/research/onboarding/readiness"),
         "project onboarding readiness",
@@ -2019,6 +2061,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "onboarding_progress_open_count": onboarding_progress["task_summary"]["open_task_count"],
         "pilot_report_status": pilot_report["report_status"],
         "pilot_report_next_action_count": len(pilot_report["next_actions"]),
+        "pilot_report_snapshot_id": pilot_report_snapshot["id"],
+        "pilot_report_snapshot_markdown_chars": len(pilot_report_snapshot_markdown),
         "onboarding_start_level": onboarding_start["readiness_level"],
         "onboarding_readiness_level": onboarding_after_workflow["readiness_level"],
         "onboarding_score": onboarding_after_workflow["readiness_score"],

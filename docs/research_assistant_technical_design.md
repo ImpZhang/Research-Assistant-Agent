@@ -1208,6 +1208,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/pilot/report` is the customer-facing pilot status report. It calls `/onboarding/progress` and `/cockpit`, then composes report_status, executive_summary, key_metrics, risks, next_actions, quick_actions, and Markdown export. It is read-only and deliberately avoids another report table: the report is a current-state view suitable for customer updates, advisor meetings, pilot handoff, and downstream MCP/agent summarization.
 
+`/pilot/report/snapshots` persists the current pilot report into the existing `ResearchBrief` table with `scope=pilot_report`. The saved summary contains report_status, readiness_level, cockpit_phase, executive_summary, key metrics, risks, next actions, quick actions, and the source generated_at timestamp; markdown_export stores the rendered customer-facing report. `GET /pilot/report/snapshots`, `GET /pilot/report/snapshots/{snapshot_id}`, and `/export/markdown` provide the retrieval path without adding a new table or duplicating brief serialization.
+
 `/briefs` 将项目级或 idea-set 状态保存为 `ResearchBrief` artifact，包含 idea list、recent experiment decisions、highest-priority open tasks、discussion prompts 和 Markdown export。它还会读取包含这些 ideas 的 research execution plans，汇总 plan task count/open/blocked/completion ratio，并加入 latest proposal review / decision memo signals、latest evidence ledger signals、claim validation queue signals、claim validation task signals、claim validation result signals、project triage / quality gate / opportunity / readiness task signals，以及 latest triage snapshot comparison。它是组会、导师沟通和后续 MCP 报告导出的稳定快照。
 
 `/tools/manifest` 是 runtime-neutral tool registry：返回 tool name、method/path、input/output schema 和 side-effect 标记。它不要求当前服务直接运行 MCP server，但为后续 MCP adapter、DeerFlow graph node 或自研 planner 提供同一份能力契约，避免外部编排层把 FastAPI 路由写死。
@@ -1298,6 +1300,10 @@ POST /research/onboarding/setup
 POST /research/onboarding/tasks
 GET  /research/onboarding/progress
 GET  /research/pilot/report
+POST /research/pilot/report/snapshots
+GET  /research/pilot/report/snapshots
+GET  /research/pilot/report/snapshots/{snapshot_id}
+GET  /research/pilot/report/snapshots/{snapshot_id}/export/markdown
 GET  /research/export/project-bundle
 POST /research/briefs
 GET  /research/briefs

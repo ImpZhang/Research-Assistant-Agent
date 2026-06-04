@@ -247,6 +247,27 @@ async function loadPilotReport() {
   }
 }
 
+async function savePilotReportSnapshot() {
+  renderResult("onboardingResult", "Saving pilot report snapshot...", "warn");
+  try {
+    const body = await api("/research/pilot/report/snapshots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Workbench Pilot Status Report",
+        created_by: "workbench",
+      }),
+    });
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "onboardingResult",
+      `Saved pilot report snapshot <code>${escapeHtml(body.id)}</code> with ${body.markdown_export_chars} Markdown chars.`,
+    );
+  } catch (error) {
+    renderResult("onboardingResult", escapeHtml(error.message), "error");
+  }
+}
+
 function fillProfileForm(profile) {
   $("profileName").value = profile.name || "Default Research Profile";
   $("profileDomains").value = formatCsv(profile.primary_domains);
@@ -2029,6 +2050,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("onboardingTasksButton").addEventListener("click", createOnboardingTasks);
   $("onboardingProgressButton").addEventListener("click", loadOnboardingProgress);
   $("pilotReportButton").addEventListener("click", loadPilotReport);
+  $("pilotReportSnapshotButton").addEventListener("click", savePilotReportSnapshot);
   $("apiKeyInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();

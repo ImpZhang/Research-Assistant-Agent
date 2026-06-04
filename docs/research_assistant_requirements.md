@@ -1073,6 +1073,8 @@ project onboarding 需要提供 progress tracking：读取 `owner_type=project_o
 
 系统需要提供 customer-facing pilot status report：聚合 onboarding readiness、onboarding progress、project cockpit、关键 metrics、risks、next actions 和 quick actions，输出结构化 JSON 与 Markdown report。它用于客户周报、导师会、交付前自查和 MCP/agent handoff，回答“当前试点是否健康、最大风险是什么、下一步该推进什么”。
 
+pilot status report 需要支持持久化 snapshot：用户可以保存当前报告为 `scope=pilot_report` 的 brief，并支持 list、detail 和 Markdown export。这样客户周报、导师会和试点交付不依赖实时状态漂移，可以保留当时的判断、风险、next actions 和 key metrics。
+
 系统需要保存研究者画像/项目约束：包括 primary domains、active research questions、target venues、methodological preferences、resource constraints、risk tolerance、negative preferences 和 ranking weights。ranking、advisor brief、后续 planner 应优先读取这份画像，避免生成“看起来不错但不适合当前资源和投稿目标”的 idea。
 
 系统需要提供 research execution plan snapshot：把 profile、ranked ideas、open/blocked tasks 聚合成 7/14/30 天行动计划，包含 phases、task ids、success checks、source ids 和 Markdown 导出。它回答“接下来一到两周具体做什么”，而不是只输出静态报告。
