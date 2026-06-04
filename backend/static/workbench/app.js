@@ -201,6 +201,24 @@ async function loadOnboardingReadiness(previewMarkdown = false) {
   }
 }
 
+async function createOnboardingTasks() {
+  renderResult("onboardingResult", "Creating onboarding tasks...", "warn");
+  try {
+    const body = await api("/research/onboarding/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limit: 8, include_optional: true, created_by: "workbench" }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "onboardingResult",
+      `${escapeHtml(body.message)}<br />${renderList("Onboarding tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("onboardingResult", escapeHtml(error.message), "error");
+  }
+}
+
 function fillProfileForm(profile) {
   $("profileName").value = profile.name || "Default Research Profile";
   $("profileDomains").value = formatCsv(profile.primary_domains);
@@ -1980,6 +1998,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("clearApiKeyButton").addEventListener("click", clearApiKey);
   $("onboardingButton").addEventListener("click", () => loadOnboardingReadiness(false));
   $("onboardingMarkdownButton").addEventListener("click", () => loadOnboardingReadiness(true));
+  $("onboardingTasksButton").addEventListener("click", createOnboardingTasks);
   $("apiKeyInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();

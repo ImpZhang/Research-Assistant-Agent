@@ -127,6 +127,7 @@ from backend.research.schemas import (
     ProjectCockpitTaskGenerateRequest,
     ProjectOnboardingChecklistItem,
     ProjectOnboardingReadinessResponse,
+    ProjectOnboardingTaskGenerateRequest,
     ProjectSetupWizardRequest,
     ProjectSetupWizardResponse,
     ProjectReadinessOverviewResponse,
@@ -274,6 +275,7 @@ def status() -> ProjectStatus:
             "project_progress_overview",
             "project_onboarding_readiness",
             "project_onboarding_setup_wizard",
+            "project_onboarding_task_generation",
             "project_cockpit_dashboard",
             "project_cockpit_task_generation",
             "project_advisor_chat",
@@ -676,6 +678,18 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/onboarding/setup",
             input_model="ProjectSetupWizardRequest",
             output_model="ProjectSetupWizardResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_onboarding",
+            description=(
+                "Turn onboarding readiness gaps and optional pilot guardrails "
+                "into project-level task-board work."
+            ),
+            method="POST",
+            path="/research/onboarding/tasks",
+            input_model="ProjectOnboardingTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -1386,6 +1400,26 @@ def run_project_setup_wizard(
         quick_actions=quick_actions,
         markdown_export=markdown_export,
         message="Saved project setup and refreshed onboarding readiness.",
+    )
+
+
+@router.post("/onboarding/tasks", response_model=ResearchTaskGenerationResponse)
+def create_tasks_from_project_onboarding(
+    payload: ProjectOnboardingTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    readiness = get_project_onboarding_readiness(session=session)
+    tasks = ResearchTaskService(session).create_from_project_onboarding(
+        readiness.model_dump(mode="json"),
+        limit=payload.limit,
+        include_optional=payload.include_optional,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} onboarding tasks from readiness {readiness.readiness_level}."
+        ),
     )
 
 
@@ -7513,6 +7547,7 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "idea_readiness_creates_task",
         "idea_has_quality_gate",
         "quality_gate_creates_task",
+        "project_onboarding_creates_task",
         "project_cockpit_creates_task",
         "project_advisor_chat_creates_task",
         "project_triage_creates_task",

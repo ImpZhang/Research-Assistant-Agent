@@ -1202,6 +1202,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/onboarding/setup` is the write-side companion to onboarding readiness. It accepts a first-run setup payload, normalizes it into the existing `ResearchProfileUpdate` shape, stores success criteria and first milestone in the profile notes, then calls the same readiness builder used by `/onboarding/readiness`. The response includes the saved profile, refreshed readiness, recommended next steps, quick actions, and a Markdown setup report. It deliberately avoids a separate project setup table so profile, ranking, advisor briefs, cockpit, MCP tools, and Workbench all read the same durable research context.
 
+`/onboarding/tasks` converts onboarding readiness gaps into `ResearchTask` records with `owner_type=project_onboarding` and `due_phase=onboarding_follow_up`. Required missing checks become high/critical setup work, while optional guardrails such as API-key protection or MCP bridge review can be included for customer pilot hardening. `ArtifactGraphService.link_project_onboarding_tasks` writes `project_onboarding_creates_task` edges so onboarding work appears in graph traces, task boards, project bundles, and later agent handoff.
+
 `/briefs` 将项目级或 idea-set 状态保存为 `ResearchBrief` artifact，包含 idea list、recent experiment decisions、highest-priority open tasks、discussion prompts 和 Markdown export。它还会读取包含这些 ideas 的 research execution plans，汇总 plan task count/open/blocked/completion ratio，并加入 latest proposal review / decision memo signals、latest evidence ledger signals、claim validation queue signals、claim validation task signals、claim validation result signals、project triage / quality gate / opportunity / readiness task signals，以及 latest triage snapshot comparison。它是组会、导师沟通和后续 MCP 报告导出的稳定快照。
 
 `/tools/manifest` 是 runtime-neutral tool registry：返回 tool name、method/path、input/output schema 和 side-effect 标记。它不要求当前服务直接运行 MCP server，但为后续 MCP adapter、DeerFlow graph node 或自研 planner 提供同一份能力契约，避免外部编排层把 FastAPI 路由写死。
@@ -1289,6 +1291,7 @@ PUT  /research/profile
 GET  /research/profile/export/markdown
 GET  /research/onboarding/readiness
 POST /research/onboarding/setup
+POST /research/onboarding/tasks
 GET  /research/export/project-bundle
 POST /research/briefs
 GET  /research/briefs

@@ -906,6 +906,104 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_onboarding(
+        self,
+        readiness: dict,
+        *,
+        limit: int = 8,
+        include_optional: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        readiness_level = str(readiness.get("readiness_level") or "")
+        readiness_score = float(readiness.get("readiness_score") or 0.0)
+        checklist = readiness.get("checklist") or []
+        items = [
+            item
+            for item in checklist
+            if item.get("status") != "done" and (item.get("required", True) or include_optional)
+        ][:limit]
+        if not items:
+            items = [
+                {
+                    "id": "onboarding_review",
+                    "label": "Review project onboarding readiness",
+                    "status": readiness_level,
+                    "detail": "Confirm the pilot setup with the customer and open project cockpit.",
+                    "required": False,
+                    "action_label": "Open cockpit",
+                    "action_method": "GET",
+                    "action_path": "/research/cockpit",
+                }
+            ]
+
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_onboarding",
+                owner_id="project_onboarding",
+                source_type=(
+                    "onboarding_required_check"
+                    if item.get("required", True)
+                    else "onboarding_optional_check"
+                ),
+                source_id=str(item.get("id") or f"onboarding_{idx}"),
+                title=self._onboarding_task_title(item, idx),
+                description=self._onboarding_task_description(item),
+                priority=self._onboarding_task_priority(item),
+                status="todo",
+                due_phase="onboarding_follow_up",
+                metadata_json={
+                    "check_id": item.get("id", ""),
+                    "check_label": item.get("label", ""),
+                    "check_status": item.get("status", ""),
+                    "required": item.get("required", True),
+                    "action_label": item.get("action_label", ""),
+                    "action_method": item.get("action_method", ""),
+                    "action_path": item.get("action_path", ""),
+                    "readiness_level": readiness_level,
+                    "readiness_score": readiness_score,
+                    "source_rank": idx,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, item in enumerate(items, start=1)
+        ]
+        tasks = self._deduplicate_onboarding_tasks(tasks)[:limit]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project onboarding readiness.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "readiness_level": readiness_level,
+                        "readiness_score": readiness_score,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_onboarding_tasks(
+            readiness,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_project_advisor_chat(
         self,
         chat: dict,
@@ -1530,6 +1628,53 @@ class ResearchTaskService:
             return "medium"
         return "medium"
 
+    def _onboarding_task_title(self, item: dict, idx: int) -> str:
+        check_id = str(item.get("id") or "")
+        label = str(item.get("label") or "")
+        if check_id == "profile":
+            return "Complete research profile setup"
+        if check_id == "paper_ingest":
+            return "Upload first literature seed"
+        if check_id == "workflow":
+            return "Run first literature-to-ideas workflow"
+        if check_id == "task_board":
+            return "Seed onboarding task board"
+        if check_id == "bundle_export":
+            return "Prepare project handoff bundle"
+        if check_id == "advisor_loop":
+            return "Run first advisor action session"
+        if check_id == "pilot_security":
+            return "Enable pilot API key guard"
+        if check_id == "mcp_bridge":
+            return "Review MCP bridge setup"
+        return self._short_task_title(label or f"Resolve onboarding check {idx}", idx)
+
+    def _onboarding_task_description(self, item: dict) -> str:
+        label = str(item.get("label") or "Onboarding check")
+        detail = str(item.get("detail") or "").strip()
+        action_label = str(item.get("action_label") or "").strip()
+        action_path = str(item.get("action_path") or "").strip()
+        parts = [label]
+        if detail:
+            parts.append(detail)
+        if action_label and action_path:
+            parts.append(f"Suggested action: {action_label} via {action_path}.")
+        return " ".join(parts)
+
+    def _onboarding_task_priority(self, item: dict) -> str:
+        check_id = str(item.get("id") or "")
+        required = bool(item.get("required", True))
+        status = str(item.get("status") or "")
+        if check_id in {"paper_ingest", "workflow", "task_board", "bundle_export"}:
+            return "critical" if required else "high"
+        if check_id == "profile":
+            return "high"
+        if check_id == "pilot_security":
+            return "high"
+        if status == "warning":
+            return "medium"
+        return "medium"
+
     def _advisor_chat_task_title(self, action: str, idx: int, *, source_type: str) -> str:
         clean = " ".join(str(action).split())
         lower = clean.lower()
@@ -1705,6 +1850,16 @@ class ResearchTaskService:
             key = clean.lower()
             if clean and key not in seen:
                 unique.append((source_type, clean, metadata))
+                seen.add(key)
+        return unique
+
+    def _deduplicate_onboarding_tasks(self, tasks: list[ResearchTask]) -> list[ResearchTask]:
+        unique = []
+        seen = set()
+        for task in tasks:
+            key = (task.owner_type, task.source_id, task.title.lower(), task.description.lower())
+            if key not in seen:
+                unique.append(task)
                 seen.add(key)
         return unique
 

@@ -116,6 +116,7 @@ def test_research_status() -> None:
     assert "claim_validation_result_ranking_adjustments" in body["implemented_capabilities"]
     assert "project_onboarding_readiness" in body["implemented_capabilities"]
     assert "project_onboarding_setup_wizard" in body["implemented_capabilities"]
+    assert "project_onboarding_task_generation" in body["implemented_capabilities"]
     assert "project_cockpit_dashboard" in body["implemented_capabilities"]
     assert "project_cockpit_task_generation" in body["implemented_capabilities"]
     assert "project_advisor_chat" in body["implemented_capabilities"]
@@ -150,6 +151,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_progress_overview" in names
     assert "get_project_onboarding_readiness" in names
     assert "run_project_setup_wizard" in names
+    assert "create_tasks_from_project_onboarding" in names
     assert "get_project_cockpit" in names
     assert "export_project_cockpit_markdown" in names
     assert "create_tasks_from_project_cockpit" in names
@@ -235,6 +237,12 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     assert setup_wizard["http"]["path"] == "/research/onboarding/setup"
     assert setup_wizard["input_schema"]["required"] == ["body"]
     assert setup_wizard["annotations"]["sideEffectHint"] is True
+
+    onboarding_tasks = tools["create_tasks_from_project_onboarding"]
+    assert onboarding_tasks["http"]["method"] == "POST"
+    assert onboarding_tasks["http"]["path"] == "/research/onboarding/tasks"
+    assert onboarding_tasks["input_schema"]["required"] == ["body"]
+    assert onboarding_tasks["annotations"]["sideEffectHint"] is True
 
 
 def test_research_profile_guides_ranking_and_advisor_briefs() -> None:
@@ -471,6 +479,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "clearApiKeyButton" in response.text
     assert "onboardingButton" in response.text
     assert "onboardingMarkdownButton" in response.text
+    assert "onboardingTasksButton" in response.text
     assert "setupWizardForm" in response.text
     assert "setupWizardButton" in response.text
 
@@ -483,8 +492,10 @@ def test_workbench_static_assets_are_served() -> None:
     assert "downloadWithAuth" in script.text
     assert "/research/onboarding/readiness" in script.text
     assert "/research/onboarding/setup" in script.text
+    assert "/research/onboarding/tasks" in script.text
     assert "loadOnboardingReadiness" in script.text
     assert "runProjectSetupWizard" in script.text
+    assert "createOnboardingTasks" in script.text
     assert "/research/profile/export/markdown" in script.text
     assert "saveResearchProfile" in script.text
     assert "/research/plans" in script.text
@@ -642,6 +653,24 @@ def test_project_setup_wizard_saves_profile_and_returns_readiness() -> None:
     profile_body = profile.json()
     assert profile_body["name"] == marker
     assert "advisor-ready report" in profile_body["notes"]
+
+
+def test_project_onboarding_tasks_create_task_board_items_and_graph_edges() -> None:
+    client = TestClient(create_app())
+    response = client.post(
+        "/research/onboarding/tasks",
+        json={"limit": 6, "include_optional": True, "created_by": "pytest"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tasks"]
+    assert all(task["owner_type"] == "project_onboarding" for task in body["tasks"])
+    assert all(task["due_phase"] == "onboarding_follow_up" for task in body["tasks"])
+    assert any(task["metadata"]["readiness_level"] for task in body["tasks"])
+
+    edges = client.get("/research/graph/edges?edge_type=project_onboarding_creates_task")
+    assert edges.status_code == 200
+    assert edges.json()
 
 
 def test_upload_text_paper() -> None:

@@ -528,6 +528,42 @@ class ArtifactGraphService:
                 payload={"source": task.source_type},
             )
 
+    def link_project_onboarding_tasks(
+        self,
+        readiness: dict,
+        tasks: list[ResearchTask],
+    ) -> None:
+        onboarding_node = self.graph.get_or_create_node(
+            node_type="project_onboarding",
+            label="Project onboarding readiness",
+            canonical_key="project_onboarding:latest",
+            payload={
+                "readiness_level": readiness.get("readiness_level", ""),
+                "readiness_score": readiness.get("readiness_score", 0.0),
+                "missing_required": readiness.get("missing_required", []),
+                "task_count": len(tasks),
+                "owner_type": "project_onboarding",
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=onboarding_node,
+                target_node=task_node,
+                edge_type="project_onboarding_creates_task",
+                payload={"source": task.source_type},
+            )
+
     def link_project_advisor_chat_tasks(self, chat: dict, tasks: list[ResearchTask]) -> None:
         chat_node = self.graph.get_or_create_node(
             node_type="project_advisor_chat",

@@ -963,6 +963,12 @@ class ProjectSetupWizardResponse(BaseModel):
     message: str
 
 
+class ProjectOnboardingTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=8, ge=1, le=20)
+    include_optional: bool = True
+    created_by: str = "system"
+
+
 class ProjectCockpitTaskGenerateRequest(BaseModel):
     limit: int = Field(default=8, ge=1, le=20)
     include_primary_action: bool = True
