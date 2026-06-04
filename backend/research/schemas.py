@@ -516,6 +516,7 @@ class TaskBoardSnapshotCreate(BaseModel):
     title: str = "Research Task Board"
     idea_id: str | None = None
     owner_type: str = ""
+    task_ids: list[str] = Field(default_factory=list)
     statuses: list[str] = Field(default_factory=list)
     created_by: str = "system"
 
@@ -1283,6 +1284,21 @@ class AdvisorChatTaskGenerateRequest(AdvisorChatRequest):
     include_recommendations: bool = True
     include_risks: bool = True
     include_tool_suggestions: bool = False
+
+
+class AdvisorActionSessionRequest(AdvisorChatTaskGenerateRequest):
+    snapshot_title: str = "Advisor Action Session"
+    snapshot_statuses: list[str] = Field(default_factory=lambda: ["todo", "doing", "blocked"])
+    include_snapshot: bool = True
+
+
+class AdvisorActionSessionResponse(BaseModel):
+    chat: AdvisorChatResponse
+    tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    snapshot: TaskBoardSnapshotDetail | None = None
+    progress_summary: dict[str, Any] = Field(default_factory=dict)
+    markdown_export: str = ""
+    message: str
 
 
 class LiteratureSearchRequest(BaseModel):

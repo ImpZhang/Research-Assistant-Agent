@@ -175,6 +175,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project advisor chat")
     if "project_advisor_chat_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project advisor chat task generation")
+    if "project_advisor_action_sessions" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project advisor action sessions")
     if "research_opportunity_radar" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include research opportunity radar")
     if "opportunity_radar_task_generation" not in status["implemented_capabilities"]:
@@ -287,6 +289,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project advisor chat tool")
     if "create_tasks_from_project_advisor_chat" not in manifest_names:
         raise RuntimeError("tool manifest did not include project advisor chat task tool")
+    if "run_project_advisor_action_session" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project advisor action session tool")
     if "get_project_triage_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include project triage brief tool")
     if "export_project_triage_brief_markdown" not in manifest_names:
@@ -376,6 +380,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("workbench did not include advisor chat form")
     if "advisorChatTasksButton" not in workbench:
         raise RuntimeError("workbench did not include advisor chat task button")
+    if "advisorActionSessionButton" not in workbench:
+        raise RuntimeError("workbench did not include advisor action session button")
     bundle_bridge = next(
         tool for tool in tool_bridge["tools"] if tool["name"] == "export_idea_bundle"
     )
@@ -1232,6 +1238,37 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not advisor_chat_task_edges:
         raise RuntimeError("project advisor chat task generation did not create graph edges")
+    advisor_action_session = require_ok(
+        client.post(
+            "/research/advisor/action-session",
+            json_body={
+                "question": "Create an execution session for the highest evidence risk.",
+                "idea_id": refined_idea["id"],
+                "paper_ids": [paper_id],
+                "include_cockpit": True,
+                "include_context": True,
+                "context_limit": 5,
+                "limit": 5,
+                "include_recommendations": True,
+                "include_risks": True,
+                "include_tool_suggestions": False,
+                "snapshot_title": "Smoke Advisor Action Session",
+                "include_snapshot": True,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project advisor action session",
+    )
+    if not advisor_action_session["tasks"]:
+        raise RuntimeError("project advisor action session returned no tasks")
+    if not advisor_action_session["snapshot"] or not advisor_action_session["snapshot"]["id"]:
+        raise RuntimeError("project advisor action session did not create a task snapshot")
+    if advisor_action_session["progress_summary"]["task_count"] != len(
+        advisor_action_session["tasks"]
+    ):
+        raise RuntimeError("project advisor action session progress did not match tasks")
+    if "Advisor Action Session" not in advisor_action_session["markdown_export"]:
+        raise RuntimeError("project advisor action session markdown did not include title")
     cockpit_tasks = require_ok(
         client.post(
             "/research/cockpit/tasks",
@@ -1960,6 +1997,11 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "advisor_chat_citation_count": advisor_citation_count,
         "advisor_chat_tool_suggestion_count": len(advisor_chat["tool_suggestions"]),
         "advisor_chat_task_count": len(advisor_chat_tasks["tasks"]),
+        "advisor_action_session_task_count": len(advisor_action_session["tasks"]),
+        "advisor_action_session_snapshot_id": advisor_action_session["snapshot"]["id"],
+        "advisor_action_session_open_count": advisor_action_session["progress_summary"][
+            "open_task_count"
+        ],
         "readiness_overview_idea_count": readiness_overview["idea_count"],
         "readiness_overview_average": readiness_overview["average_readiness"],
         "opportunity_radar_count": len(radar["top_opportunities"]),

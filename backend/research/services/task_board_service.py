@@ -17,10 +17,11 @@ class TaskBoardService:
         title: str = "Research Task Board",
         idea_id: str | None = None,
         owner_type: str = "",
+        task_ids: list[str] | None = None,
         statuses: list[str] | None = None,
         created_by: str = "system",
     ) -> TaskBoardSnapshot:
-        tasks = self._load_tasks(idea_id, owner_type, statuses or [])
+        tasks = self._load_tasks(idea_id, owner_type, statuses or [], task_ids or [])
         summary = self._summary(tasks)
         snapshot = TaskBoardSnapshot(
             title=title or "Research Task Board",
@@ -56,12 +57,15 @@ class TaskBoardService:
         idea_id: str | None,
         owner_type: str,
         statuses: list[str],
+        task_ids: list[str],
     ) -> list[ResearchTask]:
         query = self.session.query(ResearchTask).order_by(ResearchTask.created_at.desc())
         if idea_id:
             query = query.filter(ResearchTask.idea_id == idea_id)
         if owner_type:
             query = query.filter(ResearchTask.owner_type == owner_type)
+        if task_ids:
+            query = query.filter(ResearchTask.id.in_(task_ids))
         if statuses:
             query = query.filter(ResearchTask.status.in_(statuses))
         return query.limit(300).all()

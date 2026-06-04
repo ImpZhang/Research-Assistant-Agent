@@ -435,6 +435,42 @@ async function createAdvisorChatTasks() {
   }
 }
 
+async function createAdvisorActionSession() {
+  const question = $("advisorQuestion").value.trim();
+  if (!question) return;
+  renderResult("advisorChatResult", "Creating advisor action session...", "warn");
+  try {
+    const body = await api("/research/advisor/action-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        idea_id: state.latestIdeaId || null,
+        paper_ids: state.paperId ? [state.paperId] : [],
+        include_cockpit: true,
+        include_context: true,
+        context_limit: 5,
+        limit: 8,
+        include_recommendations: true,
+        include_risks: true,
+        include_tool_suggestions: false,
+        snapshot_title: "Workbench Advisor Action Session",
+        include_snapshot: true,
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    state.latestTaskSnapshotId = body.snapshot?.id || state.latestTaskSnapshotId;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "advisorChatResult",
+      `${escapeHtml(body.message)}<br />Intent <code>${escapeHtml(body.chat.intent)}</code>; open tasks: ${body.progress_summary.open_task_count}; snapshot: <code>${escapeHtml(body.progress_summary.snapshot_id || "none")}</code>.`,
+    );
+  } catch (error) {
+    renderResult("advisorChatResult", escapeHtml(error.message), "error");
+  }
+}
+
 function renderList(title, items, mapper) {
   if (!items || !items.length) {
     return `<h4>${escapeHtml(title)}</h4><div class="empty-state">No records.</div>`;
@@ -1794,6 +1830,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("literatureSearchForm").addEventListener("submit", searchLiterature);
   $("advisorChatForm").addEventListener("submit", askAdvisorChat);
   $("advisorChatTasksButton").addEventListener("click", createAdvisorChatTasks);
+  $("advisorActionSessionButton").addEventListener("click", createAdvisorActionSession);
   $("refreshJobsButton").addEventListener("click", refreshJobs);
   $("jobsTable").addEventListener("click", handleJobAction);
   $("loadDossierButton").addEventListener("click", loadDossier);

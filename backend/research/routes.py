@@ -46,6 +46,8 @@ from backend.research.models import (
     TaskBoardSnapshot,
 )
 from backend.research.schemas import (
+    AdvisorActionSessionRequest,
+    AdvisorActionSessionResponse,
     AdvisorChatRequest,
     AdvisorChatResponse,
     AdvisorChatTaskGenerateRequest,
@@ -270,6 +272,7 @@ def status() -> ProjectStatus:
             "project_cockpit_task_generation",
             "project_advisor_chat",
             "project_advisor_chat_task_generation",
+            "project_advisor_action_sessions",
             "project_triage_brief",
             "project_triage_task_generation",
             "project_triage_snapshots",
@@ -697,6 +700,18 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/advisor/chat/tasks",
             input_model="AdvisorChatTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="run_project_advisor_action_session",
+            description=(
+                "Ask the project advisor, create follow-up tasks, snapshot the action queue, "
+                "and return a Markdown action-session brief."
+            ),
+            method="POST",
+            path="/research/advisor/action-session",
+            input_model="AdvisorActionSessionRequest",
+            output_model="AdvisorActionSessionResponse",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -1490,6 +1505,168 @@ def create_tasks_from_project_advisor_chat(
         tasks=[_serialize_research_task(task) for task in tasks],
         message=(f"Created {len(tasks)} project advisor chat tasks from intent {chat.intent}."),
     )
+
+
+@router.post("/advisor/action-session", response_model=AdvisorActionSessionResponse)
+def run_project_advisor_action_session(
+    payload: AdvisorActionSessionRequest,
+    session: Session = Depends(get_session),
+) -> AdvisorActionSessionResponse:
+    chat_payload = AdvisorChatRequest(
+        question=payload.question,
+        idea_id=payload.idea_id,
+        paper_ids=payload.paper_ids,
+        include_cockpit=payload.include_cockpit,
+        include_context=payload.include_context,
+        context_limit=payload.context_limit,
+        created_by=payload.created_by,
+    )
+    chat = ask_project_advisor(chat_payload, session=session)
+    tasks = ResearchTaskService(session).create_from_project_advisor_chat(
+        chat.model_dump(mode="json"),
+        limit=payload.limit,
+        include_recommendations=payload.include_recommendations,
+        include_risks=payload.include_risks,
+        include_tool_suggestions=payload.include_tool_suggestions,
+        created_by=payload.created_by,
+    )
+    snapshot = None
+    if payload.include_snapshot and tasks:
+        snapshot_model = TaskBoardService(session).create_snapshot(
+            title=payload.snapshot_title or "Advisor Action Session",
+            owner_type="project_advisor_chat",
+            task_ids=[task.id for task in tasks],
+            statuses=payload.snapshot_statuses,
+            created_by=payload.created_by,
+        )
+        snapshot = _serialize_task_board_snapshot(snapshot_model, include_markdown=True)
+    progress_summary = _advisor_action_session_progress(tasks, snapshot)
+    markdown_export = _render_advisor_action_session_markdown(
+        chat=chat,
+        tasks=tasks,
+        snapshot=snapshot,
+        progress_summary=progress_summary,
+    )
+    return AdvisorActionSessionResponse(
+        chat=chat,
+        tasks=[_serialize_research_task(task) for task in tasks],
+        snapshot=snapshot,
+        progress_summary=progress_summary,
+        markdown_export=markdown_export,
+        message=(
+            f"Created advisor action session with {len(tasks)} tasks"
+            + (f" and snapshot {snapshot.id}." if snapshot else ".")
+        ),
+    )
+
+
+def _advisor_action_session_progress(
+    tasks: list[ResearchTask],
+    snapshot: TaskBoardSnapshotDetail | None,
+) -> dict[str, Any]:
+    by_status = Counter(task.status for task in tasks)
+    by_priority = Counter(task.priority for task in tasks)
+    return {
+        "task_count": len(tasks),
+        "open_task_count": sum(1 for task in tasks if task.status in {"todo", "doing", "blocked"}),
+        "blocked_task_count": sum(1 for task in tasks if task.status == "blocked"),
+        "by_status": dict(by_status),
+        "by_priority": dict(by_priority),
+        "snapshot_id": snapshot.id if snapshot else "",
+        "next_actions": [
+            {
+                "id": task.id,
+                "title": task.title,
+                "priority": task.priority,
+                "status": task.status,
+                "due_phase": task.due_phase,
+            }
+            for task in sorted(tasks, key=_advisor_action_session_task_order)[:8]
+        ],
+    }
+
+
+def _advisor_action_session_task_order(task: ResearchTask) -> tuple[int, int, str]:
+    priority_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    status_rank = {"doing": 0, "blocked": 1, "todo": 2, "done": 3, "archived": 4}
+    return (
+        priority_rank.get(task.priority, 9),
+        status_rank.get(task.status, 9),
+        task.created_at.isoformat(),
+    )
+
+
+def _render_advisor_action_session_markdown(
+    *,
+    chat: AdvisorChatResponse,
+    tasks: list[ResearchTask],
+    snapshot: TaskBoardSnapshotDetail | None,
+    progress_summary: dict[str, Any],
+) -> str:
+    lines = [
+        "# Advisor Action Session",
+        "",
+        f"- Intent: `{chat.intent}`",
+        f"- Cockpit Phase: `{chat.cockpit_phase or 'n/a'}`",
+        f"- Readiness: `{chat.readiness_level or 'n/a'}`",
+        f"- Task Count: {progress_summary.get('task_count', 0)}",
+        f"- Open Tasks: {progress_summary.get('open_task_count', 0)}",
+        f"- Snapshot ID: `{progress_summary.get('snapshot_id') or 'none'}`",
+        "",
+        "## Question",
+        "",
+        chat.question,
+        "",
+        "## Advisor Answer",
+        "",
+        chat.answer,
+        "",
+        "## Recommended Actions",
+    ]
+    _append_advisor_action_session_items(lines, chat.recommended_actions, "No recommended actions.")
+    lines.extend(["", "## Risk Alerts"])
+    _append_advisor_action_session_items(lines, chat.risk_alerts, "No risk alerts.")
+    lines.extend(["", "## Session Tasks"])
+    if tasks:
+        for task in sorted(tasks, key=_advisor_action_session_task_order):
+            lines.append(
+                f"- `{task.id}` `{task.priority}` `{task.status}` "
+                f"`{task.due_phase or 'follow_up'}` {task.title}"
+            )
+    else:
+        lines.append("- No tasks were created.")
+    lines.extend(["", "## Suggested Tools"])
+    if chat.tool_suggestions:
+        for tool in chat.tool_suggestions[:8]:
+            name = tool.get("name") or tool.get("tool_name") or "tool"
+            reason = tool.get("reason") or tool.get("description") or ""
+            lines.append(f"- `{name}` {reason}".rstrip())
+    else:
+        lines.append("- No tool suggestions.")
+    if snapshot:
+        lines.extend(
+            [
+                "",
+                "## Task Snapshot",
+                "",
+                f"- Snapshot ID: `{snapshot.id}`",
+                f"- Owner Type: `{snapshot.owner_type}`",
+                f"- Task IDs: {', '.join(snapshot.task_ids) if snapshot.task_ids else 'none'}",
+            ]
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _append_advisor_action_session_items(
+    lines: list[str],
+    items: list[str],
+    empty: str,
+) -> None:
+    if not items:
+        lines.append(f"- {empty}")
+        return
+    for item in items:
+        lines.append(f"- {item}")
 
 
 def _advisor_chat_context_response(
@@ -7364,6 +7541,7 @@ def create_task_board_snapshot(
         title=payload.title,
         idea_id=payload.idea_id,
         owner_type=payload.owner_type,
+        task_ids=payload.task_ids,
         statuses=payload.statuses,
         created_by=payload.created_by,
     )

@@ -69,6 +69,7 @@ def test_research_status() -> None:
     assert "project_cockpit_task_generation" in body["implemented_capabilities"]
     assert "project_advisor_chat" in body["implemented_capabilities"]
     assert "project_advisor_chat_task_generation" in body["implemented_capabilities"]
+    assert "project_advisor_action_sessions" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
@@ -101,6 +102,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_tasks_from_project_cockpit" in names
     assert "ask_project_advisor" in names
     assert "create_tasks_from_project_advisor_chat" in names
+    assert "run_project_advisor_action_session" in names
     assert "get_project_triage_brief" in names
     assert "export_project_triage_brief_markdown" in names
     assert "create_tasks_from_project_triage_brief" in names
@@ -404,6 +406,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "cockpitTasksButton" in response.text
     assert "advisorChatForm" in response.text
     assert "advisorChatTasksButton" in response.text
+    assert "advisorActionSessionButton" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200
@@ -464,6 +467,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/cockpit/tasks" in script.text
     assert "/research/advisor/chat" in script.text
     assert "/research/advisor/chat/tasks" in script.text
+    assert "/research/advisor/action-session" in script.text
     assert "/research/progress/overview" in script.text
     assert "/research/triage/brief" in script.text
     assert "/research/triage/brief/export/markdown" in script.text
@@ -1902,6 +1906,42 @@ Future work should preserve proposal drafts as reviewable artifacts.
     )
     assert advisor_chat_task_edges.status_code == 200
     assert advisor_chat_task_edges.json()
+
+    advisor_action_session = client.post(
+        "/research/advisor/action-session",
+        json={
+            "question": "Create an execution session for the highest evidence risk.",
+            "idea_id": idea_id,
+            "paper_ids": [paper_id],
+            "include_cockpit": True,
+            "include_context": True,
+            "context_limit": 5,
+            "limit": 5,
+            "include_recommendations": True,
+            "include_risks": True,
+            "include_tool_suggestions": False,
+            "snapshot_title": "Pytest Advisor Action Session",
+            "include_snapshot": True,
+            "created_by": "pytest",
+        },
+    )
+    assert advisor_action_session.status_code == 200
+    advisor_action_body = advisor_action_session.json()
+    assert advisor_action_body["chat"]["answer"]
+    assert advisor_action_body["tasks"]
+    assert advisor_action_body["snapshot"]["id"]
+    assert advisor_action_body["snapshot"]["owner_type"] == "project_advisor_chat"
+    assert set(task["id"] for task in advisor_action_body["tasks"]).issubset(
+        set(advisor_action_body["snapshot"]["task_ids"])
+    )
+    assert advisor_action_body["progress_summary"]["task_count"] == len(
+        advisor_action_body["tasks"]
+    )
+    assert (
+        advisor_action_body["progress_summary"]["snapshot_id"]
+        == advisor_action_body["snapshot"]["id"]
+    )
+    assert "# Advisor Action Session" in advisor_action_body["markdown_export"]
 
     cockpit_tasks = client.post(
         "/research/cockpit/tasks",

@@ -1077,6 +1077,8 @@ project cockpit 需要能一键转成 task board 任务：从 primary action、n
 
 project advisor chat 需要能一键转成 task board 任务：从 recommended actions、risk alerts 和可选 tool suggestions 创建 `owner_type=project_advisor_chat`、`due_phase=advisor_chat_follow_up` 的任务，并写入 `project_advisor_chat_creates_task` 图边。这样自然语言入口不是只回答问题，而能直接形成可追踪执行项。
 
+project advisor chat 还需要提供 action session：输入一次项目级问题后，系统应同时返回 advisor answer、生成的 follow-up tasks、只包含本轮任务的 task board snapshot、progress summary 和 Markdown execution report。它用于把“问下一步做什么”直接固化成一次可复盘的执行会话，方便前端、导师会、MCP/agent handoff 和后续自动化继续推进。
+
 验收标准：
 
 - 能通过关键词找相关论文。

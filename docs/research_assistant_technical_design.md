@@ -1178,6 +1178,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/advisor/chat/tasks` 复用同一份 advisor chat answer contract，将 recommended_actions、risk_alerts 和可选 tool_suggestions 写入 `ResearchTask`，使用 `owner_type=project_advisor_chat`、`due_phase=advisor_chat_follow_up`，并写入 `project_advisor_chat_creates_task` 图边。它让自然语言问题可以直接变成任务板执行项，并保留 question、intent、cockpit_phase、readiness_level 和 source_rank metadata，便于后续审计与 agent handoff。
 
+`/advisor/action-session` 将 advisor chat、advisor task generation 和 task board snapshot 串成一个执行会话。请求复用 `AdvisorChatTaskGenerateRequest`，并增加 snapshot title、snapshot status filter 和 include_snapshot；响应包含 `chat`、`tasks`、只覆盖本轮任务的 `snapshot`、`progress_summary` 和 Markdown report。它不引入新的 session table，而是复用 `ResearchTask`、`TaskBoardSnapshot`、`project_advisor_chat_creates_task` 与 `task_board_snapshot_tracks_task`，先让自然语言项目入口具备可追踪执行闭环。
+
 `/triage/brief` 组合 `/progress/overview`、`/readiness/overview`、`/quality/overview` 和 `/opportunities/radar`，输出 recommended focus、risk focus、next actions 与 Markdown brief。它是更高层的“科研驾驶舱”入口：外部 agent 不需要自己拼多个 endpoint，就能拿到今天该推进什么、卡在哪里、下一步怎么做的压缩上下文。
 
 `/triage/brief/export/markdown` 返回同一份 project triage brief 的 `text/markdown` 表示，方便导师会、纯文本备份和只消费 Markdown 的 MCP/agent 工具使用。
@@ -1259,6 +1261,7 @@ GET  /research/cockpit/export/markdown
 POST /research/cockpit/tasks
 POST /research/advisor/chat
 POST /research/advisor/chat/tasks
+POST /research/advisor/action-session
 GET  /research/triage/brief
 GET  /research/triage/brief/export/markdown
 POST /research/triage/brief/tasks
