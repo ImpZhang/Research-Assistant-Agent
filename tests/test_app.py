@@ -97,6 +97,7 @@ def test_research_status() -> None:
     assert "opportunity_radar_task_generation" in body["implemented_capabilities"]
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
     assert "project_handoff_bundle_export" in body["implemented_capabilities"]
+    assert "project_bundle_readiness" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
@@ -192,6 +193,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_idea_timeline" in names
     assert "export_idea_bundle" in names
     assert "export_project_bundle" in names
+    assert "get_project_bundle_readiness" in names
     assert "get_idea_readiness" in names
     assert "get_idea_quality_gate" in names
     assert "create_tasks_from_idea_quality_gate" in names
@@ -241,6 +243,11 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     assert bundle["input_schema"]["properties"]["idea_id"]["type"] == "string"
     assert bundle["annotations"]["readOnlyHint"] is True
     assert bundle["http"]["path"] == "/research/ideas/{idea_id}/export/bundle"
+
+    project_bundle_readiness = tools["get_project_bundle_readiness"]
+    assert project_bundle_readiness["http"]["method"] == "GET"
+    assert project_bundle_readiness["http"]["path"] == "/research/export/project-bundle/readiness"
+    assert project_bundle_readiness["annotations"]["readOnlyHint"] is True
 
     cancel = tools["cancel_job"]
     assert cancel["side_effect"] is True
@@ -541,6 +548,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "claimResultButton" in response.text
     assert "timelineButton" in response.text
     assert "projectBundleButton" in response.text
+    assert "projectBundleReadinessButton" in response.text
     assert "evidenceLedgerButton" in response.text
     assert "evidenceLedgerTasksButton" in response.text
     assert "claimPacketButton" in response.text
@@ -627,6 +635,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${state.latestIdeaId}/research-packet" in script.text
     assert "/research/ideas/${encodeURIComponent(state.latestIdeaId)}/export/bundle" in script.text
     assert "/research/export/project-bundle" in script.text
+    assert "/research/export/project-bundle/readiness" in script.text
+    assert "loadProjectBundleReadiness" in script.text
     assert "/research/ideas/${state.latestIdeaId}/readiness" in script.text
     assert "/research/ideas/${state.latestIdeaId}/quality-gate" in script.text
     assert "/research/ideas/${state.latestIdeaId}/quality-gate/tasks" in script.text
@@ -2517,6 +2527,25 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert pilot_snapshot.status_code == 200
     pilot_snapshot_body = pilot_snapshot.json()
 
+    project_bundle_readiness = client.get("/research/export/project-bundle/readiness")
+    assert project_bundle_readiness.status_code == 200
+    project_bundle_readiness_body = project_bundle_readiness.json()
+    assert project_bundle_readiness_body["readiness_level"] == "delivery_ready"
+    assert project_bundle_readiness_body["readiness_score"] == 1.0
+    assert project_bundle_readiness_body["missing_required"] == []
+    assert "# Project Bundle Readiness" in project_bundle_readiness_body["markdown_export"]
+    assert "Saved pilot report history" in project_bundle_readiness_body["markdown_export"]
+    assert "export_project_bundle" in {
+        action["id"] for action in project_bundle_readiness_body["quick_actions"]
+    }
+    readiness_manifest = project_bundle_readiness_body["manifest_summary"]
+    assert readiness_manifest["triage_snapshot_count"] >= 2
+    assert readiness_manifest["triage_snapshot_comparison_available"] is True
+    assert readiness_manifest["pilot_report_snapshot_count"] >= 2
+    assert readiness_manifest["pilot_report_snapshot_comparison_available"] is True
+    assert readiness_manifest["claim_validation_queue_count"] >= 1
+    assert readiness_manifest["research_plan_count"] >= 1
+
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200
     assert project_bundle.headers["content-type"] == "application/zip"
@@ -2555,6 +2584,18 @@ Future work should preserve proposal drafts as reviewable artifacts.
             archive.read("metadata/pilot-report-snapshot-comparison.json")
         )
         assert project_manifest["idea_count"] >= 1
+        assert readiness_manifest["bundle_type"] == "research_project_bundle"
+        assert (
+            project_manifest["triage_snapshot_count"] == readiness_manifest["triage_snapshot_count"]
+        )
+        assert (
+            project_manifest["pilot_report_snapshot_count"]
+            == readiness_manifest["pilot_report_snapshot_count"]
+        )
+        assert (
+            project_manifest["claim_validation_queue_count"]
+            == readiness_manifest["claim_validation_queue_count"]
+        )
         assert project_manifest["quality_gate_idea_count"] >= 1
         assert project_manifest["average_quality_gate_score"] >= 0
         assert project_manifest["quality_gate_decision_counts"]

@@ -1612,6 +1612,20 @@ async function downloadProjectBundle() {
   }
 }
 
+async function loadProjectBundleReadiness() {
+  renderResult("workflowResult", "Checking project bundle readiness...", "warn");
+  try {
+    const body = await api("/research/export/project-bundle/readiness");
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Bundle readiness <code>${escapeHtml(body.readiness_level)}</code> (${body.readiness_score}). Missing required checks: ${body.missing_required.length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadIdeaReadiness() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -2202,6 +2216,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("researchPacketButton").addEventListener("click", loadResearchPacket);
   $("ideaBundleButton").addEventListener("click", downloadIdeaBundle);
   $("projectBundleButton").addEventListener("click", downloadProjectBundle);
+  $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("readinessButton").addEventListener("click", loadIdeaReadiness);
   $("qualityGateButton").addEventListener("click", loadIdeaQualityGate);
   $("qualityGateTasksButton").addEventListener("click", createQualityGateTasks);

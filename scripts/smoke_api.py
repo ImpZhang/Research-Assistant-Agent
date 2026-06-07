@@ -215,6 +215,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include idea artifact bundle export")
     if "project_handoff_bundle_export" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project handoff bundle export")
+    if "project_bundle_readiness" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project bundle readiness")
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -379,6 +381,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include idea bundle export tool")
     if "export_project_bundle" not in manifest_names:
         raise RuntimeError("tool manifest did not include project bundle export tool")
+    if "get_project_bundle_readiness" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle readiness tool")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
@@ -1870,6 +1874,36 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("advisor brief did not include research plan count")
     if "## Execution Plans" not in plan_advisor_brief["markdown_export"]:
         raise RuntimeError("advisor brief markdown did not include execution plans")
+    project_bundle_readiness = require_ok(
+        client.get("/research/export/project-bundle/readiness"),
+        "project bundle readiness",
+    )
+    if project_bundle_readiness["readiness_level"] != "delivery_ready":
+        raise RuntimeError("project bundle readiness was not delivery-ready")
+    if project_bundle_readiness["readiness_score"] != 1.0:
+        raise RuntimeError("project bundle readiness score was not complete")
+    if project_bundle_readiness["missing_required"]:
+        raise RuntimeError("project bundle readiness still had missing required checks")
+    if "# Project Bundle Readiness" not in project_bundle_readiness["markdown_export"]:
+        raise RuntimeError("project bundle readiness markdown did not include title")
+    if not any(
+        action["id"] == "export_project_bundle"
+        for action in project_bundle_readiness["quick_actions"]
+    ):
+        raise RuntimeError("project bundle readiness did not include export quick action")
+    project_bundle_readiness_manifest = project_bundle_readiness["manifest_summary"]
+    if project_bundle_readiness_manifest["triage_snapshot_count"] < 2:
+        raise RuntimeError("project bundle readiness missed triage snapshot history")
+    if not project_bundle_readiness_manifest["triage_snapshot_comparison_available"]:
+        raise RuntimeError("project bundle readiness missed triage comparison")
+    if project_bundle_readiness_manifest["pilot_report_snapshot_count"] < 2:
+        raise RuntimeError("project bundle readiness missed pilot report history")
+    if not project_bundle_readiness_manifest["pilot_report_snapshot_comparison_available"]:
+        raise RuntimeError("project bundle readiness missed pilot report comparison")
+    if project_bundle_readiness_manifest["claim_validation_queue_count"] < 1:
+        raise RuntimeError("project bundle readiness missed claim validation queue")
+    if project_bundle_readiness_manifest["research_plan_count"] < 1:
+        raise RuntimeError("project bundle readiness missed research plan")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -1921,6 +1955,16 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
+    if (
+        project_bundle_manifest["claim_validation_queue_count"]
+        != project_bundle_readiness_manifest["claim_validation_queue_count"]
+    ):
+        raise RuntimeError("project bundle readiness and export queue counts diverged")
+    if (
+        project_bundle_manifest["pilot_report_snapshot_count"]
+        != project_bundle_readiness_manifest["pilot_report_snapshot_count"]
+    ):
+        raise RuntimeError("project bundle readiness and export pilot counts diverged")
     if project_bundle_manifest["research_plan_count"] < 1:
         raise RuntimeError("project bundle manifest did not include research plans")
     if project_bundle_manifest["quality_gate_idea_count"] < 1:
@@ -2367,6 +2411,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "plan_advisor_brief_id": plan_advisor_brief["id"],
         "plan_advisor_brief_plan_count": plan_advisor_brief["summary"]["research_plan_count"],
         "project_bundle_file_count": len(project_bundle_files),
+        "project_bundle_readiness_level": project_bundle_readiness["readiness_level"],
+        "project_bundle_readiness_score": project_bundle_readiness["readiness_score"],
+        "project_bundle_readiness_missing": len(project_bundle_readiness["missing_required"]),
         "project_bundle_plan_count": project_bundle_manifest["research_plan_count"],
         "project_bundle_triage_snapshot_count": project_bundle_manifest["triage_snapshot_count"],
         "project_bundle_triage_comparison_available": project_bundle_manifest[

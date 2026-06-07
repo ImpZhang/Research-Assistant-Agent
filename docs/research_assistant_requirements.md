@@ -840,6 +840,8 @@ opportunity radar 需要能一键转成 task board 任务：从 top opportunitie
 
 系统需要提供 project handoff bundle export：把 triage brief、persisted triage snapshots、latest triage snapshot comparison、pilot report snapshots、latest pilot report snapshot comparison、progress overview、readiness overview、quality gate overview、opportunity radar、claim validation queue、recent task board、advisor briefs、research plans、plan progress reports 和 JSON metadata 打包成 zip，用于项目级备份、导师沟通和外部 agent/MCP 接手。bundle 需要同时提供 claim validation queue Markdown/JSON metadata 与 pilot report snapshot Markdown/JSON metadata，让接手者优先看到哪些科研主张仍缺证据、试点周报结论如何变化、哪些客户行动项需要当天验证。
 
+系统需要提供 project bundle readiness，作为 handoff bundle 的导出前检查：复用 bundle manifest 信号，检查 project scope、quality gate、triage snapshot history、triage comparison、pilot report history、pilot comparison、claim validation queue、research plan 和 opportunity radar 是否齐备。输出 readiness score、readiness level、missing required checks、recommended actions、quick actions、manifest summary 和 Markdown report。它回答“现在这包材料能不能发给客户/导师”，并且必须与 `/research/export/project-bundle` 的 manifest 口径一致。
+
 系统需要支持 readiness blocker task generation：readiness 评分产出的 blockers 不能只停留在报告里，应能一键转成 task board 任务，并带上 readiness_score、decision、owner_type=idea_readiness、due_phase=readiness_follow_up 和图边 `idea_readiness_creates_task`，保证“评分 -> 阻塞项 -> 可执行任务”闭环。
 
 系统需要支持 novelty refresh：研究者应能对任意 idea 重新运行 local/external literature collision search，指定 query override 和 limit，并把结果保存为 `completed_external_novelty_refresh` 类型的 novelty check。这样 idea 进入 proposal 或执行计划前，可以按最新问题表述重新检查撞车风险。

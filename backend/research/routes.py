@@ -121,6 +121,7 @@ from backend.research.schemas import (
     ProposalRevisionRead,
     ProposalReviewCreate,
     ProposalReviewRead,
+    ProjectBundleReadinessResponse,
     ProjectQualityGateOverviewResponse,
     ProjectQualityGateTaskGenerateRequest,
     ProjectCockpitResponse,
@@ -306,6 +307,7 @@ def status() -> ProjectStatus:
             "opportunity_radar_task_generation",
             "idea_artifact_bundle_export",
             "project_handoff_bundle_export",
+            "project_bundle_readiness",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -513,6 +515,16 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/export/project-bundle",
             output_model="application/zip",
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_readiness",
+            description=(
+                "Check whether the project handoff bundle has enough snapshots, "
+                "evidence queues, plans, and overview materials for delivery."
+            ),
+            method="GET",
+            path="/research/export/project-bundle/readiness",
+            output_model="ProjectBundleReadinessResponse",
         ),
         ToolManifestItem(
             name="get_idea_readiness",
@@ -9173,6 +9185,55 @@ def export_idea_bundle(
     )
 
 
+@router.get(
+    "/export/project-bundle/readiness",
+    response_model=ProjectBundleReadinessResponse,
+)
+def get_project_bundle_readiness(
+    session: Session = Depends(get_session),
+) -> ProjectBundleReadinessResponse:
+    generated_at = datetime.now(timezone.utc)
+    context = _project_bundle_context(session)
+    manifest = context["manifest"]
+    checklist = _project_bundle_readiness_checklist(manifest)
+    required_items = [item for item in checklist if item.required]
+    required_done = sum(1 for item in required_items if item.status == "done")
+    required_total = len(required_items)
+    readiness_score = round(required_done / required_total, 4) if required_total else 1.0
+    missing_required = [item.label for item in required_items if item.status != "done"]
+    recommended_actions = _project_bundle_readiness_recommended_actions(checklist)
+    quick_actions = _project_bundle_readiness_quick_actions(
+        checklist,
+        readiness_score=readiness_score,
+    )
+    readiness_level = _project_bundle_readiness_level(readiness_score)
+    markdown_export = _render_project_bundle_readiness_markdown(
+        generated_at=generated_at,
+        readiness_score=readiness_score,
+        readiness_level=readiness_level,
+        required_done=required_done,
+        required_total=required_total,
+        missing_required=missing_required,
+        checklist=checklist,
+        recommended_actions=recommended_actions,
+        manifest=manifest,
+    )
+    return ProjectBundleReadinessResponse(
+        generated_at=generated_at,
+        readiness_score=readiness_score,
+        readiness_level=readiness_level,
+        required_done=required_done,
+        required_total=required_total,
+        missing_required=missing_required,
+        checklist=checklist,
+        recommended_actions=recommended_actions,
+        quick_actions=quick_actions,
+        manifest_summary=manifest,
+        markdown_export=markdown_export,
+        message="Checked project handoff bundle readiness from current bundle manifest signals.",
+    )
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -9295,48 +9356,22 @@ def _build_idea_bundle_zip(session: Session, idea_id: str) -> bytes:
 
 
 def _build_project_bundle_zip(session: Session) -> bytes:
-    overview = get_research_progress_overview(session=session)
-    readiness_overview = get_project_readiness_overview(session=session)
-    quality_overview = get_project_quality_gate_overview(session=session)
-    opportunity_radar = get_research_opportunity_radar(session=session)
-    claim_validation_queue = get_claim_validation_queue(limit=100, session=session)
-    triage_brief = get_project_triage_brief(session=session)
-    triage_snapshot_service = ProjectTriageSnapshotService(session)
-    triage_snapshots = triage_snapshot_service.list_snapshots(limit=12)
-    triage_snapshot_comparison = (
-        triage_snapshot_service.compare_snapshots(triage_snapshots[1].id, triage_snapshots[0].id)
-        if len(triage_snapshots) >= 2
-        else None
-    )
-    pilot_report_snapshots = _project_bundle_pilot_report_snapshots(session, limit=12)
-    pilot_report_snapshot_comparison = (
-        _compare_project_pilot_report_snapshots(
-            pilot_report_snapshots[1],
-            pilot_report_snapshots[0],
-        )
-        if len(pilot_report_snapshots) >= 2
-        else None
-    )
-    briefs = ResearchBriefService(session).list_briefs(limit=12)
-    plans = ResearchPlanService(session).list_plans(limit=12)
-    tasks = ResearchTaskService(session).list_tasks(limit=200)
-    plan_progress_items = [get_research_plan_progress(plan.id, session=session) for plan in plans]
-    manifest = _project_bundle_manifest(
-        overview=overview,
-        readiness_overview=readiness_overview,
-        quality_overview=quality_overview,
-        opportunity_radar=opportunity_radar,
-        claim_validation_queue=claim_validation_queue,
-        triage_brief=triage_brief,
-        triage_snapshots=triage_snapshots,
-        triage_snapshot_comparison=triage_snapshot_comparison,
-        pilot_report_snapshots=pilot_report_snapshots,
-        pilot_report_snapshot_comparison=pilot_report_snapshot_comparison,
-        briefs=briefs,
-        plans=plans,
-        tasks=tasks,
-        plan_progress_items=plan_progress_items,
-    )
+    context = _project_bundle_context(session)
+    overview = context["overview"]
+    readiness_overview = context["readiness_overview"]
+    quality_overview = context["quality_overview"]
+    opportunity_radar = context["opportunity_radar"]
+    claim_validation_queue = context["claim_validation_queue"]
+    triage_brief = context["triage_brief"]
+    triage_snapshots = context["triage_snapshots"]
+    triage_snapshot_comparison = context["triage_snapshot_comparison"]
+    pilot_report_snapshots = context["pilot_report_snapshots"]
+    pilot_report_snapshot_comparison = context["pilot_report_snapshot_comparison"]
+    briefs = context["briefs"]
+    plans = context["plans"]
+    tasks = context["tasks"]
+    plan_progress_items = context["plan_progress_items"]
+    manifest = context["manifest"]
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -9431,6 +9466,68 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 plan_progress.markdown_export,
             )
     return buffer.getvalue()
+
+
+def _project_bundle_context(session: Session) -> dict[str, Any]:
+    overview = get_research_progress_overview(session=session)
+    readiness_overview = get_project_readiness_overview(session=session)
+    quality_overview = get_project_quality_gate_overview(session=session)
+    opportunity_radar = get_research_opportunity_radar(session=session)
+    claim_validation_queue = get_claim_validation_queue(limit=100, session=session)
+    triage_brief = get_project_triage_brief(session=session)
+    triage_snapshot_service = ProjectTriageSnapshotService(session)
+    triage_snapshots = triage_snapshot_service.list_snapshots(limit=12)
+    triage_snapshot_comparison = (
+        triage_snapshot_service.compare_snapshots(triage_snapshots[1].id, triage_snapshots[0].id)
+        if len(triage_snapshots) >= 2
+        else None
+    )
+    pilot_report_snapshots = _project_bundle_pilot_report_snapshots(session, limit=12)
+    pilot_report_snapshot_comparison = (
+        _compare_project_pilot_report_snapshots(
+            pilot_report_snapshots[1],
+            pilot_report_snapshots[0],
+        )
+        if len(pilot_report_snapshots) >= 2
+        else None
+    )
+    briefs = ResearchBriefService(session).list_briefs(limit=12)
+    plans = ResearchPlanService(session).list_plans(limit=12)
+    tasks = ResearchTaskService(session).list_tasks(limit=200)
+    plan_progress_items = [get_research_plan_progress(plan.id, session=session) for plan in plans]
+    manifest = _project_bundle_manifest(
+        overview=overview,
+        readiness_overview=readiness_overview,
+        quality_overview=quality_overview,
+        opportunity_radar=opportunity_radar,
+        claim_validation_queue=claim_validation_queue,
+        triage_brief=triage_brief,
+        triage_snapshots=triage_snapshots,
+        triage_snapshot_comparison=triage_snapshot_comparison,
+        pilot_report_snapshots=pilot_report_snapshots,
+        pilot_report_snapshot_comparison=pilot_report_snapshot_comparison,
+        briefs=briefs,
+        plans=plans,
+        tasks=tasks,
+        plan_progress_items=plan_progress_items,
+    )
+    return {
+        "overview": overview,
+        "readiness_overview": readiness_overview,
+        "quality_overview": quality_overview,
+        "opportunity_radar": opportunity_radar,
+        "claim_validation_queue": claim_validation_queue,
+        "triage_brief": triage_brief,
+        "triage_snapshots": triage_snapshots,
+        "triage_snapshot_comparison": triage_snapshot_comparison,
+        "pilot_report_snapshots": pilot_report_snapshots,
+        "pilot_report_snapshot_comparison": pilot_report_snapshot_comparison,
+        "briefs": briefs,
+        "plans": plans,
+        "tasks": tasks,
+        "plan_progress_items": plan_progress_items,
+        "manifest": manifest,
+    }
 
 
 def _project_bundle_pilot_report_snapshots(
@@ -9571,6 +9668,274 @@ def _project_bundle_manifest(
             for item in plan_progress_items
         ],
     }
+
+
+def _project_bundle_readiness_checklist(
+    manifest: dict[str, Any],
+) -> list[ProjectOnboardingChecklistItem]:
+    return [
+        _project_bundle_readiness_item(
+            item_id="project_scope",
+            label="Project scope and recent task state",
+            done=manifest["idea_count"] >= 1 and manifest["recent_task_count"] >= 1,
+            detail=(
+                f"{manifest['idea_count']} ideas, {manifest['recent_task_count']} recent tasks, "
+                f"{manifest['open_task_count']} open tasks."
+            ),
+            action_label="Open project overview",
+            action_method="GET",
+            action_path="/research/progress/overview",
+        ),
+        _project_bundle_readiness_item(
+            item_id="quality_gate_context",
+            label="Quality gate overview",
+            done=manifest["quality_gate_idea_count"] >= 1,
+            detail=(
+                f"{manifest['quality_gate_idea_count']} ideas scored, "
+                f"average gate score {manifest['average_quality_gate_score']}."
+            ),
+            action_label="Open quality overview",
+            action_method="GET",
+            action_path="/research/quality/overview",
+        ),
+        _project_bundle_readiness_item(
+            item_id="triage_snapshot_history",
+            label="Saved triage snapshot history",
+            done=manifest["triage_snapshot_count"] >= 2,
+            detail=f"{manifest['triage_snapshot_count']} triage snapshots saved.",
+            action_label="Save triage snapshot",
+            action_method="POST",
+            action_path="/research/triage/snapshots",
+        ),
+        _project_bundle_readiness_item(
+            item_id="triage_change_report",
+            label="Latest triage change report",
+            done=manifest["triage_snapshot_comparison_available"],
+            detail=(
+                "Comparison available."
+                if manifest["triage_snapshot_comparison_available"]
+                else "Save two triage snapshots, then compare them."
+            ),
+            action_label="Compare triage snapshots",
+            action_method="POST",
+            action_path="/research/triage/snapshots/compare",
+        ),
+        _project_bundle_readiness_item(
+            item_id="pilot_report_history",
+            label="Saved pilot report history",
+            done=manifest["pilot_report_snapshot_count"] >= 2,
+            detail=f"{manifest['pilot_report_snapshot_count']} pilot report snapshots saved.",
+            action_label="Save pilot report",
+            action_method="POST",
+            action_path="/research/pilot/report/snapshots",
+        ),
+        _project_bundle_readiness_item(
+            item_id="pilot_change_report",
+            label="Latest pilot report change report",
+            done=manifest["pilot_report_snapshot_comparison_available"],
+            detail=(
+                "Comparison available."
+                if manifest["pilot_report_snapshot_comparison_available"]
+                else "Save two pilot report snapshots, then compare them."
+            ),
+            action_label="Compare pilot reports",
+            action_method="POST",
+            action_path="/research/pilot/report/snapshots/compare",
+        ),
+        _project_bundle_readiness_item(
+            item_id="claim_validation_queue",
+            label="Claim validation queue",
+            done=manifest["claim_validation_queue_count"] >= 1,
+            detail=(
+                f"{manifest['claim_validation_queue_count']} claims queued; "
+                f"{manifest['claim_validation_queue_critical_count']} critical, "
+                f"{manifest['claim_validation_queue_high_count']} high."
+            ),
+            action_label="Open claim queue",
+            action_method="GET",
+            action_path="/research/claims/validation-queue",
+        ),
+        _project_bundle_readiness_item(
+            item_id="research_plan",
+            label="Research execution plan",
+            done=manifest["research_plan_count"] >= 1,
+            detail=f"{manifest['research_plan_count']} research plans bundled.",
+            action_label="Create research plan",
+            action_method="POST",
+            action_path="/research/plans",
+        ),
+        _project_bundle_readiness_item(
+            item_id="opportunity_radar",
+            label="Opportunity radar",
+            done=manifest["opportunity_count"] >= 1,
+            detail=(
+                f"{manifest['opportunity_count']} opportunities, "
+                f"top score {manifest['top_opportunity_score']}."
+            ),
+            action_label="Open opportunity radar",
+            action_method="GET",
+            action_path="/research/opportunities/radar",
+        ),
+        _project_bundle_readiness_item(
+            item_id="advisor_briefs",
+            label="Advisor-ready brief",
+            done=manifest["brief_count"] >= 1,
+            detail=f"{manifest['brief_count']} advisor briefs saved.",
+            required=False,
+            warning=manifest["brief_count"] == 0,
+            action_label="Create advisor brief",
+            action_method="POST",
+            action_path="/research/briefs",
+        ),
+        _project_bundle_readiness_item(
+            item_id="blocked_task_review",
+            label="Blocked task review",
+            done=manifest["blocked_task_count"] == 0,
+            detail=f"{manifest['blocked_task_count']} blocked tasks in the handoff bundle.",
+            required=False,
+            warning=manifest["blocked_task_count"] > 0,
+            action_label="Open task board",
+            action_method="GET",
+            action_path="/research/tasks",
+        ),
+    ]
+
+
+def _project_bundle_readiness_item(
+    *,
+    item_id: str,
+    label: str,
+    done: bool,
+    detail: str,
+    required: bool = True,
+    warning: bool = False,
+    action_label: str = "",
+    action_method: str = "GET",
+    action_path: str = "",
+) -> ProjectOnboardingChecklistItem:
+    status = "done" if done else ("warning" if warning else "todo")
+    return ProjectOnboardingChecklistItem(
+        id=item_id,
+        label=label,
+        status=status,
+        detail=detail,
+        required=required,
+        action_label=action_label,
+        action_method=action_method,
+        action_path=action_path,
+    )
+
+
+def _project_bundle_readiness_level(readiness_score: float) -> str:
+    if readiness_score >= 1.0:
+        return "delivery_ready"
+    if readiness_score >= 0.75:
+        return "nearly_ready"
+    if readiness_score >= 0.5:
+        return "needs_handoff_work"
+    return "not_ready"
+
+
+def _project_bundle_readiness_recommended_actions(
+    checklist: list[ProjectOnboardingChecklistItem],
+) -> list[str]:
+    actions = [
+        f"{item.action_label}: {item.detail}"
+        for item in checklist
+        if item.required and item.status != "done" and item.action_label
+    ]
+    if actions:
+        return actions[:8]
+    warnings = [
+        f"Review optional warning: {item.label}."
+        for item in checklist
+        if not item.required and item.status == "warning"
+    ]
+    return [
+        *warnings[:3],
+        "Export the project bundle and review README.md before sharing it with a customer or advisor.",
+    ]
+
+
+def _project_bundle_readiness_quick_actions(
+    checklist: list[ProjectOnboardingChecklistItem],
+    *,
+    readiness_score: float,
+) -> list[dict[str, Any]]:
+    actions = [
+        {
+            "id": item.id,
+            "label": item.action_label or item.label,
+            "method": item.action_method,
+            "path": item.action_path,
+            "enabled": True,
+        }
+        for item in checklist
+        if item.status != "done" and item.action_path
+    ]
+    export_action = {
+        "id": "export_project_bundle",
+        "label": "Export project bundle",
+        "method": "GET",
+        "path": "/research/export/project-bundle",
+        "enabled": readiness_score >= 0.75,
+    }
+    if len(actions) >= 8:
+        return [*actions[:7], export_action]
+    return [*actions, export_action]
+
+
+def _render_project_bundle_readiness_markdown(
+    *,
+    generated_at: datetime,
+    readiness_score: float,
+    readiness_level: str,
+    required_done: int,
+    required_total: int,
+    missing_required: list[str],
+    checklist: list[ProjectOnboardingChecklistItem],
+    recommended_actions: list[str],
+    manifest: dict[str, Any],
+) -> str:
+    lines = [
+        "# Project Bundle Readiness",
+        "",
+        f"- Generated At: `{generated_at.isoformat()}`",
+        f"- Readiness Level: `{readiness_level}`",
+        f"- Readiness Score: {readiness_score}",
+        f"- Required Checks: {required_done}/{required_total}",
+        f"- Bundle Ideas: {manifest['idea_count']}",
+        f"- Recent Tasks: {manifest['recent_task_count']}",
+        f"- Claim Queue Items: {manifest['claim_validation_queue_count']}",
+        f"- Research Plans: {manifest['research_plan_count']}",
+        "",
+        "## Missing Required Checks",
+        "",
+    ]
+    if missing_required:
+        lines.extend(f"- {item}" for item in missing_required)
+    else:
+        lines.append("- None.")
+    lines.extend(["", "## Checklist", ""])
+    for item in checklist:
+        required_marker = "required" if item.required else "optional"
+        lines.append(f"- `{item.status}` `{required_marker}` {item.label}: {item.detail}")
+    lines.extend(["", "## Recommended Actions", ""])
+    lines.extend(f"- {action}" for action in recommended_actions)
+    lines.extend(["", "## Bundle Signals", ""])
+    lines.extend(
+        [
+            f"- Triage Snapshots: {manifest['triage_snapshot_count']}",
+            f"- Triage Comparison Available: {manifest['triage_snapshot_comparison_available']}",
+            f"- Pilot Report Snapshots: {manifest['pilot_report_snapshot_count']}",
+            "- Pilot Report Comparison Available: "
+            f"{manifest['pilot_report_snapshot_comparison_available']}",
+            f"- Opportunities: {manifest['opportunity_count']}",
+            f"- Advisor Briefs: {manifest['brief_count']}",
+            f"- Blocked Tasks: {manifest['blocked_task_count']}",
+        ]
+    )
+    return "\n".join(lines).strip() + "\n"
 
 
 def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:

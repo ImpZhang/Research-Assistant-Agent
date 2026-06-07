@@ -953,6 +953,21 @@ class ProjectOnboardingReadinessResponse(BaseModel):
     message: str
 
 
+class ProjectBundleReadinessResponse(BaseModel):
+    generated_at: datetime
+    readiness_score: float = 0.0
+    readiness_level: str = "not_ready"
+    required_done: int = 0
+    required_total: int = 0
+    missing_required: list[str] = Field(default_factory=list)
+    checklist: list[ProjectOnboardingChecklistItem] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+    quick_actions: list[dict[str, Any]] = Field(default_factory=list)
+    manifest_summary: dict[str, Any] = Field(default_factory=dict)
+    markdown_export: str = ""
+    message: str
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead
