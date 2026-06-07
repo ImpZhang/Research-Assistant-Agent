@@ -838,7 +838,7 @@ project triage snapshot comparison 需要能一键转成 task board 任务：从
 
 opportunity radar 需要能一键转成 task board 任务：从 top opportunities 的 next actions 创建 `owner_type=opportunity_radar`、`due_phase=opportunity_follow_up` 的任务，并写入 `opportunity_radar_creates_task` 图边。这样“机会判断 -> 行动建议 -> 任务推进”形成闭环。
 
-系统需要提供 project handoff bundle export：把 triage brief、persisted triage snapshots、latest triage snapshot comparison、progress overview、readiness overview、quality gate overview、opportunity radar、claim validation queue、recent task board、advisor briefs、research plans、plan progress reports 和 JSON metadata 打包成 zip，用于项目级备份、导师沟通和外部 agent/MCP 接手。bundle 需要同时提供 claim validation queue Markdown 与 JSON metadata，让接手者优先看到哪些科研主张仍缺证据、存在 counterevidence 或需要当天验证。
+系统需要提供 project handoff bundle export：把 triage brief、persisted triage snapshots、latest triage snapshot comparison、pilot report snapshots、latest pilot report snapshot comparison、progress overview、readiness overview、quality gate overview、opportunity radar、claim validation queue、recent task board、advisor briefs、research plans、plan progress reports 和 JSON metadata 打包成 zip，用于项目级备份、导师沟通和外部 agent/MCP 接手。bundle 需要同时提供 claim validation queue Markdown/JSON metadata 与 pilot report snapshot Markdown/JSON metadata，让接手者优先看到哪些科研主张仍缺证据、试点周报结论如何变化、哪些客户行动项需要当天验证。
 
 系统需要支持 readiness blocker task generation：readiness 评分产出的 blockers 不能只停留在报告里，应能一键转成 task board 任务，并带上 readiness_score、decision、owner_type=idea_readiness、due_phase=readiness_follow_up 和图边 `idea_readiness_creates_task`，保证“评分 -> 阻塞项 -> 可执行任务”闭环。
 

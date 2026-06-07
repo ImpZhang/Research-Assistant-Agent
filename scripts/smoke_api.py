@@ -1893,11 +1893,15 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/triage-brief.json",
             "metadata/triage-snapshots.json",
             "metadata/triage-snapshot-comparison.json",
+            "metadata/pilot-report-snapshots.json",
+            "metadata/pilot-report-snapshot-comparison.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
             f"artifacts/triage/project-triage-snapshot-{triage_snapshot['id']}.md",
             "artifacts/triage/latest-triage-snapshot-comparison.md",
+            f"artifacts/pilot/pilot-report-snapshot-{candidate_pilot_report_snapshot['id']}.md",
+            "artifacts/pilot/latest-pilot-report-snapshot-comparison.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -1908,6 +1912,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
         project_bundle_triage_comparison = json.loads(
             archive.read("metadata/triage-snapshot-comparison.json")
+        )
+        project_bundle_pilot_snapshots = json.loads(
+            archive.read("metadata/pilot-report-snapshots.json")
+        )
+        project_bundle_pilot_comparison = json.loads(
+            archive.read("metadata/pilot-report-snapshot-comparison.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -1935,6 +1945,32 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle manifest did not point at the comparison baseline")
     if project_bundle_triage_comparison["candidate_snapshot_id"] != triage_snapshot["id"]:
         raise RuntimeError("project bundle comparison metadata used the wrong candidate")
+    if project_bundle_manifest["pilot_report_snapshot_count"] < 2:
+        raise RuntimeError("project bundle manifest did not include pilot report snapshots")
+    if (
+        project_bundle_manifest["latest_pilot_report_snapshot_id"]
+        != candidate_pilot_report_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle manifest did not point at latest pilot snapshot")
+    if not project_bundle_manifest["pilot_report_snapshot_comparison_available"]:
+        raise RuntimeError("project bundle manifest did not expose pilot report comparison")
+    if (
+        project_bundle_manifest["latest_pilot_report_snapshot_comparison_candidate_id"]
+        != candidate_pilot_report_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle pilot comparison candidate was wrong")
+    if (
+        project_bundle_manifest["latest_pilot_report_snapshot_comparison_baseline_id"]
+        != pilot_report_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle pilot comparison baseline was wrong")
+    if project_bundle_pilot_snapshots[0]["id"] != candidate_pilot_report_snapshot["id"]:
+        raise RuntimeError("project bundle pilot snapshot metadata order was wrong")
+    if (
+        project_bundle_pilot_comparison["candidate_snapshot_id"]
+        != candidate_pilot_report_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle pilot comparison metadata used the wrong candidate")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -2335,6 +2371,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_triage_snapshot_count": project_bundle_manifest["triage_snapshot_count"],
         "project_bundle_triage_comparison_available": project_bundle_manifest[
             "triage_snapshot_comparison_available"
+        ],
+        "project_bundle_pilot_snapshot_count": project_bundle_manifest[
+            "pilot_report_snapshot_count"
+        ],
+        "project_bundle_pilot_comparison_available": project_bundle_manifest[
+            "pilot_report_snapshot_comparison_available"
         ],
         "project_bundle_opportunity_count": project_bundle_manifest["opportunity_count"],
         "project_bundle_claim_queue_count": project_bundle_manifest["claim_validation_queue_count"],

@@ -2503,6 +2503,20 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "Claim Validation Tasks" in brief_export.text
     assert "## Triage Snapshot Changes" in brief_export.text
 
+    baseline_pilot_snapshot = client.post(
+        "/research/pilot/report/snapshots",
+        json={"title": "Pytest Pilot Report Baseline", "created_by": "pytest"},
+    )
+    assert baseline_pilot_snapshot.status_code == 200
+    baseline_pilot_snapshot_body = baseline_pilot_snapshot.json()
+
+    pilot_snapshot = client.post(
+        "/research/pilot/report/snapshots",
+        json={"title": "Pytest Pilot Report Candidate", "created_by": "pytest"},
+    )
+    assert pilot_snapshot.status_code == 200
+    pilot_snapshot_body = pilot_snapshot.json()
+
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200
     assert project_bundle.headers["content-type"] == "application/zip"
@@ -2520,6 +2534,8 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "metadata/triage-brief.json" in names
         assert "metadata/triage-snapshots.json" in names
         assert "metadata/triage-snapshot-comparison.json" in names
+        assert "metadata/pilot-report-snapshots.json" in names
+        assert "metadata/pilot-report-snapshot-comparison.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         assert "metadata/claim-validation-queue.json" in names
@@ -2527,10 +2543,16 @@ Future work should preserve proposal drafts as reviewable artifacts.
             f"artifacts/triage/project-triage-snapshot-{triage_snapshot_body['id']}.md"
         ) in names
         assert "artifacts/triage/latest-triage-snapshot-comparison.md" in names
+        assert (f"artifacts/pilot/pilot-report-snapshot-{pilot_snapshot_body['id']}.md") in names
+        assert "artifacts/pilot/latest-pilot-report-snapshot-comparison.md" in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         bundled_claim_queue = json.loads(archive.read("metadata/claim-validation-queue.json"))
         bundled_triage_comparison = json.loads(
             archive.read("metadata/triage-snapshot-comparison.json")
+        )
+        bundled_pilot_snapshots = json.loads(archive.read("metadata/pilot-report-snapshots.json"))
+        bundled_pilot_comparison = json.loads(
+            archive.read("metadata/pilot-report-snapshot-comparison.json")
         )
         assert project_manifest["idea_count"] >= 1
         assert project_manifest["quality_gate_idea_count"] >= 1
@@ -2549,6 +2571,19 @@ Future work should preserve proposal drafts as reviewable artifacts.
             == triage_snapshot_body["id"]
         )
         assert bundled_triage_comparison["candidate_snapshot_id"] == triage_snapshot_body["id"]
+        assert project_manifest["pilot_report_snapshot_count"] >= 2
+        assert project_manifest["latest_pilot_report_snapshot_id"] == pilot_snapshot_body["id"]
+        assert project_manifest["pilot_report_snapshot_comparison_available"] is True
+        assert (
+            project_manifest["latest_pilot_report_snapshot_comparison_baseline_id"]
+            == baseline_pilot_snapshot_body["id"]
+        )
+        assert (
+            project_manifest["latest_pilot_report_snapshot_comparison_candidate_id"]
+            == pilot_snapshot_body["id"]
+        )
+        assert bundled_pilot_snapshots[0]["id"] == pilot_snapshot_body["id"]
+        assert bundled_pilot_comparison["candidate_snapshot_id"] == pilot_snapshot_body["id"]
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["claim_validation_queue_count"] >= 1
         assert project_manifest["claim_validation_queue_idea_count"] >= 1

@@ -9308,6 +9308,15 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         if len(triage_snapshots) >= 2
         else None
     )
+    pilot_report_snapshots = _project_bundle_pilot_report_snapshots(session, limit=12)
+    pilot_report_snapshot_comparison = (
+        _compare_project_pilot_report_snapshots(
+            pilot_report_snapshots[1],
+            pilot_report_snapshots[0],
+        )
+        if len(pilot_report_snapshots) >= 2
+        else None
+    )
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -9321,6 +9330,8 @@ def _build_project_bundle_zip(session: Session) -> bytes:
         triage_brief=triage_brief,
         triage_snapshots=triage_snapshots,
         triage_snapshot_comparison=triage_snapshot_comparison,
+        pilot_report_snapshots=pilot_report_snapshots,
+        pilot_report_snapshot_comparison=pilot_report_snapshot_comparison,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -9351,6 +9362,17 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "metadata/triage-snapshot-comparison.json",
                 _json_dump(triage_snapshot_comparison),
             )
+        archive.writestr(
+            "metadata/pilot-report-snapshots.json",
+            _json_dump(
+                [_serialize_research_brief(snapshot) for snapshot in pilot_report_snapshots]
+            ),
+        )
+        if pilot_report_snapshot_comparison:
+            archive.writestr(
+                "metadata/pilot-report-snapshot-comparison.json",
+                _json_dump(pilot_report_snapshot_comparison),
+            )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
@@ -9375,6 +9397,19 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "artifacts/triage/latest-triage-snapshot-comparison.md",
                 triage_snapshot_comparison["markdown_export"],
             )
+        for snapshot in pilot_report_snapshots:
+            if snapshot.markdown_export:
+                _write_markdown(
+                    archive,
+                    f"artifacts/pilot/pilot-report-snapshot-{snapshot.id}.md",
+                    snapshot.markdown_export,
+                )
+        if pilot_report_snapshot_comparison:
+            _write_markdown(
+                archive,
+                "artifacts/pilot/latest-pilot-report-snapshot-comparison.md",
+                pilot_report_snapshot_comparison["markdown_export"],
+            )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -9398,6 +9433,20 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     return buffer.getvalue()
 
 
+def _project_bundle_pilot_report_snapshots(
+    session: Session,
+    *,
+    limit: int = 12,
+) -> list[ResearchBrief]:
+    return (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "pilot_report")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(max(1, min(limit, 50)))
+        .all()
+    )
+
+
 def _project_bundle_manifest(
     *,
     overview: ResearchOverviewResponse,
@@ -9408,6 +9457,8 @@ def _project_bundle_manifest(
     triage_brief: ProjectTriageBriefResponse,
     triage_snapshots: list[ProjectTriageSnapshot],
     triage_snapshot_comparison: dict | None,
+    pilot_report_snapshots: list[ResearchBrief],
+    pilot_report_snapshot_comparison: dict | None,
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -9445,6 +9496,38 @@ def _project_bundle_manifest(
         "latest_triage_snapshot_comparison_added_next_action_count": (
             len(triage_snapshot_comparison["added_next_actions"])
             if triage_snapshot_comparison
+            else 0
+        ),
+        "pilot_report_snapshot_count": len(pilot_report_snapshots),
+        "latest_pilot_report_snapshot_id": (
+            pilot_report_snapshots[0].id if pilot_report_snapshots else ""
+        ),
+        "pilot_report_snapshot_comparison_available": (
+            pilot_report_snapshot_comparison is not None
+        ),
+        "latest_pilot_report_snapshot_comparison_baseline_id": (
+            pilot_report_snapshot_comparison["baseline_snapshot_id"]
+            if pilot_report_snapshot_comparison
+            else ""
+        ),
+        "latest_pilot_report_snapshot_comparison_candidate_id": (
+            pilot_report_snapshot_comparison["candidate_snapshot_id"]
+            if pilot_report_snapshot_comparison
+            else ""
+        ),
+        "latest_pilot_report_snapshot_comparison_added_risk_count": (
+            len(pilot_report_snapshot_comparison["added_risks"])
+            if pilot_report_snapshot_comparison
+            else 0
+        ),
+        "latest_pilot_report_snapshot_comparison_added_next_action_count": (
+            len(pilot_report_snapshot_comparison["added_next_actions"])
+            if pilot_report_snapshot_comparison
+            else 0
+        ),
+        "latest_pilot_report_snapshot_comparison_added_quick_action_count": (
+            len(pilot_report_snapshot_comparison["added_quick_actions"])
+            if pilot_report_snapshot_comparison
             else 0
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
@@ -9503,6 +9586,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         f"- Claim Validation Queue: {manifest['claim_validation_queue_count']}",
         f"- Research Plans: {manifest['research_plan_count']}",
         f"- Briefs: {manifest['brief_count']}",
+        f"- Pilot Report Snapshots: {manifest['pilot_report_snapshot_count']}",
         "",
         "## Start Here",
         "",
@@ -9518,9 +9602,14 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         lines.append(
             "- `artifacts/triage/latest-triage-snapshot-comparison.md`: latest saved triage change report."
         )
+    if manifest.get("pilot_report_snapshot_comparison_available"):
+        lines.append(
+            "- `artifacts/pilot/latest-pilot-report-snapshot-comparison.md`: latest saved pilot report change report."
+        )
     lines.extend(
         [
             "- `artifacts/triage/`: persisted project triage decision snapshots.",
+            "- `artifacts/pilot/`: persisted customer pilot reports and latest report comparison.",
             "- `artifacts/briefs/`: persisted advisor or group-meeting briefs.",
             "- `artifacts/plans/`: execution plans and plan progress reports.",
             "- `metadata/`: JSON payloads for downstream tools or backup.",
