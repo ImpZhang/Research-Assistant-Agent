@@ -968,6 +968,12 @@ class ProjectBundleReadinessResponse(BaseModel):
     message: str
 
 
+class ProjectBundleReadinessTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=8, ge=1, le=20)
+    include_optional: bool = True
+    created_by: str = "system"
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

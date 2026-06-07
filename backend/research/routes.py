@@ -122,6 +122,7 @@ from backend.research.schemas import (
     ProposalReviewCreate,
     ProposalReviewRead,
     ProjectBundleReadinessResponse,
+    ProjectBundleReadinessTaskGenerateRequest,
     ProjectQualityGateOverviewResponse,
     ProjectQualityGateTaskGenerateRequest,
     ProjectCockpitResponse,
@@ -308,6 +309,7 @@ def status() -> ProjectStatus:
             "idea_artifact_bundle_export",
             "project_handoff_bundle_export",
             "project_bundle_readiness",
+            "project_bundle_readiness_task_generation",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -525,6 +527,17 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/export/project-bundle/readiness",
             output_model="ProjectBundleReadinessResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_bundle_readiness",
+            description=(
+                "Turn project bundle readiness gaps and warnings into handoff task-board work."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/readiness/tasks",
+            input_model="ProjectBundleReadinessTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_idea_readiness",
@@ -8380,6 +8393,7 @@ def _graph_edge_summary(session: Session, canonical_keys: list[str]) -> dict[str
         "idea_has_quality_gate",
         "quality_gate_creates_task",
         "project_onboarding_creates_task",
+        "project_bundle_readiness_creates_task",
         "project_cockpit_creates_task",
         "project_advisor_chat_creates_task",
         "project_triage_creates_task",
@@ -9231,6 +9245,30 @@ def get_project_bundle_readiness(
         manifest_summary=manifest,
         markdown_export=markdown_export,
         message="Checked project handoff bundle readiness from current bundle manifest signals.",
+    )
+
+
+@router.post(
+    "/export/project-bundle/readiness/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_bundle_readiness(
+    payload: ProjectBundleReadinessTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    readiness = get_project_bundle_readiness(session=session)
+    tasks = ResearchTaskService(session).create_from_project_bundle_readiness(
+        readiness.model_dump(mode="json"),
+        limit=payload.limit,
+        include_optional=payload.include_optional,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} project bundle readiness tasks from "
+            f"{readiness.readiness_level} handoff state."
+        ),
     )
 
 

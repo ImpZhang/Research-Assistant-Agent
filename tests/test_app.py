@@ -98,6 +98,7 @@ def test_research_status() -> None:
     assert "idea_artifact_bundle_export" in body["implemented_capabilities"]
     assert "project_handoff_bundle_export" in body["implemented_capabilities"]
     assert "project_bundle_readiness" in body["implemented_capabilities"]
+    assert "project_bundle_readiness_task_generation" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
@@ -194,6 +195,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "export_idea_bundle" in names
     assert "export_project_bundle" in names
     assert "get_project_bundle_readiness" in names
+    assert "create_tasks_from_project_bundle_readiness" in names
     assert "get_idea_readiness" in names
     assert "get_idea_quality_gate" in names
     assert "create_tasks_from_idea_quality_gate" in names
@@ -248,6 +250,15 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     assert project_bundle_readiness["http"]["method"] == "GET"
     assert project_bundle_readiness["http"]["path"] == "/research/export/project-bundle/readiness"
     assert project_bundle_readiness["annotations"]["readOnlyHint"] is True
+
+    project_bundle_readiness_tasks = tools["create_tasks_from_project_bundle_readiness"]
+    assert project_bundle_readiness_tasks["http"]["method"] == "POST"
+    assert (
+        project_bundle_readiness_tasks["http"]["path"]
+        == "/research/export/project-bundle/readiness/tasks"
+    )
+    assert project_bundle_readiness_tasks["input_schema"]["required"] == ["body"]
+    assert project_bundle_readiness_tasks["annotations"]["sideEffectHint"] is True
 
     cancel = tools["cancel_job"]
     assert cancel["side_effect"] is True
@@ -549,6 +560,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "timelineButton" in response.text
     assert "projectBundleButton" in response.text
     assert "projectBundleReadinessButton" in response.text
+    assert "projectBundleReadinessTasksButton" in response.text
     assert "evidenceLedgerButton" in response.text
     assert "evidenceLedgerTasksButton" in response.text
     assert "claimPacketButton" in response.text
@@ -636,7 +648,9 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/${encodeURIComponent(state.latestIdeaId)}/export/bundle" in script.text
     assert "/research/export/project-bundle" in script.text
     assert "/research/export/project-bundle/readiness" in script.text
+    assert "/research/export/project-bundle/readiness/tasks" in script.text
     assert "loadProjectBundleReadiness" in script.text
+    assert "createProjectBundleReadinessTasks" in script.text
     assert "/research/ideas/${state.latestIdeaId}/readiness" in script.text
     assert "/research/ideas/${state.latestIdeaId}/quality-gate" in script.text
     assert "/research/ideas/${state.latestIdeaId}/quality-gate/tasks" in script.text
@@ -2545,6 +2559,24 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert readiness_manifest["pilot_report_snapshot_comparison_available"] is True
     assert readiness_manifest["claim_validation_queue_count"] >= 1
     assert readiness_manifest["research_plan_count"] >= 1
+
+    project_bundle_readiness_tasks = client.post(
+        "/research/export/project-bundle/readiness/tasks",
+        json={"limit": 6, "include_optional": True, "created_by": "pytest"},
+    )
+    assert project_bundle_readiness_tasks.status_code == 200
+    project_bundle_readiness_task_body = project_bundle_readiness_tasks.json()
+    assert project_bundle_readiness_task_body["tasks"]
+    first_bundle_task = project_bundle_readiness_task_body["tasks"][0]
+    assert first_bundle_task["owner_type"] == "project_bundle_readiness"
+    assert first_bundle_task["due_phase"] == "bundle_handoff_follow_up"
+    assert first_bundle_task["metadata"]["readiness_level"] == "delivery_ready"
+    assert first_bundle_task["metadata"]["action_path"]
+    project_bundle_readiness_task_edges = client.get(
+        "/research/graph/edges?edge_type=project_bundle_readiness_creates_task"
+    )
+    assert project_bundle_readiness_task_edges.status_code == 200
+    assert project_bundle_readiness_task_edges.json()
 
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200

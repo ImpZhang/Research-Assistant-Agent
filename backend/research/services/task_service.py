@@ -1216,6 +1216,104 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_bundle_readiness(
+        self,
+        readiness: dict,
+        *,
+        limit: int = 8,
+        include_optional: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        readiness_level = str(readiness.get("readiness_level") or "")
+        readiness_score = float(readiness.get("readiness_score") or 0.0)
+        checklist = readiness.get("checklist") or []
+        items = [
+            item
+            for item in checklist
+            if item.get("status") != "done" and (item.get("required", True) or include_optional)
+        ][:limit]
+        if not items:
+            items = [
+                {
+                    "id": "bundle_delivery_review",
+                    "label": "Review and export project handoff bundle",
+                    "status": readiness_level,
+                    "detail": "Confirm README, manifest, and Markdown reports before sharing the bundle.",
+                    "required": False,
+                    "action_label": "Export project bundle",
+                    "action_method": "GET",
+                    "action_path": "/research/export/project-bundle",
+                }
+            ]
+
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_bundle_readiness",
+                owner_id="project_bundle_readiness",
+                source_type=(
+                    "bundle_required_check"
+                    if item.get("required", True)
+                    else "bundle_optional_check"
+                ),
+                source_id=str(item.get("id") or f"bundle_readiness_{idx}"),
+                title=self._bundle_readiness_task_title(item, idx),
+                description=self._bundle_readiness_task_description(item),
+                priority=self._bundle_readiness_task_priority(item),
+                status="todo",
+                due_phase="bundle_handoff_follow_up",
+                metadata_json={
+                    "check_id": item.get("id", ""),
+                    "check_label": item.get("label", ""),
+                    "check_status": item.get("status", ""),
+                    "required": item.get("required", True),
+                    "action_label": item.get("action_label", ""),
+                    "action_method": item.get("action_method", ""),
+                    "action_path": item.get("action_path", ""),
+                    "readiness_level": readiness_level,
+                    "readiness_score": readiness_score,
+                    "source_rank": idx,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, item in enumerate(items, start=1)
+        ]
+        tasks = self._deduplicate_onboarding_tasks(tasks)[:limit]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project bundle readiness.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "readiness_level": readiness_level,
+                        "readiness_score": readiness_score,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_bundle_readiness_tasks(
+            readiness,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_project_advisor_chat(
         self,
         chat: dict,
@@ -1961,6 +2059,68 @@ class ResearchTaskService:
         if check_id == "pilot_security":
             return "high"
         if status == "warning":
+            return "medium"
+        return "medium"
+
+    def _bundle_readiness_task_title(self, item: dict, idx: int) -> str:
+        check_id = str(item.get("id") or "")
+        label = str(item.get("label") or "")
+        if check_id == "project_scope":
+            return "Complete project handoff scope"
+        if check_id == "quality_gate_context":
+            return "Run project quality gate overview"
+        if check_id == "triage_snapshot_history":
+            return "Save triage snapshot history"
+        if check_id == "triage_change_report":
+            return "Compare project triage snapshots"
+        if check_id == "pilot_report_history":
+            return "Save pilot report history"
+        if check_id == "pilot_change_report":
+            return "Compare pilot report snapshots"
+        if check_id == "claim_validation_queue":
+            return "Prepare claim validation queue"
+        if check_id == "research_plan":
+            return "Create research execution plan"
+        if check_id == "opportunity_radar":
+            return "Open opportunity radar"
+        if check_id == "advisor_briefs":
+            return "Create advisor-ready brief"
+        if check_id == "blocked_task_review":
+            return "Review blocked handoff tasks"
+        if check_id == "bundle_delivery_review":
+            return "Review and export project bundle"
+        return self._short_task_title(label or f"Resolve bundle readiness check {idx}", idx)
+
+    def _bundle_readiness_task_description(self, item: dict) -> str:
+        label = str(item.get("label") or "Project bundle readiness check")
+        detail = str(item.get("detail") or "").strip()
+        action_label = str(item.get("action_label") or "").strip()
+        action_path = str(item.get("action_path") or "").strip()
+        parts = [label]
+        if detail:
+            parts.append(detail)
+        if action_label and action_path:
+            parts.append(f"Suggested action: {action_label} via {action_path}.")
+        return " ".join(parts)
+
+    def _bundle_readiness_task_priority(self, item: dict) -> str:
+        check_id = str(item.get("id") or "")
+        required = bool(item.get("required", True))
+        status = str(item.get("status") or "")
+        if check_id in {
+            "triage_snapshot_history",
+            "triage_change_report",
+            "pilot_report_history",
+            "pilot_change_report",
+            "claim_validation_queue",
+            "research_plan",
+        }:
+            return "critical" if required else "high"
+        if check_id in {"project_scope", "quality_gate_context", "opportunity_radar"}:
+            return "high"
+        if check_id == "blocked_task_review":
+            return "high" if status == "warning" else "medium"
+        if check_id == "bundle_delivery_review":
             return "medium"
         return "medium"
 

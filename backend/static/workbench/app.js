@@ -1626,6 +1626,24 @@ async function loadProjectBundleReadiness() {
   }
 }
 
+async function createProjectBundleReadinessTasks() {
+  renderResult("workflowResult", "Creating project bundle readiness tasks...", "warn");
+  try {
+    const body = await api("/research/export/project-bundle/readiness/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limit: 8, include_optional: true, created_by: "workbench" }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Bundle readiness tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadIdeaReadiness() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -2217,6 +2235,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("ideaBundleButton").addEventListener("click", downloadIdeaBundle);
   $("projectBundleButton").addEventListener("click", downloadProjectBundle);
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
+  $("projectBundleReadinessTasksButton").addEventListener(
+    "click",
+    createProjectBundleReadinessTasks,
+  );
   $("readinessButton").addEventListener("click", loadIdeaReadiness);
   $("qualityGateButton").addEventListener("click", loadIdeaQualityGate);
   $("qualityGateTasksButton").addEventListener("click", createQualityGateTasks);
