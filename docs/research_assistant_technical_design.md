@@ -1206,6 +1206,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/export/project-bundle/readiness/snapshots/compare` loads two saved `bundle_readiness` briefs and computes score/level deltas, missing-required added/resolved/kept sets, recommended-action and quick-action changes, plus selected manifest signal deltas. `/export/project-bundle/readiness/snapshots/compare/export/markdown` returns the same comparison as a human-readable delivery audit. The project bundle automatically compares the latest two readiness snapshots when available and writes the comparison JSON/Markdown artifacts into the handoff zip.
 
+`/export/project-bundle/readiness/snapshots/compare/tasks` converts comparison changes into `ResearchTask` records with `owner_type=project_bundle_readiness_snapshot_comparison` and `due_phase=bundle_readiness_change_follow_up`. Added missing required checks become critical handoff work, added recommended actions become high-priority delivery follow-up, added quick actions become medium-priority execution work, and an unchanged comparison falls back to a manual review task. `ArtifactGraphService.link_project_bundle_readiness_snapshot_comparison_tasks` writes `project_bundle_readiness_comparison_creates_task` edges so these tasks remain traceable from the exact baseline/candidate readiness snapshots.
+
 `/onboarding/readiness` is the first-run customer pilot readiness gate. It is read-only and does not create new database tables: the route reads `ResearchProfile`, `Paper`, `Evidence`, `Idea`, `ResearchTask`, `TaskBoardSnapshot`, `ResearchBrief`, `ResearchPlanSnapshot`, `Job`, plus runtime settings such as API-key auth, MCP, and GraphRAG-lite. The response returns required and optional checklist items, readiness score/level, missing required checks, quick actions with method/path mapping, project metrics, and a Markdown report. This endpoint sits before project cockpit: onboarding answers whether the pilot is prepared, while cockpit answers how to drive an already-running project.
 
 `/onboarding/setup` is the write-side companion to onboarding readiness. It accepts a first-run setup payload, normalizes it into the existing `ResearchProfileUpdate` shape, stores success criteria and first milestone in the profile notes, then calls the same readiness builder used by `/onboarding/readiness`. The response includes the saved profile, refreshed readiness, recommended next steps, quick actions, and a Markdown setup report. It deliberately avoids a separate project setup table so profile, ranking, advisor briefs, cockpit, MCP tools, and Workbench all read the same durable research context.
@@ -1330,6 +1332,7 @@ GET  /research/export/project-bundle/readiness/snapshots/{snapshot_id}
 GET  /research/export/project-bundle/readiness/snapshots/{snapshot_id}/export/markdown
 POST /research/export/project-bundle/readiness/snapshots/compare
 POST /research/export/project-bundle/readiness/snapshots/compare/export/markdown
+POST /research/export/project-bundle/readiness/snapshots/compare/tasks
 GET  /research/export/project-bundle
 POST /research/briefs
 GET  /research/briefs

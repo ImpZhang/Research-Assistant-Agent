@@ -1314,6 +1314,115 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_bundle_readiness_snapshot_comparison(
+        self,
+        comparison: dict,
+        *,
+        limit: int = 8,
+        include_missing_required: bool = True,
+        include_recommended_actions: bool = True,
+        include_quick_actions: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        items: list[tuple[str, str, dict]] = []
+        if include_missing_required:
+            for missing in self._unique_commitments(comparison.get("added_missing_required") or []):
+                items.append(("bundle_readiness_comparison_added_missing", missing, {}))
+        if include_recommended_actions:
+            for action in self._unique_commitments(
+                comparison.get("added_recommended_actions") or []
+            ):
+                items.append(("bundle_readiness_comparison_added_action", action, {}))
+        if include_quick_actions:
+            for action in self._unique_commitments(comparison.get("added_quick_actions") or []):
+                items.append(("bundle_readiness_comparison_added_quick_action", action, {}))
+
+        items = self._deduplicate_pilot_report_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "bundle_readiness_comparison_review",
+                    comparison.get("summary")
+                    or "Review the latest project bundle readiness snapshot comparison.",
+                    {},
+                )
+            ]
+
+        candidate_id = str(comparison.get("candidate_snapshot_id") or "")
+        baseline_id = str(comparison.get("baseline_snapshot_id") or "")
+        raw_score_delta = (
+            (comparison.get("readiness_delta") or {}).get("readiness_score", {}).get("delta", 0.0)
+        )
+        try:
+            score_delta = float(raw_score_delta)
+        except (TypeError, ValueError):
+            score_delta = 0.0
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_bundle_readiness_snapshot_comparison",
+                owner_id=candidate_id or "project_bundle_readiness_snapshot_comparison",
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._bundle_readiness_comparison_task_title(
+                    action,
+                    idx,
+                    source_type=source_type,
+                ),
+                description=action,
+                priority=self._bundle_readiness_comparison_task_priority(
+                    source_type,
+                    action,
+                    score_delta,
+                ),
+                status="todo",
+                due_phase="bundle_readiness_change_follow_up",
+                metadata_json={
+                    "baseline_snapshot_id": baseline_id,
+                    "candidate_snapshot_id": candidate_id,
+                    "comparison_source_type": source_type,
+                    "readiness_score_delta": score_delta,
+                    "source_rank": idx,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, _metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project bundle readiness snapshot comparison.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "baseline_snapshot_id": baseline_id,
+                        "candidate_snapshot_id": candidate_id,
+                        "readiness_score_delta": score_delta,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(
+            GraphService(self.session)
+        ).link_project_bundle_readiness_snapshot_comparison_tasks(comparison, tasks)
+        self.session.commit()
+        return tasks
+
     def create_from_project_advisor_chat(
         self,
         chat: dict,
@@ -2122,6 +2231,48 @@ class ResearchTaskService:
             return "high" if status == "warning" else "medium"
         if check_id == "bundle_delivery_review":
             return "medium"
+        return "medium"
+
+    def _bundle_readiness_comparison_task_title(
+        self,
+        action: str,
+        idx: int,
+        *,
+        source_type: str,
+    ) -> str:
+        clean = " ".join(str(action).split())
+        lower = clean.lower()
+        if source_type == "bundle_readiness_comparison_added_missing":
+            return self._short_task_title(f"Resolve new bundle readiness gap {idx}: {clean}", idx)
+        if source_type == "bundle_readiness_comparison_added_quick_action":
+            return self._short_task_title(clean or f"Run new bundle readiness action {idx}", idx)
+        if source_type == "bundle_readiness_comparison_review":
+            return "Review bundle readiness comparison"
+        if "blocked" in lower:
+            return self._short_task_title(clean.replace("Blocked", "Unblock", 1), idx)
+        if "missing" in lower or "required" in lower:
+            return self._short_task_title(f"Resolve handoff requirement {idx}: {clean}", idx)
+        return self._short_task_title(clean or f"Work bundle readiness change {idx}", idx)
+
+    def _bundle_readiness_comparison_task_priority(
+        self,
+        source_type: str,
+        action: str,
+        score_delta: float,
+    ) -> str:
+        lower = str(action).lower()
+        if source_type == "bundle_readiness_comparison_added_missing":
+            return "critical"
+        if "blocked" in lower or "critical" in lower or "high-risk" in lower:
+            return "critical"
+        if score_delta < 0:
+            return "high"
+        if (
+            source_type == "bundle_readiness_comparison_added_action"
+            or "missing" in lower
+            or "required" in lower
+        ):
+            return "high"
         return "medium"
 
     def _advisor_chat_task_title(self, action: str, idx: int, *, source_type: str) -> str:

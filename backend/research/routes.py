@@ -124,6 +124,7 @@ from backend.research.schemas import (
     ProjectBundleReadinessResponse,
     ProjectBundleReadinessSnapshotComparisonRequest,
     ProjectBundleReadinessSnapshotComparisonResponse,
+    ProjectBundleReadinessSnapshotComparisonTaskGenerateRequest,
     ProjectBundleReadinessSnapshotCreate,
     ProjectBundleReadinessTaskGenerateRequest,
     ProjectQualityGateOverviewResponse,
@@ -315,6 +316,7 @@ def status() -> ProjectStatus:
             "project_bundle_readiness_task_generation",
             "project_bundle_readiness_snapshots",
             "project_bundle_readiness_snapshot_comparison",
+            "project_bundle_readiness_snapshot_comparison_task_generation",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -594,6 +596,18 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/export/project-bundle/readiness/snapshots/compare/export/markdown",
             input_model="ProjectBundleReadinessSnapshotComparisonRequest",
             output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_bundle_readiness_snapshot_comparison",
+            description=(
+                "Turn new bundle readiness comparison gaps and actions into "
+                "handoff task-board work."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/readiness/snapshots/compare/tasks",
+            input_model="ProjectBundleReadinessSnapshotComparisonTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_idea_readiness",
@@ -9651,6 +9665,38 @@ def export_project_bundle_readiness_snapshot_comparison_markdown(
 ) -> PlainTextResponse:
     comparison = compare_project_bundle_readiness_snapshots(payload, session)
     return PlainTextResponse(comparison.markdown_export, media_type="text/markdown")
+
+
+@router.post(
+    "/export/project-bundle/readiness/snapshots/compare/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_bundle_readiness_snapshot_comparison(
+    payload: ProjectBundleReadinessSnapshotComparisonTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    comparison = compare_project_bundle_readiness_snapshots(
+        ProjectBundleReadinessSnapshotComparisonRequest(
+            baseline_snapshot_id=payload.baseline_snapshot_id,
+            candidate_snapshot_id=payload.candidate_snapshot_id,
+        ),
+        session,
+    )
+    tasks = ResearchTaskService(session).create_from_project_bundle_readiness_snapshot_comparison(
+        comparison.model_dump(mode="json"),
+        limit=payload.limit,
+        include_missing_required=payload.include_missing_required,
+        include_recommended_actions=payload.include_recommended_actions,
+        include_quick_actions=payload.include_quick_actions,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} project bundle readiness comparison tasks from "
+            f"snapshots {payload.baseline_snapshot_id} -> {payload.candidate_snapshot_id}."
+        ),
+    )
 
 
 @router.get("/export/project-bundle")

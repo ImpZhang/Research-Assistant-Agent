@@ -1721,6 +1721,41 @@ async function compareProjectBundleReadinessSnapshots() {
   }
 }
 
+async function createProjectBundleReadinessComparisonTasks() {
+  renderResult("workflowResult", "Creating bundle readiness comparison tasks...", "warn");
+  try {
+    const snapshots = await api("/research/export/project-bundle/readiness/snapshots?limit=2");
+    if (snapshots.length < 2) {
+      renderResult(
+        "workflowResult",
+        "Save at least two bundle readiness snapshots before creating comparison tasks.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api("/research/export/project-bundle/readiness/snapshots/compare/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseline_snapshot_id: snapshots[1].id,
+        candidate_snapshot_id: snapshots[0].id,
+        limit: 8,
+        include_missing_required: true,
+        include_recommended_actions: true,
+        include_quick_actions: true,
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Bundle readiness comparison tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadIdeaReadiness() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -2327,6 +2362,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReadinessSnapshotCompareButton").addEventListener(
     "click",
     compareProjectBundleReadinessSnapshots,
+  );
+  $("projectBundleReadinessComparisonTasksButton").addEventListener(
+    "click",
+    createProjectBundleReadinessComparisonTasks,
   );
   $("readinessButton").addEventListener("click", loadIdeaReadiness);
   $("qualityGateButton").addEventListener("click", loadIdeaQualityGate);

@@ -984,6 +984,16 @@ class ProjectBundleReadinessSnapshotComparisonRequest(BaseModel):
     candidate_snapshot_id: str
 
 
+class ProjectBundleReadinessSnapshotComparisonTaskGenerateRequest(
+    ProjectBundleReadinessSnapshotComparisonRequest
+):
+    limit: int = Field(default=8, ge=1, le=20)
+    include_missing_required: bool = True
+    include_recommended_actions: bool = True
+    include_quick_actions: bool = True
+    created_by: str = "system"
+
+
 class ProjectBundleReadinessSnapshotComparisonResponse(BaseModel):
     baseline_snapshot_id: str
     candidate_snapshot_id: str

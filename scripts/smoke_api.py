@@ -227,6 +227,13 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "research status did not include project bundle readiness snapshot comparison"
         )
+    if (
+        "project_bundle_readiness_snapshot_comparison_task_generation"
+        not in status["implemented_capabilities"]
+    ):
+        raise RuntimeError(
+            "research status did not include project bundle readiness comparison tasks"
+        )
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -410,6 +417,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     if "export_project_bundle_readiness_snapshot_comparison_markdown" not in manifest_names:
         raise RuntimeError(
             "tool manifest did not include project bundle readiness comparison export"
+        )
+    if "create_tasks_from_project_bundle_readiness_snapshot_comparison" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project bundle readiness comparison task tool"
         )
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
@@ -2045,6 +2056,36 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         not in bundle_readiness_snapshot_comparison_markdown
     ):
         raise RuntimeError("project bundle readiness comparison markdown export missed title")
+    project_bundle_readiness_comparison_tasks = require_ok(
+        client.post(
+            "/research/export/project-bundle/readiness/snapshots/compare/tasks",
+            json_body={
+                "baseline_snapshot_id": baseline_project_bundle_readiness_snapshot["id"],
+                "candidate_snapshot_id": project_bundle_readiness_snapshot["id"],
+                "limit": 6,
+                "include_missing_required": True,
+                "include_recommended_actions": True,
+                "include_quick_actions": True,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project bundle readiness comparison tasks",
+    )
+    if not project_bundle_readiness_comparison_tasks["tasks"]:
+        raise RuntimeError("project bundle readiness comparison did not create tasks")
+    first_bundle_comparison_task = project_bundle_readiness_comparison_tasks["tasks"][0]
+    if first_bundle_comparison_task["owner_type"] != "project_bundle_readiness_snapshot_comparison":
+        raise RuntimeError("project bundle readiness comparison task used wrong owner type")
+    if first_bundle_comparison_task["due_phase"] != "bundle_readiness_change_follow_up":
+        raise RuntimeError("project bundle readiness comparison task used wrong due phase")
+    project_bundle_readiness_comparison_task_edges = require_ok(
+        client.get(
+            "/research/graph/edges?edge_type=project_bundle_readiness_comparison_creates_task"
+        ),
+        "project bundle readiness comparison task graph edges",
+    )
+    if not project_bundle_readiness_comparison_task_edges:
+        raise RuntimeError("project bundle readiness comparison tasks did not create graph edges")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2607,6 +2648,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_readiness_snapshot_comparison_delta": project_bundle_manifest[
             "latest_bundle_readiness_snapshot_comparison_score_delta"
         ],
+        "project_bundle_readiness_comparison_task_count": len(
+            project_bundle_readiness_comparison_tasks["tasks"]
+        ),
         "project_bundle_plan_count": project_bundle_manifest["research_plan_count"],
         "project_bundle_triage_snapshot_count": project_bundle_manifest["triage_snapshot_count"],
         "project_bundle_triage_comparison_available": project_bundle_manifest[
