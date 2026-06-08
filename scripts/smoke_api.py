@@ -223,6 +223,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
     if "project_bundle_readiness_snapshots" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project bundle readiness snapshots")
+    if "project_bundle_readiness_snapshot_comparison" not in status["implemented_capabilities"]:
+        raise RuntimeError(
+            "research status did not include project bundle readiness snapshot comparison"
+        )
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -399,6 +403,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project bundle readiness snapshot reader")
     if "export_project_bundle_readiness_snapshot_markdown" not in manifest_names:
         raise RuntimeError("tool manifest did not include project bundle readiness snapshot export")
+    if "compare_project_bundle_readiness_snapshots" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project bundle readiness snapshot comparison"
+        )
+    if "export_project_bundle_readiness_snapshot_comparison_markdown" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project bundle readiness comparison export"
+        )
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
@@ -1945,11 +1957,21 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not project_bundle_readiness_task_edges:
         raise RuntimeError("project bundle readiness tasks did not create graph edges")
+    baseline_project_bundle_readiness_snapshot = require_ok(
+        client.post(
+            "/research/export/project-bundle/readiness/snapshots",
+            json_body={
+                "title": "Smoke Bundle Readiness Baseline",
+                "created_by": "smoke_api",
+            },
+        ),
+        "project bundle readiness baseline snapshot",
+    )
     project_bundle_readiness_snapshot = require_ok(
         client.post(
             "/research/export/project-bundle/readiness/snapshots",
             json_body={
-                "title": "Smoke Bundle Readiness Snapshot",
+                "title": "Smoke Bundle Readiness Candidate",
                 "created_by": "smoke_api",
             },
         ),
@@ -1988,6 +2010,41 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "# Project Bundle Readiness" not in bundle_readiness_snapshot_markdown:
         raise RuntimeError("project bundle readiness snapshot markdown export missed title")
+    project_bundle_readiness_snapshot_comparison = require_ok(
+        client.post(
+            "/research/export/project-bundle/readiness/snapshots/compare",
+            json_body={
+                "baseline_snapshot_id": baseline_project_bundle_readiness_snapshot["id"],
+                "candidate_snapshot_id": project_bundle_readiness_snapshot["id"],
+            },
+        ),
+        "project bundle readiness snapshot comparison",
+    )
+    if (
+        project_bundle_readiness_snapshot_comparison["candidate_snapshot_id"]
+        != project_bundle_readiness_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle readiness snapshot comparison used wrong candidate")
+    if (
+        "# Project Bundle Readiness Snapshot Comparison"
+        not in project_bundle_readiness_snapshot_comparison["markdown_export"]
+    ):
+        raise RuntimeError("project bundle readiness snapshot comparison markdown missed title")
+    bundle_readiness_snapshot_comparison_markdown = require_ok(
+        client.post(
+            "/research/export/project-bundle/readiness/snapshots/compare/export/markdown",
+            json_body={
+                "baseline_snapshot_id": baseline_project_bundle_readiness_snapshot["id"],
+                "candidate_snapshot_id": project_bundle_readiness_snapshot["id"],
+            },
+        ),
+        "project bundle readiness snapshot comparison markdown",
+    )
+    if (
+        "# Project Bundle Readiness Snapshot Comparison"
+        not in bundle_readiness_snapshot_comparison_markdown
+    ):
+        raise RuntimeError("project bundle readiness comparison markdown export missed title")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2014,6 +2071,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/pilot-report-snapshots.json",
             "metadata/pilot-report-snapshot-comparison.json",
             "metadata/bundle-readiness-snapshots.json",
+            "metadata/bundle-readiness-snapshot-comparison.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
@@ -2025,6 +2083,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
                 "artifacts/readiness/project-bundle-readiness-snapshot-"
                 f"{project_bundle_readiness_snapshot['id']}.md"
             ),
+            "artifacts/readiness/latest-bundle-readiness-snapshot-comparison.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -2044,6 +2103,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
         project_bundle_readiness_snapshots = json.loads(
             archive.read("metadata/bundle-readiness-snapshots.json")
+        )
+        project_bundle_readiness_comparison = json.loads(
+            archive.read("metadata/bundle-readiness-snapshot-comparison.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -2107,7 +2169,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         != candidate_pilot_report_snapshot["id"]
     ):
         raise RuntimeError("project bundle pilot comparison metadata used the wrong candidate")
-    if project_bundle_manifest["bundle_readiness_snapshot_count"] < 1:
+    if project_bundle_manifest["bundle_readiness_snapshot_count"] < 2:
         raise RuntimeError("project bundle manifest did not include bundle readiness snapshots")
     if (
         project_bundle_manifest["latest_bundle_readiness_snapshot_id"]
@@ -2118,6 +2180,23 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle manifest missed latest readiness snapshot level")
     if project_bundle_readiness_snapshots[0]["id"] != project_bundle_readiness_snapshot["id"]:
         raise RuntimeError("project bundle readiness snapshot metadata order was wrong")
+    if not project_bundle_manifest["bundle_readiness_snapshot_comparison_available"]:
+        raise RuntimeError("project bundle manifest did not expose readiness comparison")
+    if (
+        project_bundle_manifest["latest_bundle_readiness_snapshot_comparison_candidate_id"]
+        != project_bundle_readiness_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle readiness comparison candidate was wrong")
+    if (
+        project_bundle_manifest["latest_bundle_readiness_snapshot_comparison_baseline_id"]
+        != baseline_project_bundle_readiness_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle readiness comparison baseline was wrong")
+    if (
+        project_bundle_readiness_comparison["candidate_snapshot_id"]
+        != project_bundle_readiness_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle readiness comparison metadata used wrong candidate")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -2521,6 +2600,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_readiness_snapshot_id": project_bundle_readiness_snapshot["id"],
         "project_bundle_readiness_snapshot_count": project_bundle_manifest[
             "bundle_readiness_snapshot_count"
+        ],
+        "project_bundle_readiness_snapshot_comparison_available": project_bundle_manifest[
+            "bundle_readiness_snapshot_comparison_available"
+        ],
+        "project_bundle_readiness_snapshot_comparison_delta": project_bundle_manifest[
+            "latest_bundle_readiness_snapshot_comparison_score_delta"
         ],
         "project_bundle_plan_count": project_bundle_manifest["research_plan_count"],
         "project_bundle_triage_snapshot_count": project_bundle_manifest["triage_snapshot_count"],

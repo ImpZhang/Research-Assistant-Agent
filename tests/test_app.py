@@ -100,6 +100,7 @@ def test_research_status() -> None:
     assert "project_bundle_readiness" in body["implemented_capabilities"]
     assert "project_bundle_readiness_task_generation" in body["implemented_capabilities"]
     assert "project_bundle_readiness_snapshots" in body["implemented_capabilities"]
+    assert "project_bundle_readiness_snapshot_comparison" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
@@ -201,6 +202,8 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "list_project_bundle_readiness_snapshots" in names
     assert "get_project_bundle_readiness_snapshot" in names
     assert "export_project_bundle_readiness_snapshot_markdown" in names
+    assert "compare_project_bundle_readiness_snapshots" in names
+    assert "export_project_bundle_readiness_snapshot_comparison_markdown" in names
     assert "get_idea_readiness" in names
     assert "get_idea_quality_gate" in names
     assert "create_tasks_from_idea_quality_gate" in names
@@ -281,6 +284,27 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
         == "/research/export/project-bundle/readiness/snapshots"
     )
     assert project_bundle_readiness_snapshot_list["annotations"]["readOnlyHint"] is True
+
+    project_bundle_readiness_snapshot_compare = tools["compare_project_bundle_readiness_snapshots"]
+    assert project_bundle_readiness_snapshot_compare["http"]["method"] == "POST"
+    assert (
+        project_bundle_readiness_snapshot_compare["http"]["path"]
+        == "/research/export/project-bundle/readiness/snapshots/compare"
+    )
+    assert project_bundle_readiness_snapshot_compare["input_schema"]["required"] == ["body"]
+    assert project_bundle_readiness_snapshot_compare["annotations"]["sideEffectHint"] is False
+
+    project_bundle_readiness_snapshot_compare_export = tools[
+        "export_project_bundle_readiness_snapshot_comparison_markdown"
+    ]
+    assert project_bundle_readiness_snapshot_compare_export["http"]["method"] == "POST"
+    assert (
+        project_bundle_readiness_snapshot_compare_export["http"]["path"]
+        == "/research/export/project-bundle/readiness/snapshots/compare/export/markdown"
+    )
+    assert (
+        project_bundle_readiness_snapshot_compare_export["annotations"]["sideEffectHint"] is False
+    )
 
     cancel = tools["cancel_job"]
     assert cancel["side_effect"] is True
@@ -585,6 +609,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "projectBundleReadinessTasksButton" in response.text
     assert "projectBundleReadinessSnapshotButton" in response.text
     assert "projectBundleReadinessSnapshotsButton" in response.text
+    assert "projectBundleReadinessSnapshotCompareButton" in response.text
     assert "evidenceLedgerButton" in response.text
     assert "evidenceLedgerTasksButton" in response.text
     assert "claimPacketButton" in response.text
@@ -674,10 +699,12 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/export/project-bundle/readiness" in script.text
     assert "/research/export/project-bundle/readiness/tasks" in script.text
     assert "/research/export/project-bundle/readiness/snapshots" in script.text
+    assert "/research/export/project-bundle/readiness/snapshots/compare" in script.text
     assert "loadProjectBundleReadiness" in script.text
     assert "createProjectBundleReadinessTasks" in script.text
     assert "saveProjectBundleReadinessSnapshot" in script.text
     assert "listProjectBundleReadinessSnapshots" in script.text
+    assert "compareProjectBundleReadinessSnapshots" in script.text
     assert "/research/ideas/${state.latestIdeaId}/readiness" in script.text
     assert "/research/ideas/${state.latestIdeaId}/quality-gate" in script.text
     assert "/research/ideas/${state.latestIdeaId}/quality-gate/tasks" in script.text
@@ -2605,9 +2632,16 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert project_bundle_readiness_task_edges.status_code == 200
     assert project_bundle_readiness_task_edges.json()
 
+    baseline_bundle_readiness_snapshot = client.post(
+        "/research/export/project-bundle/readiness/snapshots",
+        json={"title": "Pytest Bundle Readiness Baseline", "created_by": "pytest"},
+    )
+    assert baseline_bundle_readiness_snapshot.status_code == 200
+    baseline_bundle_readiness_snapshot_body = baseline_bundle_readiness_snapshot.json()
+
     project_bundle_readiness_snapshot = client.post(
         "/research/export/project-bundle/readiness/snapshots",
-        json={"title": "Pytest Bundle Readiness Snapshot", "created_by": "pytest"},
+        json={"title": "Pytest Bundle Readiness Candidate", "created_by": "pytest"},
     )
     assert project_bundle_readiness_snapshot.status_code == 200
     project_bundle_readiness_snapshot_body = project_bundle_readiness_snapshot.json()
@@ -2642,6 +2676,42 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert exported_bundle_readiness_snapshot.status_code == 200
     assert "# Project Bundle Readiness" in exported_bundle_readiness_snapshot.text
 
+    bundle_readiness_snapshot_comparison = client.post(
+        "/research/export/project-bundle/readiness/snapshots/compare",
+        json={
+            "baseline_snapshot_id": baseline_bundle_readiness_snapshot_body["id"],
+            "candidate_snapshot_id": project_bundle_readiness_snapshot_body["id"],
+        },
+    )
+    assert bundle_readiness_snapshot_comparison.status_code == 200
+    bundle_readiness_snapshot_comparison_body = bundle_readiness_snapshot_comparison.json()
+    assert (
+        bundle_readiness_snapshot_comparison_body["baseline_snapshot_id"]
+        == baseline_bundle_readiness_snapshot_body["id"]
+    )
+    assert (
+        bundle_readiness_snapshot_comparison_body["candidate_snapshot_id"]
+        == project_bundle_readiness_snapshot_body["id"]
+    )
+    assert "readiness_score" in bundle_readiness_snapshot_comparison_body["readiness_delta"]
+    assert (
+        "# Project Bundle Readiness Snapshot Comparison"
+        in bundle_readiness_snapshot_comparison_body["markdown_export"]
+    )
+
+    exported_bundle_readiness_snapshot_comparison = client.post(
+        "/research/export/project-bundle/readiness/snapshots/compare/export/markdown",
+        json={
+            "baseline_snapshot_id": baseline_bundle_readiness_snapshot_body["id"],
+            "candidate_snapshot_id": project_bundle_readiness_snapshot_body["id"],
+        },
+    )
+    assert exported_bundle_readiness_snapshot_comparison.status_code == 200
+    assert (
+        "# Project Bundle Readiness Snapshot Comparison"
+        in exported_bundle_readiness_snapshot_comparison.text
+    )
+
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200
     assert project_bundle.headers["content-type"] == "application/zip"
@@ -2662,6 +2732,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "metadata/pilot-report-snapshots.json" in names
         assert "metadata/pilot-report-snapshot-comparison.json" in names
         assert "metadata/bundle-readiness-snapshots.json" in names
+        assert "metadata/bundle-readiness-snapshot-comparison.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         assert "metadata/claim-validation-queue.json" in names
@@ -2675,6 +2746,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
             "artifacts/readiness/project-bundle-readiness-snapshot-"
             f"{project_bundle_readiness_snapshot_body['id']}.md"
         ) in names
+        assert "artifacts/readiness/latest-bundle-readiness-snapshot-comparison.md" in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         bundled_claim_queue = json.loads(archive.read("metadata/claim-validation-queue.json"))
         bundled_triage_comparison = json.loads(
@@ -2686,6 +2758,9 @@ Future work should preserve proposal drafts as reviewable artifacts.
         )
         bundled_bundle_readiness_snapshots = json.loads(
             archive.read("metadata/bundle-readiness-snapshots.json")
+        )
+        bundled_bundle_readiness_comparison = json.loads(
+            archive.read("metadata/bundle-readiness-snapshot-comparison.json")
         )
         assert project_manifest["idea_count"] >= 1
         assert readiness_manifest["bundle_type"] == "research_project_bundle"
@@ -2729,16 +2804,29 @@ Future work should preserve proposal drafts as reviewable artifacts.
         )
         assert bundled_pilot_snapshots[0]["id"] == pilot_snapshot_body["id"]
         assert bundled_pilot_comparison["candidate_snapshot_id"] == pilot_snapshot_body["id"]
-        assert project_manifest["bundle_readiness_snapshot_count"] >= 1
+        assert project_manifest["bundle_readiness_snapshot_count"] >= 2
         assert (
             project_manifest["latest_bundle_readiness_snapshot_id"]
             == project_bundle_readiness_snapshot_body["id"]
         )
         assert project_manifest["latest_bundle_readiness_snapshot_level"] == "delivery_ready"
         assert project_manifest["latest_bundle_readiness_snapshot_score"] == 1.0
+        assert project_manifest["bundle_readiness_snapshot_comparison_available"] is True
+        assert (
+            project_manifest["latest_bundle_readiness_snapshot_comparison_baseline_id"]
+            == baseline_bundle_readiness_snapshot_body["id"]
+        )
+        assert (
+            project_manifest["latest_bundle_readiness_snapshot_comparison_candidate_id"]
+            == project_bundle_readiness_snapshot_body["id"]
+        )
         assert (
             bundled_bundle_readiness_snapshots[0]["id"]
             == (project_bundle_readiness_snapshot_body["id"])
+        )
+        assert (
+            bundled_bundle_readiness_comparison["candidate_snapshot_id"]
+            == project_bundle_readiness_snapshot_body["id"]
         )
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["claim_validation_queue_count"] >= 1

@@ -122,6 +122,8 @@ from backend.research.schemas import (
     ProposalReviewCreate,
     ProposalReviewRead,
     ProjectBundleReadinessResponse,
+    ProjectBundleReadinessSnapshotComparisonRequest,
+    ProjectBundleReadinessSnapshotComparisonResponse,
     ProjectBundleReadinessSnapshotCreate,
     ProjectBundleReadinessTaskGenerateRequest,
     ProjectQualityGateOverviewResponse,
@@ -312,6 +314,7 @@ def status() -> ProjectStatus:
             "project_bundle_readiness",
             "project_bundle_readiness_task_generation",
             "project_bundle_readiness_snapshots",
+            "project_bundle_readiness_snapshot_comparison",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -571,6 +574,25 @@ def tool_manifest() -> ToolManifestResponse:
             path=(
                 "/research/export/project-bundle/readiness/snapshots/{snapshot_id}/export/markdown"
             ),
+            output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="compare_project_bundle_readiness_snapshots",
+            description=(
+                "Compare two saved project bundle readiness snapshots for readiness, "
+                "missing-check, recommended-action, quick-action, and manifest changes."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/readiness/snapshots/compare",
+            input_model="ProjectBundleReadinessSnapshotComparisonRequest",
+            output_model="ProjectBundleReadinessSnapshotComparisonResponse",
+        ),
+        ToolManifestItem(
+            name="export_project_bundle_readiness_snapshot_comparison_markdown",
+            description="Export a project bundle readiness snapshot comparison as Markdown.",
+            method="POST",
+            path="/research/export/project-bundle/readiness/snapshots/compare/export/markdown",
+            input_model="ProjectBundleReadinessSnapshotComparisonRequest",
             output_model="text/markdown",
         ),
         ToolManifestItem(
@@ -3455,6 +3477,213 @@ def _render_project_pilot_report_snapshot_comparison_markdown(
         "Kept",
         comparison.get("kept_quick_actions") or [],
     )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _compare_project_bundle_readiness_snapshots(
+    baseline: ResearchBrief,
+    candidate: ResearchBrief,
+) -> dict[str, Any]:
+    baseline_summary = baseline.summary_json or {}
+    candidate_summary = candidate.summary_json or {}
+    baseline_missing = baseline_summary.get("missing_required") or []
+    candidate_missing = candidate_summary.get("missing_required") or []
+    missing_delta = _pilot_report_list_delta(
+        "missing_required",
+        baseline_missing,
+        candidate_missing,
+    )
+    recommended_action_delta = _pilot_report_list_delta(
+        "recommended_actions",
+        baseline_summary.get("recommended_actions") or [],
+        candidate_summary.get("recommended_actions") or [],
+    )
+    quick_action_delta = _pilot_report_list_delta(
+        "quick_actions",
+        _pilot_report_quick_action_labels(baseline_summary.get("quick_actions") or []),
+        _pilot_report_quick_action_labels(candidate_summary.get("quick_actions") or []),
+    )
+    readiness_delta = _bundle_readiness_readiness_delta(
+        baseline_summary,
+        candidate_summary,
+    )
+    comparison = {
+        "baseline_snapshot_id": baseline.id,
+        "candidate_snapshot_id": candidate.id,
+        "baseline_title": baseline.title,
+        "candidate_title": candidate.title,
+        "readiness_delta": readiness_delta,
+        "missing_required_delta": {
+            "baseline_count": len(baseline_missing),
+            "candidate_count": len(candidate_missing),
+            "count_delta": len(candidate_missing) - len(baseline_missing),
+        },
+        "manifest_delta": _bundle_readiness_manifest_delta(
+            baseline_summary.get("manifest_summary") or {},
+            candidate_summary.get("manifest_summary") or {},
+        ),
+        **missing_delta,
+        **recommended_action_delta,
+        **quick_action_delta,
+    }
+    score_delta = readiness_delta["readiness_score"]["delta"]
+    missing_count_delta = comparison["missing_required_delta"]["count_delta"]
+    if score_delta > 0:
+        movement = f"improved by {score_delta}"
+    elif score_delta < 0:
+        movement = f"regressed by {abs(score_delta)}"
+    else:
+        movement = "stayed unchanged"
+    comparison["summary"] = (
+        f"Bundle readiness {movement}; missing required checks changed by "
+        f"{missing_count_delta}, with {len(comparison['added_missing_required'])} added "
+        f"and {len(comparison['removed_missing_required'])} resolved."
+    )
+    comparison["markdown_export"] = _render_project_bundle_readiness_snapshot_comparison_markdown(
+        comparison
+    )
+    return comparison
+
+
+def _bundle_readiness_readiness_delta(
+    baseline_summary: dict[str, Any],
+    candidate_summary: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "readiness_level": {
+            "baseline": baseline_summary.get("readiness_level", ""),
+            "candidate": candidate_summary.get("readiness_level", ""),
+            "changed": baseline_summary.get("readiness_level", "")
+            != candidate_summary.get("readiness_level", ""),
+        },
+        "readiness_score": _bundle_readiness_metric_delta_item(
+            baseline_summary.get("readiness_score", 0.0),
+            candidate_summary.get("readiness_score", 0.0),
+        ),
+        "required_done": _bundle_readiness_metric_delta_item(
+            baseline_summary.get("required_done", 0),
+            candidate_summary.get("required_done", 0),
+        ),
+        "required_total": _bundle_readiness_metric_delta_item(
+            baseline_summary.get("required_total", 0),
+            candidate_summary.get("required_total", 0),
+        ),
+    }
+
+
+def _bundle_readiness_manifest_delta(
+    baseline_manifest: dict[str, Any],
+    candidate_manifest: dict[str, Any],
+) -> dict[str, Any]:
+    keys = [
+        "idea_count",
+        "recent_task_count",
+        "quality_gate_idea_count",
+        "triage_snapshot_count",
+        "triage_snapshot_comparison_available",
+        "pilot_report_snapshot_count",
+        "pilot_report_snapshot_comparison_available",
+        "claim_validation_queue_count",
+        "research_plan_count",
+        "opportunity_count",
+        "bundle_readiness_snapshot_count",
+    ]
+    return {
+        key: _bundle_readiness_metric_delta_item(
+            baseline_manifest.get(key, 0),
+            candidate_manifest.get(key, 0),
+        )
+        for key in keys
+    }
+
+
+def _bundle_readiness_metric_delta_item(
+    baseline_value: Any,
+    candidate_value: Any,
+) -> dict[str, Any]:
+    item = {
+        "baseline": baseline_value,
+        "candidate": candidate_value,
+        "changed": baseline_value != candidate_value,
+    }
+    if (
+        isinstance(baseline_value, (int, float))
+        and isinstance(candidate_value, (int, float))
+        and not isinstance(baseline_value, bool)
+        and not isinstance(candidate_value, bool)
+    ):
+        item["delta"] = round(candidate_value - baseline_value, 4)
+    return item
+
+
+def _render_project_bundle_readiness_snapshot_comparison_markdown(
+    comparison: dict[str, Any],
+) -> str:
+    lines = [
+        "# Project Bundle Readiness Snapshot Comparison",
+        "",
+        f"- Baseline: `{comparison['baseline_snapshot_id']}` {comparison['baseline_title']}",
+        f"- Candidate: `{comparison['candidate_snapshot_id']}` {comparison['candidate_title']}",
+        f"- Summary: {comparison['summary']}",
+        "",
+        "## Readiness Delta",
+        "",
+    ]
+    for key, value in comparison.get("readiness_delta", {}).items():
+        suffix = f", delta={value['delta']}" if "delta" in value else ""
+        lines.append(f"- {key}: `{value.get('baseline')}` -> `{value.get('candidate')}`{suffix}")
+    lines.extend(["", "## Missing Required Check Changes", ""])
+    _append_pilot_report_change_group(
+        lines,
+        "Added",
+        comparison.get("added_missing_required") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Resolved",
+        comparison.get("removed_missing_required") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Still Missing",
+        comparison.get("kept_missing_required") or [],
+    )
+    lines.extend(["", "## Recommended Action Changes", ""])
+    _append_pilot_report_change_group(
+        lines,
+        "Added",
+        comparison.get("added_recommended_actions") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Removed",
+        comparison.get("removed_recommended_actions") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Kept",
+        comparison.get("kept_recommended_actions") or [],
+    )
+    lines.extend(["", "## Quick Action Changes", ""])
+    _append_pilot_report_change_group(
+        lines,
+        "Added",
+        comparison.get("added_quick_actions") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Removed",
+        comparison.get("removed_quick_actions") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Kept",
+        comparison.get("kept_quick_actions") or [],
+    )
+    lines.extend(["", "## Bundle Manifest Delta", ""])
+    for key, value in comparison.get("manifest_delta", {}).items():
+        suffix = f", delta={value['delta']}" if "delta" in value else ""
+        lines.append(f"- {key}: `{value.get('baseline')}` -> `{value.get('candidate')}`{suffix}")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -9392,6 +9621,38 @@ def export_project_bundle_readiness_snapshot_markdown(
     return PlainTextResponse(snapshot.markdown_export or "", media_type="text/markdown")
 
 
+@router.post(
+    "/export/project-bundle/readiness/snapshots/compare",
+    response_model=ProjectBundleReadinessSnapshotComparisonResponse,
+)
+def compare_project_bundle_readiness_snapshots(
+    payload: ProjectBundleReadinessSnapshotComparisonRequest,
+    session: Session = Depends(get_session),
+) -> ProjectBundleReadinessSnapshotComparisonResponse:
+    baseline = _get_project_bundle_readiness_snapshot_or_404(
+        payload.baseline_snapshot_id,
+        session,
+    )
+    candidate = _get_project_bundle_readiness_snapshot_or_404(
+        payload.candidate_snapshot_id,
+        session,
+    )
+    comparison = _compare_project_bundle_readiness_snapshots(baseline, candidate)
+    return ProjectBundleReadinessSnapshotComparisonResponse(**comparison)
+
+
+@router.post(
+    "/export/project-bundle/readiness/snapshots/compare/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_bundle_readiness_snapshot_comparison_markdown(
+    payload: ProjectBundleReadinessSnapshotComparisonRequest,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    comparison = compare_project_bundle_readiness_snapshots(payload, session)
+    return PlainTextResponse(comparison.markdown_export, media_type="text/markdown")
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -9526,6 +9787,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     pilot_report_snapshots = context["pilot_report_snapshots"]
     pilot_report_snapshot_comparison = context["pilot_report_snapshot_comparison"]
     bundle_readiness_snapshots = context["bundle_readiness_snapshots"]
+    bundle_readiness_snapshot_comparison = context["bundle_readiness_snapshot_comparison"]
     briefs = context["briefs"]
     plans = context["plans"]
     tasks = context["tasks"]
@@ -9573,6 +9835,11 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 [_serialize_research_brief(snapshot) for snapshot in bundle_readiness_snapshots]
             ),
         )
+        if bundle_readiness_snapshot_comparison:
+            archive.writestr(
+                "metadata/bundle-readiness-snapshot-comparison.json",
+                _json_dump(bundle_readiness_snapshot_comparison),
+            )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
@@ -9617,6 +9884,12 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                     f"artifacts/readiness/project-bundle-readiness-snapshot-{snapshot.id}.md",
                     snapshot.markdown_export,
                 )
+        if bundle_readiness_snapshot_comparison:
+            _write_markdown(
+                archive,
+                "artifacts/readiness/latest-bundle-readiness-snapshot-comparison.md",
+                bundle_readiness_snapshot_comparison["markdown_export"],
+            )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -9664,6 +9937,14 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         else None
     )
     bundle_readiness_snapshots = _project_bundle_readiness_snapshots(session, limit=12)
+    bundle_readiness_snapshot_comparison = (
+        _compare_project_bundle_readiness_snapshots(
+            bundle_readiness_snapshots[1],
+            bundle_readiness_snapshots[0],
+        )
+        if len(bundle_readiness_snapshots) >= 2
+        else None
+    )
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -9680,6 +9961,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         pilot_report_snapshots=pilot_report_snapshots,
         pilot_report_snapshot_comparison=pilot_report_snapshot_comparison,
         bundle_readiness_snapshots=bundle_readiness_snapshots,
+        bundle_readiness_snapshot_comparison=bundle_readiness_snapshot_comparison,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -9697,6 +9979,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "pilot_report_snapshots": pilot_report_snapshots,
         "pilot_report_snapshot_comparison": pilot_report_snapshot_comparison,
         "bundle_readiness_snapshots": bundle_readiness_snapshots,
+        "bundle_readiness_snapshot_comparison": bundle_readiness_snapshot_comparison,
         "briefs": briefs,
         "plans": plans,
         "tasks": tasks,
@@ -9746,6 +10029,7 @@ def _project_bundle_manifest(
     pilot_report_snapshots: list[ResearchBrief],
     pilot_report_snapshot_comparison: dict | None,
     bundle_readiness_snapshots: list[ResearchBrief],
+    bundle_readiness_snapshot_comparison: dict | None,
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -9832,6 +10116,37 @@ def _project_bundle_manifest(
         ),
         "latest_bundle_readiness_snapshot_missing_required_count": len(
             latest_bundle_readiness.get("missing_required") or []
+        ),
+        "bundle_readiness_snapshot_comparison_available": (
+            bundle_readiness_snapshot_comparison is not None
+        ),
+        "latest_bundle_readiness_snapshot_comparison_baseline_id": (
+            bundle_readiness_snapshot_comparison["baseline_snapshot_id"]
+            if bundle_readiness_snapshot_comparison
+            else ""
+        ),
+        "latest_bundle_readiness_snapshot_comparison_candidate_id": (
+            bundle_readiness_snapshot_comparison["candidate_snapshot_id"]
+            if bundle_readiness_snapshot_comparison
+            else ""
+        ),
+        "latest_bundle_readiness_snapshot_comparison_score_delta": (
+            bundle_readiness_snapshot_comparison["readiness_delta"]["readiness_score"].get(
+                "delta",
+                0.0,
+            )
+            if bundle_readiness_snapshot_comparison
+            else 0.0
+        ),
+        "latest_bundle_readiness_snapshot_comparison_added_missing_count": (
+            len(bundle_readiness_snapshot_comparison["added_missing_required"])
+            if bundle_readiness_snapshot_comparison
+            else 0
+        ),
+        "latest_bundle_readiness_snapshot_comparison_removed_missing_count": (
+            len(bundle_readiness_snapshot_comparison["removed_missing_required"])
+            if bundle_readiness_snapshot_comparison
+            else 0
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
@@ -10177,6 +10492,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("pilot_report_snapshot_comparison_available"):
         lines.append(
             "- `artifacts/pilot/latest-pilot-report-snapshot-comparison.md`: latest saved pilot report change report."
+        )
+    if manifest.get("bundle_readiness_snapshot_comparison_available"):
+        lines.append(
+            "- `artifacts/readiness/latest-bundle-readiness-snapshot-comparison.md`: latest saved bundle readiness change report."
         )
     lines.extend(
         [

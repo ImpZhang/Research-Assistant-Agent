@@ -979,6 +979,32 @@ class ProjectBundleReadinessSnapshotCreate(BaseModel):
     created_by: str = "researcher"
 
 
+class ProjectBundleReadinessSnapshotComparisonRequest(BaseModel):
+    baseline_snapshot_id: str
+    candidate_snapshot_id: str
+
+
+class ProjectBundleReadinessSnapshotComparisonResponse(BaseModel):
+    baseline_snapshot_id: str
+    candidate_snapshot_id: str
+    baseline_title: str
+    candidate_title: str
+    readiness_delta: dict[str, Any] = Field(default_factory=dict)
+    missing_required_delta: dict[str, Any] = Field(default_factory=dict)
+    manifest_delta: dict[str, Any] = Field(default_factory=dict)
+    added_missing_required: list[str] = Field(default_factory=list)
+    removed_missing_required: list[str] = Field(default_factory=list)
+    kept_missing_required: list[str] = Field(default_factory=list)
+    added_recommended_actions: list[str] = Field(default_factory=list)
+    removed_recommended_actions: list[str] = Field(default_factory=list)
+    kept_recommended_actions: list[str] = Field(default_factory=list)
+    added_quick_actions: list[str] = Field(default_factory=list)
+    removed_quick_actions: list[str] = Field(default_factory=list)
+    kept_quick_actions: list[str] = Field(default_factory=list)
+    summary: str
+    markdown_export: str = ""
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

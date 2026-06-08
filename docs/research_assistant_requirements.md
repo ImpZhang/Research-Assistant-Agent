@@ -846,6 +846,8 @@ project bundle readiness 需要能一键转成 task board 任务：从 missing r
 
 project bundle readiness 需要支持持久化 snapshot：用户可以保存当前 delivery preflight 为 `scope=bundle_readiness` 的 brief，保留 readiness score、readiness level、missing checks、recommended actions、quick actions、manifest summary 和 Markdown report，并支持 list、detail、Markdown export。project handoff bundle 必须包含这些 readiness snapshot 的 JSON/Markdown artifacts，让接手者看到交付前自检记录，而不是只看到实时状态。
 
+project bundle readiness 需要支持 snapshot comparison：用户可以选择 baseline/candidate readiness snapshot，对比 readiness score、level、missing required checks、recommended actions、quick actions 和 manifest signals 的变化，并导出 Markdown comparison。project handoff bundle 需要自动包含最新两份 readiness snapshot 的 comparison JSON/Markdown，使客户或导师能看到每轮交付准备度的进步、退步和仍未解决项。
+
 系统需要支持 readiness blocker task generation：readiness 评分产出的 blockers 不能只停留在报告里，应能一键转成 task board 任务，并带上 readiness_score、decision、owner_type=idea_readiness、due_phase=readiness_follow_up 和图边 `idea_readiness_creates_task`，保证“评分 -> 阻塞项 -> 可执行任务”闭环。
 
 系统需要支持 novelty refresh：研究者应能对任意 idea 重新运行 local/external literature collision search，指定 query override 和 limit，并把结果保存为 `completed_external_novelty_refresh` 类型的 novelty check。这样 idea 进入 proposal 或执行计划前，可以按最新问题表述重新检查撞车风险。

@@ -1690,6 +1690,37 @@ async function listProjectBundleReadinessSnapshots() {
   }
 }
 
+async function compareProjectBundleReadinessSnapshots() {
+  renderResult("workflowResult", "Comparing latest bundle readiness snapshots...", "warn");
+  try {
+    const snapshots = await api("/research/export/project-bundle/readiness/snapshots?limit=2");
+    if (snapshots.length < 2) {
+      renderResult(
+        "workflowResult",
+        "Save at least two bundle readiness snapshots before comparing them.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api("/research/export/project-bundle/readiness/snapshots/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseline_snapshot_id: snapshots[1].id,
+        candidate_snapshot_id: snapshots[0].id,
+      }),
+    });
+    $("dossierPreview").textContent = body.markdown_export;
+    const scoreDelta = body.readiness_delta?.readiness_score?.delta ?? 0;
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.summary)}<br />Score delta: <code>${escapeHtml(scoreDelta)}</code>.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadIdeaReadiness() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -2292,6 +2323,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReadinessSnapshotsButton").addEventListener(
     "click",
     listProjectBundleReadinessSnapshots,
+  );
+  $("projectBundleReadinessSnapshotCompareButton").addEventListener(
+    "click",
+    compareProjectBundleReadinessSnapshots,
   );
   $("readinessButton").addEventListener("click", loadIdeaReadiness);
   $("qualityGateButton").addEventListener("click", loadIdeaQualityGate);
