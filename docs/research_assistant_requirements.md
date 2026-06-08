@@ -840,6 +840,8 @@ opportunity radar 需要能一键转成 task board 任务：从 top opportunitie
 
 系统需要提供 project handoff bundle export：把 triage brief、persisted triage snapshots、latest triage snapshot comparison、pilot report snapshots、latest pilot report snapshot comparison、progress overview、readiness overview、quality gate overview、opportunity radar、claim validation queue、recent task board、advisor briefs、research plans、plan progress reports 和 JSON metadata 打包成 zip，用于项目级备份、导师沟通和外部 agent/MCP 接手。bundle 需要同时提供 claim validation queue Markdown/JSON metadata 与 pilot report snapshot Markdown/JSON metadata，让接手者优先看到哪些科研主张仍缺证据、试点周报结论如何变化、哪些客户行动项需要当天验证。
 
+系统需要支持 project bundle release note：用户在正式分享 handoff bundle 前，可以保存 `scope=project_bundle_release` 的交付记录，记录 recipient、release notes、readiness score/level、latest readiness snapshot/comparison、manifest summary 和 Markdown release note。project handoff bundle 必须包含 release note JSON/Markdown artifacts，让客户、导师或外部 agent 能看到“这一次交付是什么、交付给谁、交付时状态如何”，而不只是拿到一个无上下文 zip。
+
 系统需要提供 project bundle readiness，作为 handoff bundle 的导出前检查：复用 bundle manifest 信号，检查 project scope、quality gate、triage snapshot history、triage comparison、pilot report history、pilot comparison、claim validation queue、research plan 和 opportunity radar 是否齐备。输出 readiness score、readiness level、missing required checks、recommended actions、quick actions、manifest summary 和 Markdown report。它回答“现在这包材料能不能发给客户/导师”，并且必须与 `/research/export/project-bundle` 的 manifest 口径一致。
 
 project bundle readiness 需要能一键转成 task board 任务：从 missing required checks 和 optional warnings 创建 `owner_type=project_bundle_readiness`、`due_phase=bundle_handoff_follow_up` 的任务，并写入 `project_bundle_readiness_creates_task` 图边。若 readiness 已经 delivery-ready，也要能生成一个最终审阅/导出确认任务，确保交付前存在可追踪的人工确认动作。

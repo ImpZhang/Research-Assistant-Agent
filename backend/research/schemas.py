@@ -1015,6 +1015,13 @@ class ProjectBundleReadinessSnapshotComparisonResponse(BaseModel):
     markdown_export: str = ""
 
 
+class ProjectBundleReleaseCreate(BaseModel):
+    title: str = "Project Bundle Release Note"
+    recipient: str = "advisor_or_customer"
+    release_notes: str = ""
+    created_by: str = "researcher"
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

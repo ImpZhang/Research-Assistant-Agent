@@ -2194,6 +2194,8 @@ class ResearchTaskService:
             return "Open opportunity radar"
         if check_id == "advisor_briefs":
             return "Create advisor-ready brief"
+        if check_id == "project_bundle_release_note":
+            return "Create project bundle release note"
         if check_id == "blocked_task_review":
             return "Review blocked handoff tasks"
         if check_id == "bundle_delivery_review":

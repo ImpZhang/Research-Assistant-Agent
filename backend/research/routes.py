@@ -127,6 +127,7 @@ from backend.research.schemas import (
     ProjectBundleReadinessSnapshotComparisonTaskGenerateRequest,
     ProjectBundleReadinessSnapshotCreate,
     ProjectBundleReadinessTaskGenerateRequest,
+    ProjectBundleReleaseCreate,
     ProjectQualityGateOverviewResponse,
     ProjectQualityGateTaskGenerateRequest,
     ProjectCockpitResponse,
@@ -317,6 +318,7 @@ def status() -> ProjectStatus:
             "project_bundle_readiness_snapshots",
             "project_bundle_readiness_snapshot_comparison",
             "project_bundle_readiness_snapshot_comparison_task_generation",
+            "project_bundle_release_notes",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -524,6 +526,38 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/export/project-bundle",
             output_model="application/zip",
+        ),
+        ToolManifestItem(
+            name="create_project_bundle_release_note",
+            description=(
+                "Persist a customer/advisor-facing release note for the current project bundle."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/releases",
+            input_model="ProjectBundleReleaseCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_project_bundle_release_notes",
+            description="List saved project bundle release notes.",
+            method="GET",
+            path="/research/export/project-bundle/releases",
+            output_model="list[ResearchBriefRead]",
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_release_note",
+            description="Load one saved project bundle release note.",
+            method="GET",
+            path="/research/export/project-bundle/releases/{release_id}",
+            output_model="ResearchBriefDetail",
+        ),
+        ToolManifestItem(
+            name="export_project_bundle_release_note_markdown",
+            description="Export a saved project bundle release note as Markdown.",
+            method="GET",
+            path="/research/export/project-bundle/releases/{release_id}/export/markdown",
+            output_model="text/markdown",
         ),
         ToolManifestItem(
             name="get_project_bundle_readiness",
@@ -3731,6 +3765,16 @@ def _get_project_bundle_readiness_snapshot_or_404(
     if snapshot is None or snapshot.scope != "bundle_readiness":
         raise HTTPException(status_code=404, detail="Project bundle readiness snapshot not found")
     return snapshot
+
+
+def _get_project_bundle_release_or_404(
+    release_id: str,
+    session: Session,
+) -> ResearchBrief:
+    release = session.get(ResearchBrief, release_id)
+    if release is None or release.scope != "project_bundle_release":
+        raise HTTPException(status_code=404, detail="Project bundle release note not found")
+    return release
 
 
 def _project_cockpit_quick_actions(
@@ -9699,6 +9743,103 @@ def create_tasks_from_project_bundle_readiness_snapshot_comparison(
     )
 
 
+@router.post(
+    "/export/project-bundle/releases",
+    response_model=ResearchBriefDetail,
+)
+def create_project_bundle_release_note(
+    payload: ProjectBundleReleaseCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    generated_at = datetime.now(timezone.utc)
+    context = _project_bundle_context(session)
+    manifest = context["manifest"]
+    readiness = _project_bundle_readiness_audit_from_manifest(manifest)
+    title = payload.title or "Project Bundle Release Note"
+    recipient = payload.recipient or "advisor_or_customer"
+    release_notes = payload.release_notes or ""
+    markdown_export = _render_project_bundle_release_note_markdown(
+        generated_at=generated_at,
+        title=title,
+        recipient=recipient,
+        release_notes=release_notes,
+        readiness=readiness,
+        manifest=manifest,
+    )
+    brief = ResearchBrief(
+        title=title,
+        scope="project_bundle_release",
+        idea_ids_json=[],
+        summary_json={
+            "recipient": recipient,
+            "release_notes": release_notes,
+            "readiness_level": readiness["readiness_level"],
+            "readiness_score": readiness["readiness_score"],
+            "required_done": readiness["required_done"],
+            "required_total": readiness["required_total"],
+            "missing_required": readiness["missing_required"],
+            "latest_bundle_readiness_snapshot_id": manifest.get(
+                "latest_bundle_readiness_snapshot_id",
+                "",
+            ),
+            "bundle_readiness_snapshot_comparison_available": manifest.get(
+                "bundle_readiness_snapshot_comparison_available",
+                False,
+            ),
+            "latest_bundle_readiness_snapshot_comparison_candidate_id": manifest.get(
+                "latest_bundle_readiness_snapshot_comparison_candidate_id",
+                "",
+            ),
+            "manifest_summary": manifest,
+            "generated_at": generated_at.isoformat(),
+        },
+        markdown_export=markdown_export,
+        created_by=payload.created_by or "researcher",
+    )
+    session.add(brief)
+    session.commit()
+    session.refresh(brief)
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/releases",
+    response_model=list[ResearchBriefRead],
+)
+def list_project_bundle_release_notes(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    return [
+        _serialize_research_brief(release)
+        for release in _project_bundle_releases(session, limit=limit)
+    ]
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}",
+    response_model=ResearchBriefDetail,
+)
+def get_project_bundle_release_note(
+    release_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    return _serialize_research_brief(release, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_bundle_release_note_markdown(
+    release_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    return PlainTextResponse(release.markdown_export or "", media_type="text/markdown")
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -9834,6 +9975,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     pilot_report_snapshot_comparison = context["pilot_report_snapshot_comparison"]
     bundle_readiness_snapshots = context["bundle_readiness_snapshots"]
     bundle_readiness_snapshot_comparison = context["bundle_readiness_snapshot_comparison"]
+    bundle_releases = context["bundle_releases"]
     briefs = context["briefs"]
     plans = context["plans"]
     tasks = context["tasks"]
@@ -9886,6 +10028,10 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "metadata/bundle-readiness-snapshot-comparison.json",
                 _json_dump(bundle_readiness_snapshot_comparison),
             )
+        archive.writestr(
+            "metadata/project-bundle-releases.json",
+            _json_dump([_serialize_research_brief(release) for release in bundle_releases]),
+        )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
@@ -9936,6 +10082,13 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "artifacts/readiness/latest-bundle-readiness-snapshot-comparison.md",
                 bundle_readiness_snapshot_comparison["markdown_export"],
             )
+        for release in bundle_releases:
+            if release.markdown_export:
+                _write_markdown(
+                    archive,
+                    f"artifacts/releases/project-bundle-release-{release.id}.md",
+                    release.markdown_export,
+                )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -9991,6 +10144,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         if len(bundle_readiness_snapshots) >= 2
         else None
     )
+    bundle_releases = _project_bundle_releases(session, limit=12)
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -10008,6 +10162,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         pilot_report_snapshot_comparison=pilot_report_snapshot_comparison,
         bundle_readiness_snapshots=bundle_readiness_snapshots,
         bundle_readiness_snapshot_comparison=bundle_readiness_snapshot_comparison,
+        bundle_releases=bundle_releases,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -10026,6 +10181,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "pilot_report_snapshot_comparison": pilot_report_snapshot_comparison,
         "bundle_readiness_snapshots": bundle_readiness_snapshots,
         "bundle_readiness_snapshot_comparison": bundle_readiness_snapshot_comparison,
+        "bundle_releases": bundle_releases,
         "briefs": briefs,
         "plans": plans,
         "tasks": tasks,
@@ -10062,6 +10218,20 @@ def _project_bundle_readiness_snapshots(
     )
 
 
+def _project_bundle_releases(
+    session: Session,
+    *,
+    limit: int = 12,
+) -> list[ResearchBrief]:
+    return (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "project_bundle_release")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(max(1, min(limit, 50)))
+        .all()
+    )
+
+
 def _project_bundle_manifest(
     *,
     overview: ResearchOverviewResponse,
@@ -10076,6 +10246,7 @@ def _project_bundle_manifest(
     pilot_report_snapshot_comparison: dict | None,
     bundle_readiness_snapshots: list[ResearchBrief],
     bundle_readiness_snapshot_comparison: dict | None,
+    bundle_releases: list[ResearchBrief],
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -10084,6 +10255,7 @@ def _project_bundle_manifest(
     latest_bundle_readiness = (
         bundle_readiness_snapshots[0].summary_json if bundle_readiness_snapshots else {}
     )
+    latest_bundle_release = bundle_releases[0].summary_json if bundle_releases else {}
     return {
         "bundle_type": "research_project_bundle",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -10193,6 +10365,17 @@ def _project_bundle_manifest(
             len(bundle_readiness_snapshot_comparison["removed_missing_required"])
             if bundle_readiness_snapshot_comparison
             else 0
+        ),
+        "project_bundle_release_count": len(bundle_releases),
+        "latest_project_bundle_release_id": bundle_releases[0].id if bundle_releases else "",
+        "latest_project_bundle_release_recipient": latest_bundle_release.get("recipient", ""),
+        "latest_project_bundle_release_readiness_level": latest_bundle_release.get(
+            "readiness_level",
+            "",
+        ),
+        "latest_project_bundle_release_readiness_score": latest_bundle_release.get(
+            "readiness_score",
+            0.0,
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
@@ -10355,6 +10538,17 @@ def _project_bundle_readiness_checklist(
             action_path="/research/briefs",
         ),
         _project_bundle_readiness_item(
+            item_id="project_bundle_release_note",
+            label="Project bundle release note",
+            done=manifest["project_bundle_release_count"] >= 1,
+            detail=f"{manifest['project_bundle_release_count']} bundle release notes saved.",
+            required=False,
+            warning=manifest["project_bundle_release_count"] == 0,
+            action_label="Create bundle release note",
+            action_method="POST",
+            action_path="/research/export/project-bundle/releases",
+        ),
+        _project_bundle_readiness_item(
             item_id="blocked_task_review",
             label="Blocked task review",
             done=manifest["blocked_task_count"] == 0,
@@ -10452,6 +10646,83 @@ def _project_bundle_readiness_quick_actions(
     return [*actions, export_action]
 
 
+def _project_bundle_readiness_audit_from_manifest(
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    checklist = _project_bundle_readiness_checklist(manifest)
+    required_items = [item for item in checklist if item.required]
+    required_done = sum(1 for item in required_items if item.status == "done")
+    required_total = len(required_items)
+    readiness_score = round(required_done / required_total, 4) if required_total else 1.0
+    missing_required = [item.label for item in required_items if item.status != "done"]
+    return {
+        "readiness_score": readiness_score,
+        "readiness_level": _project_bundle_readiness_level(readiness_score),
+        "required_done": required_done,
+        "required_total": required_total,
+        "missing_required": missing_required,
+    }
+
+
+def _render_project_bundle_release_note_markdown(
+    *,
+    generated_at: datetime,
+    title: str,
+    recipient: str,
+    release_notes: str,
+    readiness: dict[str, Any],
+    manifest: dict[str, Any],
+) -> str:
+    notes = release_notes.strip() or "No additional release notes provided."
+    lines = [
+        "# Project Bundle Release Note",
+        "",
+        f"- Title: {title}",
+        f"- Generated At: `{generated_at.isoformat()}`",
+        f"- Recipient: {recipient}",
+        f"- Readiness Level: `{readiness['readiness_level']}`",
+        f"- Readiness Score: {readiness['readiness_score']}",
+        f"- Required Checks: {readiness['required_done']}/{readiness['required_total']}",
+        f"- Latest Readiness Snapshot: `{manifest.get('latest_bundle_readiness_snapshot_id', '')}`",
+        "- Latest Readiness Comparison Candidate: "
+        f"`{manifest.get('latest_bundle_readiness_snapshot_comparison_candidate_id', '')}`",
+        "",
+        "## Release Notes",
+        "",
+        notes,
+        "",
+        "## Delivery Signals",
+        "",
+        f"- Ideas: {manifest['idea_count']}",
+        f"- Open Tasks: {manifest['open_task_count']}",
+        f"- Blocked Tasks: {manifest['blocked_task_count']}",
+        f"- Claim Validation Queue: {manifest['claim_validation_queue_count']}",
+        f"- Research Plans: {manifest['research_plan_count']}",
+        f"- Triage Snapshots: {manifest['triage_snapshot_count']}",
+        f"- Pilot Report Snapshots: {manifest['pilot_report_snapshot_count']}",
+        f"- Bundle Readiness Snapshots: {manifest['bundle_readiness_snapshot_count']}",
+        "",
+        "## Missing Required Checks",
+        "",
+    ]
+    if readiness["missing_required"]:
+        lines.extend(f"- {item}" for item in readiness["missing_required"])
+    else:
+        lines.append("- None.")
+    lines.extend(
+        [
+            "",
+            "## Handoff Checklist",
+            "",
+            "- Review `README.md` and `metadata/manifest.json` in the exported project bundle.",
+            "- Review `06-claim-validation-queue.md` before sharing claims externally.",
+            "- Review latest readiness and readiness comparison artifacts before delivery.",
+            "- Confirm open or blocked tasks that should remain visible to the recipient.",
+        ]
+    )
+    return "\n".join(lines).strip() + "\n"
+
+
 def _render_project_bundle_readiness_markdown(
     *,
     generated_at: datetime,
@@ -10520,6 +10791,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         f"- Briefs: {manifest['brief_count']}",
         f"- Pilot Report Snapshots: {manifest['pilot_report_snapshot_count']}",
         f"- Bundle Readiness Snapshots: {manifest['bundle_readiness_snapshot_count']}",
+        f"- Bundle Release Notes: {manifest['project_bundle_release_count']}",
         "",
         "## Start Here",
         "",
@@ -10542,6 +10814,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("bundle_readiness_snapshot_comparison_available"):
         lines.append(
             "- `artifacts/readiness/latest-bundle-readiness-snapshot-comparison.md`: latest saved bundle readiness change report."
+        )
+    if manifest.get("project_bundle_release_count", 0):
+        lines.append(
+            "- `artifacts/releases/`: saved project bundle release notes for customer/advisor handoff."
         )
     lines.extend(
         [

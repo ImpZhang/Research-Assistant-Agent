@@ -234,6 +234,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "research status did not include project bundle readiness comparison tasks"
         )
+    if "project_bundle_release_notes" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project bundle release notes")
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -422,6 +424,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "tool manifest did not include project bundle readiness comparison task tool"
         )
+    if "create_project_bundle_release_note" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release note creator")
+    if "list_project_bundle_release_notes" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release note lister")
+    if "get_project_bundle_release_note" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release note reader")
+    if "export_project_bundle_release_note_markdown" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release note export")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
@@ -2086,6 +2096,45 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not project_bundle_readiness_comparison_task_edges:
         raise RuntimeError("project bundle readiness comparison tasks did not create graph edges")
+    project_bundle_release = require_ok(
+        client.post(
+            "/research/export/project-bundle/releases",
+            json_body={
+                "title": "Smoke Project Bundle Release",
+                "recipient": "smoke advisor",
+                "release_notes": "Smoke release note for project bundle handoff.",
+                "created_by": "smoke_api",
+            },
+        ),
+        "project bundle release note",
+    )
+    if project_bundle_release["scope"] != "project_bundle_release":
+        raise RuntimeError("project bundle release note used wrong scope")
+    if project_bundle_release["summary"]["recipient"] != "smoke advisor":
+        raise RuntimeError("project bundle release note missed recipient")
+    if "# Project Bundle Release Note" not in project_bundle_release["markdown_export"]:
+        raise RuntimeError("project bundle release note markdown missed title")
+    project_bundle_releases = require_ok(
+        client.get("/research/export/project-bundle/releases"),
+        "project bundle release note list",
+    )
+    if project_bundle_releases[0]["id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release note list did not return latest release")
+    fetched_project_bundle_release = require_ok(
+        client.get(f"/research/export/project-bundle/releases/{project_bundle_release['id']}"),
+        "project bundle release note detail",
+    )
+    if fetched_project_bundle_release["id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release note detail returned wrong note")
+    project_bundle_release_markdown = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/export/markdown"
+        ),
+        "project bundle release note markdown",
+    )
+    if "# Project Bundle Release Note" not in project_bundle_release_markdown:
+        raise RuntimeError("project bundle release note markdown export missed title")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2113,6 +2162,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/pilot-report-snapshot-comparison.json",
             "metadata/bundle-readiness-snapshots.json",
             "metadata/bundle-readiness-snapshot-comparison.json",
+            "metadata/project-bundle-releases.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
@@ -2125,6 +2175,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
                 f"{project_bundle_readiness_snapshot['id']}.md"
             ),
             "artifacts/readiness/latest-bundle-readiness-snapshot-comparison.md",
+            f"artifacts/releases/project-bundle-release-{project_bundle_release['id']}.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -2147,6 +2198,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
         project_bundle_readiness_comparison = json.loads(
             archive.read("metadata/bundle-readiness-snapshot-comparison.json")
+        )
+        project_bundle_releases_metadata = json.loads(
+            archive.read("metadata/project-bundle-releases.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -2238,6 +2292,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         != project_bundle_readiness_snapshot["id"]
     ):
         raise RuntimeError("project bundle readiness comparison metadata used wrong candidate")
+    if project_bundle_manifest["project_bundle_release_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include release notes")
+    if project_bundle_manifest["latest_project_bundle_release_id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle manifest did not point at latest release note")
+    if project_bundle_manifest["latest_project_bundle_release_recipient"] != "smoke advisor":
+        raise RuntimeError("project bundle manifest missed latest release recipient")
+    if project_bundle_releases_metadata[0]["id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release metadata order was wrong")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -2651,6 +2713,11 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_readiness_comparison_task_count": len(
             project_bundle_readiness_comparison_tasks["tasks"]
         ),
+        "project_bundle_release_id": project_bundle_release["id"],
+        "project_bundle_release_count": project_bundle_manifest["project_bundle_release_count"],
+        "project_bundle_latest_release_recipient": project_bundle_manifest[
+            "latest_project_bundle_release_recipient"
+        ],
         "project_bundle_plan_count": project_bundle_manifest["research_plan_count"],
         "project_bundle_triage_snapshot_count": project_bundle_manifest["triage_snapshot_count"],
         "project_bundle_triage_comparison_available": project_bundle_manifest[

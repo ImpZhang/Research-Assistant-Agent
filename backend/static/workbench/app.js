@@ -21,6 +21,7 @@ const state = {
   latestTriageSnapshotId: "",
   latestPilotReportSnapshotId: "",
   latestProjectBundleReadinessSnapshotId: "",
+  latestProjectBundleReleaseId: "",
   latestResearchPlanId: "",
   researchProfile: null,
   onboardingReadiness: null,
@@ -1613,6 +1614,53 @@ async function downloadProjectBundle() {
   }
 }
 
+async function saveProjectBundleReleaseNote() {
+  renderResult("workflowResult", "Saving project bundle release note...", "warn");
+  try {
+    const body = await api("/research/export/project-bundle/releases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Workbench Project Bundle Release Note",
+        recipient: "advisor_or_customer",
+        release_notes: "Workbench release note generated before project bundle handoff.",
+        created_by: "workbench",
+      }),
+    });
+    state.latestProjectBundleReleaseId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Saved project bundle release note <code>${escapeHtml(body.id)}</code> for ${escapeHtml(body.summary.recipient)}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function listProjectBundleReleaseNotes() {
+  renderResult("workflowResult", "Loading project bundle release notes...", "warn");
+  try {
+    const releases = await api("/research/export/project-bundle/releases?limit=6");
+    if (releases.length) {
+      state.latestProjectBundleReleaseId = releases[0].id;
+    }
+    const lines = ["# Project Bundle Release Notes", ""];
+    if (!releases.length) {
+      lines.push("- No project bundle release notes saved.");
+    }
+    for (const release of releases) {
+      lines.push(
+        `- \`${release.id}\` ${release.title}: ${release.summary.recipient || "recipient"} (${release.summary.readiness_level || "unknown"})`,
+      );
+    }
+    $("dossierPreview").textContent = lines.join("\n");
+    renderResult("workflowResult", `Loaded ${releases.length} project bundle release notes.`);
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -2346,6 +2394,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("researchPacketButton").addEventListener("click", loadResearchPacket);
   $("ideaBundleButton").addEventListener("click", downloadIdeaBundle);
   $("projectBundleButton").addEventListener("click", downloadProjectBundle);
+  $("projectBundleReleaseButton").addEventListener("click", saveProjectBundleReleaseNote);
+  $("projectBundleReleasesButton").addEventListener("click", listProjectBundleReleaseNotes);
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(
     "click",
