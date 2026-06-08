@@ -128,6 +128,8 @@ from backend.research.schemas import (
     ProjectBundleReadinessSnapshotCreate,
     ProjectBundleReadinessTaskGenerateRequest,
     ProjectBundleReleaseCreate,
+    ProjectBundleReleaseFeedbackCreate,
+    ProjectBundleReleaseFeedbackTaskGenerateRequest,
     ProjectBundleReleaseProgressResponse,
     ProjectBundleReleaseTaskGenerateRequest,
     ProjectQualityGateOverviewResponse,
@@ -191,6 +193,7 @@ from backend.research.schemas import (
     ToolManifestItem,
     ToolManifestResponse,
 )
+from backend.research.services.artifact_graph_service import ArtifactGraphService
 from backend.research.services.brief_service import ResearchBriefService
 from backend.research.services.assumption_audit_service import IdeaAssumptionAuditService
 from backend.research.services.document_ingestion import DocumentIngestionService
@@ -323,6 +326,8 @@ def status() -> ProjectStatus:
             "project_bundle_release_notes",
             "project_bundle_release_task_generation",
             "project_bundle_release_progress_tracking",
+            "project_bundle_release_feedback_tracking",
+            "project_bundle_release_feedback_task_generation",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -584,6 +589,54 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/export/project-bundle/releases/{release_id}/progress",
             output_model="ProjectBundleReleaseProgressResponse",
+        ),
+        ToolManifestItem(
+            name="record_project_bundle_release_feedback",
+            description=(
+                "Record customer or advisor feedback, signoff state, requested changes, "
+                "and blockers for a saved project bundle release."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/releases/{release_id}/feedback",
+            input_model="ProjectBundleReleaseFeedbackCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_project_bundle_release_feedback",
+            description="List feedback records for a saved project bundle release.",
+            method="GET",
+            path="/research/export/project-bundle/releases/{release_id}/feedback",
+            output_model="list[ResearchBriefRead]",
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_release_feedback",
+            description="Load one saved project bundle release feedback record.",
+            method="GET",
+            path="/research/export/project-bundle/releases/{release_id}/feedback/{feedback_id}",
+            output_model="ResearchBriefDetail",
+        ),
+        ToolManifestItem(
+            name="export_project_bundle_release_feedback_markdown",
+            description="Export a saved project bundle release feedback record as Markdown.",
+            method="GET",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/feedback/"
+                "{feedback_id}/export/markdown"
+            ),
+            output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_bundle_release_feedback",
+            description=(
+                "Turn requested changes, blockers, and signoff checks from release "
+                "feedback into task-board work."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/releases/{release_id}/feedback/{feedback_id}/tasks",
+            input_model="ProjectBundleReleaseFeedbackTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_project_bundle_readiness",
@@ -3801,6 +3854,19 @@ def _get_project_bundle_release_or_404(
     if release is None or release.scope != "project_bundle_release":
         raise HTTPException(status_code=404, detail="Project bundle release note not found")
     return release
+
+
+def _get_project_bundle_release_feedback_or_404(
+    release_id: str,
+    feedback_id: str,
+    session: Session,
+) -> ResearchBrief:
+    feedback = session.get(ResearchBrief, feedback_id)
+    if feedback is None or feedback.scope != "project_bundle_release_feedback":
+        raise HTTPException(status_code=404, detail="Project bundle release feedback not found")
+    if (feedback.summary_json or {}).get("release_id") != release_id:
+        raise HTTPException(status_code=404, detail="Project bundle release feedback not found")
+    return feedback
 
 
 def _project_cockpit_quick_actions(
@@ -9901,6 +9967,144 @@ def get_project_bundle_release_progress(
     return _project_bundle_release_progress(release, session)
 
 
+@router.post(
+    "/export/project-bundle/releases/{release_id}/feedback",
+    response_model=ResearchBriefDetail,
+)
+def record_project_bundle_release_feedback(
+    release_id: str,
+    payload: ProjectBundleReleaseFeedbackCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    generated_at = datetime.now(timezone.utc)
+    release_summary = release.summary_json or {}
+    recipient = payload.recipient or str(release_summary.get("recipient") or "advisor_or_customer")
+    requested_changes = _clean_project_bundle_feedback_items(payload.requested_changes)
+    blockers = _clean_project_bundle_feedback_items(payload.blockers)
+    accepted_artifacts = _clean_project_bundle_feedback_items(payload.accepted_artifacts)
+    title = payload.title or "Project Bundle Release Feedback"
+    markdown_export = _render_project_bundle_release_feedback_markdown(
+        generated_at=generated_at,
+        release=release,
+        title=title,
+        recipient=recipient,
+        feedback_status=payload.feedback_status,
+        signoff_confirmed=payload.signoff_confirmed,
+        feedback_notes=payload.feedback_notes,
+        requested_changes=requested_changes,
+        blockers=blockers,
+        accepted_artifacts=accepted_artifacts,
+    )
+    feedback = ResearchBrief(
+        title=title,
+        scope="project_bundle_release_feedback",
+        idea_ids_json=[],
+        summary_json={
+            "release_id": release.id,
+            "release_title": release.title,
+            "recipient": recipient,
+            "feedback_status": payload.feedback_status,
+            "signoff_confirmed": payload.signoff_confirmed,
+            "feedback_notes": payload.feedback_notes,
+            "requested_changes": requested_changes,
+            "blockers": blockers,
+            "accepted_artifacts": accepted_artifacts,
+            "release_readiness_level": release_summary.get("readiness_level", ""),
+            "release_readiness_score": release_summary.get("readiness_score", 0.0),
+            "generated_at": generated_at.isoformat(),
+        },
+        markdown_export=markdown_export,
+        created_by=payload.created_by or "researcher",
+    )
+    session.add(feedback)
+    session.commit()
+    session.refresh(feedback)
+    ArtifactGraphService(GraphService(session)).link_project_bundle_release_feedback(
+        release,
+        feedback,
+    )
+    session.commit()
+    return _serialize_research_brief(feedback, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/feedback",
+    response_model=list[ResearchBriefRead],
+)
+def list_project_bundle_release_feedback(
+    release_id: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    _get_project_bundle_release_or_404(release_id, session)
+    return [
+        _serialize_research_brief(feedback)
+        for feedback in _project_bundle_release_feedbacks(
+            session,
+            release_id=release_id,
+            limit=limit,
+        )
+    ]
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/feedback/{feedback_id}",
+    response_model=ResearchBriefDetail,
+)
+def get_project_bundle_release_feedback(
+    release_id: str,
+    feedback_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    _get_project_bundle_release_or_404(release_id, session)
+    feedback = _get_project_bundle_release_feedback_or_404(release_id, feedback_id, session)
+    return _serialize_research_brief(feedback, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/feedback/{feedback_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_bundle_release_feedback_markdown(
+    release_id: str,
+    feedback_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    _get_project_bundle_release_or_404(release_id, session)
+    feedback = _get_project_bundle_release_feedback_or_404(release_id, feedback_id, session)
+    return PlainTextResponse(feedback.markdown_export or "", media_type="text/markdown")
+
+
+@router.post(
+    "/export/project-bundle/releases/{release_id}/feedback/{feedback_id}/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_bundle_release_feedback(
+    release_id: str,
+    feedback_id: str,
+    payload: ProjectBundleReleaseFeedbackTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    _get_project_bundle_release_or_404(release_id, session)
+    feedback = _get_project_bundle_release_feedback_or_404(release_id, feedback_id, session)
+    tasks = ResearchTaskService(session).create_from_project_bundle_release_feedback(
+        feedback,
+        limit=payload.limit,
+        include_requested_changes=payload.include_requested_changes,
+        include_blockers=payload.include_blockers,
+        include_signoff_check=payload.include_signoff_check,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} project bundle release feedback tasks "
+            f"from feedback {feedback_id}."
+        ),
+    )
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -10038,6 +10242,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     bundle_readiness_snapshot_comparison = context["bundle_readiness_snapshot_comparison"]
     bundle_releases = context["bundle_releases"]
     latest_bundle_release_progress = context["latest_bundle_release_progress"]
+    bundle_release_feedbacks = context["bundle_release_feedbacks"]
     briefs = context["briefs"]
     plans = context["plans"]
     tasks = context["tasks"]
@@ -10099,6 +10304,12 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "metadata/project-bundle-release-progress.json",
                 _json_dump(latest_bundle_release_progress),
             )
+        archive.writestr(
+            "metadata/project-bundle-release-feedback.json",
+            _json_dump(
+                [_serialize_research_brief(feedback) for feedback in bundle_release_feedbacks]
+            ),
+        )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
@@ -10162,6 +10373,19 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                     f"artifacts/releases/project-bundle-release-{release.id}.md",
                     release.markdown_export,
                 )
+        for feedback in bundle_release_feedbacks:
+            if feedback.markdown_export:
+                _write_markdown(
+                    archive,
+                    f"artifacts/releases/project-bundle-release-feedback-{feedback.id}.md",
+                    feedback.markdown_export,
+                )
+        if bundle_release_feedbacks and bundle_release_feedbacks[0].markdown_export:
+            _write_markdown(
+                archive,
+                "artifacts/releases/latest-project-bundle-release-feedback.md",
+                bundle_release_feedbacks[0].markdown_export,
+            )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -10221,6 +10445,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
     latest_bundle_release_progress = (
         _project_bundle_release_progress(bundle_releases[0], session) if bundle_releases else None
     )
+    bundle_release_feedbacks = _project_bundle_release_feedbacks(session, limit=12)
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -10240,6 +10465,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         bundle_readiness_snapshot_comparison=bundle_readiness_snapshot_comparison,
         bundle_releases=bundle_releases,
         latest_bundle_release_progress=latest_bundle_release_progress,
+        bundle_release_feedbacks=bundle_release_feedbacks,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -10260,6 +10486,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "bundle_readiness_snapshot_comparison": bundle_readiness_snapshot_comparison,
         "bundle_releases": bundle_releases,
         "latest_bundle_release_progress": latest_bundle_release_progress,
+        "bundle_release_feedbacks": bundle_release_feedbacks,
         "briefs": briefs,
         "plans": plans,
         "tasks": tasks,
@@ -10308,6 +10535,44 @@ def _project_bundle_releases(
         .limit(max(1, min(limit, 50)))
         .all()
     )
+
+
+def _project_bundle_release_feedbacks(
+    session: Session,
+    *,
+    release_id: str | None = None,
+    limit: int = 12,
+) -> list[ResearchBrief]:
+    fetch_limit = max(1, min(limit, 50)) if release_id is None else 200
+    feedbacks = (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "project_bundle_release_feedback")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(fetch_limit)
+        .all()
+    )
+    if release_id is None:
+        return feedbacks
+    return [
+        feedback
+        for feedback in feedbacks
+        if (feedback.summary_json or {}).get("release_id") == release_id
+    ][: max(1, min(limit, 50))]
+
+
+def _clean_project_bundle_feedback_items(items: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        value = " ".join(str(item).split())
+        if not value:
+            continue
+        key = value.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(value)
+    return cleaned[:20]
 
 
 def _project_bundle_release_progress(
@@ -10403,6 +10668,7 @@ def _project_bundle_manifest(
     bundle_readiness_snapshot_comparison: dict | None,
     bundle_releases: list[ResearchBrief],
     latest_bundle_release_progress: ProjectBundleReleaseProgressResponse | None,
+    bundle_release_feedbacks: list[ResearchBrief],
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -10415,6 +10681,9 @@ def _project_bundle_manifest(
     latest_bundle_release_progress_summary = (
         latest_bundle_release_progress.task_summary if latest_bundle_release_progress else {}
     )
+    latest_bundle_release_feedback = (
+        bundle_release_feedbacks[0].summary_json if bundle_release_feedbacks else {}
+    ) or {}
     return {
         "bundle_type": "research_project_bundle",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -10549,6 +10818,21 @@ def _project_bundle_manifest(
         ),
         "latest_project_bundle_release_progress_blocked_task_count": (
             latest_bundle_release_progress_summary.get("blocked_task_count", 0)
+        ),
+        "project_bundle_release_feedback_count": len(bundle_release_feedbacks),
+        "latest_project_bundle_release_feedback_id": (
+            bundle_release_feedbacks[0].id if bundle_release_feedbacks else ""
+        ),
+        "latest_project_bundle_release_feedback_release_id": latest_bundle_release_feedback.get(
+            "release_id",
+            "",
+        ),
+        "latest_project_bundle_release_feedback_status": latest_bundle_release_feedback.get(
+            "feedback_status",
+            "",
+        ),
+        "latest_project_bundle_release_feedback_signoff_confirmed": (
+            latest_bundle_release_feedback.get("signoff_confirmed", False)
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
@@ -10884,6 +11168,53 @@ def _append_project_bundle_release_progress_tasks(
         lines.append(f"- `{task.id}` `{task.priority}` `{task.status}` {task.title}{description}")
 
 
+def _render_project_bundle_release_feedback_markdown(
+    *,
+    generated_at: datetime,
+    release: ResearchBrief,
+    title: str,
+    recipient: str,
+    feedback_status: str,
+    signoff_confirmed: bool,
+    feedback_notes: str,
+    requested_changes: list[str],
+    blockers: list[str],
+    accepted_artifacts: list[str],
+) -> str:
+    notes = feedback_notes.strip() or "No feedback notes provided."
+    lines = [
+        "# Project Bundle Release Feedback",
+        "",
+        f"- Title: {title}",
+        f"- Generated At: `{generated_at.isoformat()}`",
+        f"- Release Id: `{release.id}`",
+        f"- Release Title: {release.title}",
+        f"- Recipient: {recipient}",
+        f"- Feedback Status: `{feedback_status}`",
+        f"- Signoff Confirmed: {signoff_confirmed}",
+        "",
+        "## Feedback Notes",
+        "",
+        notes,
+        "",
+        "## Requested Changes",
+        "",
+    ]
+    _append_project_bundle_feedback_items(lines, requested_changes)
+    lines.extend(["", "## Blockers", ""])
+    _append_project_bundle_feedback_items(lines, blockers)
+    lines.extend(["", "## Accepted Artifacts", ""])
+    _append_project_bundle_feedback_items(lines, accepted_artifacts)
+    return "\n".join(lines).strip() + "\n"
+
+
+def _append_project_bundle_feedback_items(lines: list[str], items: list[str]) -> None:
+    if not items:
+        lines.append("- None.")
+        return
+    lines.extend(f"- {item}" for item in items)
+
+
 def _render_project_bundle_release_note_markdown(
     *,
     generated_at: datetime,
@@ -11012,6 +11343,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         f"- Pilot Report Snapshots: {manifest['pilot_report_snapshot_count']}",
         f"- Bundle Readiness Snapshots: {manifest['bundle_readiness_snapshot_count']}",
         f"- Bundle Release Notes: {manifest['project_bundle_release_count']}",
+        f"- Bundle Release Feedback: {manifest['project_bundle_release_feedback_count']}",
         "",
         "## Start Here",
         "",
@@ -11042,6 +11374,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("latest_project_bundle_release_progress_available"):
         lines.append(
             "- `artifacts/releases/latest-project-bundle-release-progress.md`: latest release follow-up progress."
+        )
+    if manifest.get("project_bundle_release_feedback_count", 0):
+        lines.append(
+            "- `artifacts/releases/latest-project-bundle-release-feedback.md`: latest release recipient feedback and signoff state."
         )
     lines.extend(
         [

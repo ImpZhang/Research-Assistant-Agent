@@ -1044,6 +1044,32 @@ class ProjectBundleReleaseProgressResponse(BaseModel):
     message: str
 
 
+class ProjectBundleReleaseFeedbackCreate(BaseModel):
+    title: str = "Project Bundle Release Feedback"
+    recipient: str = ""
+    feedback_status: Literal[
+        "received",
+        "accepted",
+        "changes_requested",
+        "blocked",
+        "rejected",
+    ] = "received"
+    signoff_confirmed: bool = False
+    feedback_notes: str = ""
+    requested_changes: list[str] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    accepted_artifacts: list[str] = Field(default_factory=list)
+    created_by: str = "researcher"
+
+
+class ProjectBundleReleaseFeedbackTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=6, ge=1, le=20)
+    include_requested_changes: bool = True
+    include_blockers: bool = True
+    include_signoff_check: bool = True
+    created_by: str = "system"
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

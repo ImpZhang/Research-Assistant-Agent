@@ -1546,6 +1546,127 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_bundle_release_feedback(
+        self,
+        feedback: ResearchBrief,
+        *,
+        limit: int = 6,
+        include_requested_changes: bool = True,
+        include_blockers: bool = True,
+        include_signoff_check: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        summary = feedback.summary_json or {}
+        release_id = str(summary.get("release_id") or "")
+        recipient = str(summary.get("recipient") or "advisor_or_customer")
+        feedback_status = str(summary.get("feedback_status") or "received")
+        signoff_confirmed = bool(summary.get("signoff_confirmed", False))
+        items: list[tuple[str, str, dict]] = []
+        if include_blockers:
+            for blocker in self._unique_commitments(summary.get("blockers") or []):
+                items.append(
+                    (
+                        "bundle_release_feedback_blocker",
+                        f"Resolve release feedback blocker: {blocker}",
+                        {"blocker": blocker},
+                    )
+                )
+        if include_requested_changes:
+            for change in self._unique_commitments(summary.get("requested_changes") or []):
+                items.append(
+                    (
+                        "bundle_release_feedback_requested_change",
+                        f"Address release feedback requested change: {change}",
+                        {"requested_change": change},
+                    )
+                )
+        if include_signoff_check:
+            if signoff_confirmed:
+                action = "Document confirmed release signoff and close the feedback loop."
+            elif feedback_status == "accepted":
+                action = "Confirm final written release signoff with the recipient."
+            else:
+                action = f"Confirm {recipient} accepts the release after feedback is addressed."
+            items.append(("bundle_release_feedback_signoff", action, {}))
+        items = self._deduplicate_pilot_report_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "bundle_release_feedback_review",
+                    "Review release feedback and decide whether more follow-up is needed.",
+                    {},
+                )
+            ]
+
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_bundle_release_feedback",
+                owner_id=feedback.id,
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._bundle_release_feedback_task_title(
+                    action,
+                    idx,
+                    source_type=source_type,
+                ),
+                description=action,
+                priority=self._bundle_release_feedback_task_priority(
+                    source_type,
+                    action,
+                    feedback_status,
+                ),
+                status="todo",
+                due_phase="project_bundle_release_feedback_follow_up",
+                metadata_json={
+                    "release_id": release_id,
+                    "feedback_id": feedback.id,
+                    "recipient": recipient,
+                    "feedback_status": feedback_status,
+                    "signoff_confirmed": signoff_confirmed,
+                    "source_rank": idx,
+                    **metadata,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project bundle release feedback.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "release_id": release_id,
+                        "feedback_id": feedback.id,
+                        "feedback_status": feedback_status,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_bundle_release_feedback_tasks(
+            feedback,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_project_advisor_chat(
         self,
         chat: dict,
@@ -2431,6 +2552,39 @@ class ResearchTaskService:
             "bundle_release_claim_queue_review",
             "bundle_release_open_task_review",
         }:
+            return "high"
+        return "medium"
+
+    def _bundle_release_feedback_task_title(
+        self,
+        action: str,
+        idx: int,
+        *,
+        source_type: str,
+    ) -> str:
+        clean = " ".join(str(action).split())
+        if source_type == "bundle_release_feedback_blocker":
+            return self._short_task_title(f"Resolve release feedback blocker {idx}: {clean}", idx)
+        if source_type == "bundle_release_feedback_requested_change":
+            return self._short_task_title(f"Address release feedback change {idx}: {clean}", idx)
+        if source_type == "bundle_release_feedback_signoff":
+            return "Confirm release feedback signoff"
+        return self._short_task_title(clean or f"Work release feedback follow-up {idx}", idx)
+
+    def _bundle_release_feedback_task_priority(
+        self,
+        source_type: str,
+        action: str,
+        feedback_status: str,
+    ) -> str:
+        lower = str(action).lower()
+        if source_type == "bundle_release_feedback_blocker":
+            return "critical"
+        if "blocked" in lower or "critical" in lower:
+            return "critical"
+        if source_type == "bundle_release_feedback_requested_change":
+            return "high"
+        if feedback_status in {"changes_requested", "blocked", "rejected"}:
             return "high"
         return "medium"
 

@@ -759,6 +759,86 @@ class ArtifactGraphService:
                 payload={"source": task.source_type},
             )
 
+    def link_project_bundle_release_feedback(
+        self,
+        release: ResearchBrief,
+        feedback: ResearchBrief,
+    ) -> None:
+        release_summary = release.summary_json or {}
+        feedback_summary = feedback.summary_json or {}
+        release_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release",
+            label=release.title,
+            canonical_key=release.id,
+            payload={
+                "recipient": release_summary.get("recipient", ""),
+                "readiness_level": release_summary.get("readiness_level", ""),
+                "readiness_score": release_summary.get("readiness_score", 0.0),
+                "owner_type": "project_bundle_release",
+            },
+        )
+        feedback_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release_feedback",
+            label=feedback.title,
+            canonical_key=feedback.id,
+            payload={
+                "release_id": release.id,
+                "recipient": feedback_summary.get("recipient", ""),
+                "feedback_status": feedback_summary.get("feedback_status", ""),
+                "signoff_confirmed": feedback_summary.get("signoff_confirmed", False),
+                "requested_change_count": len(feedback_summary.get("requested_changes") or []),
+                "blocker_count": len(feedback_summary.get("blockers") or []),
+                "owner_type": "project_bundle_release_feedback",
+            },
+        )
+        self.graph.create_edge(
+            source_node=release_node,
+            target_node=feedback_node,
+            edge_type="project_bundle_release_has_feedback",
+            payload={
+                "feedback_status": feedback_summary.get("feedback_status", ""),
+                "signoff_confirmed": feedback_summary.get("signoff_confirmed", False),
+            },
+        )
+
+    def link_project_bundle_release_feedback_tasks(
+        self,
+        feedback: ResearchBrief,
+        tasks: list[ResearchTask],
+    ) -> None:
+        summary = feedback.summary_json or {}
+        feedback_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release_feedback",
+            label=feedback.title,
+            canonical_key=feedback.id,
+            payload={
+                "release_id": summary.get("release_id", ""),
+                "recipient": summary.get("recipient", ""),
+                "feedback_status": summary.get("feedback_status", ""),
+                "signoff_confirmed": summary.get("signoff_confirmed", False),
+                "task_count": len(tasks),
+                "owner_type": "project_bundle_release_feedback",
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=feedback_node,
+                target_node=task_node,
+                edge_type="project_bundle_release_feedback_creates_task",
+                payload={"source": task.source_type},
+            )
+
     def link_project_advisor_chat_tasks(self, chat: dict, tasks: list[ResearchTask]) -> None:
         chat_node = self.graph.get_or_create_node(
             node_type="project_advisor_chat",

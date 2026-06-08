@@ -240,6 +240,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project bundle release tasks")
     if "project_bundle_release_progress_tracking" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project bundle release progress")
+    if "project_bundle_release_feedback_tracking" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project bundle release feedback")
+    if "project_bundle_release_feedback_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project bundle release feedback tasks")
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -440,6 +444,16 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project bundle release task tool")
     if "get_project_bundle_release_progress" not in manifest_names:
         raise RuntimeError("tool manifest did not include project bundle release progress tool")
+    if "record_project_bundle_release_feedback" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release feedback creator")
+    if "list_project_bundle_release_feedback" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release feedback lister")
+    if "get_project_bundle_release_feedback" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release feedback reader")
+    if "export_project_bundle_release_feedback_markdown" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release feedback export")
+    if "create_tasks_from_project_bundle_release_feedback" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release feedback tasks")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
@@ -2187,6 +2201,98 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         not in project_bundle_release_progress["markdown_export"]
     ):
         raise RuntimeError("project bundle release progress markdown missed title")
+    project_bundle_release_feedback = require_ok(
+        client.post(
+            f"/research/export/project-bundle/releases/{project_bundle_release['id']}/feedback",
+            json_body={
+                "title": "Smoke Project Bundle Release Feedback",
+                "recipient": "smoke advisor",
+                "feedback_status": "changes_requested",
+                "signoff_confirmed": False,
+                "feedback_notes": "Smoke feedback captured after release handoff.",
+                "requested_changes": [
+                    "Clarify release closeout ownership.",
+                    "Summarize unresolved claim risks.",
+                ],
+                "blockers": ["Smoke advisor signoff remains pending."],
+                "accepted_artifacts": ["README.md", "metadata/manifest.json"],
+                "created_by": "smoke_api",
+            },
+        ),
+        "project bundle release feedback",
+    )
+    if project_bundle_release_feedback["scope"] != "project_bundle_release_feedback":
+        raise RuntimeError("project bundle release feedback used wrong scope")
+    if project_bundle_release_feedback["summary"]["release_id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release feedback used wrong release id")
+    if project_bundle_release_feedback["summary"]["feedback_status"] != "changes_requested":
+        raise RuntimeError("project bundle release feedback missed status")
+    if (
+        "# Project Bundle Release Feedback"
+        not in project_bundle_release_feedback["markdown_export"]
+    ):
+        raise RuntimeError("project bundle release feedback markdown missed title")
+    project_bundle_release_feedback_list = require_ok(
+        client.get(
+            f"/research/export/project-bundle/releases/{project_bundle_release['id']}/feedback"
+        ),
+        "project bundle release feedback list",
+    )
+    if project_bundle_release_feedback_list[0]["id"] != project_bundle_release_feedback["id"]:
+        raise RuntimeError("project bundle release feedback list did not return latest feedback")
+    fetched_project_bundle_release_feedback = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/feedback/{project_bundle_release_feedback['id']}"
+        ),
+        "project bundle release feedback detail",
+    )
+    if fetched_project_bundle_release_feedback["id"] != project_bundle_release_feedback["id"]:
+        raise RuntimeError("project bundle release feedback detail returned wrong record")
+    project_bundle_release_feedback_markdown = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/feedback/"
+            f"{project_bundle_release_feedback['id']}/export/markdown"
+        ),
+        "project bundle release feedback markdown",
+    )
+    if "# Project Bundle Release Feedback" not in project_bundle_release_feedback_markdown:
+        raise RuntimeError("project bundle release feedback markdown export missed title")
+    project_bundle_release_feedback_tasks = require_ok(
+        client.post(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/feedback/"
+            f"{project_bundle_release_feedback['id']}/tasks",
+            json_body={
+                "limit": 6,
+                "include_requested_changes": True,
+                "include_blockers": True,
+                "include_signoff_check": True,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project bundle release feedback tasks",
+    )
+    if not project_bundle_release_feedback_tasks["tasks"]:
+        raise RuntimeError("project bundle release feedback did not create tasks")
+    first_feedback_task = project_bundle_release_feedback_tasks["tasks"][0]
+    if first_feedback_task["owner_type"] != "project_bundle_release_feedback":
+        raise RuntimeError("project bundle release feedback task used wrong owner type")
+    if first_feedback_task["due_phase"] != "project_bundle_release_feedback_follow_up":
+        raise RuntimeError("project bundle release feedback task used wrong due phase")
+    project_bundle_release_feedback_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=project_bundle_release_has_feedback"),
+        "project bundle release feedback graph edges",
+    )
+    if not project_bundle_release_feedback_edges:
+        raise RuntimeError("project bundle release feedback did not create graph edge")
+    project_bundle_release_feedback_task_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=project_bundle_release_feedback_creates_task"),
+        "project bundle release feedback task graph edges",
+    )
+    if not project_bundle_release_feedback_task_edges:
+        raise RuntimeError("project bundle release feedback tasks did not create graph edges")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2216,6 +2322,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/bundle-readiness-snapshot-comparison.json",
             "metadata/project-bundle-releases.json",
             "metadata/project-bundle-release-progress.json",
+            "metadata/project-bundle-release-feedback.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
@@ -2230,6 +2337,11 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "artifacts/readiness/latest-bundle-readiness-snapshot-comparison.md",
             f"artifacts/releases/project-bundle-release-{project_bundle_release['id']}.md",
             "artifacts/releases/latest-project-bundle-release-progress.md",
+            (
+                "artifacts/releases/project-bundle-release-feedback-"
+                f"{project_bundle_release_feedback['id']}.md"
+            ),
+            "artifacts/releases/latest-project-bundle-release-feedback.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -2258,6 +2370,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
         project_bundle_release_progress_metadata = json.loads(
             archive.read("metadata/project-bundle-release-progress.json")
+        )
+        project_bundle_release_feedback_metadata = json.loads(
+            archive.read("metadata/project-bundle-release-feedback.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -2370,6 +2485,27 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle release progress metadata used wrong release id")
     if project_bundle_release_progress_metadata["task_summary"]["open_task_count"] < 1:
         raise RuntimeError("project bundle release progress metadata missed open tasks")
+    if project_bundle_manifest["project_bundle_release_feedback_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include release feedback")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_feedback_id"]
+        != project_bundle_release_feedback["id"]
+    ):
+        raise RuntimeError("project bundle manifest did not point at latest release feedback")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_feedback_release_id"]
+        != project_bundle_release["id"]
+    ):
+        raise RuntimeError("project bundle manifest release feedback used wrong release id")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_feedback_status"]
+        != "changes_requested"
+    ):
+        raise RuntimeError("project bundle manifest release feedback missed status")
+    if project_bundle_manifest["latest_project_bundle_release_feedback_signoff_confirmed"]:
+        raise RuntimeError("project bundle manifest release feedback signoff should be pending")
+    if project_bundle_release_feedback_metadata[0]["id"] != project_bundle_release_feedback["id"]:
+        raise RuntimeError("project bundle release feedback metadata order was wrong")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -2792,6 +2928,16 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_release_progress_open_count": project_bundle_release_progress[
             "task_summary"
         ]["open_task_count"],
+        "project_bundle_release_feedback_id": project_bundle_release_feedback["id"],
+        "project_bundle_release_feedback_count": project_bundle_manifest[
+            "project_bundle_release_feedback_count"
+        ],
+        "project_bundle_release_feedback_status": project_bundle_manifest[
+            "latest_project_bundle_release_feedback_status"
+        ],
+        "project_bundle_release_feedback_task_count": len(
+            project_bundle_release_feedback_tasks["tasks"]
+        ),
         "project_bundle_latest_release_recipient": project_bundle_manifest[
             "latest_project_bundle_release_recipient"
         ],
