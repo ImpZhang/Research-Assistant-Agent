@@ -221,6 +221,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "research status did not include project bundle readiness task generation"
         )
+    if "project_bundle_readiness_snapshots" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project bundle readiness snapshots")
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -389,6 +391,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project bundle readiness tool")
     if "create_tasks_from_project_bundle_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include project bundle readiness task tool")
+    if "create_project_bundle_readiness_snapshot" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle readiness snapshot tool")
+    if "list_project_bundle_readiness_snapshots" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle readiness snapshot lister")
+    if "get_project_bundle_readiness_snapshot" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle readiness snapshot reader")
+    if "export_project_bundle_readiness_snapshot_markdown" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle readiness snapshot export")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
@@ -1935,6 +1945,49 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not project_bundle_readiness_task_edges:
         raise RuntimeError("project bundle readiness tasks did not create graph edges")
+    project_bundle_readiness_snapshot = require_ok(
+        client.post(
+            "/research/export/project-bundle/readiness/snapshots",
+            json_body={
+                "title": "Smoke Bundle Readiness Snapshot",
+                "created_by": "smoke_api",
+            },
+        ),
+        "project bundle readiness snapshot",
+    )
+    if project_bundle_readiness_snapshot["scope"] != "bundle_readiness":
+        raise RuntimeError("project bundle readiness snapshot used the wrong scope")
+    if (
+        project_bundle_readiness_snapshot["summary"]["readiness_level"]
+        != project_bundle_readiness["readiness_level"]
+    ):
+        raise RuntimeError("project bundle readiness snapshot missed readiness level")
+    if "# Project Bundle Readiness" not in project_bundle_readiness_snapshot["markdown_export"]:
+        raise RuntimeError("project bundle readiness snapshot markdown did not include title")
+    bundle_readiness_snapshots = require_ok(
+        client.get("/research/export/project-bundle/readiness/snapshots"),
+        "project bundle readiness snapshot list",
+    )
+    if bundle_readiness_snapshots[0]["id"] != project_bundle_readiness_snapshot["id"]:
+        raise RuntimeError("project bundle readiness snapshot list did not return latest snapshot")
+    fetched_bundle_readiness_snapshot = require_ok(
+        client.get(
+            "/research/export/project-bundle/readiness/snapshots/"
+            f"{project_bundle_readiness_snapshot['id']}"
+        ),
+        "project bundle readiness snapshot detail",
+    )
+    if fetched_bundle_readiness_snapshot["id"] != project_bundle_readiness_snapshot["id"]:
+        raise RuntimeError("project bundle readiness snapshot detail returned wrong snapshot")
+    bundle_readiness_snapshot_markdown = require_ok(
+        client.get(
+            "/research/export/project-bundle/readiness/snapshots/"
+            f"{project_bundle_readiness_snapshot['id']}/export/markdown"
+        ),
+        "project bundle readiness snapshot markdown",
+    )
+    if "# Project Bundle Readiness" not in bundle_readiness_snapshot_markdown:
+        raise RuntimeError("project bundle readiness snapshot markdown export missed title")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -1960,6 +2013,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/triage-snapshot-comparison.json",
             "metadata/pilot-report-snapshots.json",
             "metadata/pilot-report-snapshot-comparison.json",
+            "metadata/bundle-readiness-snapshots.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
@@ -1967,6 +2021,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "artifacts/triage/latest-triage-snapshot-comparison.md",
             f"artifacts/pilot/pilot-report-snapshot-{candidate_pilot_report_snapshot['id']}.md",
             "artifacts/pilot/latest-pilot-report-snapshot-comparison.md",
+            (
+                "artifacts/readiness/project-bundle-readiness-snapshot-"
+                f"{project_bundle_readiness_snapshot['id']}.md"
+            ),
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -1983,6 +2041,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
         project_bundle_pilot_comparison = json.loads(
             archive.read("metadata/pilot-report-snapshot-comparison.json")
+        )
+        project_bundle_readiness_snapshots = json.loads(
+            archive.read("metadata/bundle-readiness-snapshots.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -2046,6 +2107,17 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         != candidate_pilot_report_snapshot["id"]
     ):
         raise RuntimeError("project bundle pilot comparison metadata used the wrong candidate")
+    if project_bundle_manifest["bundle_readiness_snapshot_count"] < 1:
+        raise RuntimeError("project bundle manifest did not include bundle readiness snapshots")
+    if (
+        project_bundle_manifest["latest_bundle_readiness_snapshot_id"]
+        != project_bundle_readiness_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle manifest did not point at latest readiness snapshot")
+    if project_bundle_manifest["latest_bundle_readiness_snapshot_level"] != "delivery_ready":
+        raise RuntimeError("project bundle manifest missed latest readiness snapshot level")
+    if project_bundle_readiness_snapshots[0]["id"] != project_bundle_readiness_snapshot["id"]:
+        raise RuntimeError("project bundle readiness snapshot metadata order was wrong")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -2446,6 +2518,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_readiness_score": project_bundle_readiness["readiness_score"],
         "project_bundle_readiness_missing": len(project_bundle_readiness["missing_required"]),
         "project_bundle_readiness_task_count": len(project_bundle_readiness_tasks["tasks"]),
+        "project_bundle_readiness_snapshot_id": project_bundle_readiness_snapshot["id"],
+        "project_bundle_readiness_snapshot_count": project_bundle_manifest[
+            "bundle_readiness_snapshot_count"
+        ],
         "project_bundle_plan_count": project_bundle_manifest["research_plan_count"],
         "project_bundle_triage_snapshot_count": project_bundle_manifest["triage_snapshot_count"],
         "project_bundle_triage_comparison_available": project_bundle_manifest[

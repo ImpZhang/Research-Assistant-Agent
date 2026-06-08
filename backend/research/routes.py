@@ -122,6 +122,7 @@ from backend.research.schemas import (
     ProposalReviewCreate,
     ProposalReviewRead,
     ProjectBundleReadinessResponse,
+    ProjectBundleReadinessSnapshotCreate,
     ProjectBundleReadinessTaskGenerateRequest,
     ProjectQualityGateOverviewResponse,
     ProjectQualityGateTaskGenerateRequest,
@@ -310,6 +311,7 @@ def status() -> ProjectStatus:
             "project_handoff_bundle_export",
             "project_bundle_readiness",
             "project_bundle_readiness_task_generation",
+            "project_bundle_readiness_snapshots",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -538,6 +540,38 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="ProjectBundleReadinessTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_project_bundle_readiness_snapshot",
+            description="Persist the current project bundle readiness as a handoff audit snapshot.",
+            method="POST",
+            path="/research/export/project-bundle/readiness/snapshots",
+            input_model="ProjectBundleReadinessSnapshotCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_project_bundle_readiness_snapshots",
+            description="List saved project bundle readiness snapshots.",
+            method="GET",
+            path="/research/export/project-bundle/readiness/snapshots",
+            output_model="list[ResearchBriefRead]",
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_readiness_snapshot",
+            description="Load one saved project bundle readiness snapshot.",
+            method="GET",
+            path="/research/export/project-bundle/readiness/snapshots/{snapshot_id}",
+            output_model="ResearchBriefDetail",
+        ),
+        ToolManifestItem(
+            name="export_project_bundle_readiness_snapshot_markdown",
+            description="Export a saved project bundle readiness snapshot as Markdown.",
+            method="GET",
+            path=(
+                "/research/export/project-bundle/readiness/snapshots/{snapshot_id}/export/markdown"
+            ),
+            output_model="text/markdown",
         ),
         ToolManifestItem(
             name="get_idea_readiness",
@@ -3443,6 +3477,16 @@ def _get_project_pilot_report_snapshot_or_404(
     snapshot = session.get(ResearchBrief, snapshot_id)
     if snapshot is None or snapshot.scope != "pilot_report":
         raise HTTPException(status_code=404, detail="Pilot report snapshot not found")
+    return snapshot
+
+
+def _get_project_bundle_readiness_snapshot_or_404(
+    snapshot_id: str,
+    session: Session,
+) -> ResearchBrief:
+    snapshot = session.get(ResearchBrief, snapshot_id)
+    if snapshot is None or snapshot.scope != "bundle_readiness":
+        raise HTTPException(status_code=404, detail="Project bundle readiness snapshot not found")
     return snapshot
 
 
@@ -9272,6 +9316,82 @@ def create_tasks_from_project_bundle_readiness(
     )
 
 
+@router.post(
+    "/export/project-bundle/readiness/snapshots",
+    response_model=ResearchBriefDetail,
+)
+def create_project_bundle_readiness_snapshot(
+    payload: ProjectBundleReadinessSnapshotCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    readiness = get_project_bundle_readiness(session=session)
+    brief = ResearchBrief(
+        title=payload.title or "Project Bundle Readiness Snapshot",
+        scope="bundle_readiness",
+        idea_ids_json=[],
+        summary_json={
+            "readiness_level": readiness.readiness_level,
+            "readiness_score": readiness.readiness_score,
+            "required_done": readiness.required_done,
+            "required_total": readiness.required_total,
+            "missing_required": readiness.missing_required,
+            "recommended_actions": readiness.recommended_actions,
+            "quick_actions": readiness.quick_actions,
+            "manifest_summary": readiness.manifest_summary,
+            "generated_at": readiness.generated_at.isoformat(),
+        },
+        markdown_export=readiness.markdown_export,
+        created_by=payload.created_by or "researcher",
+    )
+    session.add(brief)
+    session.commit()
+    session.refresh(brief)
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/readiness/snapshots",
+    response_model=list[ResearchBriefRead],
+)
+def list_project_bundle_readiness_snapshots(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    limit = max(1, min(limit, 200))
+    snapshots = (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "bundle_readiness")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_serialize_research_brief(snapshot) for snapshot in snapshots]
+
+
+@router.get(
+    "/export/project-bundle/readiness/snapshots/{snapshot_id}",
+    response_model=ResearchBriefDetail,
+)
+def get_project_bundle_readiness_snapshot(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    snapshot = _get_project_bundle_readiness_snapshot_or_404(snapshot_id, session)
+    return _serialize_research_brief(snapshot, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/readiness/snapshots/{snapshot_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_bundle_readiness_snapshot_markdown(
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    snapshot = _get_project_bundle_readiness_snapshot_or_404(snapshot_id, session)
+    return PlainTextResponse(snapshot.markdown_export or "", media_type="text/markdown")
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -9405,6 +9525,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     triage_snapshot_comparison = context["triage_snapshot_comparison"]
     pilot_report_snapshots = context["pilot_report_snapshots"]
     pilot_report_snapshot_comparison = context["pilot_report_snapshot_comparison"]
+    bundle_readiness_snapshots = context["bundle_readiness_snapshots"]
     briefs = context["briefs"]
     plans = context["plans"]
     tasks = context["tasks"]
@@ -9446,6 +9567,12 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "metadata/pilot-report-snapshot-comparison.json",
                 _json_dump(pilot_report_snapshot_comparison),
             )
+        archive.writestr(
+            "metadata/bundle-readiness-snapshots.json",
+            _json_dump(
+                [_serialize_research_brief(snapshot) for snapshot in bundle_readiness_snapshots]
+            ),
+        )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
@@ -9483,6 +9610,13 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "artifacts/pilot/latest-pilot-report-snapshot-comparison.md",
                 pilot_report_snapshot_comparison["markdown_export"],
             )
+        for snapshot in bundle_readiness_snapshots:
+            if snapshot.markdown_export:
+                _write_markdown(
+                    archive,
+                    f"artifacts/readiness/project-bundle-readiness-snapshot-{snapshot.id}.md",
+                    snapshot.markdown_export,
+                )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -9529,6 +9663,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         if len(pilot_report_snapshots) >= 2
         else None
     )
+    bundle_readiness_snapshots = _project_bundle_readiness_snapshots(session, limit=12)
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -9544,6 +9679,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         triage_snapshot_comparison=triage_snapshot_comparison,
         pilot_report_snapshots=pilot_report_snapshots,
         pilot_report_snapshot_comparison=pilot_report_snapshot_comparison,
+        bundle_readiness_snapshots=bundle_readiness_snapshots,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -9560,6 +9696,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "triage_snapshot_comparison": triage_snapshot_comparison,
         "pilot_report_snapshots": pilot_report_snapshots,
         "pilot_report_snapshot_comparison": pilot_report_snapshot_comparison,
+        "bundle_readiness_snapshots": bundle_readiness_snapshots,
         "briefs": briefs,
         "plans": plans,
         "tasks": tasks,
@@ -9582,6 +9719,20 @@ def _project_bundle_pilot_report_snapshots(
     )
 
 
+def _project_bundle_readiness_snapshots(
+    session: Session,
+    *,
+    limit: int = 12,
+) -> list[ResearchBrief]:
+    return (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "bundle_readiness")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(max(1, min(limit, 50)))
+        .all()
+    )
+
+
 def _project_bundle_manifest(
     *,
     overview: ResearchOverviewResponse,
@@ -9594,11 +9745,15 @@ def _project_bundle_manifest(
     triage_snapshot_comparison: dict | None,
     pilot_report_snapshots: list[ResearchBrief],
     pilot_report_snapshot_comparison: dict | None,
+    bundle_readiness_snapshots: list[ResearchBrief],
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
     plan_progress_items: list[ResearchPlanProgressResponse],
 ) -> dict[str, Any]:
+    latest_bundle_readiness = (
+        bundle_readiness_snapshots[0].summary_json if bundle_readiness_snapshots else {}
+    )
     return {
         "bundle_type": "research_project_bundle",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -9664,6 +9819,19 @@ def _project_bundle_manifest(
             len(pilot_report_snapshot_comparison["added_quick_actions"])
             if pilot_report_snapshot_comparison
             else 0
+        ),
+        "bundle_readiness_snapshot_count": len(bundle_readiness_snapshots),
+        "latest_bundle_readiness_snapshot_id": (
+            bundle_readiness_snapshots[0].id if bundle_readiness_snapshots else ""
+        ),
+        "latest_bundle_readiness_snapshot_level": latest_bundle_readiness.get(
+            "readiness_level", ""
+        ),
+        "latest_bundle_readiness_snapshot_score": latest_bundle_readiness.get(
+            "readiness_score", 0.0
+        ),
+        "latest_bundle_readiness_snapshot_missing_required_count": len(
+            latest_bundle_readiness.get("missing_required") or []
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
@@ -9990,6 +10158,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         f"- Research Plans: {manifest['research_plan_count']}",
         f"- Briefs: {manifest['brief_count']}",
         f"- Pilot Report Snapshots: {manifest['pilot_report_snapshot_count']}",
+        f"- Bundle Readiness Snapshots: {manifest['bundle_readiness_snapshot_count']}",
         "",
         "## Start Here",
         "",
@@ -10013,6 +10182,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         [
             "- `artifacts/triage/`: persisted project triage decision snapshots.",
             "- `artifacts/pilot/`: persisted customer pilot reports and latest report comparison.",
+            "- `artifacts/readiness/`: persisted project bundle readiness snapshots.",
             "- `artifacts/briefs/`: persisted advisor or group-meeting briefs.",
             "- `artifacts/plans/`: execution plans and plan progress reports.",
             "- `metadata/`: JSON payloads for downstream tools or backup.",

@@ -20,6 +20,7 @@ const state = {
   latestTaskSnapshotId: "",
   latestTriageSnapshotId: "",
   latestPilotReportSnapshotId: "",
+  latestProjectBundleReadinessSnapshotId: "",
   latestResearchPlanId: "",
   researchProfile: null,
   onboardingReadiness: null,
@@ -1644,6 +1645,51 @@ async function createProjectBundleReadinessTasks() {
   }
 }
 
+async function saveProjectBundleReadinessSnapshot() {
+  renderResult("workflowResult", "Saving project bundle readiness snapshot...", "warn");
+  try {
+    const body = await api("/research/export/project-bundle/readiness/snapshots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Workbench Project Bundle Readiness Snapshot",
+        created_by: "workbench",
+      }),
+    });
+    state.latestProjectBundleReadinessSnapshotId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Saved bundle readiness snapshot <code>${escapeHtml(body.id)}</code> with score ${body.summary.readiness_score}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function listProjectBundleReadinessSnapshots() {
+  renderResult("workflowResult", "Loading project bundle readiness snapshots...", "warn");
+  try {
+    const snapshots = await api("/research/export/project-bundle/readiness/snapshots?limit=6");
+    if (snapshots.length) {
+      state.latestProjectBundleReadinessSnapshotId = snapshots[0].id;
+    }
+    const lines = ["# Project Bundle Readiness Snapshots", ""];
+    if (!snapshots.length) {
+      lines.push("- No bundle readiness snapshots saved.");
+    }
+    for (const snapshot of snapshots) {
+      lines.push(
+        `- \`${snapshot.id}\` ${snapshot.title}: ${snapshot.summary.readiness_level || "unknown"} (${snapshot.summary.readiness_score ?? 0})`,
+      );
+    }
+    $("dossierPreview").textContent = lines.join("\n");
+    renderResult("workflowResult", `Loaded ${snapshots.length} bundle readiness snapshots.`);
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadIdeaReadiness() {
   if (!state.latestIdeaId) {
     renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
@@ -2238,6 +2284,14 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReadinessTasksButton").addEventListener(
     "click",
     createProjectBundleReadinessTasks,
+  );
+  $("projectBundleReadinessSnapshotButton").addEventListener(
+    "click",
+    saveProjectBundleReadinessSnapshot,
+  );
+  $("projectBundleReadinessSnapshotsButton").addEventListener(
+    "click",
+    listProjectBundleReadinessSnapshots,
   );
   $("readinessButton").addEventListener("click", loadIdeaReadiness);
   $("qualityGateButton").addEventListener("click", loadIdeaQualityGate);

@@ -974,6 +974,11 @@ class ProjectBundleReadinessTaskGenerateRequest(BaseModel):
     created_by: str = "system"
 
 
+class ProjectBundleReadinessSnapshotCreate(BaseModel):
+    title: str = "Project Bundle Readiness Snapshot"
+    created_by: str = "researcher"
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead
