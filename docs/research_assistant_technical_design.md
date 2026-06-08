@@ -1200,6 +1200,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/export/project-bundle/releases` persists a project bundle release note as a `ResearchBrief` with `scope=project_bundle_release`. The summary captures recipient, free-form release notes, readiness score/level, latest readiness snapshot/comparison ids, and the current bundle manifest summary; the Markdown export renders a customer/advisor-facing handoff note with delivery signals and a handoff checklist. List/detail/Markdown endpoints expose saved releases, and `/export/project-bundle` includes release note JSON/Markdown artifacts plus latest release fields in the manifest.
 
+`/export/project-bundle/releases/{release_id}/tasks` turns a saved release note into `ResearchTask` records with `owner_type=project_bundle_release` and `due_phase=project_bundle_release_follow_up`. Missing required checks become critical release blockers; handoff checks cover recipient receipt, claim queue review, open-task ownership, and release closeout. `ArtifactGraphService.link_project_bundle_release_tasks` writes `project_bundle_release_creates_task` edges so post-release work is traceable from the exact release note.
+
 `/export/project-bundle/readiness` is the read-only gate before building or sharing the handoff zip. It calls the same project bundle context builder used by `/export/project-bundle`, reads the generated manifest, and returns a checklist for project scope, quality gates, triage snapshot history, triage comparison, pilot report history, pilot comparison, claim validation queue, research plans, opportunity radar, optional advisor briefs, and blocked task review. The response includes readiness score/level, missing required checks, quick actions, the manifest summary, and Markdown export, so Workbench, MCP tools, and external planners see the same delivery state that the zip manifest will later encode.
 
 `/export/project-bundle/readiness/tasks` converts bundle readiness gaps into `ResearchTask` records with `owner_type=project_bundle_readiness` and `due_phase=bundle_handoff_follow_up`. Required missing checks become critical/high handoff work, optional warnings can be included for final polish, and a delivery-ready state falls back to a final review/export task. `ArtifactGraphService.link_project_bundle_readiness_tasks` writes `project_bundle_readiness_creates_task` edges so handoff gaps appear in GraphRAG-lite traces, task boards, advisor briefs, and future external planner handoff.
@@ -1339,6 +1341,7 @@ POST /research/export/project-bundle/releases
 GET  /research/export/project-bundle/releases
 GET  /research/export/project-bundle/releases/{release_id}
 GET  /research/export/project-bundle/releases/{release_id}/export/markdown
+POST /research/export/project-bundle/releases/{release_id}/tasks
 GET  /research/export/project-bundle
 POST /research/briefs
 GET  /research/briefs

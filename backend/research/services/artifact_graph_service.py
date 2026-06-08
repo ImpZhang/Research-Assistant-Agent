@@ -721,6 +721,44 @@ class ArtifactGraphService:
                 payload={"source": task.source_type},
             )
 
+    def link_project_bundle_release_tasks(
+        self,
+        release: ResearchBrief,
+        tasks: list[ResearchTask],
+    ) -> None:
+        summary = release.summary_json or {}
+        release_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release",
+            label=release.title,
+            canonical_key=release.id,
+            payload={
+                "recipient": summary.get("recipient", ""),
+                "readiness_level": summary.get("readiness_level", ""),
+                "readiness_score": summary.get("readiness_score", 0.0),
+                "missing_required": summary.get("missing_required", []),
+                "task_count": len(tasks),
+                "owner_type": "project_bundle_release",
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=release_node,
+                target_node=task_node,
+                edge_type="project_bundle_release_creates_task",
+                payload={"source": task.source_type},
+            )
+
     def link_project_advisor_chat_tasks(self, chat: dict, tasks: list[ResearchTask]) -> None:
         chat_node = self.graph.get_or_create_node(
             node_type="project_advisor_chat",

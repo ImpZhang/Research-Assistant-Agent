@@ -1423,6 +1423,129 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_bundle_release(
+        self,
+        release: ResearchBrief,
+        *,
+        limit: int = 6,
+        include_missing_required: bool = True,
+        include_handoff_checks: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        summary = release.summary_json or {}
+        recipient = str(summary.get("recipient") or "advisor_or_customer")
+        readiness_level = str(summary.get("readiness_level") or "")
+        readiness_score = summary.get("readiness_score", 0.0)
+        items: list[tuple[str, str, dict]] = []
+        if include_missing_required:
+            for missing in self._unique_commitments(summary.get("missing_required") or []):
+                items.append(
+                    (
+                        "bundle_release_missing_required",
+                        f"Resolve release readiness gap before recipient follow-up: {missing}",
+                        {"missing_required": missing},
+                    )
+                )
+        if include_handoff_checks:
+            items.extend(
+                [
+                    (
+                        "bundle_release_recipient_confirmation",
+                        f"Confirm {recipient} received and can open the project bundle.",
+                        {},
+                    ),
+                    (
+                        "bundle_release_claim_queue_review",
+                        "Review claim validation queue and unresolved evidence risks with the recipient.",
+                        {},
+                    ),
+                    (
+                        "bundle_release_open_task_review",
+                        "Confirm ownership for open or blocked handoff tasks after release.",
+                        {},
+                    ),
+                    (
+                        "bundle_release_readiness_review",
+                        "Review the release note, bundle README, and manifest before closing the handoff.",
+                        {},
+                    ),
+                ]
+            )
+        items = self._deduplicate_pilot_report_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "bundle_release_review",
+                    "Review project bundle release note and confirm handoff is complete.",
+                    {},
+                )
+            ]
+
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_bundle_release",
+                owner_id=release.id,
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._bundle_release_task_title(
+                    action,
+                    idx,
+                    source_type=source_type,
+                ),
+                description=action,
+                priority=self._bundle_release_task_priority(source_type, action),
+                status="todo",
+                due_phase="project_bundle_release_follow_up",
+                metadata_json={
+                    "release_id": release.id,
+                    "recipient": recipient,
+                    "readiness_level": readiness_level,
+                    "readiness_score": readiness_score,
+                    "release_title": release.title,
+                    "source_rank": idx,
+                    **metadata,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project bundle release note.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "release_id": release.id,
+                        "recipient": recipient,
+                        "readiness_level": readiness_level,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_bundle_release_tasks(
+            release,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_project_advisor_chat(
         self,
         chat: dict,
@@ -2274,6 +2397,40 @@ class ResearchTaskService:
             or "missing" in lower
             or "required" in lower
         ):
+            return "high"
+        return "medium"
+
+    def _bundle_release_task_title(
+        self,
+        action: str,
+        idx: int,
+        *,
+        source_type: str,
+    ) -> str:
+        clean = " ".join(str(action).split())
+        if source_type == "bundle_release_missing_required":
+            return self._short_task_title(f"Resolve release blocker {idx}: {clean}", idx)
+        if source_type == "bundle_release_recipient_confirmation":
+            return "Confirm recipient received project bundle"
+        if source_type == "bundle_release_claim_queue_review":
+            return "Review claim queue with recipient"
+        if source_type == "bundle_release_open_task_review":
+            return "Confirm post-release task ownership"
+        if source_type == "bundle_release_readiness_review":
+            return "Close release readiness review"
+        return self._short_task_title(clean or f"Work bundle release follow-up {idx}", idx)
+
+    def _bundle_release_task_priority(self, source_type: str, action: str) -> str:
+        lower = str(action).lower()
+        if source_type == "bundle_release_missing_required":
+            return "critical"
+        if "blocked" in lower or "critical" in lower or "missing" in lower:
+            return "critical"
+        if source_type in {
+            "bundle_release_recipient_confirmation",
+            "bundle_release_claim_queue_review",
+            "bundle_release_open_task_review",
+        }:
             return "high"
         return "medium"
 

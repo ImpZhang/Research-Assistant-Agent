@@ -128,6 +128,7 @@ from backend.research.schemas import (
     ProjectBundleReadinessSnapshotCreate,
     ProjectBundleReadinessTaskGenerateRequest,
     ProjectBundleReleaseCreate,
+    ProjectBundleReleaseTaskGenerateRequest,
     ProjectQualityGateOverviewResponse,
     ProjectQualityGateTaskGenerateRequest,
     ProjectCockpitResponse,
@@ -319,6 +320,7 @@ def status() -> ProjectStatus:
             "project_bundle_readiness_snapshot_comparison",
             "project_bundle_readiness_snapshot_comparison_task_generation",
             "project_bundle_release_notes",
+            "project_bundle_release_task_generation",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -558,6 +560,18 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/export/project-bundle/releases/{release_id}/export/markdown",
             output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_bundle_release_note",
+            description=(
+                "Turn a saved project bundle release note into recipient follow-up "
+                "and handoff verification tasks."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/releases/{release_id}/tasks",
+            input_model="ProjectBundleReleaseTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_project_bundle_readiness",
@@ -9838,6 +9852,29 @@ def export_project_bundle_release_note_markdown(
 ) -> PlainTextResponse:
     release = _get_project_bundle_release_or_404(release_id, session)
     return PlainTextResponse(release.markdown_export or "", media_type="text/markdown")
+
+
+@router.post(
+    "/export/project-bundle/releases/{release_id}/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_bundle_release_note(
+    release_id: str,
+    payload: ProjectBundleReleaseTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    tasks = ResearchTaskService(session).create_from_project_bundle_release(
+        release,
+        limit=payload.limit,
+        include_missing_required=payload.include_missing_required,
+        include_handoff_checks=payload.include_handoff_checks,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} project bundle release tasks from release {release_id}.",
+    )
 
 
 @router.get("/export/project-bundle")

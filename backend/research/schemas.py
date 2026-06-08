@@ -1022,6 +1022,13 @@ class ProjectBundleReleaseCreate(BaseModel):
     created_by: str = "researcher"
 
 
+class ProjectBundleReleaseTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=6, ge=1, le=20)
+    include_missing_required: bool = True
+    include_handoff_checks: bool = True
+    created_by: str = "system"
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

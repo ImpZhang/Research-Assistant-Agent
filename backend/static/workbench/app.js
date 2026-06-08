@@ -1661,6 +1661,43 @@ async function listProjectBundleReleaseNotes() {
   }
 }
 
+async function createProjectBundleReleaseTasks() {
+  renderResult("workflowResult", "Creating project bundle release tasks...", "warn");
+  try {
+    let releaseId = state.latestProjectBundleReleaseId;
+    if (!releaseId) {
+      const releases = await api("/research/export/project-bundle/releases?limit=1");
+      if (!releases.length) {
+        renderResult(
+          "workflowResult",
+          "Save a project bundle release note before creating release tasks.",
+          "warn",
+        );
+        return;
+      }
+      releaseId = releases[0].id;
+      state.latestProjectBundleReleaseId = releaseId;
+    }
+    const body = await api(`/research/export/project-bundle/releases/${releaseId}/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        limit: 6,
+        include_missing_required: true,
+        include_handoff_checks: true,
+        created_by: "workbench",
+      }),
+    });
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Project bundle release tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -2396,6 +2433,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleButton").addEventListener("click", downloadProjectBundle);
   $("projectBundleReleaseButton").addEventListener("click", saveProjectBundleReleaseNote);
   $("projectBundleReleasesButton").addEventListener("click", listProjectBundleReleaseNotes);
+  $("projectBundleReleaseTasksButton").addEventListener(
+    "click",
+    createProjectBundleReleaseTasks,
+  );
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(
     "click",

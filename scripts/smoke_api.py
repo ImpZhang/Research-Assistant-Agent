@@ -236,6 +236,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
     if "project_bundle_release_notes" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project bundle release notes")
+    if "project_bundle_release_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project bundle release tasks")
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -432,6 +434,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project bundle release note reader")
     if "export_project_bundle_release_note_markdown" not in manifest_names:
         raise RuntimeError("tool manifest did not include project bundle release note export")
+    if "create_tasks_from_project_bundle_release_note" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release task tool")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
@@ -2135,6 +2139,31 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if "# Project Bundle Release Note" not in project_bundle_release_markdown:
         raise RuntimeError("project bundle release note markdown export missed title")
+    project_bundle_release_tasks = require_ok(
+        client.post(
+            f"/research/export/project-bundle/releases/{project_bundle_release['id']}/tasks",
+            json_body={
+                "limit": 6,
+                "include_missing_required": True,
+                "include_handoff_checks": True,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project bundle release note tasks",
+    )
+    if not project_bundle_release_tasks["tasks"]:
+        raise RuntimeError("project bundle release note did not create tasks")
+    first_release_task = project_bundle_release_tasks["tasks"][0]
+    if first_release_task["owner_type"] != "project_bundle_release":
+        raise RuntimeError("project bundle release task used wrong owner type")
+    if first_release_task["due_phase"] != "project_bundle_release_follow_up":
+        raise RuntimeError("project bundle release task used wrong due phase")
+    project_bundle_release_task_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=project_bundle_release_creates_task"),
+        "project bundle release task graph edges",
+    )
+    if not project_bundle_release_task_edges:
+        raise RuntimeError("project bundle release tasks did not create graph edges")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2715,6 +2744,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         ),
         "project_bundle_release_id": project_bundle_release["id"],
         "project_bundle_release_count": project_bundle_manifest["project_bundle_release_count"],
+        "project_bundle_release_task_count": len(project_bundle_release_tasks["tasks"]),
         "project_bundle_latest_release_recipient": project_bundle_manifest[
             "latest_project_bundle_release_recipient"
         ],
