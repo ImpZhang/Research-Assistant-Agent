@@ -1698,6 +1698,34 @@ async function createProjectBundleReleaseTasks() {
   }
 }
 
+async function loadProjectBundleReleaseProgress() {
+  renderResult("workflowResult", "Loading project bundle release progress...", "warn");
+  try {
+    let releaseId = state.latestProjectBundleReleaseId;
+    if (!releaseId) {
+      const releases = await api("/research/export/project-bundle/releases?limit=1");
+      if (!releases.length) {
+        renderResult(
+          "workflowResult",
+          "Save a project bundle release note before checking release progress.",
+          "warn",
+        );
+        return;
+      }
+      releaseId = releases[0].id;
+      state.latestProjectBundleReleaseId = releaseId;
+    }
+    const body = await api(`/research/export/project-bundle/releases/${releaseId}/progress`);
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Release follow-up is ${(body.completion_ratio * 100).toFixed(1)}% complete. Open tasks: ${body.task_summary.open_task_count || 0}; blockers: ${body.task_summary.blocked_task_count || 0}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -2436,6 +2464,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReleaseTasksButton").addEventListener(
     "click",
     createProjectBundleReleaseTasks,
+  );
+  $("projectBundleReleaseProgressButton").addEventListener(
+    "click",
+    loadProjectBundleReleaseProgress,
   );
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(

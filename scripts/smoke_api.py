@@ -238,6 +238,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project bundle release notes")
     if "project_bundle_release_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project bundle release tasks")
+    if "project_bundle_release_progress_tracking" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project bundle release progress")
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -436,6 +438,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project bundle release note export")
     if "create_tasks_from_project_bundle_release_note" not in manifest_names:
         raise RuntimeError("tool manifest did not include project bundle release task tool")
+    if "get_project_bundle_release_progress" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release progress tool")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
@@ -2164,6 +2168,25 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not project_bundle_release_task_edges:
         raise RuntimeError("project bundle release tasks did not create graph edges")
+    project_bundle_release_progress = require_ok(
+        client.get(
+            f"/research/export/project-bundle/releases/{project_bundle_release['id']}/progress"
+        ),
+        "project bundle release progress",
+    )
+    if project_bundle_release_progress["release_id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release progress used wrong release id")
+    if project_bundle_release_progress["task_summary"]["task_count"] < len(
+        project_bundle_release_tasks["tasks"]
+    ):
+        raise RuntimeError("project bundle release progress missed generated tasks")
+    if project_bundle_release_progress["task_summary"]["open_task_count"] < 1:
+        raise RuntimeError("project bundle release progress did not count open tasks")
+    if (
+        "# Project Bundle Release Progress"
+        not in project_bundle_release_progress["markdown_export"]
+    ):
+        raise RuntimeError("project bundle release progress markdown missed title")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2192,6 +2215,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/bundle-readiness-snapshots.json",
             "metadata/bundle-readiness-snapshot-comparison.json",
             "metadata/project-bundle-releases.json",
+            "metadata/project-bundle-release-progress.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
@@ -2205,6 +2229,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             ),
             "artifacts/readiness/latest-bundle-readiness-snapshot-comparison.md",
             f"artifacts/releases/project-bundle-release-{project_bundle_release['id']}.md",
+            "artifacts/releases/latest-project-bundle-release-progress.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -2230,6 +2255,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
         project_bundle_releases_metadata = json.loads(
             archive.read("metadata/project-bundle-releases.json")
+        )
+        project_bundle_release_progress_metadata = json.loads(
+            archive.read("metadata/project-bundle-release-progress.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -2327,8 +2355,21 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle manifest did not point at latest release note")
     if project_bundle_manifest["latest_project_bundle_release_recipient"] != "smoke advisor":
         raise RuntimeError("project bundle manifest missed latest release recipient")
+    if not project_bundle_manifest["latest_project_bundle_release_progress_available"]:
+        raise RuntimeError("project bundle manifest did not expose release progress")
+    if project_bundle_manifest["latest_project_bundle_release_progress_open_task_count"] < 1:
+        raise RuntimeError("project bundle manifest did not count release progress open tasks")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_progress_completion_ratio"]
+        != project_bundle_release_progress["completion_ratio"]
+    ):
+        raise RuntimeError("project bundle manifest release progress completion diverged")
     if project_bundle_releases_metadata[0]["id"] != project_bundle_release["id"]:
         raise RuntimeError("project bundle release metadata order was wrong")
+    if project_bundle_release_progress_metadata["release_id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release progress metadata used wrong release id")
+    if project_bundle_release_progress_metadata["task_summary"]["open_task_count"] < 1:
+        raise RuntimeError("project bundle release progress metadata missed open tasks")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -2745,6 +2786,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_release_id": project_bundle_release["id"],
         "project_bundle_release_count": project_bundle_manifest["project_bundle_release_count"],
         "project_bundle_release_task_count": len(project_bundle_release_tasks["tasks"]),
+        "project_bundle_release_progress_completion": project_bundle_release_progress[
+            "completion_ratio"
+        ],
+        "project_bundle_release_progress_open_count": project_bundle_release_progress[
+            "task_summary"
+        ]["open_task_count"],
         "project_bundle_latest_release_recipient": project_bundle_manifest[
             "latest_project_bundle_release_recipient"
         ],

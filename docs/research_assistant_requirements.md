@@ -844,6 +844,8 @@ opportunity radar 需要能一键转成 task board 任务：从 top opportunitie
 
 project bundle release note 需要能一键转成 task board 任务：系统应从 release note 生成 recipient confirmation、claim queue review、open task ownership 和 release closeout 等后续任务；若 release note 中仍有 missing required checks，则优先生成 critical 任务。任务需要使用 `owner_type=project_bundle_release`、`due_phase=project_bundle_release_follow_up`，并写入 `project_bundle_release_creates_task` 图边，保证交付记录和交付后动作可追溯。
 
+project bundle release 后需要有 follow-up progress tracking：系统应基于 `owner_type=project_bundle_release` 和 release id 聚合后续任务，返回 task count、open/done/blocked/todo/doing 计数、completion ratio、blocked tasks、next tasks 和 Markdown progress report。project handoff bundle 需要包含最新 release progress 的 JSON 与 Markdown artifacts，让客户、导师或外部 agent 能判断这次交付是否完成签收、还有哪些阻塞、下一步该谁处理。
+
 系统需要提供 project bundle readiness，作为 handoff bundle 的导出前检查：复用 bundle manifest 信号，检查 project scope、quality gate、triage snapshot history、triage comparison、pilot report history、pilot comparison、claim validation queue、research plan 和 opportunity radar 是否齐备。输出 readiness score、readiness level、missing required checks、recommended actions、quick actions、manifest summary 和 Markdown report。它回答“现在这包材料能不能发给客户/导师”，并且必须与 `/research/export/project-bundle` 的 manifest 口径一致。
 
 project bundle readiness 需要能一键转成 task board 任务：从 missing required checks 和 optional warnings 创建 `owner_type=project_bundle_readiness`、`due_phase=bundle_handoff_follow_up` 的任务，并写入 `project_bundle_readiness_creates_task` 图边。若 readiness 已经 delivery-ready，也要能生成一个最终审阅/导出确认任务，确保交付前存在可追踪的人工确认动作。

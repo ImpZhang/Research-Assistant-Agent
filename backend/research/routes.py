@@ -128,6 +128,7 @@ from backend.research.schemas import (
     ProjectBundleReadinessSnapshotCreate,
     ProjectBundleReadinessTaskGenerateRequest,
     ProjectBundleReleaseCreate,
+    ProjectBundleReleaseProgressResponse,
     ProjectBundleReleaseTaskGenerateRequest,
     ProjectQualityGateOverviewResponse,
     ProjectQualityGateTaskGenerateRequest,
@@ -321,6 +322,7 @@ def status() -> ProjectStatus:
             "project_bundle_readiness_snapshot_comparison_task_generation",
             "project_bundle_release_notes",
             "project_bundle_release_task_generation",
+            "project_bundle_release_progress_tracking",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -572,6 +574,16 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="ProjectBundleReleaseTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_release_progress",
+            description=(
+                "Summarize follow-up task completion, blockers, and next actions "
+                "for a saved project bundle release."
+            ),
+            method="GET",
+            path="/research/export/project-bundle/releases/{release_id}/progress",
+            output_model="ProjectBundleReleaseProgressResponse",
         ),
         ToolManifestItem(
             name="get_project_bundle_readiness",
@@ -9877,6 +9889,18 @@ def create_tasks_from_project_bundle_release_note(
     )
 
 
+@router.get(
+    "/export/project-bundle/releases/{release_id}/progress",
+    response_model=ProjectBundleReleaseProgressResponse,
+)
+def get_project_bundle_release_progress(
+    release_id: str,
+    session: Session = Depends(get_session),
+) -> ProjectBundleReleaseProgressResponse:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    return _project_bundle_release_progress(release, session)
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -10013,6 +10037,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     bundle_readiness_snapshots = context["bundle_readiness_snapshots"]
     bundle_readiness_snapshot_comparison = context["bundle_readiness_snapshot_comparison"]
     bundle_releases = context["bundle_releases"]
+    latest_bundle_release_progress = context["latest_bundle_release_progress"]
     briefs = context["briefs"]
     plans = context["plans"]
     tasks = context["tasks"]
@@ -10069,6 +10094,11 @@ def _build_project_bundle_zip(session: Session) -> bytes:
             "metadata/project-bundle-releases.json",
             _json_dump([_serialize_research_brief(release) for release in bundle_releases]),
         )
+        if latest_bundle_release_progress:
+            archive.writestr(
+                "metadata/project-bundle-release-progress.json",
+                _json_dump(latest_bundle_release_progress),
+            )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
@@ -10118,6 +10148,12 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 archive,
                 "artifacts/readiness/latest-bundle-readiness-snapshot-comparison.md",
                 bundle_readiness_snapshot_comparison["markdown_export"],
+            )
+        if latest_bundle_release_progress:
+            _write_markdown(
+                archive,
+                "artifacts/releases/latest-project-bundle-release-progress.md",
+                latest_bundle_release_progress.markdown_export,
             )
         for release in bundle_releases:
             if release.markdown_export:
@@ -10182,6 +10218,9 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         else None
     )
     bundle_releases = _project_bundle_releases(session, limit=12)
+    latest_bundle_release_progress = (
+        _project_bundle_release_progress(bundle_releases[0], session) if bundle_releases else None
+    )
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -10200,6 +10239,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         bundle_readiness_snapshots=bundle_readiness_snapshots,
         bundle_readiness_snapshot_comparison=bundle_readiness_snapshot_comparison,
         bundle_releases=bundle_releases,
+        latest_bundle_release_progress=latest_bundle_release_progress,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -10219,6 +10259,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "bundle_readiness_snapshots": bundle_readiness_snapshots,
         "bundle_readiness_snapshot_comparison": bundle_readiness_snapshot_comparison,
         "bundle_releases": bundle_releases,
+        "latest_bundle_release_progress": latest_bundle_release_progress,
         "briefs": briefs,
         "plans": plans,
         "tasks": tasks,
@@ -10269,6 +10310,83 @@ def _project_bundle_releases(
     )
 
 
+def _project_bundle_release_progress(
+    release: ResearchBrief,
+    session: Session,
+) -> ProjectBundleReleaseProgressResponse:
+    generated_at = datetime.now(timezone.utc)
+    tasks = (
+        session.query(ResearchTask)
+        .filter(ResearchTask.owner_type == "project_bundle_release")
+        .filter(ResearchTask.owner_id == release.id)
+        .order_by(ResearchTask.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    summary = _project_bundle_release_task_summary(tasks)
+    open_tasks = [task for task in tasks if task.status in {"todo", "doing", "blocked"}]
+    blocked_tasks = [task for task in tasks if task.status == "blocked"]
+    done_tasks = [task for task in tasks if task.status == "done"]
+    next_tasks = sorted(open_tasks, key=_project_bundle_release_task_order)[:5]
+    recipient = str((release.summary_json or {}).get("recipient") or "advisor_or_customer")
+    markdown_export = _render_project_bundle_release_progress_markdown(
+        generated_at=generated_at,
+        release=release,
+        recipient=recipient,
+        task_summary=summary,
+        blocked_tasks=blocked_tasks,
+        next_tasks=next_tasks,
+        done_tasks=done_tasks,
+    )
+    percent = round(summary["completion_ratio"] * 100, 2)
+    return ProjectBundleReleaseProgressResponse(
+        release_id=release.id,
+        title=release.title,
+        recipient=recipient,
+        generated_at=generated_at,
+        task_summary=summary,
+        completion_ratio=summary["completion_ratio"],
+        blocked_tasks=[_serialize_research_task(task) for task in blocked_tasks],
+        open_tasks=[_serialize_research_task(task) for task in open_tasks],
+        done_tasks=[_serialize_research_task(task) for task in done_tasks],
+        next_tasks=[_serialize_research_task(task) for task in next_tasks],
+        markdown_export=markdown_export,
+        message=(
+            f"Release {release.id} follow-up is {percent}% complete "
+            f"with {len(open_tasks)} open tasks and {len(blocked_tasks)} blockers."
+        ),
+    )
+
+
+def _project_bundle_release_task_summary(tasks: list[ResearchTask]) -> dict[str, Any]:
+    by_status = Counter(task.status for task in tasks)
+    by_priority = Counter(task.priority for task in tasks)
+    task_count = len(tasks)
+    done_task_count = by_status.get("done", 0)
+    return {
+        "task_count": task_count,
+        "open_task_count": sum(by_status.get(status, 0) for status in ("todo", "doing", "blocked")),
+        "done_task_count": done_task_count,
+        "blocked_task_count": by_status.get("blocked", 0),
+        "todo_task_count": by_status.get("todo", 0),
+        "doing_task_count": by_status.get("doing", 0),
+        "archived_task_count": by_status.get("archived", 0),
+        "by_status": dict(by_status),
+        "by_priority": dict(by_priority),
+        "completion_ratio": round(done_task_count / task_count, 4) if task_count else 0.0,
+    }
+
+
+def _project_bundle_release_task_order(task: ResearchTask) -> tuple[int, int, datetime]:
+    status_rank = {"blocked": 0, "doing": 1, "todo": 2}
+    priority_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    return (
+        status_rank.get(task.status, 9),
+        priority_rank.get(task.priority, 9),
+        task.created_at,
+    )
+
+
 def _project_bundle_manifest(
     *,
     overview: ResearchOverviewResponse,
@@ -10284,6 +10402,7 @@ def _project_bundle_manifest(
     bundle_readiness_snapshots: list[ResearchBrief],
     bundle_readiness_snapshot_comparison: dict | None,
     bundle_releases: list[ResearchBrief],
+    latest_bundle_release_progress: ProjectBundleReleaseProgressResponse | None,
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -10293,6 +10412,9 @@ def _project_bundle_manifest(
         bundle_readiness_snapshots[0].summary_json if bundle_readiness_snapshots else {}
     )
     latest_bundle_release = bundle_releases[0].summary_json if bundle_releases else {}
+    latest_bundle_release_progress_summary = (
+        latest_bundle_release_progress.task_summary if latest_bundle_release_progress else {}
+    )
     return {
         "bundle_type": "research_project_bundle",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -10413,6 +10535,20 @@ def _project_bundle_manifest(
         "latest_project_bundle_release_readiness_score": latest_bundle_release.get(
             "readiness_score",
             0.0,
+        ),
+        "latest_project_bundle_release_progress_available": (
+            latest_bundle_release_progress is not None
+        ),
+        "latest_project_bundle_release_progress_completion_ratio": (
+            latest_bundle_release_progress.completion_ratio
+            if latest_bundle_release_progress
+            else 0.0
+        ),
+        "latest_project_bundle_release_progress_open_task_count": (
+            latest_bundle_release_progress_summary.get("open_task_count", 0)
+        ),
+        "latest_project_bundle_release_progress_blocked_task_count": (
+            latest_bundle_release_progress_summary.get("blocked_task_count", 0)
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
@@ -10701,6 +10837,53 @@ def _project_bundle_readiness_audit_from_manifest(
     }
 
 
+def _render_project_bundle_release_progress_markdown(
+    *,
+    generated_at: datetime,
+    release: ResearchBrief,
+    recipient: str,
+    task_summary: dict[str, Any],
+    blocked_tasks: list[ResearchTask],
+    next_tasks: list[ResearchTask],
+    done_tasks: list[ResearchTask],
+) -> str:
+    lines = [
+        "# Project Bundle Release Progress",
+        "",
+        f"- Release Id: `{release.id}`",
+        f"- Title: {release.title}",
+        f"- Generated At: `{generated_at.isoformat()}`",
+        f"- Recipient: {recipient}",
+        f"- Completion Ratio: {task_summary.get('completion_ratio', 0.0)}",
+        f"- Open Tasks: {task_summary.get('open_task_count', 0)}",
+        f"- Done Tasks: {task_summary.get('done_task_count', 0)}",
+        f"- Blocked Tasks: {task_summary.get('blocked_task_count', 0)}",
+        f"- By Status: {task_summary.get('by_status', {})}",
+        f"- By Priority: {task_summary.get('by_priority', {})}",
+        "",
+        "## Blockers",
+        "",
+    ]
+    _append_project_bundle_release_progress_tasks(lines, blocked_tasks)
+    lines.extend(["", "## Next Tasks", ""])
+    _append_project_bundle_release_progress_tasks(lines, next_tasks)
+    lines.extend(["", "## Completed Tasks", ""])
+    _append_project_bundle_release_progress_tasks(lines, done_tasks[:12])
+    return "\n".join(lines).strip() + "\n"
+
+
+def _append_project_bundle_release_progress_tasks(
+    lines: list[str],
+    tasks: list[ResearchTask],
+) -> None:
+    if not tasks:
+        lines.append("- None.")
+        return
+    for task in tasks:
+        description = f": {task.description}" if task.description else ""
+        lines.append(f"- `{task.id}` `{task.priority}` `{task.status}` {task.title}{description}")
+
+
 def _render_project_bundle_release_note_markdown(
     *,
     generated_at: datetime,
@@ -10855,6 +11038,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("project_bundle_release_count", 0):
         lines.append(
             "- `artifacts/releases/`: saved project bundle release notes for customer/advisor handoff."
+        )
+    if manifest.get("latest_project_bundle_release_progress_available"):
+        lines.append(
+            "- `artifacts/releases/latest-project-bundle-release-progress.md`: latest release follow-up progress."
         )
     lines.extend(
         [

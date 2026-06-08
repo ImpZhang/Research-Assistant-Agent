@@ -1029,6 +1029,21 @@ class ProjectBundleReleaseTaskGenerateRequest(BaseModel):
     created_by: str = "system"
 
 
+class ProjectBundleReleaseProgressResponse(BaseModel):
+    release_id: str
+    title: str
+    recipient: str
+    generated_at: datetime
+    task_summary: dict[str, Any] = Field(default_factory=dict)
+    completion_ratio: float = 0.0
+    blocked_tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    open_tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    done_tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    next_tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead
