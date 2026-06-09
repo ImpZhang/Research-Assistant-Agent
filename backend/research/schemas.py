@@ -1156,6 +1156,39 @@ class ProjectBundleReleaseAcceptancePacketSnapshotComparisonResponse(BaseModel):
     markdown_export: str = ""
 
 
+class ProjectBundleReleaseReviewSessionTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=8, ge=1, le=20)
+    include_decisions: bool = True
+    include_risks: bool = True
+    include_follow_up_actions: bool = True
+    created_by: str = "system"
+
+
+class ProjectBundleReleaseReviewSessionResponse(BaseModel):
+    release_id: str
+    title: str
+    recipient: str
+    generated_at: datetime
+    review_status: str
+    ready_for_review: bool = False
+    acceptance_status: str
+    release_note: dict[str, Any] = Field(default_factory=dict)
+    release_progress: ProjectBundleReleaseProgressResponse
+    latest_feedback: dict[str, Any] = Field(default_factory=dict)
+    closeout: ProjectBundleReleaseCloseoutResponse
+    acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse
+    latest_acceptance_snapshot: dict[str, Any] = Field(default_factory=dict)
+    acceptance_snapshot_comparison: dict[str, Any] = Field(default_factory=dict)
+    review_task_summary: dict[str, Any] = Field(default_factory=dict)
+    agenda: list[str] = Field(default_factory=list)
+    decisions_needed: list[str] = Field(default_factory=list)
+    risk_items: list[str] = Field(default_factory=list)
+    follow_up_actions: list[str] = Field(default_factory=list)
+    artifact_links: list[dict[str, Any]] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

@@ -994,6 +994,46 @@ class ArtifactGraphService:
                 payload={"source": task.source_type},
             )
 
+    def link_project_bundle_release_review_tasks(
+        self,
+        review_session: dict,
+        tasks: list[ResearchTask],
+    ) -> None:
+        review_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release_review_session",
+            label="Project bundle release review session",
+            canonical_key=f"project_bundle_release_review_session:{review_session.get('release_id', '')}",
+            payload={
+                "release_id": review_session.get("release_id", ""),
+                "recipient": review_session.get("recipient", ""),
+                "review_status": review_session.get("review_status", ""),
+                "acceptance_status": review_session.get("acceptance_status", ""),
+                "decision_count": len(review_session.get("decisions_needed") or []),
+                "risk_count": len(review_session.get("risk_items") or []),
+                "follow_up_action_count": len(review_session.get("follow_up_actions") or []),
+                "task_count": len(tasks),
+                "owner_type": "project_bundle_release_review_session",
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=review_node,
+                target_node=task_node,
+                edge_type="project_bundle_release_review_creates_task",
+                payload={"source": task.source_type},
+            )
+
     def link_project_advisor_chat_tasks(self, chat: dict, tasks: list[ResearchTask]) -> None:
         chat_node = self.graph.get_or_create_node(
             node_type="project_advisor_chat",

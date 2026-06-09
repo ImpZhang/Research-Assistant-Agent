@@ -2118,6 +2118,67 @@ async function createProjectBundleReleaseAcceptancePacketSnapshotComparisonTasks
   }
 }
 
+async function loadProjectBundleReleaseReviewSession() {
+  renderResult("workflowResult", "Loading project bundle release review session...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before loading the review session.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/review-session`,
+    );
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Release review is <code>${escapeHtml(body.review_status)}</code>. Decisions: ${body.decisions_needed.length}. Follow-up actions: ${body.follow_up_actions.length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createProjectBundleReleaseReviewSessionTasks() {
+  renderResult("workflowResult", "Creating release review tasks...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before creating review tasks.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/review-session/tasks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          limit: 8,
+          include_decisions: true,
+          include_risks: true,
+          include_follow_up_actions: true,
+          created_by: "workbench",
+        }),
+      },
+    );
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Release review tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -2900,6 +2961,14 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReleaseAcceptancePacketSnapshotTasksButton").addEventListener(
     "click",
     createProjectBundleReleaseAcceptancePacketSnapshotComparisonTasks,
+  );
+  $("projectBundleReleaseReviewSessionButton").addEventListener(
+    "click",
+    loadProjectBundleReleaseReviewSession,
+  );
+  $("projectBundleReleaseReviewSessionTasksButton").addEventListener(
+    "click",
+    createProjectBundleReleaseReviewSessionTasks,
   );
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(

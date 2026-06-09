@@ -138,6 +138,8 @@ from backend.research.schemas import (
     ProjectBundleReleaseFeedbackCreate,
     ProjectBundleReleaseFeedbackTaskGenerateRequest,
     ProjectBundleReleaseProgressResponse,
+    ProjectBundleReleaseReviewSessionResponse,
+    ProjectBundleReleaseReviewSessionTaskGenerateRequest,
     ProjectBundleReleaseTaskGenerateRequest,
     ProjectQualityGateOverviewResponse,
     ProjectQualityGateTaskGenerateRequest,
@@ -341,6 +343,8 @@ def status() -> ProjectStatus:
             "project_bundle_release_acceptance_packet_snapshots",
             "project_bundle_release_acceptance_packet_snapshot_comparison",
             "project_bundle_release_acceptance_packet_snapshot_comparison_task_generation",
+            "project_bundle_release_review_sessions",
+            "project_bundle_release_review_session_task_generation",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -758,6 +762,27 @@ def tool_manifest() -> ToolManifestResponse:
                 "snapshots/compare/tasks"
             ),
             input_model="ProjectBundleReleaseAcceptancePacketSnapshotComparisonTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_release_review_session",
+            description=(
+                "Prepare a customer/advisor release review session from the release note, "
+                "progress, feedback, closeout, acceptance packet, and acceptance snapshot changes."
+            ),
+            method="GET",
+            path="/research/export/project-bundle/releases/{release_id}/review-session",
+            output_model="ProjectBundleReleaseReviewSessionResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_bundle_release_review_session",
+            description=(
+                "Turn release review decisions, risks, and follow-up actions into task-board work."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/releases/{release_id}/review-session/tasks",
+            input_model="ProjectBundleReleaseReviewSessionTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
             side_effect=True,
         ),
@@ -10464,6 +10489,45 @@ def create_tasks_from_project_bundle_release_acceptance_packet_snapshot_comparis
     )
 
 
+@router.get(
+    "/export/project-bundle/releases/{release_id}/review-session",
+    response_model=ProjectBundleReleaseReviewSessionResponse,
+)
+def get_project_bundle_release_review_session(
+    release_id: str,
+    session: Session = Depends(get_session),
+) -> ProjectBundleReleaseReviewSessionResponse:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    return _project_bundle_release_review_session(release, session)
+
+
+@router.post(
+    "/export/project-bundle/releases/{release_id}/review-session/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_bundle_release_review_session(
+    release_id: str,
+    payload: ProjectBundleReleaseReviewSessionTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    review_session = _project_bundle_release_review_session(release, session)
+    tasks = ResearchTaskService(session).create_from_project_bundle_release_review_session(
+        review_session.model_dump(mode="json"),
+        limit=payload.limit,
+        include_decisions=payload.include_decisions,
+        include_risks=payload.include_risks,
+        include_follow_up_actions=payload.include_follow_up_actions,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} project bundle release review tasks from release {release_id}."
+        ),
+    )
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -10610,6 +10674,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     ]
     latest_bundle_release_closeout = context["latest_bundle_release_closeout"]
     latest_bundle_release_acceptance_packet = context["latest_bundle_release_acceptance_packet"]
+    latest_bundle_release_review_session = context["latest_bundle_release_review_session"]
     briefs = context["briefs"]
     plans = context["plans"]
     tasks = context["tasks"]
@@ -10700,6 +10765,11 @@ def _build_project_bundle_zip(session: Session) -> bytes:
             archive.writestr(
                 "metadata/project-bundle-release-acceptance-packet.json",
                 _json_dump(latest_bundle_release_acceptance_packet),
+            )
+        if latest_bundle_release_review_session:
+            archive.writestr(
+                "metadata/project-bundle-release-review-session.json",
+                _json_dump(latest_bundle_release_review_session),
             )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
@@ -10817,6 +10887,12 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "artifacts/releases/latest-project-bundle-release-acceptance-packet.md",
                 latest_bundle_release_acceptance_packet.markdown_export,
             )
+        if latest_bundle_release_review_session:
+            _write_markdown(
+                archive,
+                "artifacts/releases/latest-project-bundle-release-review-session.md",
+                latest_bundle_release_review_session.markdown_export,
+            )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -10905,6 +10981,11 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         if bundle_releases
         else None
     )
+    latest_bundle_release_review_session = (
+        _project_bundle_release_review_session(bundle_releases[0], session)
+        if bundle_releases
+        else None
+    )
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -10931,6 +11012,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         ),
         latest_bundle_release_closeout=latest_bundle_release_closeout,
         latest_bundle_release_acceptance_packet=latest_bundle_release_acceptance_packet,
+        latest_bundle_release_review_session=latest_bundle_release_review_session,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -10958,6 +11040,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         ),
         "latest_bundle_release_closeout": latest_bundle_release_closeout,
         "latest_bundle_release_acceptance_packet": latest_bundle_release_acceptance_packet,
+        "latest_bundle_release_review_session": latest_bundle_release_review_session,
         "briefs": briefs,
         "plans": plans,
         "tasks": tasks,
@@ -11308,6 +11391,347 @@ def _clean_project_bundle_feedback_items(items: list[str]) -> list[str]:
         seen.add(key)
         cleaned.append(value)
     return cleaned[:20]
+
+
+def _project_bundle_release_review_session(
+    release: ResearchBrief,
+    session: Session,
+) -> ProjectBundleReleaseReviewSessionResponse:
+    generated_at = datetime.now(timezone.utc)
+    release_progress = _project_bundle_release_progress(release, session)
+    closeout = _project_bundle_release_closeout(release, session)
+    acceptance_packet = _project_bundle_release_acceptance_packet(release, session)
+    acceptance_snapshots = _project_bundle_release_acceptance_packet_snapshots(
+        session,
+        release_id=release.id,
+        limit=2,
+    )
+    latest_acceptance_snapshot = (
+        jsonable_encoder(_serialize_research_brief(acceptance_snapshots[0], include_markdown=True))
+        if acceptance_snapshots
+        else {}
+    )
+    acceptance_snapshot_comparison = (
+        _compare_project_bundle_release_acceptance_packet_snapshots(
+            acceptance_snapshots[1],
+            acceptance_snapshots[0],
+        )
+        if len(acceptance_snapshots) >= 2
+        else {}
+    )
+    review_tasks = _project_bundle_release_review_session_tasks(release, session)
+    review_task_summary = _project_bundle_release_task_summary(review_tasks)
+    review_status = _project_bundle_release_review_session_status(
+        acceptance_packet=acceptance_packet,
+        acceptance_snapshot_comparison=acceptance_snapshot_comparison,
+        review_task_summary=review_task_summary,
+    )
+    ready_for_review = bool(latest_acceptance_snapshot) and acceptance_packet.acceptance_status in {
+        "accepted",
+        "awaiting_signoff",
+        "follow_up_open",
+        "changes_requested",
+        "blocked",
+    }
+    agenda = _project_bundle_release_review_session_agenda(
+        release=release,
+        release_progress=release_progress,
+        acceptance_packet=acceptance_packet,
+        acceptance_snapshot_comparison=acceptance_snapshot_comparison,
+    )
+    decisions_needed = _project_bundle_release_review_session_decisions(
+        acceptance_packet=acceptance_packet,
+        acceptance_snapshot_comparison=acceptance_snapshot_comparison,
+    )
+    risk_items = _project_bundle_release_review_session_risks(
+        closeout=closeout,
+        acceptance_packet=acceptance_packet,
+        acceptance_snapshot_comparison=acceptance_snapshot_comparison,
+    )
+    follow_up_actions = _project_bundle_release_review_session_follow_up_actions(
+        acceptance_packet=acceptance_packet,
+        acceptance_snapshot_comparison=acceptance_snapshot_comparison,
+    )
+    artifact_links = _project_bundle_release_review_session_artifact_links(
+        release=release,
+        latest_acceptance_snapshot=latest_acceptance_snapshot,
+        acceptance_snapshot_comparison=acceptance_snapshot_comparison,
+    )
+    release_note = jsonable_encoder(_serialize_research_brief(release, include_markdown=True))
+    markdown_export = _render_project_bundle_release_review_session_markdown(
+        generated_at=generated_at,
+        release=release,
+        recipient=closeout.recipient,
+        review_status=review_status,
+        ready_for_review=ready_for_review,
+        acceptance_status=acceptance_packet.acceptance_status,
+        agenda=agenda,
+        decisions_needed=decisions_needed,
+        risk_items=risk_items,
+        follow_up_actions=follow_up_actions,
+        artifact_links=artifact_links,
+        review_task_summary=review_task_summary,
+    )
+    return ProjectBundleReleaseReviewSessionResponse(
+        release_id=release.id,
+        title=release.title,
+        recipient=closeout.recipient,
+        generated_at=generated_at,
+        review_status=review_status,
+        ready_for_review=ready_for_review,
+        acceptance_status=acceptance_packet.acceptance_status,
+        release_note=release_note,
+        release_progress=release_progress,
+        latest_feedback=closeout.latest_feedback,
+        closeout=closeout,
+        acceptance_packet=acceptance_packet,
+        latest_acceptance_snapshot=latest_acceptance_snapshot,
+        acceptance_snapshot_comparison=acceptance_snapshot_comparison,
+        review_task_summary=review_task_summary,
+        agenda=agenda,
+        decisions_needed=decisions_needed,
+        risk_items=risk_items,
+        follow_up_actions=follow_up_actions,
+        artifact_links=artifact_links,
+        markdown_export=markdown_export,
+        message=(
+            f"Release {release.id} review session is {review_status}; "
+            f"{len(decisions_needed)} decisions and {len(follow_up_actions)} follow-up actions."
+        ),
+    )
+
+
+def _project_bundle_release_review_session_tasks(
+    release: ResearchBrief,
+    session: Session,
+) -> list[ResearchTask]:
+    return (
+        session.query(ResearchTask)
+        .filter(ResearchTask.owner_type == "project_bundle_release_review_session")
+        .filter(ResearchTask.owner_id == release.id)
+        .order_by(ResearchTask.created_at.desc())
+        .limit(200)
+        .all()
+    )
+
+
+def _project_bundle_release_review_session_status(
+    *,
+    acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse,
+    acceptance_snapshot_comparison: dict[str, Any],
+    review_task_summary: dict[str, Any],
+) -> str:
+    status_delta = acceptance_snapshot_comparison.get("status_delta") or {}
+    if review_task_summary.get("blocked_task_count", 0):
+        return "review_blocked"
+    if status_delta.get("regressed"):
+        return "acceptance_regressed"
+    if acceptance_packet.acceptance_status in {"blocked", "rejected"}:
+        return "blocked_review"
+    if acceptance_packet.acceptance_status in {"changes_requested", "follow_up_open"}:
+        return "follow_up_review"
+    if acceptance_packet.acceptance_status == "awaiting_feedback":
+        return "awaiting_feedback_review"
+    if acceptance_packet.ready_for_signoff:
+        return "ready_for_signoff_review"
+    return "review_needed"
+
+
+def _project_bundle_release_review_session_agenda(
+    *,
+    release: ResearchBrief,
+    release_progress: ProjectBundleReleaseProgressResponse,
+    acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse,
+    acceptance_snapshot_comparison: dict[str, Any],
+) -> list[str]:
+    agenda = [
+        f"Confirm release scope and recipient for `{release.title}`.",
+        (
+            "Review release follow-up progress: "
+            f"{release_progress.task_summary.get('open_task_count', 0)} open tasks, "
+            f"{release_progress.task_summary.get('blocked_task_count', 0)} blocked."
+        ),
+        f"Review acceptance status `{acceptance_packet.acceptance_status}` and signoff readiness.",
+        "Walk through remaining acceptance actions and closeout tasks.",
+    ]
+    if acceptance_snapshot_comparison:
+        agenda.append("Compare latest acceptance snapshot with the previous signoff attempt.")
+    agenda.append("Assign owners and due phases for post-review follow-up tasks.")
+    return agenda
+
+
+def _project_bundle_release_review_session_decisions(
+    *,
+    acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse,
+    acceptance_snapshot_comparison: dict[str, Any],
+) -> list[str]:
+    decisions: list[str] = []
+    if acceptance_packet.acceptance_status == "accepted":
+        decisions.append("Confirm final signoff and archive the accepted release packet.")
+    elif acceptance_packet.acceptance_status == "awaiting_signoff":
+        decisions.append("Decide who must confirm final release signoff.")
+    elif acceptance_packet.acceptance_status == "awaiting_feedback":
+        decisions.append("Decide when and how recipient feedback will be collected.")
+    elif acceptance_packet.acceptance_status in {"blocked", "rejected"}:
+        decisions.append("Decide whether the release is blocked or needs a revised handoff.")
+    else:
+        decisions.append("Decide which remaining actions must be completed before signoff.")
+    status_delta = acceptance_snapshot_comparison.get("status_delta") or {}
+    if status_delta.get("regressed"):
+        decisions.append(
+            "Decide how to recover acceptance regression from "
+            f"{status_delta.get('baseline', 'unknown')} to "
+            f"{status_delta.get('candidate', 'unknown')}."
+        )
+    if acceptance_snapshot_comparison.get("newly_blocked_checklist_items"):
+        decisions.append("Decide owners for newly open acceptance checklist items.")
+    return _clean_project_bundle_feedback_items(decisions)
+
+
+def _project_bundle_release_review_session_risks(
+    *,
+    closeout: ProjectBundleReleaseCloseoutResponse,
+    acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse,
+    acceptance_snapshot_comparison: dict[str, Any],
+) -> list[str]:
+    risks: list[str] = []
+    risks.extend(closeout.blocking_reasons)
+    if acceptance_packet.open_closeout_tasks:
+        risks.append(
+            f"{len(acceptance_packet.open_closeout_tasks)} open closeout tasks remain before signoff."
+        )
+    risks.extend(acceptance_snapshot_comparison.get("newly_blocked_checklist_items") or [])
+    status_delta = acceptance_snapshot_comparison.get("status_delta") or {}
+    if status_delta.get("regressed"):
+        risks.append(
+            f"Acceptance status regressed from {status_delta.get('baseline')} to "
+            f"{status_delta.get('candidate')}."
+        )
+    return _clean_project_bundle_feedback_items(risks)
+
+
+def _project_bundle_release_review_session_follow_up_actions(
+    *,
+    acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse,
+    acceptance_snapshot_comparison: dict[str, Any],
+) -> list[str]:
+    actions: list[str] = []
+    actions.extend(acceptance_snapshot_comparison.get("added_remaining_actions") or [])
+    actions.extend(acceptance_packet.remaining_actions)
+    if acceptance_packet.ready_for_signoff:
+        actions.append("Capture final signoff confirmation and archive the accepted packet.")
+    else:
+        actions.append(
+            "Assign an owner to every unresolved acceptance action before closing review."
+        )
+    return _clean_project_bundle_feedback_items(actions)[:12]
+
+
+def _project_bundle_release_review_session_artifact_links(
+    *,
+    release: ResearchBrief,
+    latest_acceptance_snapshot: dict[str, Any],
+    acceptance_snapshot_comparison: dict[str, Any],
+) -> list[dict[str, Any]]:
+    links = [
+        {
+            "label": "Release note",
+            "method": "GET",
+            "path": f"/research/export/project-bundle/releases/{release.id}",
+        },
+        {
+            "label": "Release progress",
+            "method": "GET",
+            "path": f"/research/export/project-bundle/releases/{release.id}/progress",
+        },
+        {
+            "label": "Acceptance packet",
+            "method": "GET",
+            "path": f"/research/export/project-bundle/releases/{release.id}/acceptance-packet",
+        },
+    ]
+    if latest_acceptance_snapshot:
+        links.append(
+            {
+                "label": "Latest acceptance snapshot",
+                "method": "GET",
+                "path": (
+                    f"/research/export/project-bundle/releases/{release.id}/"
+                    "acceptance-packet/snapshots/"
+                    f"{latest_acceptance_snapshot['id']}"
+                ),
+            }
+        )
+    if acceptance_snapshot_comparison:
+        links.append(
+            {
+                "label": "Acceptance snapshot comparison",
+                "method": "POST",
+                "path": (
+                    f"/research/export/project-bundle/releases/{release.id}/"
+                    "acceptance-packet/snapshots/compare"
+                ),
+            }
+        )
+    links.append(
+        {
+            "label": "Project bundle",
+            "method": "GET",
+            "path": "/research/export/project-bundle",
+        }
+    )
+    return links
+
+
+def _render_project_bundle_release_review_session_markdown(
+    *,
+    generated_at: datetime,
+    release: ResearchBrief,
+    recipient: str,
+    review_status: str,
+    ready_for_review: bool,
+    acceptance_status: str,
+    agenda: list[str],
+    decisions_needed: list[str],
+    risk_items: list[str],
+    follow_up_actions: list[str],
+    artifact_links: list[dict[str, Any]],
+    review_task_summary: dict[str, Any],
+) -> str:
+    lines = [
+        "# Project Bundle Release Review Session",
+        "",
+        f"- Release: `{release.id}` {release.title}",
+        f"- Recipient: {recipient}",
+        f"- Generated At: {generated_at.isoformat()}",
+        f"- Review Status: {review_status}",
+        f"- Ready For Review: {ready_for_review}",
+        f"- Acceptance Status: {acceptance_status}",
+        (
+            f"- Review Tasks: {review_task_summary.get('task_count', 0)} total, "
+            f"{review_task_summary.get('open_task_count', 0)} open, "
+            f"{review_task_summary.get('blocked_task_count', 0)} blocked"
+        ),
+        "",
+        "## Agenda",
+        "",
+    ]
+    _append_project_bundle_feedback_items(lines, agenda)
+    lines.extend(["", "## Decisions Needed", ""])
+    _append_project_bundle_feedback_items(lines, decisions_needed)
+    lines.extend(["", "## Risks", ""])
+    _append_project_bundle_feedback_items(lines, risk_items)
+    lines.extend(["", "## Follow-up Actions", ""])
+    _append_project_bundle_feedback_items(lines, follow_up_actions)
+    lines.extend(["", "## Artifacts", ""])
+    if artifact_links:
+        for link in artifact_links:
+            lines.append(
+                f"- {link.get('method', 'GET')} `{link.get('path', '')}`: {link.get('label', '')}"
+            )
+    else:
+        lines.append("- None.")
+    return "\n".join(lines).strip() + "\n"
 
 
 def _project_bundle_release_acceptance_packet(
@@ -11754,6 +12178,7 @@ def _project_bundle_manifest(
     bundle_release_acceptance_packet_snapshot_comparison: dict | None,
     latest_bundle_release_closeout: ProjectBundleReleaseCloseoutResponse | None,
     latest_bundle_release_acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse | None,
+    latest_bundle_release_review_session: ProjectBundleReleaseReviewSessionResponse | None,
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -12013,6 +12438,34 @@ def _project_bundle_manifest(
                 ]
             )
             if bundle_release_acceptance_packet_snapshot_comparison
+            else 0
+        ),
+        "latest_project_bundle_release_review_session_available": (
+            latest_bundle_release_review_session is not None
+        ),
+        "latest_project_bundle_release_review_session_status": (
+            latest_bundle_release_review_session.review_status
+            if latest_bundle_release_review_session
+            else ""
+        ),
+        "latest_project_bundle_release_review_session_ready": (
+            latest_bundle_release_review_session.ready_for_review
+            if latest_bundle_release_review_session
+            else False
+        ),
+        "latest_project_bundle_release_review_session_decision_count": (
+            len(latest_bundle_release_review_session.decisions_needed)
+            if latest_bundle_release_review_session
+            else 0
+        ),
+        "latest_project_bundle_release_review_session_risk_count": (
+            len(latest_bundle_release_review_session.risk_items)
+            if latest_bundle_release_review_session
+            else 0
+        ),
+        "latest_project_bundle_release_review_session_follow_up_count": (
+            len(latest_bundle_release_review_session.follow_up_actions)
+            if latest_bundle_release_review_session
             else 0
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
@@ -12683,6 +13136,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("project_bundle_release_acceptance_packet_snapshot_comparison_available"):
         lines.append(
             "- `artifacts/releases/latest-project-bundle-release-acceptance-packet-snapshot-comparison.md`: latest persisted acceptance/signoff change report."
+        )
+    if manifest.get("latest_project_bundle_release_review_session_available"):
+        lines.append(
+            "- `artifacts/releases/latest-project-bundle-release-review-session.md`: customer/advisor release review agenda, decisions, risks, and follow-up actions."
         )
     lines.extend(
         [

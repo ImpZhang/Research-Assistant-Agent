@@ -267,6 +267,15 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         not in status["implemented_capabilities"]
     ):
         raise RuntimeError("research status did not include release acceptance comparison tasks")
+    if "project_bundle_release_review_sessions" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project bundle release review sessions")
+    if (
+        "project_bundle_release_review_session_task_generation"
+        not in status["implemented_capabilities"]
+    ):
+        raise RuntimeError(
+            "research status did not include project bundle release review session tasks"
+        )
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -516,6 +525,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     ):
         raise RuntimeError(
             "tool manifest did not include project bundle release acceptance comparison tasks"
+        )
+    if "get_project_bundle_release_review_session" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release review session")
+    if "create_tasks_from_project_bundle_release_review_session" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project bundle release review session tasks"
         )
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
@@ -2613,6 +2628,66 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "project bundle release acceptance snapshot comparison did not create graph edge"
         )
+    project_bundle_release_review_session = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/review-session"
+        ),
+        "project bundle release review session",
+    )
+    if project_bundle_release_review_session["release_id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release review session used wrong release id")
+    if project_bundle_release_review_session["review_status"] != "blocked_review":
+        raise RuntimeError("project bundle release review session missed blocked status")
+    if project_bundle_release_review_session["acceptance_status"] != "blocked":
+        raise RuntimeError("project bundle release review session missed acceptance status")
+    if not project_bundle_release_review_session["ready_for_review"]:
+        raise RuntimeError("project bundle release review session should be ready")
+    if not project_bundle_release_review_session["agenda"]:
+        raise RuntimeError("project bundle release review session missed agenda")
+    if not project_bundle_release_review_session["decisions_needed"]:
+        raise RuntimeError("project bundle release review session missed decisions")
+    if not project_bundle_release_review_session["risk_items"]:
+        raise RuntimeError("project bundle release review session missed risks")
+    if not project_bundle_release_review_session["follow_up_actions"]:
+        raise RuntimeError("project bundle release review session missed follow-up actions")
+    if (
+        project_bundle_release_review_session["latest_acceptance_snapshot"]["id"]
+        != project_bundle_release_acceptance_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle release review session used wrong latest snapshot")
+    if (
+        "# Project Bundle Release Review Session"
+        not in project_bundle_release_review_session["markdown_export"]
+    ):
+        raise RuntimeError("project bundle release review session markdown missed title")
+    project_bundle_release_review_session_tasks = require_ok(
+        client.post(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/review-session/tasks",
+            json_body={
+                "limit": 8,
+                "include_decisions": True,
+                "include_risks": True,
+                "include_follow_up_actions": True,
+                "created_by": "smoke",
+            },
+        ),
+        "project bundle release review session tasks",
+    )
+    if not project_bundle_release_review_session_tasks["tasks"]:
+        raise RuntimeError("project bundle release review session did not create tasks")
+    first_release_review_task = project_bundle_release_review_session_tasks["tasks"][0]
+    if first_release_review_task["owner_type"] != "project_bundle_release_review_session":
+        raise RuntimeError("project bundle release review task used wrong owner type")
+    if first_release_review_task["due_phase"] != "project_bundle_release_review_follow_up":
+        raise RuntimeError("project bundle release review task used wrong due phase")
+    project_bundle_release_review_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=project_bundle_release_review_creates_task"),
+        "project bundle release review graph edges",
+    )
+    if not project_bundle_release_review_edges:
+        raise RuntimeError("project bundle release review did not create graph edge")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2647,6 +2722,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/project-bundle-release-acceptance-packet.json",
             "metadata/project-bundle-release-acceptance-packet-snapshots.json",
             "metadata/project-bundle-release-acceptance-packet-snapshot-comparison.json",
+            "metadata/project-bundle-release-review-session.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
@@ -2677,6 +2753,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
                 "artifacts/releases/"
                 "latest-project-bundle-release-acceptance-packet-snapshot-comparison.md"
             ),
+            "artifacts/releases/latest-project-bundle-release-review-session.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -2722,6 +2799,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             archive.read(
                 "metadata/project-bundle-release-acceptance-packet-snapshot-comparison.json"
             )
+        )
+        project_bundle_release_review_session_metadata = json.loads(
+            archive.read("metadata/project-bundle-release-review-session.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -2952,6 +3032,31 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         != project_bundle_release_acceptance_snapshot["id"]
     ):
         raise RuntimeError("project bundle acceptance comparison metadata used wrong candidate")
+    if not project_bundle_manifest["latest_project_bundle_release_review_session_available"]:
+        raise RuntimeError("project bundle manifest missed release review session")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_review_session_status"]
+        != "blocked_review"
+    ):
+        raise RuntimeError("project bundle manifest release review missed blocked status")
+    if not project_bundle_manifest["latest_project_bundle_release_review_session_ready"]:
+        raise RuntimeError("project bundle manifest release review should be ready")
+    if project_bundle_manifest[
+        "latest_project_bundle_release_review_session_decision_count"
+    ] != len(project_bundle_release_review_session["decisions_needed"]):
+        raise RuntimeError("project bundle manifest release review decision count diverged")
+    if project_bundle_manifest["latest_project_bundle_release_review_session_risk_count"] != len(
+        project_bundle_release_review_session["risk_items"]
+    ):
+        raise RuntimeError("project bundle manifest release review risk count diverged")
+    if project_bundle_manifest[
+        "latest_project_bundle_release_review_session_follow_up_count"
+    ] != len(project_bundle_release_review_session["follow_up_actions"]):
+        raise RuntimeError("project bundle manifest release review follow-up count diverged")
+    if project_bundle_release_review_session_metadata["release_id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release review metadata used wrong release id")
+    if project_bundle_release_review_session_metadata["review_status"] != "blocked_review":
+        raise RuntimeError("project bundle release review metadata missed blocked status")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -3411,6 +3516,15 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         ],
         "project_bundle_release_acceptance_comparison_task_count": len(
             project_bundle_release_acceptance_snapshot_comparison_tasks["tasks"]
+        ),
+        "project_bundle_release_review_status": project_bundle_release_review_session[
+            "review_status"
+        ],
+        "project_bundle_release_review_decision_count": len(
+            project_bundle_release_review_session["decisions_needed"]
+        ),
+        "project_bundle_release_review_task_count": len(
+            project_bundle_release_review_session_tasks["tasks"]
         ),
         "project_bundle_latest_release_recipient": project_bundle_manifest[
             "latest_project_bundle_release_recipient"

@@ -122,6 +122,10 @@ def test_research_status() -> None:
         "project_bundle_release_acceptance_packet_snapshot_comparison_task_generation"
         in body["implemented_capabilities"]
     )
+    assert "project_bundle_release_review_sessions" in body["implemented_capabilities"]
+    assert (
+        "project_bundle_release_review_session_task_generation" in body["implemented_capabilities"]
+    )
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
@@ -247,6 +251,8 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "compare_project_bundle_release_acceptance_packet_snapshots" in names
     assert "export_project_bundle_release_acceptance_packet_snapshot_comparison_markdown" in names
     assert "create_tasks_from_project_bundle_release_acceptance_packet_snapshot_comparison" in names
+    assert "get_project_bundle_release_review_session" in names
+    assert "create_tasks_from_project_bundle_release_review_session" in names
     assert "get_idea_readiness" in names
     assert "get_idea_quality_gate" in names
     assert "create_tasks_from_idea_quality_gate" in names
@@ -506,6 +512,29 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
         project_bundle_release_acceptance_snapshot_compare_tasks["annotations"]["sideEffectHint"]
         is True
     )
+
+    project_bundle_release_review_session = tools["get_project_bundle_release_review_session"]
+    assert project_bundle_release_review_session["http"]["method"] == "GET"
+    assert (
+        project_bundle_release_review_session["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/review-session"
+    )
+    assert project_bundle_release_review_session["input_schema"]["required"] == ["release_id"]
+    assert project_bundle_release_review_session["annotations"]["readOnlyHint"] is True
+
+    project_bundle_release_review_session_tasks = tools[
+        "create_tasks_from_project_bundle_release_review_session"
+    ]
+    assert project_bundle_release_review_session_tasks["http"]["method"] == "POST"
+    assert (
+        project_bundle_release_review_session_tasks["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/review-session/tasks"
+    )
+    assert project_bundle_release_review_session_tasks["input_schema"]["required"] == [
+        "release_id",
+        "body",
+    ]
+    assert project_bundle_release_review_session_tasks["annotations"]["sideEffectHint"] is True
 
     project_bundle_readiness_tasks = tools["create_tasks_from_project_bundle_readiness"]
     assert project_bundle_readiness_tasks["http"]["method"] == "POST"
@@ -878,6 +907,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "projectBundleReleaseAcceptancePacketSnapshotsButton" in response.text
     assert "projectBundleReleaseAcceptancePacketSnapshotCompareButton" in response.text
     assert "projectBundleReleaseAcceptancePacketSnapshotTasksButton" in response.text
+    assert "projectBundleReleaseReviewSessionButton" in response.text
+    assert "projectBundleReleaseReviewSessionTasksButton" in response.text
     assert "projectBundleReadinessButton" in response.text
     assert "projectBundleReadinessTasksButton" in response.text
     assert "projectBundleReadinessSnapshotButton" in response.text
@@ -993,6 +1024,10 @@ def test_workbench_static_assets_are_served() -> None:
         "/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots/compare/tasks"
         in script.text
     )
+    assert "/research/export/project-bundle/releases/${releaseId}/review-session" in script.text
+    assert (
+        "/research/export/project-bundle/releases/${releaseId}/review-session/tasks" in script.text
+    )
     assert "/research/export/project-bundle/readiness" in script.text
     assert "/research/export/project-bundle/readiness/tasks" in script.text
     assert "/research/export/project-bundle/readiness/snapshots" in script.text
@@ -1012,6 +1047,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "listProjectBundleReleaseAcceptancePacketSnapshots" in script.text
     assert "compareProjectBundleReleaseAcceptancePacketSnapshots" in script.text
     assert "createProjectBundleReleaseAcceptancePacketSnapshotComparisonTasks" in script.text
+    assert "loadProjectBundleReleaseReviewSession" in script.text
+    assert "createProjectBundleReleaseReviewSessionTasks" in script.text
     assert "loadProjectBundleReadiness" in script.text
     assert "createProjectBundleReadinessTasks" in script.text
     assert "saveProjectBundleReadinessSnapshot" in script.text
@@ -3487,6 +3524,70 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert project_bundle_release_acceptance_snapshot_comparison_edges.status_code == 200
     assert project_bundle_release_acceptance_snapshot_comparison_edges.json()
 
+    project_bundle_release_review_session = client.get(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/review-session"
+    )
+    assert project_bundle_release_review_session.status_code == 200
+    project_bundle_release_review_session_body = project_bundle_release_review_session.json()
+    assert (
+        project_bundle_release_review_session_body["release_id"]
+        == project_bundle_release_body["id"]
+    )
+    assert project_bundle_release_review_session_body["recipient"] == "pytest advisor"
+    assert project_bundle_release_review_session_body["acceptance_status"] == "blocked"
+    assert project_bundle_release_review_session_body["review_status"] == "blocked_review"
+    assert project_bundle_release_review_session_body["ready_for_review"] is True
+    assert project_bundle_release_review_session_body["agenda"]
+    assert project_bundle_release_review_session_body["decisions_needed"]
+    assert project_bundle_release_review_session_body["risk_items"]
+    assert project_bundle_release_review_session_body["follow_up_actions"]
+    assert project_bundle_release_review_session_body["artifact_links"]
+    assert (
+        project_bundle_release_review_session_body["latest_acceptance_snapshot"]["id"]
+        == project_bundle_release_acceptance_snapshot_body["id"]
+    )
+    assert (
+        project_bundle_release_review_session_body["acceptance_snapshot_comparison"][
+            "candidate_snapshot_id"
+        ]
+        == project_bundle_release_acceptance_snapshot_body["id"]
+    )
+    assert (
+        "# Project Bundle Release Review Session"
+        in project_bundle_release_review_session_body["markdown_export"]
+    )
+
+    project_bundle_release_review_session_tasks = client.post(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/review-session/tasks",
+        json={
+            "limit": 8,
+            "include_decisions": True,
+            "include_risks": True,
+            "include_follow_up_actions": True,
+            "created_by": "pytest",
+        },
+    )
+    assert project_bundle_release_review_session_tasks.status_code == 200
+    project_bundle_release_review_session_task_body = (
+        project_bundle_release_review_session_tasks.json()
+    )
+    assert project_bundle_release_review_session_task_body["tasks"]
+    first_release_review_task = project_bundle_release_review_session_task_body["tasks"][0]
+    assert first_release_review_task["owner_type"] == "project_bundle_release_review_session"
+    assert first_release_review_task["owner_id"] == project_bundle_release_body["id"]
+    assert first_release_review_task["due_phase"] == "project_bundle_release_review_follow_up"
+    assert first_release_review_task["metadata"]["release_id"] == project_bundle_release_body["id"]
+    assert first_release_review_task["metadata"]["review_status"] == "blocked_review"
+    assert first_release_review_task["metadata"]["acceptance_status"] == "blocked"
+
+    project_bundle_release_review_edges = client.get(
+        "/research/graph/edges?edge_type=project_bundle_release_review_creates_task"
+    )
+    assert project_bundle_release_review_edges.status_code == 200
+    assert project_bundle_release_review_edges.json()
+
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200
     assert project_bundle.headers["content-type"] == "application/zip"
@@ -3515,6 +3616,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "metadata/project-bundle-release-acceptance-packet.json" in names
         assert "metadata/project-bundle-release-acceptance-packet-snapshots.json" in names
         assert "metadata/project-bundle-release-acceptance-packet-snapshot-comparison.json" in names
+        assert "metadata/project-bundle-release-review-session.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         assert "metadata/claim-validation-queue.json" in names
@@ -3552,6 +3654,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
             "artifacts/releases/"
             "latest-project-bundle-release-acceptance-packet-snapshot-comparison.md" in names
         )
+        assert "artifacts/releases/latest-project-bundle-release-review-session.md" in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         bundled_claim_queue = json.loads(archive.read("metadata/claim-validation-queue.json"))
         bundled_triage_comparison = json.loads(
@@ -3589,6 +3692,9 @@ Future work should preserve proposal drafts as reviewable artifacts.
             archive.read(
                 "metadata/project-bundle-release-acceptance-packet-snapshot-comparison.json"
             )
+        )
+        bundled_project_bundle_release_review_session = json.loads(
+            archive.read("metadata/project-bundle-release-review-session.json")
         )
         assert project_manifest["idea_count"] >= 1
         assert readiness_manifest["bundle_type"] == "research_project_bundle"
@@ -3775,6 +3881,26 @@ Future work should preserve proposal drafts as reviewable artifacts.
             ]
             == project_bundle_release_acceptance_snapshot_body["id"]
         )
+        assert project_manifest["latest_project_bundle_release_review_session_available"] is True
+        assert (
+            project_manifest["latest_project_bundle_release_review_session_status"]
+            == "blocked_review"
+        )
+        assert project_manifest["latest_project_bundle_release_review_session_ready"] is True
+        assert project_manifest[
+            "latest_project_bundle_release_review_session_decision_count"
+        ] == len(project_bundle_release_review_session_body["decisions_needed"])
+        assert project_manifest["latest_project_bundle_release_review_session_risk_count"] == len(
+            project_bundle_release_review_session_body["risk_items"]
+        )
+        assert project_manifest[
+            "latest_project_bundle_release_review_session_follow_up_count"
+        ] == len(project_bundle_release_review_session_body["follow_up_actions"])
+        assert (
+            bundled_project_bundle_release_review_session["release_id"]
+            == project_bundle_release_body["id"]
+        )
+        assert bundled_project_bundle_release_review_session["review_status"] == "blocked_review"
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["claim_validation_queue_count"] >= 1
         assert project_manifest["claim_validation_queue_idea_count"] >= 1

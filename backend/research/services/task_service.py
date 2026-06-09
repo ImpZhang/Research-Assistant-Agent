@@ -1555,6 +1555,110 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_bundle_release_review_session(
+        self,
+        review_session: dict,
+        *,
+        limit: int = 8,
+        include_decisions: bool = True,
+        include_risks: bool = True,
+        include_follow_up_actions: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        items: list[tuple[str, str, dict]] = []
+        if include_decisions:
+            for decision in self._unique_commitments(review_session.get("decisions_needed") or []):
+                items.append(("release_review_decision", decision, {}))
+        if include_risks:
+            for risk in self._unique_commitments(review_session.get("risk_items") or []):
+                items.append(("release_review_risk", risk, {}))
+        if include_follow_up_actions:
+            for action in self._unique_commitments(review_session.get("follow_up_actions") or []):
+                items.append(("release_review_follow_up", action, {}))
+
+        items = self._deduplicate_pilot_report_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "release_review_summary",
+                    review_session.get("message")
+                    or "Review the project bundle release session and confirm next actions.",
+                    {},
+                )
+            ]
+
+        release_id = str(review_session.get("release_id") or "")
+        review_status = str(review_session.get("review_status") or "")
+        acceptance_status = str(review_session.get("acceptance_status") or "")
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_bundle_release_review_session",
+                owner_id=release_id or "project_bundle_release_review_session",
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._release_review_session_task_title(
+                    action,
+                    idx,
+                    source_type=source_type,
+                ),
+                description=action,
+                priority=self._release_review_session_task_priority(
+                    source_type,
+                    action,
+                    review_status,
+                    acceptance_status,
+                ),
+                status="todo",
+                due_phase="project_bundle_release_review_follow_up",
+                metadata_json={
+                    "release_id": release_id,
+                    "review_status": review_status,
+                    "acceptance_status": acceptance_status,
+                    "comparison_source_type": source_type,
+                    "source_rank": idx,
+                    **metadata,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project bundle release review session.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "release_id": release_id,
+                        "review_status": review_status,
+                        "acceptance_status": acceptance_status,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_bundle_release_review_tasks(
+            review_session,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_project_bundle_release(
         self,
         release: ResearchBrief,
@@ -2830,6 +2934,44 @@ class ResearchTaskService:
             "acceptance_comparison_new_checklist_gap",
             "acceptance_comparison_added_remaining_action",
         }:
+            return "high"
+        return "medium"
+
+    def _release_review_session_task_title(
+        self,
+        action: str,
+        idx: int,
+        *,
+        source_type: str,
+    ) -> str:
+        clean = " ".join(str(action).split())
+        if source_type == "release_review_decision":
+            return self._short_task_title(f"Resolve release review decision {idx}: {clean}", idx)
+        if source_type == "release_review_risk":
+            return self._short_task_title(f"Mitigate release review risk {idx}: {clean}", idx)
+        if source_type == "release_review_follow_up":
+            return self._short_task_title(f"Complete release review follow-up {idx}: {clean}", idx)
+        if source_type == "release_review_summary":
+            return "Review project bundle release session"
+        return self._short_task_title(clean or f"Work release review item {idx}", idx)
+
+    def _release_review_session_task_priority(
+        self,
+        source_type: str,
+        action: str,
+        review_status: str,
+        acceptance_status: str,
+    ) -> str:
+        lower = str(action).lower()
+        if source_type == "release_review_risk" or "blocked" in lower or "regressed" in lower:
+            return "critical"
+        if review_status in {"blocked_review", "acceptance_regressed", "review_blocked"}:
+            return "critical"
+        if acceptance_status in {"blocked", "rejected"}:
+            return "critical"
+        if source_type == "release_review_decision":
+            return "high"
+        if "signoff" in lower or "owner" in lower:
             return "high"
         return "medium"
 
