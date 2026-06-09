@@ -1423,6 +1423,138 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_bundle_release_acceptance_packet_snapshot_comparison(
+        self,
+        comparison: dict,
+        *,
+        limit: int = 6,
+        include_remaining_actions: bool = True,
+        include_checklist_regressions: bool = True,
+        include_status_regression: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        items: list[tuple[str, str, dict]] = []
+        status_delta = comparison.get("status_delta") or {}
+        signoff_delta = comparison.get("signoff_delta") or {}
+        if include_status_regression:
+            if status_delta.get("regressed"):
+                items.append(
+                    (
+                        "acceptance_comparison_status_regression",
+                        (
+                            "Review release acceptance status regression: "
+                            f"{status_delta.get('baseline', 'unknown')} -> "
+                            f"{status_delta.get('candidate', 'unknown')}."
+                        ),
+                        {},
+                    )
+                )
+            for key, value in signoff_delta.items():
+                if value.get("baseline") is True and value.get("candidate") is False:
+                    items.append(
+                        (
+                            "acceptance_comparison_signoff_regression",
+                            f"Restore release signoff readiness signal: {key}.",
+                            {"signoff_signal": key},
+                        )
+                    )
+        if include_remaining_actions:
+            for action in self._unique_commitments(comparison.get("added_remaining_actions") or []):
+                items.append(("acceptance_comparison_added_remaining_action", action, {}))
+        if include_checklist_regressions:
+            for item in self._unique_commitments(
+                comparison.get("newly_blocked_checklist_items") or []
+            ):
+                items.append(("acceptance_comparison_new_checklist_gap", item, {}))
+
+        items = self._deduplicate_pilot_report_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "acceptance_comparison_review",
+                    comparison.get("summary")
+                    or "Review the latest release acceptance snapshot comparison.",
+                    {},
+                )
+            ]
+
+        candidate_id = str(comparison.get("candidate_snapshot_id") or "")
+        baseline_id = str(comparison.get("baseline_snapshot_id") or "")
+        release_id = str(comparison.get("release_id") or "")
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_bundle_release_acceptance_packet_snapshot_comparison",
+                owner_id=(
+                    candidate_id or "project_bundle_release_acceptance_packet_snapshot_comparison"
+                ),
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._release_acceptance_comparison_task_title(
+                    action,
+                    idx,
+                    source_type=source_type,
+                ),
+                description=action,
+                priority=self._release_acceptance_comparison_task_priority(
+                    source_type,
+                    action,
+                    status_delta,
+                ),
+                status="todo",
+                due_phase="project_bundle_release_acceptance_change_follow_up",
+                metadata_json={
+                    "release_id": release_id,
+                    "baseline_snapshot_id": baseline_id,
+                    "candidate_snapshot_id": candidate_id,
+                    "comparison_source_type": source_type,
+                    "acceptance_status_baseline": status_delta.get("baseline", ""),
+                    "acceptance_status_candidate": status_delta.get("candidate", ""),
+                    "source_rank": idx,
+                    **metadata,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from release acceptance snapshot comparison.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "release_id": release_id,
+                        "baseline_snapshot_id": baseline_id,
+                        "candidate_snapshot_id": candidate_id,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(
+            GraphService(self.session)
+        ).link_project_bundle_release_acceptance_snapshot_comparison_tasks(
+            comparison,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_project_bundle_release(
         self,
         release: ResearchBrief,
@@ -2655,6 +2787,49 @@ class ResearchTaskService:
             or "missing" in lower
             or "required" in lower
         ):
+            return "high"
+        return "medium"
+
+    def _release_acceptance_comparison_task_title(
+        self,
+        action: str,
+        idx: int,
+        *,
+        source_type: str,
+    ) -> str:
+        clean = " ".join(str(action).split())
+        if source_type == "acceptance_comparison_status_regression":
+            return "Review release acceptance regression"
+        if source_type == "acceptance_comparison_signoff_regression":
+            return "Restore release signoff readiness"
+        if source_type == "acceptance_comparison_new_checklist_gap":
+            return self._short_task_title(
+                f"Resolve new acceptance checklist gap {idx}: {clean}", idx
+            )
+        if source_type == "acceptance_comparison_added_remaining_action":
+            return self._short_task_title(f"Work new acceptance action {idx}: {clean}", idx)
+        if source_type == "acceptance_comparison_review":
+            return "Review release acceptance comparison"
+        return self._short_task_title(clean or f"Work release acceptance change {idx}", idx)
+
+    def _release_acceptance_comparison_task_priority(
+        self,
+        source_type: str,
+        action: str,
+        status_delta: dict,
+    ) -> str:
+        lower = str(action).lower()
+        if source_type in {
+            "acceptance_comparison_status_regression",
+            "acceptance_comparison_signoff_regression",
+        }:
+            return "critical"
+        if "blocked" in lower or "rejected" in lower:
+            return "critical"
+        if status_delta.get("regressed") or source_type in {
+            "acceptance_comparison_new_checklist_gap",
+            "acceptance_comparison_added_remaining_action",
+        }:
             return "high"
         return "medium"
 

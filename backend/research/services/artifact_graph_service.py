@@ -943,6 +943,57 @@ class ArtifactGraphService:
             },
         )
 
+    def link_project_bundle_release_acceptance_snapshot_comparison_tasks(
+        self,
+        comparison: dict,
+        tasks: list[ResearchTask],
+    ) -> None:
+        comparison_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release_acceptance_packet_snapshot_comparison",
+            label="Project bundle release acceptance snapshot comparison",
+            canonical_key=(
+                f"{comparison.get('baseline_snapshot_id', '')}:"
+                f"{comparison.get('candidate_snapshot_id', '')}"
+            ),
+            payload={
+                "release_id": comparison.get("release_id", ""),
+                "baseline_snapshot_id": comparison.get("baseline_snapshot_id", ""),
+                "candidate_snapshot_id": comparison.get("candidate_snapshot_id", ""),
+                "acceptance_status_baseline": (
+                    (comparison.get("status_delta") or {}).get("baseline", "")
+                ),
+                "acceptance_status_candidate": (
+                    (comparison.get("status_delta") or {}).get("candidate", "")
+                ),
+                "added_remaining_action_count": len(
+                    comparison.get("added_remaining_actions") or []
+                ),
+                "newly_open_checklist_count": len(
+                    comparison.get("newly_blocked_checklist_items") or []
+                ),
+                "task_count": len(tasks),
+                "owner_type": ("project_bundle_release_acceptance_packet_snapshot_comparison"),
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=comparison_node,
+                target_node=task_node,
+                edge_type="project_bundle_release_acceptance_comparison_creates_task",
+                payload={"source": task.source_type},
+            )
+
     def link_project_advisor_chat_tasks(self, chat: dict, tasks: list[ResearchTask]) -> None:
         chat_node = self.graph.get_or_create_node(
             node_type="project_advisor_chat",

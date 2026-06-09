@@ -1120,6 +1120,42 @@ class ProjectBundleReleaseAcceptancePacketSnapshotCreate(BaseModel):
     created_by: str = "researcher"
 
 
+class ProjectBundleReleaseAcceptancePacketSnapshotComparisonRequest(BaseModel):
+    baseline_snapshot_id: str
+    candidate_snapshot_id: str
+
+
+class ProjectBundleReleaseAcceptancePacketSnapshotComparisonTaskGenerateRequest(
+    ProjectBundleReleaseAcceptancePacketSnapshotComparisonRequest
+):
+    limit: int = Field(default=6, ge=1, le=20)
+    include_remaining_actions: bool = True
+    include_checklist_regressions: bool = True
+    include_status_regression: bool = True
+    created_by: str = "system"
+
+
+class ProjectBundleReleaseAcceptancePacketSnapshotComparisonResponse(BaseModel):
+    baseline_snapshot_id: str
+    candidate_snapshot_id: str
+    baseline_title: str
+    candidate_title: str
+    release_id: str
+    status_delta: dict[str, Any] = Field(default_factory=dict)
+    signoff_delta: dict[str, Any] = Field(default_factory=dict)
+    closeout_delta: dict[str, Any] = Field(default_factory=dict)
+    remaining_action_delta: dict[str, Any] = Field(default_factory=dict)
+    checklist_delta: dict[str, Any] = Field(default_factory=dict)
+    added_remaining_actions: list[str] = Field(default_factory=list)
+    removed_remaining_actions: list[str] = Field(default_factory=list)
+    kept_remaining_actions: list[str] = Field(default_factory=list)
+    newly_blocked_checklist_items: list[str] = Field(default_factory=list)
+    resolved_checklist_items: list[str] = Field(default_factory=list)
+    kept_open_checklist_items: list[str] = Field(default_factory=list)
+    summary: str
+    markdown_export: str = ""
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

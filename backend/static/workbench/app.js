@@ -2025,6 +2025,99 @@ async function listProjectBundleReleaseAcceptancePacketSnapshots() {
   }
 }
 
+async function compareProjectBundleReleaseAcceptancePacketSnapshots() {
+  renderResult("workflowResult", "Comparing latest acceptance snapshots...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before comparing acceptance snapshots.",
+        "warn",
+      );
+      return;
+    }
+    const snapshots = await api(
+      `/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots?limit=2`,
+    );
+    if (snapshots.length < 2) {
+      renderResult(
+        "workflowResult",
+        "Save at least two acceptance snapshots before comparing them.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots/compare`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseline_snapshot_id: snapshots[1].id,
+          candidate_snapshot_id: snapshots[0].id,
+        }),
+      },
+    );
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.summary)}<br />New actions: ${body.added_remaining_actions.length}. New checklist gaps: ${body.newly_blocked_checklist_items.length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createProjectBundleReleaseAcceptancePacketSnapshotComparisonTasks() {
+  renderResult("workflowResult", "Creating acceptance comparison tasks...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before creating acceptance comparison tasks.",
+        "warn",
+      );
+      return;
+    }
+    const snapshots = await api(
+      `/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots?limit=2`,
+    );
+    if (snapshots.length < 2) {
+      renderResult(
+        "workflowResult",
+        "Save at least two acceptance snapshots before creating comparison tasks.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots/compare/tasks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseline_snapshot_id: snapshots[1].id,
+          candidate_snapshot_id: snapshots[0].id,
+          limit: 6,
+          include_remaining_actions: true,
+          include_checklist_regressions: true,
+          include_status_regression: true,
+          created_by: "workbench",
+        }),
+      },
+    );
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Acceptance comparison tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -2799,6 +2892,14 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReleaseAcceptancePacketSnapshotsButton").addEventListener(
     "click",
     listProjectBundleReleaseAcceptancePacketSnapshots,
+  );
+  $("projectBundleReleaseAcceptancePacketSnapshotCompareButton").addEventListener(
+    "click",
+    compareProjectBundleReleaseAcceptancePacketSnapshots,
+  );
+  $("projectBundleReleaseAcceptancePacketSnapshotTasksButton").addEventListener(
+    "click",
+    createProjectBundleReleaseAcceptancePacketSnapshotComparisonTasks,
   );
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(

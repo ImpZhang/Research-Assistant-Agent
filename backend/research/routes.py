@@ -129,6 +129,9 @@ from backend.research.schemas import (
     ProjectBundleReadinessTaskGenerateRequest,
     ProjectBundleReleaseAcceptancePacketResponse,
     ProjectBundleReleaseAcceptancePacketSnapshotCreate,
+    ProjectBundleReleaseAcceptancePacketSnapshotComparisonRequest,
+    ProjectBundleReleaseAcceptancePacketSnapshotComparisonResponse,
+    ProjectBundleReleaseAcceptancePacketSnapshotComparisonTaskGenerateRequest,
     ProjectBundleReleaseCloseoutResponse,
     ProjectBundleReleaseCloseoutTaskGenerateRequest,
     ProjectBundleReleaseCreate,
@@ -336,6 +339,8 @@ def status() -> ProjectStatus:
             "project_bundle_release_closeout_task_generation",
             "project_bundle_release_acceptance_packets",
             "project_bundle_release_acceptance_packet_snapshots",
+            "project_bundle_release_acceptance_packet_snapshot_comparison",
+            "project_bundle_release_acceptance_packet_snapshot_comparison_task_generation",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -715,6 +720,46 @@ def tool_manifest() -> ToolManifestResponse:
                 "snapshots/{snapshot_id}/export/markdown"
             ),
             output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="compare_project_bundle_release_acceptance_packet_snapshots",
+            description=(
+                "Compare two saved release acceptance packet snapshots to show "
+                "acceptance status, signoff, checklist, and remaining-action changes."
+            ),
+            method="POST",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/acceptance-packet/"
+                "snapshots/compare"
+            ),
+            input_model="ProjectBundleReleaseAcceptancePacketSnapshotComparisonRequest",
+            output_model="ProjectBundleReleaseAcceptancePacketSnapshotComparisonResponse",
+        ),
+        ToolManifestItem(
+            name="export_project_bundle_release_acceptance_packet_snapshot_comparison_markdown",
+            description="Export a release acceptance packet snapshot comparison as Markdown.",
+            method="POST",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/acceptance-packet/"
+                "snapshots/compare/export/markdown"
+            ),
+            input_model="ProjectBundleReleaseAcceptancePacketSnapshotComparisonRequest",
+            output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_bundle_release_acceptance_packet_snapshot_comparison",
+            description=(
+                "Turn release acceptance snapshot regressions and new remaining actions "
+                "into task-board work."
+            ),
+            method="POST",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/acceptance-packet/"
+                "snapshots/compare/tasks"
+            ),
+            input_model="ProjectBundleReleaseAcceptancePacketSnapshotComparisonTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="get_project_bundle_readiness",
@@ -10339,6 +10384,86 @@ def export_project_bundle_release_acceptance_packet_snapshot_markdown(
     return PlainTextResponse(snapshot.markdown_export or "", media_type="text/markdown")
 
 
+@router.post(
+    "/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/compare",
+    response_model=ProjectBundleReleaseAcceptancePacketSnapshotComparisonResponse,
+)
+def compare_project_bundle_release_acceptance_packet_snapshots(
+    release_id: str,
+    payload: ProjectBundleReleaseAcceptancePacketSnapshotComparisonRequest,
+    session: Session = Depends(get_session),
+) -> ProjectBundleReleaseAcceptancePacketSnapshotComparisonResponse:
+    _get_project_bundle_release_or_404(release_id, session)
+    baseline = _get_project_bundle_release_acceptance_packet_snapshot_or_404(
+        release_id,
+        payload.baseline_snapshot_id,
+        session,
+    )
+    candidate = _get_project_bundle_release_acceptance_packet_snapshot_or_404(
+        release_id,
+        payload.candidate_snapshot_id,
+        session,
+    )
+    comparison = _compare_project_bundle_release_acceptance_packet_snapshots(
+        baseline,
+        candidate,
+    )
+    return ProjectBundleReleaseAcceptancePacketSnapshotComparisonResponse(**comparison)
+
+
+@router.post(
+    "/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/compare/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_bundle_release_acceptance_packet_snapshot_comparison_markdown(
+    release_id: str,
+    payload: ProjectBundleReleaseAcceptancePacketSnapshotComparisonRequest,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    comparison = compare_project_bundle_release_acceptance_packet_snapshots(
+        release_id,
+        payload,
+        session,
+    )
+    return PlainTextResponse(comparison.markdown_export, media_type="text/markdown")
+
+
+@router.post(
+    "/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/compare/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_bundle_release_acceptance_packet_snapshot_comparison(
+    release_id: str,
+    payload: ProjectBundleReleaseAcceptancePacketSnapshotComparisonTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    comparison = compare_project_bundle_release_acceptance_packet_snapshots(
+        release_id,
+        ProjectBundleReleaseAcceptancePacketSnapshotComparisonRequest(
+            baseline_snapshot_id=payload.baseline_snapshot_id,
+            candidate_snapshot_id=payload.candidate_snapshot_id,
+        ),
+        session,
+    )
+    tasks = ResearchTaskService(
+        session
+    ).create_from_project_bundle_release_acceptance_packet_snapshot_comparison(
+        comparison.model_dump(mode="json"),
+        limit=payload.limit,
+        include_remaining_actions=payload.include_remaining_actions,
+        include_checklist_regressions=payload.include_checklist_regressions,
+        include_status_regression=payload.include_status_regression,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} release acceptance comparison tasks from snapshots "
+            f"{payload.baseline_snapshot_id} -> {payload.candidate_snapshot_id}."
+        ),
+    )
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -10480,6 +10605,9 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     bundle_release_acceptance_packet_snapshots = context[
         "bundle_release_acceptance_packet_snapshots"
     ]
+    bundle_release_acceptance_packet_snapshot_comparison = context[
+        "bundle_release_acceptance_packet_snapshot_comparison"
+    ]
     latest_bundle_release_closeout = context["latest_bundle_release_closeout"]
     latest_bundle_release_acceptance_packet = context["latest_bundle_release_acceptance_packet"]
     briefs = context["briefs"]
@@ -10558,6 +10686,11 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 ]
             ),
         )
+        if bundle_release_acceptance_packet_snapshot_comparison:
+            archive.writestr(
+                "metadata/project-bundle-release-acceptance-packet-snapshot-comparison.json",
+                _json_dump(bundle_release_acceptance_packet_snapshot_comparison),
+            )
         if latest_bundle_release_closeout:
             archive.writestr(
                 "metadata/project-bundle-release-closeout.json",
@@ -10663,6 +10796,15 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "artifacts/releases/latest-project-bundle-release-acceptance-packet-snapshot.md",
                 bundle_release_acceptance_packet_snapshots[0].markdown_export,
             )
+        if bundle_release_acceptance_packet_snapshot_comparison:
+            _write_markdown(
+                archive,
+                (
+                    "artifacts/releases/"
+                    "latest-project-bundle-release-acceptance-packet-snapshot-comparison.md"
+                ),
+                bundle_release_acceptance_packet_snapshot_comparison["markdown_export"],
+            )
         if latest_bundle_release_closeout:
             _write_markdown(
                 archive,
@@ -10738,6 +10880,23 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
     bundle_release_acceptance_packet_snapshots = (
         _project_bundle_release_acceptance_packet_snapshots(session, limit=12)
     )
+    latest_release_acceptance_packet_snapshots = (
+        _project_bundle_release_acceptance_packet_snapshots(
+            session,
+            release_id=bundle_releases[0].id,
+            limit=2,
+        )
+        if bundle_releases
+        else []
+    )
+    bundle_release_acceptance_packet_snapshot_comparison = (
+        _compare_project_bundle_release_acceptance_packet_snapshots(
+            latest_release_acceptance_packet_snapshots[1],
+            latest_release_acceptance_packet_snapshots[0],
+        )
+        if len(latest_release_acceptance_packet_snapshots) >= 2
+        else None
+    )
     latest_bundle_release_closeout = (
         _project_bundle_release_closeout(bundle_releases[0], session) if bundle_releases else None
     )
@@ -10767,6 +10926,9 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         latest_bundle_release_progress=latest_bundle_release_progress,
         bundle_release_feedbacks=bundle_release_feedbacks,
         bundle_release_acceptance_packet_snapshots=bundle_release_acceptance_packet_snapshots,
+        bundle_release_acceptance_packet_snapshot_comparison=(
+            bundle_release_acceptance_packet_snapshot_comparison
+        ),
         latest_bundle_release_closeout=latest_bundle_release_closeout,
         latest_bundle_release_acceptance_packet=latest_bundle_release_acceptance_packet,
         briefs=briefs,
@@ -10791,6 +10953,9 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "latest_bundle_release_progress": latest_bundle_release_progress,
         "bundle_release_feedbacks": bundle_release_feedbacks,
         "bundle_release_acceptance_packet_snapshots": (bundle_release_acceptance_packet_snapshots),
+        "bundle_release_acceptance_packet_snapshot_comparison": (
+            bundle_release_acceptance_packet_snapshot_comparison
+        ),
         "latest_bundle_release_closeout": latest_bundle_release_closeout,
         "latest_bundle_release_acceptance_packet": latest_bundle_release_acceptance_packet,
         "briefs": briefs,
@@ -10900,6 +11065,234 @@ def _get_project_bundle_release_acceptance_packet_snapshot_or_404(
     if (snapshot.summary_json or {}).get("release_id") != release_id:
         raise HTTPException(status_code=404, detail="Release acceptance packet snapshot not found")
     return snapshot
+
+
+def _compare_project_bundle_release_acceptance_packet_snapshots(
+    baseline: ResearchBrief,
+    candidate: ResearchBrief,
+) -> dict[str, Any]:
+    baseline_summary = baseline.summary_json or {}
+    candidate_summary = candidate.summary_json or {}
+    baseline_actions = baseline_summary.get("remaining_actions") or []
+    candidate_actions = candidate_summary.get("remaining_actions") or []
+    remaining_action_delta = _pilot_report_list_delta(
+        "remaining_actions",
+        baseline_actions,
+        candidate_actions,
+    )
+    baseline_open_checklist = _project_bundle_release_acceptance_open_checklist_items(
+        baseline_summary.get("checklist") or []
+    )
+    candidate_open_checklist = _project_bundle_release_acceptance_open_checklist_items(
+        candidate_summary.get("checklist") or []
+    )
+    checklist_delta_items = _pilot_report_list_delta(
+        "checklist_items",
+        baseline_open_checklist,
+        candidate_open_checklist,
+    )
+    status_delta = _project_bundle_release_acceptance_status_delta(
+        str(baseline_summary.get("acceptance_status") or ""),
+        str(candidate_summary.get("acceptance_status") or ""),
+    )
+    signoff_delta = {
+        "ready_for_signoff": _bundle_readiness_metric_delta_item(
+            baseline_summary.get("ready_for_signoff", False),
+            candidate_summary.get("ready_for_signoff", False),
+        ),
+        "signoff_confirmed": _bundle_readiness_metric_delta_item(
+            baseline_summary.get("signoff_confirmed", False),
+            candidate_summary.get("signoff_confirmed", False),
+        ),
+    }
+    closeout_delta = {
+        "closeout_status": _bundle_readiness_metric_delta_item(
+            baseline_summary.get("closeout_status", ""),
+            candidate_summary.get("closeout_status", ""),
+        ),
+        "closeout_ready": _bundle_readiness_metric_delta_item(
+            baseline_summary.get("closeout_ready", False),
+            candidate_summary.get("closeout_ready", False),
+        ),
+        "closeout_task_count": _bundle_readiness_metric_delta_item(
+            (baseline_summary.get("closeout_task_summary") or {}).get("task_count", 0),
+            (candidate_summary.get("closeout_task_summary") or {}).get("task_count", 0),
+        ),
+        "open_closeout_task_count": _bundle_readiness_metric_delta_item(
+            (baseline_summary.get("closeout_task_summary") or {}).get("open_task_count", 0),
+            (candidate_summary.get("closeout_task_summary") or {}).get("open_task_count", 0),
+        ),
+        "blocked_closeout_task_count": _bundle_readiness_metric_delta_item(
+            (baseline_summary.get("closeout_task_summary") or {}).get("blocked_task_count", 0),
+            (candidate_summary.get("closeout_task_summary") or {}).get("blocked_task_count", 0),
+        ),
+    }
+    comparison = {
+        "baseline_snapshot_id": baseline.id,
+        "candidate_snapshot_id": candidate.id,
+        "baseline_title": baseline.title,
+        "candidate_title": candidate.title,
+        "release_id": str(
+            candidate_summary.get("release_id") or baseline_summary.get("release_id") or ""
+        ),
+        "status_delta": status_delta,
+        "signoff_delta": signoff_delta,
+        "closeout_delta": closeout_delta,
+        "remaining_action_delta": {
+            "baseline_count": len(baseline_actions),
+            "candidate_count": len(candidate_actions),
+            "count_delta": len(candidate_actions) - len(baseline_actions),
+        },
+        "checklist_delta": {
+            "baseline_open_count": len(baseline_open_checklist),
+            "candidate_open_count": len(candidate_open_checklist),
+            "open_count_delta": len(candidate_open_checklist) - len(baseline_open_checklist),
+        },
+        "added_remaining_actions": remaining_action_delta["added_remaining_actions"],
+        "removed_remaining_actions": remaining_action_delta["removed_remaining_actions"],
+        "kept_remaining_actions": remaining_action_delta["kept_remaining_actions"],
+        "newly_blocked_checklist_items": checklist_delta_items["added_checklist_items"],
+        "resolved_checklist_items": checklist_delta_items["removed_checklist_items"],
+        "kept_open_checklist_items": checklist_delta_items["kept_checklist_items"],
+    }
+    comparison["summary"] = _project_bundle_release_acceptance_snapshot_comparison_summary(
+        comparison
+    )
+    comparison["markdown_export"] = (
+        _render_project_bundle_release_acceptance_packet_snapshot_comparison_markdown(comparison)
+    )
+    return comparison
+
+
+def _project_bundle_release_acceptance_status_delta(
+    baseline_status: str,
+    candidate_status: str,
+) -> dict[str, Any]:
+    baseline_rank = _project_bundle_release_acceptance_status_rank(baseline_status)
+    candidate_rank = _project_bundle_release_acceptance_status_rank(candidate_status)
+    return {
+        "baseline": baseline_status,
+        "candidate": candidate_status,
+        "changed": baseline_status != candidate_status,
+        "regressed": candidate_rank > baseline_rank,
+        "improved": candidate_rank < baseline_rank,
+    }
+
+
+def _project_bundle_release_acceptance_status_rank(status: str) -> int:
+    order = {
+        "accepted": 0,
+        "closed": 0,
+        "awaiting_signoff": 1,
+        "follow_up_open": 2,
+        "changes_requested": 3,
+        "awaiting_feedback": 3,
+        "blocked": 4,
+        "rejected": 5,
+    }
+    return order.get(status, 3)
+
+
+def _project_bundle_release_acceptance_open_checklist_items(
+    checklist: list[dict[str, Any]],
+) -> list[str]:
+    items: list[str] = []
+    for item in checklist:
+        status = str(item.get("status") or "").strip()
+        if status == "passed":
+            continue
+        label = " ".join(str(item.get("label") or "Acceptance checklist item").split())
+        detail = " ".join(str(item.get("detail") or "").split())
+        if detail:
+            items.append(f"{label}: {status} - {detail}")
+        else:
+            items.append(f"{label}: {status}")
+    return items
+
+
+def _project_bundle_release_acceptance_snapshot_comparison_summary(
+    comparison: dict[str, Any],
+) -> str:
+    status_delta = comparison["status_delta"]
+    if status_delta.get("improved"):
+        movement = "improved"
+    elif status_delta.get("regressed"):
+        movement = "regressed"
+    elif status_delta.get("changed"):
+        movement = "changed"
+    else:
+        movement = "stayed unchanged"
+    return (
+        f"Release acceptance {movement} from {status_delta.get('baseline') or 'unknown'} "
+        f"to {status_delta.get('candidate') or 'unknown'}; "
+        f"{len(comparison['added_remaining_actions'])} new remaining actions, "
+        f"{len(comparison['removed_remaining_actions'])} resolved actions, and "
+        f"{len(comparison['newly_blocked_checklist_items'])} newly open checklist items."
+    )
+
+
+def _render_project_bundle_release_acceptance_packet_snapshot_comparison_markdown(
+    comparison: dict[str, Any],
+) -> str:
+    lines = [
+        "# Project Bundle Release Acceptance Snapshot Comparison",
+        "",
+        f"- Release: `{comparison['release_id']}`",
+        f"- Baseline: `{comparison['baseline_snapshot_id']}` {comparison['baseline_title']}",
+        f"- Candidate: `{comparison['candidate_snapshot_id']}` {comparison['candidate_title']}",
+        f"- Summary: {comparison['summary']}",
+        "",
+        "## Acceptance Status",
+        "",
+        (
+            f"- Status: `{comparison['status_delta'].get('baseline')}` -> "
+            f"`{comparison['status_delta'].get('candidate')}`"
+        ),
+        f"- Improved: {comparison['status_delta'].get('improved', False)}",
+        f"- Regressed: {comparison['status_delta'].get('regressed', False)}",
+        "",
+        "## Signoff Delta",
+        "",
+    ]
+    for key, value in comparison.get("signoff_delta", {}).items():
+        lines.append(f"- {key}: `{value.get('baseline')}` -> `{value.get('candidate')}`")
+    lines.extend(["", "## Closeout Delta", ""])
+    for key, value in comparison.get("closeout_delta", {}).items():
+        suffix = f", delta={value['delta']}" if "delta" in value else ""
+        lines.append(f"- {key}: `{value.get('baseline')}` -> `{value.get('candidate')}`{suffix}")
+    lines.extend(["", "## Remaining Action Changes", ""])
+    _append_pilot_report_change_group(
+        lines,
+        "Added",
+        comparison.get("added_remaining_actions") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Resolved",
+        comparison.get("removed_remaining_actions") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Still Open",
+        comparison.get("kept_remaining_actions") or [],
+    )
+    lines.extend(["", "## Checklist Changes", ""])
+    _append_pilot_report_change_group(
+        lines,
+        "Newly Open",
+        comparison.get("newly_blocked_checklist_items") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Resolved",
+        comparison.get("resolved_checklist_items") or [],
+    )
+    _append_pilot_report_change_group(
+        lines,
+        "Still Open",
+        comparison.get("kept_open_checklist_items") or [],
+    )
+    return "\n".join(lines).strip() + "\n"
 
 
 def _clean_project_bundle_feedback_items(items: list[str]) -> list[str]:
@@ -11358,6 +11751,7 @@ def _project_bundle_manifest(
     latest_bundle_release_progress: ProjectBundleReleaseProgressResponse | None,
     bundle_release_feedbacks: list[ResearchBrief],
     bundle_release_acceptance_packet_snapshots: list[ResearchBrief],
+    bundle_release_acceptance_packet_snapshot_comparison: dict | None,
     latest_bundle_release_closeout: ProjectBundleReleaseCloseoutResponse | None,
     latest_bundle_release_acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse | None,
     briefs: list[ResearchBrief],
@@ -11593,6 +11987,33 @@ def _project_bundle_manifest(
         ),
         "latest_project_bundle_release_acceptance_packet_snapshot_ready_for_signoff": (
             latest_bundle_release_acceptance_packet_snapshot.get("ready_for_signoff", False)
+        ),
+        "project_bundle_release_acceptance_packet_snapshot_comparison_available": (
+            bundle_release_acceptance_packet_snapshot_comparison is not None
+        ),
+        "latest_project_bundle_release_acceptance_packet_snapshot_comparison_baseline_id": (
+            bundle_release_acceptance_packet_snapshot_comparison["baseline_snapshot_id"]
+            if bundle_release_acceptance_packet_snapshot_comparison
+            else ""
+        ),
+        "latest_project_bundle_release_acceptance_packet_snapshot_comparison_candidate_id": (
+            bundle_release_acceptance_packet_snapshot_comparison["candidate_snapshot_id"]
+            if bundle_release_acceptance_packet_snapshot_comparison
+            else ""
+        ),
+        "latest_project_bundle_release_acceptance_packet_snapshot_comparison_added_action_count": (
+            len(bundle_release_acceptance_packet_snapshot_comparison["added_remaining_actions"])
+            if bundle_release_acceptance_packet_snapshot_comparison
+            else 0
+        ),
+        "latest_project_bundle_release_acceptance_packet_snapshot_comparison_new_checklist_count": (
+            len(
+                bundle_release_acceptance_packet_snapshot_comparison[
+                    "newly_blocked_checklist_items"
+                ]
+            )
+            if bundle_release_acceptance_packet_snapshot_comparison
+            else 0
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
@@ -12258,6 +12679,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("project_bundle_release_acceptance_packet_snapshot_count", 0):
         lines.append(
             "- `artifacts/releases/latest-project-bundle-release-acceptance-packet-snapshot.md`: persisted release acceptance/signoff snapshot."
+        )
+    if manifest.get("project_bundle_release_acceptance_packet_snapshot_comparison_available"):
+        lines.append(
+            "- `artifacts/releases/latest-project-bundle-release-acceptance-packet-snapshot-comparison.md`: latest persisted acceptance/signoff change report."
         )
     lines.extend(
         [

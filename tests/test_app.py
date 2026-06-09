@@ -114,6 +114,14 @@ def test_research_status() -> None:
     assert "project_bundle_release_closeout_task_generation" in body["implemented_capabilities"]
     assert "project_bundle_release_acceptance_packets" in body["implemented_capabilities"]
     assert "project_bundle_release_acceptance_packet_snapshots" in body["implemented_capabilities"]
+    assert (
+        "project_bundle_release_acceptance_packet_snapshot_comparison"
+        in body["implemented_capabilities"]
+    )
+    assert (
+        "project_bundle_release_acceptance_packet_snapshot_comparison_task_generation"
+        in body["implemented_capabilities"]
+    )
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
@@ -236,6 +244,9 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "list_project_bundle_release_acceptance_packet_snapshots" in names
     assert "get_project_bundle_release_acceptance_packet_snapshot" in names
     assert "export_project_bundle_release_acceptance_packet_snapshot_markdown" in names
+    assert "compare_project_bundle_release_acceptance_packet_snapshots" in names
+    assert "export_project_bundle_release_acceptance_packet_snapshot_comparison_markdown" in names
+    assert "create_tasks_from_project_bundle_release_acceptance_packet_snapshot_comparison" in names
     assert "get_idea_readiness" in names
     assert "get_idea_quality_gate" in names
     assert "create_tasks_from_idea_quality_gate" in names
@@ -442,6 +453,58 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     ]
     assert (
         project_bundle_release_acceptance_snapshot_markdown["annotations"]["readOnlyHint"] is True
+    )
+
+    project_bundle_release_acceptance_snapshot_compare = tools[
+        "compare_project_bundle_release_acceptance_packet_snapshots"
+    ]
+    assert project_bundle_release_acceptance_snapshot_compare["http"]["method"] == "POST"
+    assert (
+        project_bundle_release_acceptance_snapshot_compare["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/acceptance-packet/"
+        "snapshots/compare"
+    )
+    assert project_bundle_release_acceptance_snapshot_compare["input_schema"]["required"] == [
+        "release_id",
+        "body",
+    ]
+    assert (
+        project_bundle_release_acceptance_snapshot_compare["annotations"]["sideEffectHint"] is False
+    )
+
+    project_bundle_release_acceptance_snapshot_compare_markdown = tools[
+        "export_project_bundle_release_acceptance_packet_snapshot_comparison_markdown"
+    ]
+    assert project_bundle_release_acceptance_snapshot_compare_markdown["http"]["method"] == "POST"
+    assert (
+        project_bundle_release_acceptance_snapshot_compare_markdown["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/acceptance-packet/"
+        "snapshots/compare/export/markdown"
+    )
+    assert project_bundle_release_acceptance_snapshot_compare_markdown["input_schema"][
+        "required"
+    ] == ["release_id", "body"]
+    assert (
+        project_bundle_release_acceptance_snapshot_compare_markdown["annotations"]["sideEffectHint"]
+        is False
+    )
+
+    project_bundle_release_acceptance_snapshot_compare_tasks = tools[
+        "create_tasks_from_project_bundle_release_acceptance_packet_snapshot_comparison"
+    ]
+    assert project_bundle_release_acceptance_snapshot_compare_tasks["http"]["method"] == "POST"
+    assert (
+        project_bundle_release_acceptance_snapshot_compare_tasks["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/acceptance-packet/"
+        "snapshots/compare/tasks"
+    )
+    assert project_bundle_release_acceptance_snapshot_compare_tasks["input_schema"]["required"] == [
+        "release_id",
+        "body",
+    ]
+    assert (
+        project_bundle_release_acceptance_snapshot_compare_tasks["annotations"]["sideEffectHint"]
+        is True
     )
 
     project_bundle_readiness_tasks = tools["create_tasks_from_project_bundle_readiness"]
@@ -813,6 +876,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "projectBundleReleaseAcceptancePacketButton" in response.text
     assert "projectBundleReleaseAcceptancePacketSnapshotButton" in response.text
     assert "projectBundleReleaseAcceptancePacketSnapshotsButton" in response.text
+    assert "projectBundleReleaseAcceptancePacketSnapshotCompareButton" in response.text
+    assert "projectBundleReleaseAcceptancePacketSnapshotTasksButton" in response.text
     assert "projectBundleReadinessButton" in response.text
     assert "projectBundleReadinessTasksButton" in response.text
     assert "projectBundleReadinessSnapshotButton" in response.text
@@ -920,6 +985,14 @@ def test_workbench_static_assets_are_served() -> None:
         "/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots"
         in script.text
     )
+    assert (
+        "/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots/compare"
+        in script.text
+    )
+    assert (
+        "/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots/compare/tasks"
+        in script.text
+    )
     assert "/research/export/project-bundle/readiness" in script.text
     assert "/research/export/project-bundle/readiness/tasks" in script.text
     assert "/research/export/project-bundle/readiness/snapshots" in script.text
@@ -937,6 +1010,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "loadProjectBundleReleaseAcceptancePacket" in script.text
     assert "saveProjectBundleReleaseAcceptancePacketSnapshot" in script.text
     assert "listProjectBundleReleaseAcceptancePacketSnapshots" in script.text
+    assert "compareProjectBundleReleaseAcceptancePacketSnapshots" in script.text
+    assert "createProjectBundleReleaseAcceptancePacketSnapshotComparisonTasks" in script.text
     assert "loadProjectBundleReadiness" in script.text
     assert "createProjectBundleReadinessTasks" in script.text
     assert "saveProjectBundleReadinessSnapshot" in script.text
@@ -3233,6 +3308,19 @@ Future work should preserve proposal drafts as reviewable artifacts.
         in project_bundle_release_acceptance_packet_body["markdown_export"]
     )
 
+    baseline_project_bundle_release_acceptance_snapshot = client.post(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/acceptance-packet/snapshots",
+        json={
+            "title": "Pytest Baseline Project Bundle Release Acceptance Snapshot",
+            "created_by": "pytest",
+        },
+    )
+    assert baseline_project_bundle_release_acceptance_snapshot.status_code == 200
+    baseline_project_bundle_release_acceptance_snapshot_body = (
+        baseline_project_bundle_release_acceptance_snapshot.json()
+    )
+
     project_bundle_release_acceptance_snapshot = client.post(
         "/research/export/project-bundle/releases/"
         f"{project_bundle_release_body['id']}/acceptance-packet/snapshots",
@@ -3300,6 +3388,105 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert project_bundle_release_acceptance_snapshot_edges.status_code == 200
     assert project_bundle_release_acceptance_snapshot_edges.json()
 
+    project_bundle_release_acceptance_snapshot_comparison = client.post(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/acceptance-packet/snapshots/compare",
+        json={
+            "baseline_snapshot_id": baseline_project_bundle_release_acceptance_snapshot_body["id"],
+            "candidate_snapshot_id": project_bundle_release_acceptance_snapshot_body["id"],
+        },
+    )
+    assert project_bundle_release_acceptance_snapshot_comparison.status_code == 200
+    project_bundle_release_acceptance_snapshot_comparison_body = (
+        project_bundle_release_acceptance_snapshot_comparison.json()
+    )
+    assert (
+        project_bundle_release_acceptance_snapshot_comparison_body["baseline_snapshot_id"]
+        == baseline_project_bundle_release_acceptance_snapshot_body["id"]
+    )
+    assert (
+        project_bundle_release_acceptance_snapshot_comparison_body["candidate_snapshot_id"]
+        == project_bundle_release_acceptance_snapshot_body["id"]
+    )
+    assert (
+        project_bundle_release_acceptance_snapshot_comparison_body["release_id"]
+        == project_bundle_release_body["id"]
+    )
+    assert (
+        project_bundle_release_acceptance_snapshot_comparison_body["status_delta"]["candidate"]
+        == "blocked"
+    )
+    assert (
+        "# Project Bundle Release Acceptance Snapshot Comparison"
+        in project_bundle_release_acceptance_snapshot_comparison_body["markdown_export"]
+    )
+
+    project_bundle_release_acceptance_snapshot_comparison_markdown = client.post(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/acceptance-packet/snapshots/compare/export/markdown",
+        json={
+            "baseline_snapshot_id": baseline_project_bundle_release_acceptance_snapshot_body["id"],
+            "candidate_snapshot_id": project_bundle_release_acceptance_snapshot_body["id"],
+        },
+    )
+    assert project_bundle_release_acceptance_snapshot_comparison_markdown.status_code == 200
+    assert (
+        "# Project Bundle Release Acceptance Snapshot Comparison"
+        in project_bundle_release_acceptance_snapshot_comparison_markdown.text
+    )
+
+    project_bundle_release_acceptance_snapshot_comparison_tasks = client.post(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/acceptance-packet/snapshots/compare/tasks",
+        json={
+            "baseline_snapshot_id": baseline_project_bundle_release_acceptance_snapshot_body["id"],
+            "candidate_snapshot_id": project_bundle_release_acceptance_snapshot_body["id"],
+            "limit": 6,
+            "include_remaining_actions": True,
+            "include_checklist_regressions": True,
+            "include_status_regression": True,
+            "created_by": "pytest",
+        },
+    )
+    assert project_bundle_release_acceptance_snapshot_comparison_tasks.status_code == 200
+    project_bundle_release_acceptance_snapshot_comparison_task_body = (
+        project_bundle_release_acceptance_snapshot_comparison_tasks.json()
+    )
+    assert project_bundle_release_acceptance_snapshot_comparison_task_body["tasks"]
+    first_acceptance_comparison_task = (
+        project_bundle_release_acceptance_snapshot_comparison_task_body["tasks"][0]
+    )
+    assert (
+        first_acceptance_comparison_task["owner_type"]
+        == "project_bundle_release_acceptance_packet_snapshot_comparison"
+    )
+    assert (
+        first_acceptance_comparison_task["owner_id"]
+        == project_bundle_release_acceptance_snapshot_body["id"]
+    )
+    assert (
+        first_acceptance_comparison_task["due_phase"]
+        == "project_bundle_release_acceptance_change_follow_up"
+    )
+    assert (
+        first_acceptance_comparison_task["metadata"]["release_id"]
+        == project_bundle_release_body["id"]
+    )
+    assert (
+        first_acceptance_comparison_task["metadata"]["baseline_snapshot_id"]
+        == baseline_project_bundle_release_acceptance_snapshot_body["id"]
+    )
+    assert (
+        first_acceptance_comparison_task["metadata"]["candidate_snapshot_id"]
+        == project_bundle_release_acceptance_snapshot_body["id"]
+    )
+
+    project_bundle_release_acceptance_snapshot_comparison_edges = client.get(
+        "/research/graph/edges?edge_type=project_bundle_release_acceptance_comparison_creates_task"
+    )
+    assert project_bundle_release_acceptance_snapshot_comparison_edges.status_code == 200
+    assert project_bundle_release_acceptance_snapshot_comparison_edges.json()
+
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200
     assert project_bundle.headers["content-type"] == "application/zip"
@@ -3327,6 +3514,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "metadata/project-bundle-release-closeout.json" in names
         assert "metadata/project-bundle-release-acceptance-packet.json" in names
         assert "metadata/project-bundle-release-acceptance-packet-snapshots.json" in names
+        assert "metadata/project-bundle-release-acceptance-packet-snapshot-comparison.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         assert "metadata/claim-validation-queue.json" in names
@@ -3360,6 +3548,10 @@ Future work should preserve proposal drafts as reviewable artifacts.
             "artifacts/releases/latest-project-bundle-release-acceptance-packet-snapshot.md"
             in names
         )
+        assert (
+            "artifacts/releases/"
+            "latest-project-bundle-release-acceptance-packet-snapshot-comparison.md" in names
+        )
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         bundled_claim_queue = json.loads(archive.read("metadata/claim-validation-queue.json"))
         bundled_triage_comparison = json.loads(
@@ -3392,6 +3584,11 @@ Future work should preserve proposal drafts as reviewable artifacts.
         )
         bundled_project_bundle_release_acceptance_packet_snapshots = json.loads(
             archive.read("metadata/project-bundle-release-acceptance-packet-snapshots.json")
+        )
+        bundled_project_bundle_release_acceptance_packet_snapshot_comparison = json.loads(
+            archive.read(
+                "metadata/project-bundle-release-acceptance-packet-snapshot-comparison.json"
+            )
         )
         assert project_manifest["idea_count"] >= 1
         assert readiness_manifest["bundle_type"] == "research_project_bundle"
@@ -3540,6 +3737,42 @@ Future work should preserve proposal drafts as reviewable artifacts.
         )
         assert (
             bundled_project_bundle_release_acceptance_packet_snapshots[0]["id"]
+            == project_bundle_release_acceptance_snapshot_body["id"]
+        )
+        assert (
+            project_manifest[
+                "project_bundle_release_acceptance_packet_snapshot_comparison_available"
+            ]
+            is True
+        )
+        assert (
+            project_manifest[
+                "latest_project_bundle_release_acceptance_packet_snapshot_comparison_baseline_id"
+            ]
+            == baseline_project_bundle_release_acceptance_snapshot_body["id"]
+        )
+        assert (
+            project_manifest[
+                "latest_project_bundle_release_acceptance_packet_snapshot_comparison_candidate_id"
+            ]
+            == project_bundle_release_acceptance_snapshot_body["id"]
+        )
+        assert project_manifest[
+            "latest_project_bundle_release_acceptance_packet_snapshot_comparison_added_action_count"
+        ] == len(
+            project_bundle_release_acceptance_snapshot_comparison_body["added_remaining_actions"]
+        )
+        assert project_manifest[
+            "latest_project_bundle_release_acceptance_packet_snapshot_comparison_new_checklist_count"
+        ] == len(
+            project_bundle_release_acceptance_snapshot_comparison_body[
+                "newly_blocked_checklist_items"
+            ]
+        )
+        assert (
+            bundled_project_bundle_release_acceptance_packet_snapshot_comparison[
+                "candidate_snapshot_id"
+            ]
             == project_bundle_release_acceptance_snapshot_body["id"]
         )
         assert project_manifest["opportunity_count"] >= 1
