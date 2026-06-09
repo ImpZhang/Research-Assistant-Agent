@@ -1659,6 +1659,120 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_bundle_release_review_outcome(
+        self,
+        outcome: ResearchBrief,
+        *,
+        limit: int = 8,
+        include_decisions: bool = True,
+        include_risks: bool = True,
+        include_follow_up_actions: bool = True,
+        include_signoff_check: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        summary = outcome.summary_json or {}
+        review_decision = str(summary.get("review_decision") or "")
+        signoff_confirmed = bool(summary.get("signoff_confirmed", False))
+        items: list[tuple[str, str, dict]] = []
+        if include_decisions:
+            for decision in self._unique_commitments(summary.get("decisions") or []):
+                items.append(("release_review_outcome_decision", decision, {}))
+        if include_risks:
+            for risk in self._unique_commitments(summary.get("risks") or []):
+                items.append(("release_review_outcome_risk", risk, {}))
+        if include_follow_up_actions:
+            for action in self._unique_commitments(summary.get("follow_up_actions") or []):
+                items.append(("release_review_outcome_follow_up", action, {}))
+        if include_signoff_check and not signoff_confirmed:
+            items.append(
+                (
+                    "release_review_outcome_signoff_check",
+                    "Confirm whether the release review outcome requires final signoff.",
+                    {},
+                )
+            )
+
+        items = self._deduplicate_pilot_report_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "release_review_outcome_review",
+                    "Review the release review outcome and confirm whether follow-up work is needed.",
+                    {},
+                )
+            ]
+
+        release_id = str(summary.get("release_id") or "")
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_bundle_release_review_outcome",
+                owner_id=outcome.id,
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._release_review_outcome_task_title(
+                    action,
+                    idx,
+                    source_type=source_type,
+                ),
+                description=action,
+                priority=self._release_review_outcome_task_priority(
+                    source_type,
+                    action,
+                    review_decision,
+                ),
+                status="todo",
+                due_phase="project_bundle_release_review_outcome_follow_up",
+                metadata_json={
+                    "release_id": release_id,
+                    "review_decision": review_decision,
+                    "signoff_confirmed": signoff_confirmed,
+                    "outcome_title": outcome.title,
+                    "source_rank": idx,
+                    **metadata,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project bundle release review outcome.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "release_id": release_id,
+                        "review_decision": review_decision,
+                        "signoff_confirmed": signoff_confirmed,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(
+            GraphService(self.session)
+        ).link_project_bundle_release_review_outcome_tasks(
+            outcome,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_project_bundle_release(
         self,
         release: ResearchBrief,
@@ -2970,6 +3084,50 @@ class ResearchTaskService:
         if acceptance_status in {"blocked", "rejected"}:
             return "critical"
         if source_type == "release_review_decision":
+            return "high"
+        if "signoff" in lower or "owner" in lower:
+            return "high"
+        return "medium"
+
+    def _release_review_outcome_task_title(
+        self,
+        action: str,
+        idx: int,
+        *,
+        source_type: str,
+    ) -> str:
+        clean = " ".join(str(action).split())
+        if source_type == "release_review_outcome_decision":
+            return self._short_task_title(f"Implement review decision {idx}: {clean}", idx)
+        if source_type == "release_review_outcome_risk":
+            return self._short_task_title(f"Mitigate review outcome risk {idx}: {clean}", idx)
+        if source_type == "release_review_outcome_follow_up":
+            return self._short_task_title(f"Complete review outcome follow-up {idx}: {clean}", idx)
+        if source_type == "release_review_outcome_signoff_check":
+            return "Confirm release review outcome signoff"
+        if source_type == "release_review_outcome_review":
+            return "Review release review outcome"
+        return self._short_task_title(clean or f"Work release review outcome item {idx}", idx)
+
+    def _release_review_outcome_task_priority(
+        self,
+        source_type: str,
+        action: str,
+        review_decision: str,
+    ) -> str:
+        lower = str(action).lower()
+        if source_type == "release_review_outcome_risk":
+            return "critical"
+        if review_decision in {"blocked", "rejected"}:
+            return "critical"
+        if "blocked" in lower or "rejected" in lower or "critical" in lower:
+            return "critical"
+        if source_type in {
+            "release_review_outcome_decision",
+            "release_review_outcome_signoff_check",
+        }:
+            return "high"
+        if review_decision in {"approved_with_changes", "changes_requested"}:
             return "high"
         if "signoff" in lower or "owner" in lower:
             return "high"

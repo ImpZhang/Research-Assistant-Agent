@@ -138,6 +138,8 @@ from backend.research.schemas import (
     ProjectBundleReleaseFeedbackCreate,
     ProjectBundleReleaseFeedbackTaskGenerateRequest,
     ProjectBundleReleaseProgressResponse,
+    ProjectBundleReleaseReviewOutcomeCreate,
+    ProjectBundleReleaseReviewOutcomeTaskGenerateRequest,
     ProjectBundleReleaseReviewSessionResponse,
     ProjectBundleReleaseReviewSessionTaskGenerateRequest,
     ProjectBundleReleaseTaskGenerateRequest,
@@ -345,6 +347,8 @@ def status() -> ProjectStatus:
             "project_bundle_release_acceptance_packet_snapshot_comparison_task_generation",
             "project_bundle_release_review_sessions",
             "project_bundle_release_review_session_task_generation",
+            "project_bundle_release_review_outcomes",
+            "project_bundle_release_review_outcome_task_generation",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -783,6 +787,60 @@ def tool_manifest() -> ToolManifestResponse:
             method="POST",
             path="/research/export/project-bundle/releases/{release_id}/review-session/tasks",
             input_model="ProjectBundleReleaseReviewSessionTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="record_project_bundle_release_review_outcome",
+            description=(
+                "Persist customer/advisor review decisions, participants, accepted artifacts, "
+                "risks, follow-up actions, and signoff state after a release review session."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/releases/{release_id}/review-session/outcomes",
+            input_model="ProjectBundleReleaseReviewOutcomeCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_project_bundle_release_review_outcomes",
+            description="List saved release review outcomes for one release.",
+            method="GET",
+            path="/research/export/project-bundle/releases/{release_id}/review-session/outcomes",
+            output_model="list[ResearchBriefRead]",
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_release_review_outcome",
+            description="Load one saved release review outcome.",
+            method="GET",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/review-session/"
+                "outcomes/{outcome_id}"
+            ),
+            output_model="ResearchBriefDetail",
+        ),
+        ToolManifestItem(
+            name="export_project_bundle_release_review_outcome_markdown",
+            description="Export a saved release review outcome as Markdown.",
+            method="GET",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/review-session/"
+                "outcomes/{outcome_id}/export/markdown"
+            ),
+            output_model="text/markdown",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_bundle_release_review_outcome",
+            description=(
+                "Turn review outcome decisions, risks, follow-up actions, and signoff gaps "
+                "into task-board work."
+            ),
+            method="POST",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/review-session/"
+                "outcomes/{outcome_id}/tasks"
+            ),
+            input_model="ProjectBundleReleaseReviewOutcomeTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
             side_effect=True,
         ),
@@ -10528,6 +10586,151 @@ def create_tasks_from_project_bundle_release_review_session(
     )
 
 
+@router.post(
+    "/export/project-bundle/releases/{release_id}/review-session/outcomes",
+    response_model=ResearchBriefDetail,
+)
+def record_project_bundle_release_review_outcome(
+    release_id: str,
+    payload: ProjectBundleReleaseReviewOutcomeCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    review_session = _project_bundle_release_review_session(release, session)
+    title = payload.title or "Project Bundle Release Review Outcome"
+    generated_at = datetime.now(timezone.utc)
+    markdown_export = _render_project_bundle_release_review_outcome_markdown(
+        generated_at=generated_at,
+        release=release,
+        review_session=review_session,
+        payload=payload,
+    )
+    outcome = ResearchBrief(
+        title=title,
+        scope="project_bundle_release_review_outcome",
+        idea_ids_json=[],
+        summary_json={
+            "release_id": release.id,
+            "release_title": release.title,
+            "recipient": review_session.recipient,
+            "review_status": review_session.review_status,
+            "acceptance_status": review_session.acceptance_status,
+            "review_decision": payload.review_decision,
+            "participants": payload.participants,
+            "outcome_notes": payload.outcome_notes,
+            "decisions": payload.decisions,
+            "accepted_artifacts": payload.accepted_artifacts,
+            "follow_up_actions": payload.follow_up_actions,
+            "risks": payload.risks,
+            "signoff_confirmed": payload.signoff_confirmed,
+            "source_review_generated_at": review_session.generated_at.isoformat(),
+            "generated_at": generated_at.isoformat(),
+        },
+        markdown_export=markdown_export,
+        created_by=payload.created_by or "researcher",
+    )
+    session.add(outcome)
+    session.commit()
+    session.refresh(outcome)
+    ArtifactGraphService(GraphService(session)).link_project_bundle_release_review_outcome(
+        release,
+        outcome,
+    )
+    session.commit()
+    return _serialize_research_brief(outcome, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/review-session/outcomes",
+    response_model=list[ResearchBriefRead],
+)
+def list_project_bundle_release_review_outcomes(
+    release_id: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    _get_project_bundle_release_or_404(release_id, session)
+    return [
+        _serialize_research_brief(outcome)
+        for outcome in _project_bundle_release_review_outcomes(
+            session,
+            release_id=release_id,
+            limit=limit,
+        )
+    ]
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/review-session/outcomes/{outcome_id}",
+    response_model=ResearchBriefDetail,
+)
+def get_project_bundle_release_review_outcome(
+    release_id: str,
+    outcome_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    _get_project_bundle_release_or_404(release_id, session)
+    outcome = _get_project_bundle_release_review_outcome_or_404(
+        release_id,
+        outcome_id,
+        session,
+    )
+    return _serialize_research_brief(outcome, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/review-session/"
+    "outcomes/{outcome_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_bundle_release_review_outcome_markdown(
+    release_id: str,
+    outcome_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    _get_project_bundle_release_or_404(release_id, session)
+    outcome = _get_project_bundle_release_review_outcome_or_404(
+        release_id,
+        outcome_id,
+        session,
+    )
+    return PlainTextResponse(outcome.markdown_export or "", media_type="text/markdown")
+
+
+@router.post(
+    "/export/project-bundle/releases/{release_id}/review-session/outcomes/{outcome_id}/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_bundle_release_review_outcome(
+    release_id: str,
+    outcome_id: str,
+    payload: ProjectBundleReleaseReviewOutcomeTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    _get_project_bundle_release_or_404(release_id, session)
+    outcome = _get_project_bundle_release_review_outcome_or_404(
+        release_id,
+        outcome_id,
+        session,
+    )
+    tasks = ResearchTaskService(session).create_from_project_bundle_release_review_outcome(
+        outcome,
+        limit=payload.limit,
+        include_decisions=payload.include_decisions,
+        include_risks=payload.include_risks,
+        include_follow_up_actions=payload.include_follow_up_actions,
+        include_signoff_check=payload.include_signoff_check,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} project bundle release review outcome tasks from outcome "
+            f"{outcome_id}."
+        ),
+    )
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -10675,6 +10878,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     latest_bundle_release_closeout = context["latest_bundle_release_closeout"]
     latest_bundle_release_acceptance_packet = context["latest_bundle_release_acceptance_packet"]
     latest_bundle_release_review_session = context["latest_bundle_release_review_session"]
+    bundle_release_review_outcomes = context["bundle_release_review_outcomes"]
     briefs = context["briefs"]
     plans = context["plans"]
     tasks = context["tasks"]
@@ -10771,6 +10975,12 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "metadata/project-bundle-release-review-session.json",
                 _json_dump(latest_bundle_release_review_session),
             )
+        archive.writestr(
+            "metadata/project-bundle-release-review-outcomes.json",
+            _json_dump(
+                [_serialize_research_brief(outcome) for outcome in bundle_release_review_outcomes]
+            ),
+        )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
@@ -10893,6 +11103,19 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "artifacts/releases/latest-project-bundle-release-review-session.md",
                 latest_bundle_release_review_session.markdown_export,
             )
+        for outcome in bundle_release_review_outcomes:
+            if outcome.markdown_export:
+                _write_markdown(
+                    archive,
+                    (f"artifacts/releases/project-bundle-release-review-outcome-{outcome.id}.md"),
+                    outcome.markdown_export,
+                )
+        if bundle_release_review_outcomes and bundle_release_review_outcomes[0].markdown_export:
+            _write_markdown(
+                archive,
+                "artifacts/releases/latest-project-bundle-release-review-outcome.md",
+                bundle_release_review_outcomes[0].markdown_export,
+            )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -10986,6 +11209,10 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         if bundle_releases
         else None
     )
+    bundle_release_review_outcomes = _project_bundle_release_review_outcomes(
+        session,
+        limit=12,
+    )
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -11013,6 +11240,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         latest_bundle_release_closeout=latest_bundle_release_closeout,
         latest_bundle_release_acceptance_packet=latest_bundle_release_acceptance_packet,
         latest_bundle_release_review_session=latest_bundle_release_review_session,
+        bundle_release_review_outcomes=bundle_release_review_outcomes,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -11041,6 +11269,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "latest_bundle_release_closeout": latest_bundle_release_closeout,
         "latest_bundle_release_acceptance_packet": latest_bundle_release_acceptance_packet,
         "latest_bundle_release_review_session": latest_bundle_release_review_session,
+        "bundle_release_review_outcomes": bundle_release_review_outcomes,
         "briefs": briefs,
         "plans": plans,
         "tasks": tasks,
@@ -11135,6 +11364,42 @@ def _project_bundle_release_acceptance_packet_snapshots(
         for snapshot in snapshots
         if (snapshot.summary_json or {}).get("release_id") == release_id
     ][: max(1, min(limit, 50))]
+
+
+def _project_bundle_release_review_outcomes(
+    session: Session,
+    *,
+    release_id: str | None = None,
+    limit: int = 12,
+) -> list[ResearchBrief]:
+    fetch_limit = max(1, min(limit, 50)) if release_id is None else 200
+    outcomes = (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "project_bundle_release_review_outcome")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(fetch_limit)
+        .all()
+    )
+    if release_id is None:
+        return outcomes
+    return [
+        outcome
+        for outcome in outcomes
+        if (outcome.summary_json or {}).get("release_id") == release_id
+    ][: max(1, min(limit, 50))]
+
+
+def _get_project_bundle_release_review_outcome_or_404(
+    release_id: str,
+    outcome_id: str,
+    session: Session,
+) -> ResearchBrief:
+    outcome = session.get(ResearchBrief, outcome_id)
+    if outcome is None or outcome.scope != "project_bundle_release_review_outcome":
+        raise HTTPException(status_code=404, detail="Release review outcome not found")
+    if (outcome.summary_json or {}).get("release_id") != release_id:
+        raise HTTPException(status_code=404, detail="Release review outcome not found")
+    return outcome
 
 
 def _get_project_bundle_release_acceptance_packet_snapshot_or_404(
@@ -11734,6 +11999,47 @@ def _render_project_bundle_release_review_session_markdown(
     return "\n".join(lines).strip() + "\n"
 
 
+def _render_project_bundle_release_review_outcome_markdown(
+    *,
+    generated_at: datetime,
+    release: ResearchBrief,
+    review_session: ProjectBundleReleaseReviewSessionResponse,
+    payload: ProjectBundleReleaseReviewOutcomeCreate,
+) -> str:
+    lines = [
+        "# Project Bundle Release Review Outcome",
+        "",
+        f"- Release: `{release.id}` {release.title}",
+        f"- Recipient: {review_session.recipient}",
+        f"- Generated At: {generated_at.isoformat()}",
+        f"- Review Status: {review_session.review_status}",
+        f"- Acceptance Status: {review_session.acceptance_status}",
+        f"- Review Decision: {payload.review_decision}",
+        f"- Signoff Confirmed: {payload.signoff_confirmed}",
+        "",
+        "## Participants",
+        "",
+    ]
+    _append_project_bundle_feedback_items(lines, payload.participants)
+    lines.extend(["", "## Outcome Notes", ""])
+    lines.append(payload.outcome_notes or "No additional outcome notes recorded.")
+    lines.extend(["", "## Decisions", ""])
+    _append_project_bundle_feedback_items(lines, payload.decisions)
+    lines.extend(["", "## Accepted Artifacts", ""])
+    _append_project_bundle_feedback_items(lines, payload.accepted_artifacts)
+    lines.extend(["", "## Follow-up Actions", ""])
+    _append_project_bundle_feedback_items(lines, payload.follow_up_actions)
+    lines.extend(["", "## Risks", ""])
+    _append_project_bundle_feedback_items(lines, payload.risks)
+    lines.extend(["", "## Source Review Session", ""])
+    lines.append(f"- Review Status: {review_session.review_status}")
+    lines.append(f"- Acceptance Status: {review_session.acceptance_status}")
+    lines.append(f"- Decision Count: {len(review_session.decisions_needed)}")
+    lines.append(f"- Risk Count: {len(review_session.risk_items)}")
+    lines.append(f"- Follow-up Count: {len(review_session.follow_up_actions)}")
+    return "\n".join(lines).strip() + "\n"
+
+
 def _project_bundle_release_acceptance_packet(
     release: ResearchBrief,
     session: Session,
@@ -12179,6 +12485,7 @@ def _project_bundle_manifest(
     latest_bundle_release_closeout: ProjectBundleReleaseCloseoutResponse | None,
     latest_bundle_release_acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse | None,
     latest_bundle_release_review_session: ProjectBundleReleaseReviewSessionResponse | None,
+    bundle_release_review_outcomes: list[ResearchBrief],
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -12198,6 +12505,9 @@ def _project_bundle_manifest(
         bundle_release_acceptance_packet_snapshots[0].summary_json
         if bundle_release_acceptance_packet_snapshots
         else {}
+    ) or {}
+    latest_bundle_release_review_outcome = (
+        bundle_release_review_outcomes[0].summary_json if bundle_release_review_outcomes else {}
     ) or {}
     return {
         "bundle_type": "research_project_bundle",
@@ -12467,6 +12777,25 @@ def _project_bundle_manifest(
             len(latest_bundle_release_review_session.follow_up_actions)
             if latest_bundle_release_review_session
             else 0
+        ),
+        "project_bundle_release_review_outcome_count": len(bundle_release_review_outcomes),
+        "latest_project_bundle_release_review_outcome_id": (
+            bundle_release_review_outcomes[0].id if bundle_release_review_outcomes else ""
+        ),
+        "latest_project_bundle_release_review_outcome_release_id": (
+            latest_bundle_release_review_outcome.get("release_id", "")
+        ),
+        "latest_project_bundle_release_review_outcome_decision": (
+            latest_bundle_release_review_outcome.get("review_decision", "")
+        ),
+        "latest_project_bundle_release_review_outcome_signoff_confirmed": (
+            latest_bundle_release_review_outcome.get("signoff_confirmed", False)
+        ),
+        "latest_project_bundle_release_review_outcome_follow_up_count": (
+            len(latest_bundle_release_review_outcome.get("follow_up_actions") or [])
+        ),
+        "latest_project_bundle_release_review_outcome_risk_count": (
+            len(latest_bundle_release_review_outcome.get("risks") or [])
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
@@ -13085,6 +13414,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         f"- Bundle Readiness Snapshots: {manifest['bundle_readiness_snapshot_count']}",
         f"- Bundle Release Notes: {manifest['project_bundle_release_count']}",
         f"- Bundle Release Feedback: {manifest['project_bundle_release_feedback_count']}",
+        f"- Release Review Outcomes: {manifest['project_bundle_release_review_outcome_count']}",
         f"- Latest Release Closeout: {manifest['latest_project_bundle_release_closeout_status'] or 'not_available'}",
         "",
         "## Start Here",
@@ -13140,6 +13470,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("latest_project_bundle_release_review_session_available"):
         lines.append(
             "- `artifacts/releases/latest-project-bundle-release-review-session.md`: customer/advisor release review agenda, decisions, risks, and follow-up actions."
+        )
+    if manifest.get("project_bundle_release_review_outcome_count", 0):
+        lines.append(
+            "- `artifacts/releases/latest-project-bundle-release-review-outcome.md`: latest release review decision, accepted artifacts, risks, and signoff state."
         )
     lines.extend(
         [

@@ -24,6 +24,7 @@ const state = {
   latestProjectBundleReleaseId: "",
   latestProjectBundleReleaseFeedbackId: "",
   latestProjectBundleReleaseAcceptancePacketSnapshotId: "",
+  latestProjectBundleReleaseReviewOutcomeId: "",
   latestResearchPlanId: "",
   researchProfile: null,
   onboardingReadiness: null,
@@ -2179,6 +2180,136 @@ async function createProjectBundleReleaseReviewSessionTasks() {
   }
 }
 
+async function recordProjectBundleReleaseReviewOutcome() {
+  renderResult("workflowResult", "Recording release review outcome...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before recording a review outcome.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Workbench Project Bundle Release Review Outcome",
+          review_decision: "follow_up_needed",
+          participants: ["workbench user", "advisor_or_customer"],
+          outcome_notes:
+            "Workbench review outcome captured from the release review session.",
+          decisions: ["Confirm owners for unresolved acceptance follow-up."],
+          accepted_artifacts: ["Project bundle", "Release review session"],
+          follow_up_actions: ["Work unresolved release review follow-up tasks."],
+          risks: ["Acceptance remains blocked until follow-up is complete."],
+          signoff_confirmed: false,
+          created_by: "workbench",
+        }),
+      },
+    );
+    state.latestProjectBundleReleaseReviewOutcomeId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Recorded release review outcome <code>${escapeHtml(body.id)}</code> with decision <code>${escapeHtml(body.summary.review_decision)}</code>.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function listProjectBundleReleaseReviewOutcomes() {
+  renderResult("workflowResult", "Loading release review outcomes...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before loading review outcomes.",
+        "warn",
+      );
+      return;
+    }
+    const outcomes = await api(
+      `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes?limit=6`,
+    );
+    if (outcomes.length) {
+      state.latestProjectBundleReleaseReviewOutcomeId = outcomes[0].id;
+    }
+    const lines = ["# Release Review Outcomes", ""];
+    if (!outcomes.length) {
+      lines.push("- No release review outcomes saved.");
+    }
+    for (const outcome of outcomes) {
+      const decision = outcome.summary.review_decision || "pending";
+      const signoff = outcome.summary.signoff_confirmed ? "signed" : "not signed";
+      lines.push(`- \`${outcome.id}\` ${outcome.title}: ${decision}, ${signoff}`);
+    }
+    $("dossierPreview").textContent = lines.join("\n");
+    renderResult("workflowResult", `Loaded ${outcomes.length} release review outcomes.`);
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function createProjectBundleReleaseReviewOutcomeTasks() {
+  renderResult("workflowResult", "Creating release review outcome tasks...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before creating review outcome tasks.",
+        "warn",
+      );
+      return;
+    }
+    let outcomeId = state.latestProjectBundleReleaseReviewOutcomeId;
+    if (!outcomeId) {
+      const outcomes = await api(
+        `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes?limit=1`,
+      );
+      if (!outcomes.length) {
+        renderResult(
+          "workflowResult",
+          "Record a release review outcome before creating outcome tasks.",
+          "warn",
+        );
+        return;
+      }
+      outcomeId = outcomes[0].id;
+      state.latestProjectBundleReleaseReviewOutcomeId = outcomeId;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes/${outcomeId}/tasks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          limit: 8,
+          include_decisions: true,
+          include_risks: true,
+          include_follow_up_actions: true,
+          include_signoff_check: true,
+          created_by: "workbench",
+        }),
+      },
+    );
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Review outcome tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -2969,6 +3100,18 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReleaseReviewSessionTasksButton").addEventListener(
     "click",
     createProjectBundleReleaseReviewSessionTasks,
+  );
+  $("projectBundleReleaseReviewOutcomeButton").addEventListener(
+    "click",
+    recordProjectBundleReleaseReviewOutcome,
+  );
+  $("projectBundleReleaseReviewOutcomesButton").addEventListener(
+    "click",
+    listProjectBundleReleaseReviewOutcomes,
+  );
+  $("projectBundleReleaseReviewOutcomeTasksButton").addEventListener(
+    "click",
+    createProjectBundleReleaseReviewOutcomeTasks,
   );
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(

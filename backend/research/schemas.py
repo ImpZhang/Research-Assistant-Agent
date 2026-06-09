@@ -1189,6 +1189,35 @@ class ProjectBundleReleaseReviewSessionResponse(BaseModel):
     message: str
 
 
+class ProjectBundleReleaseReviewOutcomeCreate(BaseModel):
+    title: str = "Project Bundle Release Review Outcome"
+    review_decision: Literal[
+        "approved",
+        "approved_with_changes",
+        "changes_requested",
+        "follow_up_needed",
+        "blocked",
+        "rejected",
+    ] = "follow_up_needed"
+    participants: list[str] = Field(default_factory=list)
+    outcome_notes: str = ""
+    decisions: list[str] = Field(default_factory=list)
+    accepted_artifacts: list[str] = Field(default_factory=list)
+    follow_up_actions: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    signoff_confirmed: bool = False
+    created_by: str = "researcher"
+
+
+class ProjectBundleReleaseReviewOutcomeTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=8, ge=1, le=20)
+    include_decisions: bool = True
+    include_risks: bool = True
+    include_follow_up_actions: bool = True
+    include_signoff_check: bool = True
+    created_by: str = "system"
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

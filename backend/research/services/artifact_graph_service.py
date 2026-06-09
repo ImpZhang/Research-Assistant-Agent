@@ -1034,6 +1034,90 @@ class ArtifactGraphService:
                 payload={"source": task.source_type},
             )
 
+    def link_project_bundle_release_review_outcome(
+        self,
+        release: ResearchBrief,
+        outcome: ResearchBrief,
+    ) -> None:
+        release_summary = release.summary_json or {}
+        outcome_summary = outcome.summary_json or {}
+        release_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release",
+            label=release.title,
+            canonical_key=release.id,
+            payload={
+                "recipient": release_summary.get("recipient", ""),
+                "readiness_level": release_summary.get("readiness_level", ""),
+                "readiness_score": release_summary.get("readiness_score", 0.0),
+                "owner_type": "project_bundle_release",
+            },
+        )
+        outcome_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release_review_outcome",
+            label=outcome.title,
+            canonical_key=outcome.id,
+            payload={
+                "release_id": release.id,
+                "recipient": outcome_summary.get("recipient", ""),
+                "review_status": outcome_summary.get("review_status", ""),
+                "acceptance_status": outcome_summary.get("acceptance_status", ""),
+                "review_decision": outcome_summary.get("review_decision", ""),
+                "signoff_confirmed": outcome_summary.get("signoff_confirmed", False),
+                "decision_count": len(outcome_summary.get("decisions") or []),
+                "accepted_artifact_count": len(outcome_summary.get("accepted_artifacts") or []),
+                "risk_count": len(outcome_summary.get("risks") or []),
+                "follow_up_action_count": len(outcome_summary.get("follow_up_actions") or []),
+                "owner_type": "project_bundle_release_review_outcome",
+            },
+        )
+        self.graph.create_edge(
+            source_node=release_node,
+            target_node=outcome_node,
+            edge_type="project_bundle_release_has_review_outcome",
+            payload={
+                "review_decision": outcome_summary.get("review_decision", ""),
+                "signoff_confirmed": outcome_summary.get("signoff_confirmed", False),
+            },
+        )
+
+    def link_project_bundle_release_review_outcome_tasks(
+        self,
+        outcome: ResearchBrief,
+        tasks: list[ResearchTask],
+    ) -> None:
+        summary = outcome.summary_json or {}
+        outcome_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release_review_outcome",
+            label=outcome.title,
+            canonical_key=outcome.id,
+            payload={
+                "release_id": summary.get("release_id", ""),
+                "recipient": summary.get("recipient", ""),
+                "review_decision": summary.get("review_decision", ""),
+                "signoff_confirmed": summary.get("signoff_confirmed", False),
+                "task_count": len(tasks),
+                "owner_type": "project_bundle_release_review_outcome",
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=outcome_node,
+                target_node=task_node,
+                edge_type="project_bundle_release_review_outcome_creates_task",
+                payload={"source": task.source_type},
+            )
+
     def link_project_advisor_chat_tasks(self, chat: dict, tasks: list[ResearchTask]) -> None:
         chat_node = self.graph.get_or_create_node(
             node_type="project_advisor_chat",
