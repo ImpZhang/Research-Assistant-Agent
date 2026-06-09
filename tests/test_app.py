@@ -110,6 +110,7 @@ def test_research_status() -> None:
     assert "project_bundle_release_progress_tracking" in body["implemented_capabilities"]
     assert "project_bundle_release_feedback_tracking" in body["implemented_capabilities"]
     assert "project_bundle_release_feedback_task_generation" in body["implemented_capabilities"]
+    assert "project_bundle_release_closeout_tracking" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
@@ -225,6 +226,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_bundle_release_feedback" in names
     assert "export_project_bundle_release_feedback_markdown" in names
     assert "create_tasks_from_project_bundle_release_feedback" in names
+    assert "get_project_bundle_release_closeout" in names
     assert "get_idea_readiness" in names
     assert "get_idea_quality_gate" in names
     assert "create_tasks_from_idea_quality_gate" in names
@@ -341,6 +343,15 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
         "body",
     ]
     assert project_bundle_release_feedback_tasks["annotations"]["sideEffectHint"] is True
+
+    project_bundle_release_closeout = tools["get_project_bundle_release_closeout"]
+    assert project_bundle_release_closeout["http"]["method"] == "GET"
+    assert (
+        project_bundle_release_closeout["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/closeout"
+    )
+    assert project_bundle_release_closeout["input_schema"]["required"] == ["release_id"]
+    assert project_bundle_release_closeout["annotations"]["readOnlyHint"] is True
 
     project_bundle_readiness_tasks = tools["create_tasks_from_project_bundle_readiness"]
     assert project_bundle_readiness_tasks["http"]["method"] == "POST"
@@ -706,6 +717,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "projectBundleReleaseFeedbackButton" in response.text
     assert "projectBundleReleaseFeedbackListButton" in response.text
     assert "projectBundleReleaseFeedbackTasksButton" in response.text
+    assert "projectBundleReleaseCloseoutButton" in response.text
     assert "projectBundleReadinessButton" in response.text
     assert "projectBundleReadinessTasksButton" in response.text
     assert "projectBundleReadinessSnapshotButton" in response.text
@@ -806,6 +818,7 @@ def test_workbench_static_assets_are_served() -> None:
         "/research/export/project-bundle/releases/${releaseId}/feedback/${feedbackId}/tasks"
         in script.text
     )
+    assert "/research/export/project-bundle/releases/${releaseId}/closeout" in script.text
     assert "/research/export/project-bundle/readiness" in script.text
     assert "/research/export/project-bundle/readiness/tasks" in script.text
     assert "/research/export/project-bundle/readiness/snapshots" in script.text
@@ -818,6 +831,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "recordProjectBundleReleaseFeedback" in script.text
     assert "listProjectBundleReleaseFeedback" in script.text
     assert "createProjectBundleReleaseFeedbackTasks" in script.text
+    assert "loadProjectBundleReleaseCloseout" in script.text
     assert "loadProjectBundleReadiness" in script.text
     assert "createProjectBundleReadinessTasks" in script.text
     assert "saveProjectBundleReadinessSnapshot" in script.text
@@ -3035,6 +3049,29 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert project_bundle_release_feedback_task_edges.status_code == 200
     assert project_bundle_release_feedback_task_edges.json()
 
+    project_bundle_release_closeout = client.get(
+        f"/research/export/project-bundle/releases/{project_bundle_release_body['id']}/closeout"
+    )
+    assert project_bundle_release_closeout.status_code == 200
+    project_bundle_release_closeout_body = project_bundle_release_closeout.json()
+    assert project_bundle_release_closeout_body["release_id"] == project_bundle_release_body["id"]
+    assert project_bundle_release_closeout_body["closeout_status"] == "blocked"
+    assert project_bundle_release_closeout_body["ready_to_close"] is False
+    assert project_bundle_release_closeout_body["signoff_confirmed"] is False
+    assert (
+        project_bundle_release_closeout_body["latest_feedback"]["id"]
+        == project_bundle_release_feedback_body["id"]
+    )
+    assert project_bundle_release_closeout_body["feedback_task_summary"]["task_count"] >= len(
+        project_bundle_release_feedback_task_body["tasks"]
+    )
+    assert project_bundle_release_closeout_body["blocking_reasons"]
+    assert project_bundle_release_closeout_body["next_actions"]
+    assert (
+        "# Project Bundle Release Closeout"
+        in project_bundle_release_closeout_body["markdown_export"]
+    )
+
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200
     assert project_bundle.headers["content-type"] == "application/zip"
@@ -3059,6 +3096,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "metadata/project-bundle-releases.json" in names
         assert "metadata/project-bundle-release-progress.json" in names
         assert "metadata/project-bundle-release-feedback.json" in names
+        assert "metadata/project-bundle-release-closeout.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         assert "metadata/claim-validation-queue.json" in names
@@ -3082,6 +3120,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         ) in names
         assert "artifacts/releases/latest-project-bundle-release-progress.md" in names
         assert "artifacts/releases/latest-project-bundle-release-feedback.md" in names
+        assert "artifacts/releases/latest-project-bundle-release-closeout.md" in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         bundled_claim_queue = json.loads(archive.read("metadata/claim-validation-queue.json"))
         bundled_triage_comparison = json.loads(
@@ -3105,6 +3144,9 @@ Future work should preserve proposal drafts as reviewable artifacts.
         )
         bundled_project_bundle_release_feedback = json.loads(
             archive.read("metadata/project-bundle-release-feedback.json")
+        )
+        bundled_project_bundle_release_closeout = json.loads(
+            archive.read("metadata/project-bundle-release-closeout.json")
         )
         assert project_manifest["idea_count"] >= 1
         assert readiness_manifest["bundle_type"] == "research_project_bundle"
@@ -3205,6 +3247,16 @@ Future work should preserve proposal drafts as reviewable artifacts.
             bundled_project_bundle_release_feedback[0]["id"]
             == (project_bundle_release_feedback_body["id"])
         )
+        assert project_manifest["latest_project_bundle_release_closeout_available"] is True
+        assert project_manifest["latest_project_bundle_release_closeout_status"] == "blocked"
+        assert project_manifest["latest_project_bundle_release_closeout_ready"] is False
+        assert project_manifest["latest_project_bundle_release_closeout_next_action_count"] >= 1
+        assert project_manifest["latest_project_bundle_release_closeout_blocker_count"] >= 1
+        assert (
+            bundled_project_bundle_release_closeout["release_id"]
+            == project_bundle_release_body["id"]
+        )
+        assert bundled_project_bundle_release_closeout["closeout_status"] == "blocked"
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["claim_validation_queue_count"] >= 1
         assert project_manifest["claim_validation_queue_idea_count"] >= 1

@@ -1868,6 +1868,29 @@ async function createProjectBundleReleaseFeedbackTasks() {
   }
 }
 
+async function loadProjectBundleReleaseCloseout() {
+  renderResult("workflowResult", "Loading project bundle release closeout...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before loading closeout.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api(`/research/export/project-bundle/releases/${releaseId}/closeout`);
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Release closeout is <code>${escapeHtml(body.closeout_status)}</code>. Ready: ${body.ready_to_close}. Next actions: ${body.next_actions.length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -2622,6 +2645,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReleaseFeedbackTasksButton").addEventListener(
     "click",
     createProjectBundleReleaseFeedbackTasks,
+  );
+  $("projectBundleReleaseCloseoutButton").addEventListener(
+    "click",
+    loadProjectBundleReleaseCloseout,
   );
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(

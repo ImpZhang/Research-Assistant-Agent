@@ -127,6 +127,7 @@ from backend.research.schemas import (
     ProjectBundleReadinessSnapshotComparisonTaskGenerateRequest,
     ProjectBundleReadinessSnapshotCreate,
     ProjectBundleReadinessTaskGenerateRequest,
+    ProjectBundleReleaseCloseoutResponse,
     ProjectBundleReleaseCreate,
     ProjectBundleReleaseFeedbackCreate,
     ProjectBundleReleaseFeedbackTaskGenerateRequest,
@@ -328,6 +329,7 @@ def status() -> ProjectStatus:
             "project_bundle_release_progress_tracking",
             "project_bundle_release_feedback_tracking",
             "project_bundle_release_feedback_task_generation",
+            "project_bundle_release_closeout_tracking",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -637,6 +639,16 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="ProjectBundleReleaseFeedbackTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_release_closeout",
+            description=(
+                "Summarize release progress, latest feedback, feedback tasks, "
+                "blockers, and signoff state into a closeout decision."
+            ),
+            method="GET",
+            path="/research/export/project-bundle/releases/{release_id}/closeout",
+            output_model="ProjectBundleReleaseCloseoutResponse",
         ),
         ToolManifestItem(
             name="get_project_bundle_readiness",
@@ -10105,6 +10117,18 @@ def create_tasks_from_project_bundle_release_feedback(
     )
 
 
+@router.get(
+    "/export/project-bundle/releases/{release_id}/closeout",
+    response_model=ProjectBundleReleaseCloseoutResponse,
+)
+def get_project_bundle_release_closeout(
+    release_id: str,
+    session: Session = Depends(get_session),
+) -> ProjectBundleReleaseCloseoutResponse:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    return _project_bundle_release_closeout(release, session)
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -10243,6 +10267,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     bundle_releases = context["bundle_releases"]
     latest_bundle_release_progress = context["latest_bundle_release_progress"]
     bundle_release_feedbacks = context["bundle_release_feedbacks"]
+    latest_bundle_release_closeout = context["latest_bundle_release_closeout"]
     briefs = context["briefs"]
     plans = context["plans"]
     tasks = context["tasks"]
@@ -10310,6 +10335,11 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 [_serialize_research_brief(feedback) for feedback in bundle_release_feedbacks]
             ),
         )
+        if latest_bundle_release_closeout:
+            archive.writestr(
+                "metadata/project-bundle-release-closeout.json",
+                _json_dump(latest_bundle_release_closeout),
+            )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
         _write_markdown(archive, "02-readiness-overview.md", readiness_overview.markdown_export)
@@ -10386,6 +10416,12 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "artifacts/releases/latest-project-bundle-release-feedback.md",
                 bundle_release_feedbacks[0].markdown_export,
             )
+        if latest_bundle_release_closeout:
+            _write_markdown(
+                archive,
+                "artifacts/releases/latest-project-bundle-release-closeout.md",
+                latest_bundle_release_closeout.markdown_export,
+            )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -10446,6 +10482,9 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         _project_bundle_release_progress(bundle_releases[0], session) if bundle_releases else None
     )
     bundle_release_feedbacks = _project_bundle_release_feedbacks(session, limit=12)
+    latest_bundle_release_closeout = (
+        _project_bundle_release_closeout(bundle_releases[0], session) if bundle_releases else None
+    )
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -10466,6 +10505,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         bundle_releases=bundle_releases,
         latest_bundle_release_progress=latest_bundle_release_progress,
         bundle_release_feedbacks=bundle_release_feedbacks,
+        latest_bundle_release_closeout=latest_bundle_release_closeout,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -10487,6 +10527,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "bundle_releases": bundle_releases,
         "latest_bundle_release_progress": latest_bundle_release_progress,
         "bundle_release_feedbacks": bundle_release_feedbacks,
+        "latest_bundle_release_closeout": latest_bundle_release_closeout,
         "briefs": briefs,
         "plans": plans,
         "tasks": tasks,
@@ -10573,6 +10614,166 @@ def _clean_project_bundle_feedback_items(items: list[str]) -> list[str]:
         seen.add(key)
         cleaned.append(value)
     return cleaned[:20]
+
+
+def _project_bundle_release_closeout(
+    release: ResearchBrief,
+    session: Session,
+) -> ProjectBundleReleaseCloseoutResponse:
+    generated_at = datetime.now(timezone.utc)
+    release_progress = _project_bundle_release_progress(release, session)
+    feedbacks = _project_bundle_release_feedbacks(session, release_id=release.id, limit=12)
+    latest_feedback = feedbacks[0] if feedbacks else None
+    feedback_tasks = _project_bundle_release_feedback_tasks(feedbacks, session)
+    feedback_task_summary = _project_bundle_release_task_summary(feedback_tasks)
+    feedback_summary = latest_feedback.summary_json if latest_feedback else {}
+    feedback_summary = feedback_summary or {}
+    signoff_confirmed = bool(feedback_summary.get("signoff_confirmed", False))
+    blocking_reasons = _project_bundle_release_closeout_blockers(
+        release_progress=release_progress,
+        latest_feedback=latest_feedback,
+        feedback_task_summary=feedback_task_summary,
+    )
+    next_actions = _project_bundle_release_closeout_next_actions(
+        release_progress=release_progress,
+        latest_feedback=latest_feedback,
+        feedback_task_summary=feedback_task_summary,
+        blocking_reasons=blocking_reasons,
+    )
+    closeout_status = _project_bundle_release_closeout_status(
+        release_progress=release_progress,
+        latest_feedback=latest_feedback,
+        feedback_task_summary=feedback_task_summary,
+        blocking_reasons=blocking_reasons,
+    )
+    ready_to_close = closeout_status == "closed"
+    recipient = str((release.summary_json or {}).get("recipient") or "advisor_or_customer")
+    latest_feedback_payload = (
+        jsonable_encoder(_serialize_research_brief(latest_feedback, include_markdown=True))
+        if latest_feedback
+        else {}
+    )
+    markdown_export = _render_project_bundle_release_closeout_markdown(
+        generated_at=generated_at,
+        release=release,
+        recipient=recipient,
+        closeout_status=closeout_status,
+        ready_to_close=ready_to_close,
+        signoff_confirmed=signoff_confirmed,
+        release_progress=release_progress,
+        latest_feedback=latest_feedback,
+        feedback_task_summary=feedback_task_summary,
+        blocking_reasons=blocking_reasons,
+        next_actions=next_actions,
+    )
+    return ProjectBundleReleaseCloseoutResponse(
+        release_id=release.id,
+        title=release.title,
+        recipient=recipient,
+        generated_at=generated_at,
+        closeout_status=closeout_status,
+        ready_to_close=ready_to_close,
+        signoff_confirmed=signoff_confirmed,
+        release_progress=release_progress,
+        latest_feedback=latest_feedback_payload,
+        feedback_task_summary=feedback_task_summary,
+        blocking_reasons=blocking_reasons,
+        next_actions=next_actions,
+        markdown_export=markdown_export,
+        message=(
+            f"Release {release.id} closeout status is {closeout_status}; "
+            f"{len(next_actions)} next actions remain."
+        ),
+    )
+
+
+def _project_bundle_release_feedback_tasks(
+    feedbacks: list[ResearchBrief],
+    session: Session,
+) -> list[ResearchTask]:
+    feedback_ids = [feedback.id for feedback in feedbacks]
+    if not feedback_ids:
+        return []
+    return (
+        session.query(ResearchTask)
+        .filter(ResearchTask.owner_type == "project_bundle_release_feedback")
+        .filter(ResearchTask.owner_id.in_(feedback_ids))
+        .order_by(ResearchTask.created_at.desc())
+        .limit(200)
+        .all()
+    )
+
+
+def _project_bundle_release_closeout_blockers(
+    *,
+    release_progress: ProjectBundleReleaseProgressResponse,
+    latest_feedback: ResearchBrief | None,
+    feedback_task_summary: dict[str, Any],
+) -> list[str]:
+    blockers: list[str] = []
+    if latest_feedback is None:
+        blockers.append("No customer or advisor feedback has been recorded for this release.")
+        return blockers
+    summary = latest_feedback.summary_json or {}
+    blockers.extend(str(item) for item in summary.get("blockers") or [])
+    if release_progress.task_summary.get("blocked_task_count", 0):
+        blockers.append("Release follow-up task board still has blocked tasks.")
+    if feedback_task_summary.get("blocked_task_count", 0):
+        blockers.append("Release feedback follow-up task board still has blocked tasks.")
+    if summary.get("feedback_status") == "rejected":
+        blockers.append("Latest feedback rejected the release.")
+    return blockers
+
+
+def _project_bundle_release_closeout_next_actions(
+    *,
+    release_progress: ProjectBundleReleaseProgressResponse,
+    latest_feedback: ResearchBrief | None,
+    feedback_task_summary: dict[str, Any],
+    blocking_reasons: list[str],
+) -> list[str]:
+    actions: list[str] = []
+    if latest_feedback is None:
+        return ["Record customer or advisor feedback for this release."]
+    summary = latest_feedback.summary_json or {}
+    for change in summary.get("requested_changes") or []:
+        actions.append(f"Address requested change: {change}")
+    if blocking_reasons:
+        actions.append("Resolve release closeout blockers.")
+    if release_progress.task_summary.get("open_task_count", 0):
+        actions.append("Complete open release follow-up tasks.")
+    if feedback_task_summary.get("open_task_count", 0):
+        actions.append("Complete open release feedback tasks.")
+    if not summary.get("signoff_confirmed", False):
+        actions.append("Confirm final release signoff with the recipient.")
+    if not actions:
+        actions.append("Archive the release closeout report with the project bundle.")
+    return actions[:10]
+
+
+def _project_bundle_release_closeout_status(
+    *,
+    release_progress: ProjectBundleReleaseProgressResponse,
+    latest_feedback: ResearchBrief | None,
+    feedback_task_summary: dict[str, Any],
+    blocking_reasons: list[str],
+) -> str:
+    if latest_feedback is None:
+        return "awaiting_feedback"
+    summary = latest_feedback.summary_json or {}
+    feedback_status = str(summary.get("feedback_status") or "received")
+    if blocking_reasons:
+        return "blocked"
+    if feedback_status in {"changes_requested", "rejected"}:
+        return feedback_status
+    if release_progress.task_summary.get("open_task_count", 0) or feedback_task_summary.get(
+        "open_task_count",
+        0,
+    ):
+        return "follow_up_open"
+    if not summary.get("signoff_confirmed", False):
+        return "awaiting_signoff"
+    return "closed"
 
 
 def _project_bundle_release_progress(
@@ -10669,6 +10870,7 @@ def _project_bundle_manifest(
     bundle_releases: list[ResearchBrief],
     latest_bundle_release_progress: ProjectBundleReleaseProgressResponse | None,
     bundle_release_feedbacks: list[ResearchBrief],
+    latest_bundle_release_closeout: ProjectBundleReleaseCloseoutResponse | None,
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -10833,6 +11035,27 @@ def _project_bundle_manifest(
         ),
         "latest_project_bundle_release_feedback_signoff_confirmed": (
             latest_bundle_release_feedback.get("signoff_confirmed", False)
+        ),
+        "latest_project_bundle_release_closeout_available": (
+            latest_bundle_release_closeout is not None
+        ),
+        "latest_project_bundle_release_closeout_status": (
+            latest_bundle_release_closeout.closeout_status if latest_bundle_release_closeout else ""
+        ),
+        "latest_project_bundle_release_closeout_ready": (
+            latest_bundle_release_closeout.ready_to_close
+            if latest_bundle_release_closeout
+            else False
+        ),
+        "latest_project_bundle_release_closeout_next_action_count": (
+            len(latest_bundle_release_closeout.next_actions)
+            if latest_bundle_release_closeout
+            else 0
+        ),
+        "latest_project_bundle_release_closeout_blocker_count": (
+            len(latest_bundle_release_closeout.blocking_reasons)
+            if latest_bundle_release_closeout
+            else 0
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
@@ -11168,6 +11391,59 @@ def _append_project_bundle_release_progress_tasks(
         lines.append(f"- `{task.id}` `{task.priority}` `{task.status}` {task.title}{description}")
 
 
+def _render_project_bundle_release_closeout_markdown(
+    *,
+    generated_at: datetime,
+    release: ResearchBrief,
+    recipient: str,
+    closeout_status: str,
+    ready_to_close: bool,
+    signoff_confirmed: bool,
+    release_progress: ProjectBundleReleaseProgressResponse,
+    latest_feedback: ResearchBrief | None,
+    feedback_task_summary: dict[str, Any],
+    blocking_reasons: list[str],
+    next_actions: list[str],
+) -> str:
+    feedback_summary = latest_feedback.summary_json if latest_feedback else {}
+    feedback_summary = feedback_summary or {}
+    lines = [
+        "# Project Bundle Release Closeout",
+        "",
+        f"- Release Id: `{release.id}`",
+        f"- Release Title: {release.title}",
+        f"- Generated At: `{generated_at.isoformat()}`",
+        f"- Recipient: {recipient}",
+        f"- Closeout Status: `{closeout_status}`",
+        f"- Ready To Close: {ready_to_close}",
+        f"- Signoff Confirmed: {signoff_confirmed}",
+        f"- Release Follow-up Completion: {release_progress.completion_ratio}",
+        f"- Release Open Tasks: {release_progress.task_summary.get('open_task_count', 0)}",
+        f"- Feedback Task Completion: {feedback_task_summary.get('completion_ratio', 0.0)}",
+        f"- Feedback Open Tasks: {feedback_task_summary.get('open_task_count', 0)}",
+        "",
+        "## Latest Feedback",
+        "",
+    ]
+    if latest_feedback:
+        lines.extend(
+            [
+                f"- Feedback Id: `{latest_feedback.id}`",
+                f"- Feedback Status: `{feedback_summary.get('feedback_status', '')}`",
+                f"- Signoff Confirmed: {feedback_summary.get('signoff_confirmed', False)}",
+                f"- Requested Changes: {len(feedback_summary.get('requested_changes') or [])}",
+                f"- Blockers: {len(feedback_summary.get('blockers') or [])}",
+            ]
+        )
+    else:
+        lines.append("- No release feedback recorded.")
+    lines.extend(["", "## Blocking Reasons", ""])
+    _append_project_bundle_feedback_items(lines, blocking_reasons)
+    lines.extend(["", "## Next Actions", ""])
+    _append_project_bundle_feedback_items(lines, next_actions)
+    return "\n".join(lines).strip() + "\n"
+
+
 def _render_project_bundle_release_feedback_markdown(
     *,
     generated_at: datetime,
@@ -11344,6 +11620,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         f"- Bundle Readiness Snapshots: {manifest['bundle_readiness_snapshot_count']}",
         f"- Bundle Release Notes: {manifest['project_bundle_release_count']}",
         f"- Bundle Release Feedback: {manifest['project_bundle_release_feedback_count']}",
+        f"- Latest Release Closeout: {manifest['latest_project_bundle_release_closeout_status'] or 'not_available'}",
         "",
         "## Start Here",
         "",
@@ -11378,6 +11655,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("project_bundle_release_feedback_count", 0):
         lines.append(
             "- `artifacts/releases/latest-project-bundle-release-feedback.md`: latest release recipient feedback and signoff state."
+        )
+    if manifest.get("latest_project_bundle_release_closeout_available"):
+        lines.append(
+            "- `artifacts/releases/latest-project-bundle-release-closeout.md`: latest release closeout decision and remaining actions."
         )
     lines.extend(
         [
