@@ -127,7 +127,9 @@ from backend.research.schemas import (
     ProjectBundleReadinessSnapshotComparisonTaskGenerateRequest,
     ProjectBundleReadinessSnapshotCreate,
     ProjectBundleReadinessTaskGenerateRequest,
+    ProjectBundleReleaseAcceptancePacketResponse,
     ProjectBundleReleaseCloseoutResponse,
+    ProjectBundleReleaseCloseoutTaskGenerateRequest,
     ProjectBundleReleaseCreate,
     ProjectBundleReleaseFeedbackCreate,
     ProjectBundleReleaseFeedbackTaskGenerateRequest,
@@ -330,6 +332,8 @@ def status() -> ProjectStatus:
             "project_bundle_release_feedback_tracking",
             "project_bundle_release_feedback_task_generation",
             "project_bundle_release_closeout_tracking",
+            "project_bundle_release_closeout_task_generation",
+            "project_bundle_release_acceptance_packets",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -649,6 +653,27 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/export/project-bundle/releases/{release_id}/closeout",
             output_model="ProjectBundleReleaseCloseoutResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_project_bundle_release_closeout",
+            description=(
+                "Turn closeout blockers, next actions, and signoff gaps into task-board work."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/releases/{release_id}/closeout/tasks",
+            input_model="ProjectBundleReleaseCloseoutTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_release_acceptance_packet",
+            description=(
+                "Compile the release note, progress, feedback, closeout decision, "
+                "and closeout tasks into a customer/advisor acceptance packet."
+            ),
+            method="GET",
+            path="/research/export/project-bundle/releases/{release_id}/acceptance-packet",
+            output_model="ProjectBundleReleaseAcceptancePacketResponse",
         ),
         ToolManifestItem(
             name="get_project_bundle_readiness",
@@ -10129,6 +10154,46 @@ def get_project_bundle_release_closeout(
     return _project_bundle_release_closeout(release, session)
 
 
+@router.post(
+    "/export/project-bundle/releases/{release_id}/closeout/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_project_bundle_release_closeout(
+    release_id: str,
+    payload: ProjectBundleReleaseCloseoutTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    closeout = _project_bundle_release_closeout(release, session)
+    tasks = ResearchTaskService(session).create_from_project_bundle_release_closeout(
+        release,
+        jsonable_encoder(closeout),
+        limit=payload.limit,
+        include_blockers=payload.include_blockers,
+        include_next_actions=payload.include_next_actions,
+        include_signoff_check=payload.include_signoff_check,
+        created_by=payload.created_by,
+    )
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=(
+            f"Created {len(tasks)} project bundle release closeout tasks from release {release_id}."
+        ),
+    )
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/acceptance-packet",
+    response_model=ProjectBundleReleaseAcceptancePacketResponse,
+)
+def get_project_bundle_release_acceptance_packet(
+    release_id: str,
+    session: Session = Depends(get_session),
+) -> ProjectBundleReleaseAcceptancePacketResponse:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    return _project_bundle_release_acceptance_packet(release, session)
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -10268,6 +10333,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     latest_bundle_release_progress = context["latest_bundle_release_progress"]
     bundle_release_feedbacks = context["bundle_release_feedbacks"]
     latest_bundle_release_closeout = context["latest_bundle_release_closeout"]
+    latest_bundle_release_acceptance_packet = context["latest_bundle_release_acceptance_packet"]
     briefs = context["briefs"]
     plans = context["plans"]
     tasks = context["tasks"]
@@ -10339,6 +10405,11 @@ def _build_project_bundle_zip(session: Session) -> bytes:
             archive.writestr(
                 "metadata/project-bundle-release-closeout.json",
                 _json_dump(latest_bundle_release_closeout),
+            )
+        if latest_bundle_release_acceptance_packet:
+            archive.writestr(
+                "metadata/project-bundle-release-acceptance-packet.json",
+                _json_dump(latest_bundle_release_acceptance_packet),
             )
         _write_markdown(archive, "00-project-triage-brief.md", triage_brief.markdown_export)
         _write_markdown(archive, "01-progress-overview.md", overview.markdown_export)
@@ -10422,6 +10493,12 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "artifacts/releases/latest-project-bundle-release-closeout.md",
                 latest_bundle_release_closeout.markdown_export,
             )
+        if latest_bundle_release_acceptance_packet:
+            _write_markdown(
+                archive,
+                "artifacts/releases/latest-project-bundle-release-acceptance-packet.md",
+                latest_bundle_release_acceptance_packet.markdown_export,
+            )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -10485,6 +10562,11 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
     latest_bundle_release_closeout = (
         _project_bundle_release_closeout(bundle_releases[0], session) if bundle_releases else None
     )
+    latest_bundle_release_acceptance_packet = (
+        _project_bundle_release_acceptance_packet(bundle_releases[0], session)
+        if bundle_releases
+        else None
+    )
     briefs = ResearchBriefService(session).list_briefs(limit=12)
     plans = ResearchPlanService(session).list_plans(limit=12)
     tasks = ResearchTaskService(session).list_tasks(limit=200)
@@ -10506,6 +10588,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         latest_bundle_release_progress=latest_bundle_release_progress,
         bundle_release_feedbacks=bundle_release_feedbacks,
         latest_bundle_release_closeout=latest_bundle_release_closeout,
+        latest_bundle_release_acceptance_packet=latest_bundle_release_acceptance_packet,
         briefs=briefs,
         plans=plans,
         tasks=tasks,
@@ -10528,6 +10611,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "latest_bundle_release_progress": latest_bundle_release_progress,
         "bundle_release_feedbacks": bundle_release_feedbacks,
         "latest_bundle_release_closeout": latest_bundle_release_closeout,
+        "latest_bundle_release_acceptance_packet": latest_bundle_release_acceptance_packet,
         "briefs": briefs,
         "plans": plans,
         "tasks": tasks,
@@ -10614,6 +10698,192 @@ def _clean_project_bundle_feedback_items(items: list[str]) -> list[str]:
         seen.add(key)
         cleaned.append(value)
     return cleaned[:20]
+
+
+def _project_bundle_release_acceptance_packet(
+    release: ResearchBrief,
+    session: Session,
+) -> ProjectBundleReleaseAcceptancePacketResponse:
+    generated_at = datetime.now(timezone.utc)
+    closeout = _project_bundle_release_closeout(release, session)
+    closeout_tasks = _project_bundle_release_closeout_tasks(release, session)
+    closeout_task_summary = _project_bundle_release_task_summary(closeout_tasks)
+    open_closeout_tasks = [
+        task for task in closeout_tasks if task.status in {"todo", "doing", "blocked"}
+    ]
+    checklist = _project_bundle_release_acceptance_checklist(
+        closeout=closeout,
+        closeout_task_summary=closeout_task_summary,
+    )
+    acceptance_status = _project_bundle_release_acceptance_status(
+        closeout=closeout,
+        closeout_task_summary=closeout_task_summary,
+    )
+    ready_for_signoff = acceptance_status == "accepted"
+    remaining_actions = _project_bundle_release_acceptance_remaining_actions(
+        closeout=closeout,
+        closeout_task_summary=closeout_task_summary,
+    )
+    release_note = jsonable_encoder(_serialize_research_brief(release, include_markdown=True))
+    markdown_export = _render_project_bundle_release_acceptance_packet_markdown(
+        generated_at=generated_at,
+        release=release,
+        acceptance_status=acceptance_status,
+        ready_for_signoff=ready_for_signoff,
+        closeout=closeout,
+        closeout_task_summary=closeout_task_summary,
+        open_closeout_tasks=open_closeout_tasks,
+        checklist=checklist,
+        remaining_actions=remaining_actions,
+    )
+    return ProjectBundleReleaseAcceptancePacketResponse(
+        release_id=release.id,
+        title=release.title,
+        recipient=closeout.recipient,
+        generated_at=generated_at,
+        acceptance_status=acceptance_status,
+        ready_for_signoff=ready_for_signoff,
+        signoff_confirmed=closeout.signoff_confirmed,
+        release_note=release_note,
+        release_progress=closeout.release_progress,
+        latest_feedback=closeout.latest_feedback,
+        closeout=closeout,
+        closeout_task_summary=closeout_task_summary,
+        open_closeout_tasks=[
+            _serialize_research_task(task)
+            for task in sorted(open_closeout_tasks, key=_project_bundle_release_task_order)[:10]
+        ],
+        checklist=checklist,
+        remaining_actions=remaining_actions,
+        markdown_export=markdown_export,
+        message=(
+            f"Release {release.id} acceptance status is {acceptance_status}; "
+            f"{len(remaining_actions)} remaining actions."
+        ),
+    )
+
+
+def _project_bundle_release_closeout_tasks(
+    release: ResearchBrief,
+    session: Session,
+) -> list[ResearchTask]:
+    return (
+        session.query(ResearchTask)
+        .filter(ResearchTask.owner_type == "project_bundle_release_closeout")
+        .filter(ResearchTask.owner_id == release.id)
+        .order_by(ResearchTask.created_at.desc())
+        .limit(200)
+        .all()
+    )
+
+
+def _project_bundle_release_acceptance_checklist(
+    *,
+    closeout: ProjectBundleReleaseCloseoutResponse,
+    closeout_task_summary: dict[str, Any],
+) -> list[dict[str, Any]]:
+    progress_summary = closeout.release_progress.task_summary
+    return [
+        {
+            "label": "Release note saved",
+            "status": "passed",
+            "detail": "Saved release note is available for this handoff.",
+        },
+        {
+            "label": "Release follow-up tasks complete",
+            "status": _acceptance_check_status(
+                progress_summary.get("open_task_count", 0),
+                progress_summary.get("blocked_task_count", 0),
+            ),
+            "detail": (
+                f"{progress_summary.get('open_task_count', 0)} open release tasks; "
+                f"{progress_summary.get('blocked_task_count', 0)} blocked."
+            ),
+        },
+        {
+            "label": "Recipient feedback recorded",
+            "status": "passed" if closeout.latest_feedback else "pending",
+            "detail": (
+                "Latest recipient feedback is attached."
+                if closeout.latest_feedback
+                else "No recipient feedback has been recorded."
+            ),
+        },
+        {
+            "label": "Signoff confirmed",
+            "status": "passed" if closeout.signoff_confirmed else "pending",
+            "detail": (
+                "Final release signoff is confirmed."
+                if closeout.signoff_confirmed
+                else "Final release signoff is still pending."
+            ),
+        },
+        {
+            "label": "Closeout decision ready",
+            "status": "passed" if closeout.ready_to_close else closeout.closeout_status,
+            "detail": f"Closeout status is {closeout.closeout_status}.",
+        },
+        {
+            "label": "Closeout follow-up tasks clear",
+            "status": _acceptance_check_status(
+                closeout_task_summary.get("open_task_count", 0),
+                closeout_task_summary.get("blocked_task_count", 0),
+            ),
+            "detail": (
+                f"{closeout_task_summary.get('open_task_count', 0)} open closeout tasks; "
+                f"{closeout_task_summary.get('blocked_task_count', 0)} blocked."
+            ),
+        },
+    ]
+
+
+def _acceptance_check_status(open_count: int, blocked_count: int) -> str:
+    if blocked_count:
+        return "blocked"
+    if open_count:
+        return "pending"
+    return "passed"
+
+
+def _project_bundle_release_acceptance_status(
+    *,
+    closeout: ProjectBundleReleaseCloseoutResponse,
+    closeout_task_summary: dict[str, Any],
+) -> str:
+    if closeout.blocking_reasons or closeout.closeout_status in {"blocked", "rejected"}:
+        return "blocked"
+    if closeout.closeout_status == "changes_requested":
+        return "changes_requested"
+    if closeout.closeout_status == "awaiting_feedback":
+        return "awaiting_feedback"
+    if closeout_task_summary.get("blocked_task_count", 0):
+        return "blocked"
+    if closeout_task_summary.get("open_task_count", 0):
+        return "follow_up_open"
+    if closeout.closeout_status == "follow_up_open":
+        return "follow_up_open"
+    if closeout.closeout_status == "awaiting_signoff":
+        return "awaiting_signoff"
+    if closeout.ready_to_close and closeout.signoff_confirmed:
+        return "accepted"
+    return closeout.closeout_status
+
+
+def _project_bundle_release_acceptance_remaining_actions(
+    *,
+    closeout: ProjectBundleReleaseCloseoutResponse,
+    closeout_task_summary: dict[str, Any],
+) -> list[str]:
+    actions: list[str] = []
+    actions.extend(closeout.blocking_reasons)
+    actions.extend(closeout.next_actions)
+    if closeout_task_summary.get("blocked_task_count", 0):
+        actions.append("Resolve blocked release closeout tasks.")
+    if closeout_task_summary.get("open_task_count", 0):
+        actions.append("Complete open release closeout tasks.")
+    if closeout.ready_to_close and not actions:
+        actions.append("Archive the accepted release packet with the project bundle.")
+    return _clean_project_bundle_feedback_items(actions)
 
 
 def _project_bundle_release_closeout(
@@ -10871,6 +11141,7 @@ def _project_bundle_manifest(
     latest_bundle_release_progress: ProjectBundleReleaseProgressResponse | None,
     bundle_release_feedbacks: list[ResearchBrief],
     latest_bundle_release_closeout: ProjectBundleReleaseCloseoutResponse | None,
+    latest_bundle_release_acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse | None,
     briefs: list[ResearchBrief],
     plans: list[ResearchPlanSnapshot],
     tasks: list[ResearchTask],
@@ -11055,6 +11326,32 @@ def _project_bundle_manifest(
         "latest_project_bundle_release_closeout_blocker_count": (
             len(latest_bundle_release_closeout.blocking_reasons)
             if latest_bundle_release_closeout
+            else 0
+        ),
+        "latest_project_bundle_release_acceptance_packet_available": (
+            latest_bundle_release_acceptance_packet is not None
+        ),
+        "latest_project_bundle_release_acceptance_status": (
+            latest_bundle_release_acceptance_packet.acceptance_status
+            if latest_bundle_release_acceptance_packet
+            else ""
+        ),
+        "latest_project_bundle_release_acceptance_ready_for_signoff": (
+            latest_bundle_release_acceptance_packet.ready_for_signoff
+            if latest_bundle_release_acceptance_packet
+            else False
+        ),
+        "latest_project_bundle_release_acceptance_remaining_action_count": (
+            len(latest_bundle_release_acceptance_packet.remaining_actions)
+            if latest_bundle_release_acceptance_packet
+            else 0
+        ),
+        "latest_project_bundle_release_acceptance_open_closeout_task_count": (
+            latest_bundle_release_acceptance_packet.closeout_task_summary.get(
+                "open_task_count",
+                0,
+            )
+            if latest_bundle_release_acceptance_packet
             else 0
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
@@ -11444,6 +11741,60 @@ def _render_project_bundle_release_closeout_markdown(
     return "\n".join(lines).strip() + "\n"
 
 
+def _render_project_bundle_release_acceptance_packet_markdown(
+    *,
+    generated_at: datetime,
+    release: ResearchBrief,
+    acceptance_status: str,
+    ready_for_signoff: bool,
+    closeout: ProjectBundleReleaseCloseoutResponse,
+    closeout_task_summary: dict[str, Any],
+    open_closeout_tasks: list[ResearchTask],
+    checklist: list[dict[str, Any]],
+    remaining_actions: list[str],
+) -> str:
+    lines = [
+        "# Project Bundle Release Acceptance Packet",
+        "",
+        f"- Release Id: `{release.id}`",
+        f"- Release Title: {release.title}",
+        f"- Generated At: `{generated_at.isoformat()}`",
+        f"- Recipient: {closeout.recipient}",
+        f"- Acceptance Status: `{acceptance_status}`",
+        f"- Ready For Signoff: {ready_for_signoff}",
+        f"- Signoff Confirmed: {closeout.signoff_confirmed}",
+        f"- Closeout Status: `{closeout.closeout_status}`",
+        f"- Release Follow-up Completion: {closeout.release_progress.completion_ratio}",
+        f"- Closeout Open Tasks: {closeout_task_summary.get('open_task_count', 0)}",
+        f"- Closeout Blocked Tasks: {closeout_task_summary.get('blocked_task_count', 0)}",
+        "",
+        "## Acceptance Checklist",
+        "",
+    ]
+    for item in checklist:
+        lines.append(f"- `{item['status']}` {item['label']}: {item['detail']}")
+    lines.extend(["", "## Remaining Actions", ""])
+    _append_project_bundle_feedback_items(lines, remaining_actions)
+    lines.extend(["", "## Open Closeout Tasks", ""])
+    _append_project_bundle_release_progress_tasks(
+        lines,
+        sorted(open_closeout_tasks, key=_project_bundle_release_task_order)[:10],
+    )
+    lines.extend(["", "## Latest Feedback", ""])
+    if closeout.latest_feedback:
+        summary = closeout.latest_feedback.get("summary", {})
+        lines.extend(
+            [
+                f"- Feedback Id: `{closeout.latest_feedback.get('id', '')}`",
+                f"- Feedback Status: `{summary.get('feedback_status', '')}`",
+                f"- Signoff Confirmed: {summary.get('signoff_confirmed', False)}",
+            ]
+        )
+    else:
+        lines.append("- No release feedback recorded.")
+    return "\n".join(lines).strip() + "\n"
+
+
 def _render_project_bundle_release_feedback_markdown(
     *,
     generated_at: datetime,
@@ -11659,6 +12010,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("latest_project_bundle_release_closeout_available"):
         lines.append(
             "- `artifacts/releases/latest-project-bundle-release-closeout.md`: latest release closeout decision and remaining actions."
+        )
+    if manifest.get("latest_project_bundle_release_acceptance_packet_available"):
+        lines.append(
+            "- `artifacts/releases/latest-project-bundle-release-acceptance-packet.md`: customer/advisor acceptance status and signoff checklist."
         )
     lines.extend(
         [

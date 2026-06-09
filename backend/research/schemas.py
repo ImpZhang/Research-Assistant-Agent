@@ -1070,6 +1070,14 @@ class ProjectBundleReleaseFeedbackTaskGenerateRequest(BaseModel):
     created_by: str = "system"
 
 
+class ProjectBundleReleaseCloseoutTaskGenerateRequest(BaseModel):
+    limit: int = Field(default=6, ge=1, le=20)
+    include_blockers: bool = True
+    include_next_actions: bool = True
+    include_signoff_check: bool = True
+    created_by: str = "system"
+
+
 class ProjectBundleReleaseCloseoutResponse(BaseModel):
     release_id: str
     title: str
@@ -1083,6 +1091,26 @@ class ProjectBundleReleaseCloseoutResponse(BaseModel):
     feedback_task_summary: dict[str, Any] = Field(default_factory=dict)
     blocking_reasons: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
+    markdown_export: str = ""
+    message: str
+
+
+class ProjectBundleReleaseAcceptancePacketResponse(BaseModel):
+    release_id: str
+    title: str
+    recipient: str
+    generated_at: datetime
+    acceptance_status: str
+    ready_for_signoff: bool = False
+    signoff_confirmed: bool = False
+    release_note: dict[str, Any] = Field(default_factory=dict)
+    release_progress: ProjectBundleReleaseProgressResponse
+    latest_feedback: dict[str, Any] = Field(default_factory=dict)
+    closeout: ProjectBundleReleaseCloseoutResponse
+    closeout_task_summary: dict[str, Any] = Field(default_factory=dict)
+    open_closeout_tasks: list[ResearchTaskRead] = Field(default_factory=list)
+    checklist: list[dict[str, Any]] = Field(default_factory=list)
+    remaining_actions: list[str] = Field(default_factory=list)
     markdown_export: str = ""
     message: str
 

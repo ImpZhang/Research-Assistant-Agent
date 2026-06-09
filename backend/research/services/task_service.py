@@ -1667,6 +1667,143 @@ class ResearchTaskService:
         self.session.commit()
         return tasks
 
+    def create_from_project_bundle_release_closeout(
+        self,
+        release: ResearchBrief,
+        closeout: dict,
+        *,
+        limit: int = 6,
+        include_blockers: bool = True,
+        include_next_actions: bool = True,
+        include_signoff_check: bool = True,
+        created_by: str = "system",
+    ) -> list[ResearchTask]:
+        limit = max(1, min(limit, 20))
+        closeout_status = str(closeout.get("closeout_status") or "unknown")
+        ready_to_close = bool(closeout.get("ready_to_close", False))
+        signoff_confirmed = bool(closeout.get("signoff_confirmed", False))
+        recipient = str(closeout.get("recipient") or "advisor_or_customer")
+        blockers = self._unique_commitments(closeout.get("blocking_reasons") or [])
+        next_actions = self._unique_commitments(closeout.get("next_actions") or [])
+        items: list[tuple[str, str, dict]] = []
+        if include_blockers:
+            for blocker in blockers:
+                items.append(
+                    (
+                        "bundle_release_closeout_blocker",
+                        f"Resolve closeout blocker: {blocker}",
+                        {"blocking_reason": blocker},
+                    )
+                )
+        if include_next_actions:
+            for action in next_actions:
+                if include_signoff_check and not signoff_confirmed and "signoff" in action.lower():
+                    continue
+                items.append(
+                    (
+                        "bundle_release_closeout_next_action",
+                        f"Complete closeout action: {action}",
+                        {"next_action": action},
+                    )
+                )
+        if include_signoff_check and not signoff_confirmed:
+            items.append(
+                (
+                    "bundle_release_closeout_signoff",
+                    f"Confirm final release signoff with {recipient}.",
+                    {},
+                )
+            )
+        if ready_to_close and not items:
+            items.append(
+                (
+                    "bundle_release_closeout_archive",
+                    "Archive release closeout report and mark handoff complete.",
+                    {},
+                )
+            )
+        items = self._deduplicate_pilot_report_items(items)[:limit]
+        if not items:
+            items = [
+                (
+                    "bundle_release_closeout_review",
+                    "Review release closeout and decide whether more follow-up is needed.",
+                    {},
+                )
+            ]
+
+        tasks = [
+            ResearchTask(
+                idea_id=None,
+                owner_type="project_bundle_release_closeout",
+                owner_id=release.id,
+                source_type=source_type,
+                source_id=f"{source_type}_{idx}",
+                title=self._bundle_release_closeout_task_title(
+                    action,
+                    idx,
+                    source_type=source_type,
+                ),
+                description=action,
+                priority=self._bundle_release_closeout_task_priority(
+                    source_type,
+                    action,
+                    closeout_status,
+                    signoff_confirmed=signoff_confirmed,
+                ),
+                status="todo",
+                due_phase="project_bundle_release_closeout_follow_up",
+                metadata_json={
+                    "release_id": release.id,
+                    "recipient": recipient,
+                    "closeout_status": closeout_status,
+                    "ready_to_close": ready_to_close,
+                    "signoff_confirmed": signoff_confirmed,
+                    "closeout_blocker_count": len(blockers),
+                    "closeout_next_action_count": len(next_actions),
+                    "source_rank": idx,
+                    **metadata,
+                },
+                created_by=created_by or "system",
+            )
+            for idx, (source_type, action, metadata) in enumerate(items, start=1)
+        ]
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=None,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from project bundle release closeout.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "owner_id": task.owner_id,
+                        "source_type": task.source_type,
+                        "source_id": task.source_id,
+                        "release_id": release.id,
+                        "closeout_status": closeout_status,
+                        "ready_to_close": ready_to_close,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        ArtifactGraphService(GraphService(self.session)).link_project_bundle_release_closeout_tasks(
+            release,
+            closeout,
+            tasks,
+        )
+        self.session.commit()
+        return tasks
+
     def create_from_project_advisor_chat(
         self,
         chat: dict,
@@ -2586,6 +2723,47 @@ class ResearchTaskService:
             return "high"
         if feedback_status in {"changes_requested", "blocked", "rejected"}:
             return "high"
+        return "medium"
+
+    def _bundle_release_closeout_task_title(
+        self,
+        action: str,
+        idx: int,
+        *,
+        source_type: str,
+    ) -> str:
+        clean = " ".join(str(action).split())
+        if source_type == "bundle_release_closeout_blocker":
+            return self._short_task_title(f"Resolve release closeout blocker {idx}: {clean}", idx)
+        if source_type == "bundle_release_closeout_next_action":
+            return self._short_task_title(clean or f"Complete release closeout action {idx}", idx)
+        if source_type == "bundle_release_closeout_signoff":
+            return "Confirm release closeout signoff"
+        if source_type == "bundle_release_closeout_archive":
+            return "Archive release closeout"
+        return self._short_task_title(clean or f"Review release closeout {idx}", idx)
+
+    def _bundle_release_closeout_task_priority(
+        self,
+        source_type: str,
+        action: str,
+        closeout_status: str,
+        *,
+        signoff_confirmed: bool,
+    ) -> str:
+        lower = str(action).lower()
+        if source_type == "bundle_release_closeout_blocker":
+            return "critical"
+        if "blocked" in lower or "critical" in lower or "rejected" in lower:
+            return "critical"
+        if source_type == "bundle_release_closeout_signoff" and not signoff_confirmed:
+            return "high"
+        if closeout_status in {"blocked", "changes_requested", "follow_up_open"}:
+            return "high"
+        if closeout_status == "awaiting_signoff":
+            return "high"
+        if source_type == "bundle_release_closeout_archive":
+            return "low"
         return "medium"
 
     def _advisor_chat_task_title(self, action: str, idx: int, *, source_type: str) -> str:

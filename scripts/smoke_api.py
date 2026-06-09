@@ -246,6 +246,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project bundle release feedback tasks")
     if "project_bundle_release_closeout_tracking" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project bundle release closeout")
+    if "project_bundle_release_closeout_task_generation" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project bundle release closeout tasks")
+    if "project_bundle_release_acceptance_packets" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include project bundle release acceptance")
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -458,6 +462,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project bundle release feedback tasks")
     if "get_project_bundle_release_closeout" not in manifest_names:
         raise RuntimeError("tool manifest did not include project bundle release closeout")
+    if "create_tasks_from_project_bundle_release_closeout" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release closeout tasks")
+    if "get_project_bundle_release_acceptance_packet" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project bundle release acceptance")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
@@ -2323,6 +2331,59 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         not in project_bundle_release_closeout["markdown_export"]
     ):
         raise RuntimeError("project bundle release closeout markdown missed title")
+    project_bundle_release_closeout_tasks = require_ok(
+        client.post(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/closeout/tasks",
+            json_body={
+                "limit": 6,
+                "include_blockers": True,
+                "include_next_actions": True,
+                "include_signoff_check": True,
+                "created_by": "smoke_api",
+            },
+        ),
+        "project bundle release closeout tasks",
+    )
+    if not project_bundle_release_closeout_tasks["tasks"]:
+        raise RuntimeError("project bundle release closeout did not create tasks")
+    first_closeout_task = project_bundle_release_closeout_tasks["tasks"][0]
+    if first_closeout_task["owner_type"] != "project_bundle_release_closeout":
+        raise RuntimeError("project bundle release closeout task used wrong owner type")
+    if first_closeout_task["due_phase"] != "project_bundle_release_closeout_follow_up":
+        raise RuntimeError("project bundle release closeout task used wrong due phase")
+    project_bundle_release_closeout_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=project_bundle_release_has_closeout"),
+        "project bundle release closeout graph edges",
+    )
+    if not project_bundle_release_closeout_edges:
+        raise RuntimeError("project bundle release closeout did not create graph edge")
+    project_bundle_release_closeout_task_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=project_bundle_release_closeout_creates_task"),
+        "project bundle release closeout task graph edges",
+    )
+    if not project_bundle_release_closeout_task_edges:
+        raise RuntimeError("project bundle release closeout tasks did not create graph edges")
+    project_bundle_release_acceptance_packet = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/acceptance-packet"
+        ),
+        "project bundle release acceptance packet",
+    )
+    if project_bundle_release_acceptance_packet["release_id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release acceptance packet used wrong release id")
+    if project_bundle_release_acceptance_packet["acceptance_status"] != "blocked":
+        raise RuntimeError("project bundle release acceptance packet missed blocked status")
+    if project_bundle_release_acceptance_packet["ready_for_signoff"]:
+        raise RuntimeError("project bundle release acceptance packet should not be ready")
+    if not project_bundle_release_acceptance_packet["open_closeout_tasks"]:
+        raise RuntimeError("project bundle release acceptance packet missed closeout tasks")
+    if (
+        "# Project Bundle Release Acceptance Packet"
+        not in project_bundle_release_acceptance_packet["markdown_export"]
+    ):
+        raise RuntimeError("project bundle release acceptance markdown missed title")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2354,6 +2415,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/project-bundle-release-progress.json",
             "metadata/project-bundle-release-feedback.json",
             "metadata/project-bundle-release-closeout.json",
+            "metadata/project-bundle-release-acceptance-packet.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
@@ -2374,6 +2436,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             ),
             "artifacts/releases/latest-project-bundle-release-feedback.md",
             "artifacts/releases/latest-project-bundle-release-closeout.md",
+            "artifacts/releases/latest-project-bundle-release-acceptance-packet.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -2408,6 +2471,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
         project_bundle_release_closeout_metadata = json.loads(
             archive.read("metadata/project-bundle-release-closeout.json")
+        )
+        project_bundle_release_acceptance_metadata = json.loads(
+            archive.read("metadata/project-bundle-release-acceptance-packet.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -2555,6 +2621,26 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle release closeout metadata used wrong release id")
     if project_bundle_release_closeout_metadata["closeout_status"] != "blocked":
         raise RuntimeError("project bundle release closeout metadata missed blocked status")
+    if not project_bundle_manifest["latest_project_bundle_release_acceptance_packet_available"]:
+        raise RuntimeError("project bundle manifest did not expose release acceptance packet")
+    if project_bundle_manifest["latest_project_bundle_release_acceptance_status"] != "blocked":
+        raise RuntimeError("project bundle manifest release acceptance missed blocked status")
+    if project_bundle_manifest["latest_project_bundle_release_acceptance_ready_for_signoff"]:
+        raise RuntimeError("project bundle manifest release acceptance should not be ready")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_acceptance_remaining_action_count"]
+        < 1
+    ):
+        raise RuntimeError("project bundle manifest release acceptance missed remaining actions")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_acceptance_open_closeout_task_count"]
+        < 1
+    ):
+        raise RuntimeError("project bundle manifest release acceptance missed closeout tasks")
+    if project_bundle_release_acceptance_metadata["release_id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release acceptance metadata used wrong release id")
+    if project_bundle_release_acceptance_metadata["acceptance_status"] != "blocked":
+        raise RuntimeError("project bundle release acceptance metadata missed blocked status")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -2993,6 +3079,15 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_release_closeout_ready": project_bundle_release_closeout["ready_to_close"],
         "project_bundle_release_closeout_next_actions": len(
             project_bundle_release_closeout["next_actions"]
+        ),
+        "project_bundle_release_closeout_task_count": len(
+            project_bundle_release_closeout_tasks["tasks"]
+        ),
+        "project_bundle_release_acceptance_status": project_bundle_release_acceptance_packet[
+            "acceptance_status"
+        ],
+        "project_bundle_release_acceptance_remaining_actions": len(
+            project_bundle_release_acceptance_packet["remaining_actions"]
         ),
         "project_bundle_latest_release_recipient": project_bundle_manifest[
             "latest_project_bundle_release_recipient"

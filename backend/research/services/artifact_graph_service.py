@@ -839,6 +839,68 @@ class ArtifactGraphService:
                 payload={"source": task.source_type},
             )
 
+    def link_project_bundle_release_closeout_tasks(
+        self,
+        release: ResearchBrief,
+        closeout: dict,
+        tasks: list[ResearchTask],
+    ) -> None:
+        release_summary = release.summary_json or {}
+        release_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release",
+            label=release.title,
+            canonical_key=release.id,
+            payload={
+                "recipient": release_summary.get("recipient", ""),
+                "readiness_level": release_summary.get("readiness_level", ""),
+                "readiness_score": release_summary.get("readiness_score", 0.0),
+                "owner_type": "project_bundle_release",
+            },
+        )
+        closeout_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release_closeout",
+            label=f"{release.title} closeout",
+            canonical_key=f"{release.id}:closeout",
+            payload={
+                "release_id": release.id,
+                "recipient": closeout.get("recipient", ""),
+                "closeout_status": closeout.get("closeout_status", ""),
+                "ready_to_close": closeout.get("ready_to_close", False),
+                "signoff_confirmed": closeout.get("signoff_confirmed", False),
+                "blocker_count": len(closeout.get("blocking_reasons") or []),
+                "next_action_count": len(closeout.get("next_actions") or []),
+                "task_count": len(tasks),
+                "owner_type": "project_bundle_release_closeout",
+            },
+        )
+        self.graph.create_edge(
+            source_node=release_node,
+            target_node=closeout_node,
+            edge_type="project_bundle_release_has_closeout",
+            payload={
+                "closeout_status": closeout.get("closeout_status", ""),
+                "ready_to_close": closeout.get("ready_to_close", False),
+            },
+        )
+        for task in tasks:
+            task_node = self.graph.get_or_create_node(
+                node_type="research_task",
+                label=task.title,
+                canonical_key=task.id,
+                payload={
+                    "status": task.status,
+                    "priority": task.priority,
+                    "source_type": task.source_type,
+                    "due_phase": task.due_phase,
+                },
+            )
+            self.graph.create_edge(
+                source_node=closeout_node,
+                target_node=task_node,
+                edge_type="project_bundle_release_closeout_creates_task",
+                payload={"source": task.source_type},
+            )
+
     def link_project_advisor_chat_tasks(self, chat: dict, tasks: list[ResearchTask]) -> None:
         chat_node = self.graph.get_or_create_node(
             node_type="project_advisor_chat",

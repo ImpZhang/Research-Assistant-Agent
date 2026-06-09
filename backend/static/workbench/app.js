@@ -1891,6 +1891,67 @@ async function loadProjectBundleReleaseCloseout() {
   }
 }
 
+async function createProjectBundleReleaseCloseoutTasks() {
+  renderResult("workflowResult", "Creating project bundle release closeout tasks...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before creating closeout tasks.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/closeout/tasks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          limit: 6,
+          include_blockers: true,
+          include_next_actions: true,
+          include_signoff_check: true,
+          created_by: "workbench",
+        }),
+      },
+    );
+    state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Release closeout tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function loadProjectBundleReleaseAcceptancePacket() {
+  renderResult("workflowResult", "Loading project bundle release acceptance packet...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before loading the acceptance packet.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/acceptance-packet`,
+    );
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Release acceptance is <code>${escapeHtml(body.acceptance_status)}</code>. Ready for signoff: ${body.ready_for_signoff}. Remaining actions: ${body.remaining_actions.length}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -2649,6 +2710,14 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReleaseCloseoutButton").addEventListener(
     "click",
     loadProjectBundleReleaseCloseout,
+  );
+  $("projectBundleReleaseCloseoutTasksButton").addEventListener(
+    "click",
+    createProjectBundleReleaseCloseoutTasks,
+  );
+  $("projectBundleReleaseAcceptancePacketButton").addEventListener(
+    "click",
+    loadProjectBundleReleaseAcceptancePacket,
   );
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(
