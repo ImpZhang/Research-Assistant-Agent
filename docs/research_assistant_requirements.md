@@ -854,6 +854,8 @@ project bundle release closeout 需要能一键转成 task board 任务：系统
 
 project bundle release 需要提供 acceptance packet：系统应把 release note、release follow-up progress、最新 feedback、closeout decision、closeout-generated tasks、验收 checklist、remaining actions 和 Markdown signoff summary 聚合成只读验收包。acceptance packet 必须明确给出 acceptance_status、ready_for_signoff 和 signoff_confirmed，让客户、导师或外部 agent 不需要解析多个内部报告就能判断这次交付是否可签收、还差哪些动作。project handoff bundle 必须包含最新 acceptance packet JSON/Markdown artifacts。
 
+project bundle release 还需要持久化 acceptance packet snapshot：系统应允许在一次交付评审时把当前 acceptance packet 保存为 `project_bundle_release_acceptance_packet` brief，固定当时的 acceptance_status、ready_for_signoff、signoff_confirmed、remaining_actions、checklist、closeout/task summary 和 Markdown signoff evidence。snapshot 必须支持 create/list/detail/markdown export，写入 `project_bundle_release_has_acceptance_packet` graph edge，并进入 project handoff bundle 的 metadata、latest Markdown artifact 和 manifest 字段，避免后续任务状态变化改写历史签收记录。
+
 系统需要提供 project bundle readiness，作为 handoff bundle 的导出前检查：复用 bundle manifest 信号，检查 project scope、quality gate、triage snapshot history、triage comparison、pilot report history、pilot comparison、claim validation queue、research plan 和 opportunity radar 是否齐备。输出 readiness score、readiness level、missing required checks、recommended actions、quick actions、manifest summary 和 Markdown report。它回答“现在这包材料能不能发给客户/导师”，并且必须与 `/research/export/project-bundle` 的 manifest 口径一致。
 
 project bundle readiness 需要能一键转成 task board 任务：从 missing required checks 和 optional warnings 创建 `owner_type=project_bundle_readiness`、`due_phase=bundle_handoff_follow_up` 的任务，并写入 `project_bundle_readiness_creates_task` 图边。若 readiness 已经 delivery-ready，也要能生成一个最终审阅/导出确认任务，确保交付前存在可追踪的人工确认动作。

@@ -1115,6 +1115,11 @@ class ProjectBundleReleaseAcceptancePacketResponse(BaseModel):
     message: str
 
 
+class ProjectBundleReleaseAcceptancePacketSnapshotCreate(BaseModel):
+    title: str = "Project Bundle Release Acceptance Packet Snapshot"
+    created_by: str = "researcher"
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

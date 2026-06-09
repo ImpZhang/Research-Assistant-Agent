@@ -113,6 +113,7 @@ def test_research_status() -> None:
     assert "project_bundle_release_closeout_tracking" in body["implemented_capabilities"]
     assert "project_bundle_release_closeout_task_generation" in body["implemented_capabilities"]
     assert "project_bundle_release_acceptance_packets" in body["implemented_capabilities"]
+    assert "project_bundle_release_acceptance_packet_snapshots" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
@@ -231,6 +232,10 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_bundle_release_closeout" in names
     assert "create_tasks_from_project_bundle_release_closeout" in names
     assert "get_project_bundle_release_acceptance_packet" in names
+    assert "create_project_bundle_release_acceptance_packet_snapshot" in names
+    assert "list_project_bundle_release_acceptance_packet_snapshots" in names
+    assert "get_project_bundle_release_acceptance_packet_snapshot" in names
+    assert "export_project_bundle_release_acceptance_packet_snapshot_markdown" in names
     assert "get_idea_readiness" in names
     assert "get_idea_quality_gate" in names
     assert "create_tasks_from_idea_quality_gate" in names
@@ -379,6 +384,65 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     )
     assert project_bundle_release_acceptance_packet["input_schema"]["required"] == ["release_id"]
     assert project_bundle_release_acceptance_packet["annotations"]["readOnlyHint"] is True
+
+    project_bundle_release_acceptance_snapshot = tools[
+        "create_project_bundle_release_acceptance_packet_snapshot"
+    ]
+    assert project_bundle_release_acceptance_snapshot["http"]["method"] == "POST"
+    assert (
+        project_bundle_release_acceptance_snapshot["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots"
+    )
+    assert project_bundle_release_acceptance_snapshot["input_schema"]["required"] == [
+        "release_id",
+        "body",
+    ]
+    assert project_bundle_release_acceptance_snapshot["annotations"]["sideEffectHint"] is True
+
+    project_bundle_release_acceptance_snapshot_list = tools[
+        "list_project_bundle_release_acceptance_packet_snapshots"
+    ]
+    assert project_bundle_release_acceptance_snapshot_list["http"]["method"] == "GET"
+    assert (
+        project_bundle_release_acceptance_snapshot_list["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots"
+    )
+    assert project_bundle_release_acceptance_snapshot_list["input_schema"]["required"] == [
+        "release_id"
+    ]
+    assert project_bundle_release_acceptance_snapshot_list["annotations"]["readOnlyHint"] is True
+
+    project_bundle_release_acceptance_snapshot_detail = tools[
+        "get_project_bundle_release_acceptance_packet_snapshot"
+    ]
+    assert project_bundle_release_acceptance_snapshot_detail["http"]["method"] == "GET"
+    assert (
+        project_bundle_release_acceptance_snapshot_detail["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/acceptance-packet/"
+        "snapshots/{snapshot_id}"
+    )
+    assert project_bundle_release_acceptance_snapshot_detail["input_schema"]["required"] == [
+        "release_id",
+        "snapshot_id",
+    ]
+    assert project_bundle_release_acceptance_snapshot_detail["annotations"]["readOnlyHint"] is True
+
+    project_bundle_release_acceptance_snapshot_markdown = tools[
+        "export_project_bundle_release_acceptance_packet_snapshot_markdown"
+    ]
+    assert project_bundle_release_acceptance_snapshot_markdown["http"]["method"] == "GET"
+    assert (
+        project_bundle_release_acceptance_snapshot_markdown["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/acceptance-packet/"
+        "snapshots/{snapshot_id}/export/markdown"
+    )
+    assert project_bundle_release_acceptance_snapshot_markdown["input_schema"]["required"] == [
+        "release_id",
+        "snapshot_id",
+    ]
+    assert (
+        project_bundle_release_acceptance_snapshot_markdown["annotations"]["readOnlyHint"] is True
+    )
 
     project_bundle_readiness_tasks = tools["create_tasks_from_project_bundle_readiness"]
     assert project_bundle_readiness_tasks["http"]["method"] == "POST"
@@ -747,6 +811,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "projectBundleReleaseCloseoutButton" in response.text
     assert "projectBundleReleaseCloseoutTasksButton" in response.text
     assert "projectBundleReleaseAcceptancePacketButton" in response.text
+    assert "projectBundleReleaseAcceptancePacketSnapshotButton" in response.text
+    assert "projectBundleReleaseAcceptancePacketSnapshotsButton" in response.text
     assert "projectBundleReadinessButton" in response.text
     assert "projectBundleReadinessTasksButton" in response.text
     assert "projectBundleReadinessSnapshotButton" in response.text
@@ -850,6 +916,10 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/export/project-bundle/releases/${releaseId}/closeout" in script.text
     assert "/research/export/project-bundle/releases/${releaseId}/closeout/tasks" in script.text
     assert "/research/export/project-bundle/releases/${releaseId}/acceptance-packet" in script.text
+    assert (
+        "/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots"
+        in script.text
+    )
     assert "/research/export/project-bundle/readiness" in script.text
     assert "/research/export/project-bundle/readiness/tasks" in script.text
     assert "/research/export/project-bundle/readiness/snapshots" in script.text
@@ -865,6 +935,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "loadProjectBundleReleaseCloseout" in script.text
     assert "createProjectBundleReleaseCloseoutTasks" in script.text
     assert "loadProjectBundleReleaseAcceptancePacket" in script.text
+    assert "saveProjectBundleReleaseAcceptancePacketSnapshot" in script.text
+    assert "listProjectBundleReleaseAcceptancePacketSnapshots" in script.text
     assert "loadProjectBundleReadiness" in script.text
     assert "createProjectBundleReadinessTasks" in script.text
     assert "saveProjectBundleReadinessSnapshot" in script.text
@@ -3161,6 +3233,73 @@ Future work should preserve proposal drafts as reviewable artifacts.
         in project_bundle_release_acceptance_packet_body["markdown_export"]
     )
 
+    project_bundle_release_acceptance_snapshot = client.post(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/acceptance-packet/snapshots",
+        json={
+            "title": "Pytest Project Bundle Release Acceptance Snapshot",
+            "created_by": "pytest",
+        },
+    )
+    assert project_bundle_release_acceptance_snapshot.status_code == 200
+    project_bundle_release_acceptance_snapshot_body = (
+        project_bundle_release_acceptance_snapshot.json()
+    )
+    assert (
+        project_bundle_release_acceptance_snapshot_body["scope"]
+        == "project_bundle_release_acceptance_packet"
+    )
+    assert (
+        project_bundle_release_acceptance_snapshot_body["summary"]["release_id"]
+        == project_bundle_release_body["id"]
+    )
+    assert (
+        project_bundle_release_acceptance_snapshot_body["summary"]["acceptance_status"] == "blocked"
+    )
+    assert project_bundle_release_acceptance_snapshot_body["summary"]["ready_for_signoff"] is False
+    assert (
+        "# Project Bundle Release Acceptance Packet"
+        in project_bundle_release_acceptance_snapshot_body["markdown_export"]
+    )
+
+    project_bundle_release_acceptance_snapshots = client.get(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/acceptance-packet/snapshots?limit=5"
+    )
+    assert project_bundle_release_acceptance_snapshots.status_code == 200
+    assert (
+        project_bundle_release_acceptance_snapshots.json()[0]["id"]
+        == project_bundle_release_acceptance_snapshot_body["id"]
+    )
+
+    project_bundle_release_acceptance_snapshot_detail = client.get(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/acceptance-packet/snapshots/"
+        f"{project_bundle_release_acceptance_snapshot_body['id']}"
+    )
+    assert project_bundle_release_acceptance_snapshot_detail.status_code == 200
+    assert (
+        project_bundle_release_acceptance_snapshot_detail.json()["id"]
+        == project_bundle_release_acceptance_snapshot_body["id"]
+    )
+
+    project_bundle_release_acceptance_snapshot_markdown = client.get(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/acceptance-packet/snapshots/"
+        f"{project_bundle_release_acceptance_snapshot_body['id']}/export/markdown"
+    )
+    assert project_bundle_release_acceptance_snapshot_markdown.status_code == 200
+    assert (
+        "# Project Bundle Release Acceptance Packet"
+        in project_bundle_release_acceptance_snapshot_markdown.text
+    )
+
+    project_bundle_release_acceptance_snapshot_edges = client.get(
+        "/research/graph/edges?edge_type=project_bundle_release_has_acceptance_packet"
+    )
+    assert project_bundle_release_acceptance_snapshot_edges.status_code == 200
+    assert project_bundle_release_acceptance_snapshot_edges.json()
+
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200
     assert project_bundle.headers["content-type"] == "application/zip"
@@ -3187,6 +3326,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "metadata/project-bundle-release-feedback.json" in names
         assert "metadata/project-bundle-release-closeout.json" in names
         assert "metadata/project-bundle-release-acceptance-packet.json" in names
+        assert "metadata/project-bundle-release-acceptance-packet-snapshots.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         assert "metadata/claim-validation-queue.json" in names
@@ -3212,6 +3352,14 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "artifacts/releases/latest-project-bundle-release-feedback.md" in names
         assert "artifacts/releases/latest-project-bundle-release-closeout.md" in names
         assert "artifacts/releases/latest-project-bundle-release-acceptance-packet.md" in names
+        assert (
+            "artifacts/releases/project-bundle-release-acceptance-packet-snapshot-"
+            f"{project_bundle_release_acceptance_snapshot_body['id']}.md"
+        ) in names
+        assert (
+            "artifacts/releases/latest-project-bundle-release-acceptance-packet-snapshot.md"
+            in names
+        )
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         bundled_claim_queue = json.loads(archive.read("metadata/claim-validation-queue.json"))
         bundled_triage_comparison = json.loads(
@@ -3241,6 +3389,9 @@ Future work should preserve proposal drafts as reviewable artifacts.
         )
         bundled_project_bundle_release_acceptance_packet = json.loads(
             archive.read("metadata/project-bundle-release-acceptance-packet.json")
+        )
+        bundled_project_bundle_release_acceptance_packet_snapshots = json.loads(
+            archive.read("metadata/project-bundle-release-acceptance-packet-snapshots.json")
         )
         assert project_manifest["idea_count"] >= 1
         assert readiness_manifest["bundle_type"] == "research_project_bundle"
@@ -3368,6 +3519,29 @@ Future work should preserve proposal drafts as reviewable artifacts.
             == project_bundle_release_body["id"]
         )
         assert bundled_project_bundle_release_acceptance_packet["acceptance_status"] == "blocked"
+        assert project_manifest["project_bundle_release_acceptance_packet_snapshot_count"] >= 1
+        assert (
+            project_manifest["latest_project_bundle_release_acceptance_packet_snapshot_id"]
+            == project_bundle_release_acceptance_snapshot_body["id"]
+        )
+        assert (
+            project_manifest["latest_project_bundle_release_acceptance_packet_snapshot_release_id"]
+            == project_bundle_release_body["id"]
+        )
+        assert (
+            project_manifest["latest_project_bundle_release_acceptance_packet_snapshot_status"]
+            == "blocked"
+        )
+        assert (
+            project_manifest[
+                "latest_project_bundle_release_acceptance_packet_snapshot_ready_for_signoff"
+            ]
+            is False
+        )
+        assert (
+            bundled_project_bundle_release_acceptance_packet_snapshots[0]["id"]
+            == project_bundle_release_acceptance_snapshot_body["id"]
+        )
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["claim_validation_queue_count"] >= 1
         assert project_manifest["claim_validation_queue_idea_count"] >= 1

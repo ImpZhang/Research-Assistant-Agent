@@ -901,6 +901,48 @@ class ArtifactGraphService:
                 payload={"source": task.source_type},
             )
 
+    def link_project_bundle_release_acceptance_packet(
+        self,
+        release: ResearchBrief,
+        snapshot: ResearchBrief,
+    ) -> None:
+        release_summary = release.summary_json or {}
+        snapshot_summary = snapshot.summary_json or {}
+        release_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release",
+            label=release.title,
+            canonical_key=release.id,
+            payload={
+                "recipient": release_summary.get("recipient", ""),
+                "readiness_level": release_summary.get("readiness_level", ""),
+                "readiness_score": release_summary.get("readiness_score", 0.0),
+                "owner_type": "project_bundle_release",
+            },
+        )
+        snapshot_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release_acceptance_packet",
+            label=snapshot.title,
+            canonical_key=snapshot.id,
+            payload={
+                "release_id": release.id,
+                "recipient": snapshot_summary.get("recipient", ""),
+                "acceptance_status": snapshot_summary.get("acceptance_status", ""),
+                "ready_for_signoff": snapshot_summary.get("ready_for_signoff", False),
+                "signoff_confirmed": snapshot_summary.get("signoff_confirmed", False),
+                "remaining_action_count": len(snapshot_summary.get("remaining_actions") or []),
+                "owner_type": "project_bundle_release_acceptance_packet",
+            },
+        )
+        self.graph.create_edge(
+            source_node=release_node,
+            target_node=snapshot_node,
+            edge_type="project_bundle_release_has_acceptance_packet",
+            payload={
+                "acceptance_status": snapshot_summary.get("acceptance_status", ""),
+                "ready_for_signoff": snapshot_summary.get("ready_for_signoff", False),
+            },
+        )
+
     def link_project_advisor_chat_tasks(self, chat: dict, tasks: list[ResearchTask]) -> None:
         chat_node = self.graph.get_or_create_node(
             node_type="project_advisor_chat",

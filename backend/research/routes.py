@@ -128,6 +128,7 @@ from backend.research.schemas import (
     ProjectBundleReadinessSnapshotCreate,
     ProjectBundleReadinessTaskGenerateRequest,
     ProjectBundleReleaseAcceptancePacketResponse,
+    ProjectBundleReleaseAcceptancePacketSnapshotCreate,
     ProjectBundleReleaseCloseoutResponse,
     ProjectBundleReleaseCloseoutTaskGenerateRequest,
     ProjectBundleReleaseCreate,
@@ -334,6 +335,7 @@ def status() -> ProjectStatus:
             "project_bundle_release_closeout_tracking",
             "project_bundle_release_closeout_task_generation",
             "project_bundle_release_acceptance_packets",
+            "project_bundle_release_acceptance_packet_snapshots",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -674,6 +676,45 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/export/project-bundle/releases/{release_id}/acceptance-packet",
             output_model="ProjectBundleReleaseAcceptancePacketResponse",
+        ),
+        ToolManifestItem(
+            name="create_project_bundle_release_acceptance_packet_snapshot",
+            description=(
+                "Persist the current release acceptance packet as a durable "
+                "customer/advisor signoff snapshot."
+            ),
+            method="POST",
+            path="/research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots",
+            input_model="ProjectBundleReleaseAcceptancePacketSnapshotCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_project_bundle_release_acceptance_packet_snapshots",
+            description="List saved release acceptance packet snapshots for one release.",
+            method="GET",
+            path="/research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots",
+            output_model="list[ResearchBriefRead]",
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_release_acceptance_packet_snapshot",
+            description="Load one saved release acceptance packet snapshot.",
+            method="GET",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/acceptance-packet/"
+                "snapshots/{snapshot_id}"
+            ),
+            output_model="ResearchBriefDetail",
+        ),
+        ToolManifestItem(
+            name="export_project_bundle_release_acceptance_packet_snapshot_markdown",
+            description="Export a saved release acceptance packet snapshot as Markdown.",
+            method="GET",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/acceptance-packet/"
+                "snapshots/{snapshot_id}/export/markdown"
+            ),
+            output_model="text/markdown",
         ),
         ToolManifestItem(
             name="get_project_bundle_readiness",
@@ -10194,6 +10235,110 @@ def get_project_bundle_release_acceptance_packet(
     return _project_bundle_release_acceptance_packet(release, session)
 
 
+@router.post(
+    "/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots",
+    response_model=ResearchBriefDetail,
+)
+def create_project_bundle_release_acceptance_packet_snapshot(
+    release_id: str,
+    payload: ProjectBundleReleaseAcceptancePacketSnapshotCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    release = _get_project_bundle_release_or_404(release_id, session)
+    packet = _project_bundle_release_acceptance_packet(release, session)
+    title = payload.title or "Project Bundle Release Acceptance Packet Snapshot"
+    snapshot = ResearchBrief(
+        title=title,
+        scope="project_bundle_release_acceptance_packet",
+        idea_ids_json=[],
+        summary_json={
+            "release_id": release.id,
+            "release_title": release.title,
+            "recipient": packet.recipient,
+            "acceptance_status": packet.acceptance_status,
+            "ready_for_signoff": packet.ready_for_signoff,
+            "signoff_confirmed": packet.signoff_confirmed,
+            "closeout_status": packet.closeout.closeout_status,
+            "closeout_ready": packet.closeout.ready_to_close,
+            "remaining_actions": packet.remaining_actions,
+            "checklist": packet.checklist,
+            "closeout_task_summary": packet.closeout_task_summary,
+            "release_progress_summary": packet.release_progress.task_summary,
+            "latest_feedback_id": packet.latest_feedback.get("id", ""),
+            "source_generated_at": packet.generated_at.isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        markdown_export=packet.markdown_export,
+        created_by=payload.created_by or "researcher",
+    )
+    session.add(snapshot)
+    session.commit()
+    session.refresh(snapshot)
+    ArtifactGraphService(GraphService(session)).link_project_bundle_release_acceptance_packet(
+        release,
+        snapshot,
+    )
+    session.commit()
+    return _serialize_research_brief(snapshot, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots",
+    response_model=list[ResearchBriefRead],
+)
+def list_project_bundle_release_acceptance_packet_snapshots(
+    release_id: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    _get_project_bundle_release_or_404(release_id, session)
+    return [
+        _serialize_research_brief(snapshot)
+        for snapshot in _project_bundle_release_acceptance_packet_snapshots(
+            session,
+            release_id=release_id,
+            limit=limit,
+        )
+    ]
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/{snapshot_id}",
+    response_model=ResearchBriefDetail,
+)
+def get_project_bundle_release_acceptance_packet_snapshot(
+    release_id: str,
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    _get_project_bundle_release_or_404(release_id, session)
+    snapshot = _get_project_bundle_release_acceptance_packet_snapshot_or_404(
+        release_id,
+        snapshot_id,
+        session,
+    )
+    return _serialize_research_brief(snapshot, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/acceptance-packet/"
+    "snapshots/{snapshot_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_bundle_release_acceptance_packet_snapshot_markdown(
+    release_id: str,
+    snapshot_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    _get_project_bundle_release_or_404(release_id, session)
+    snapshot = _get_project_bundle_release_acceptance_packet_snapshot_or_404(
+        release_id,
+        snapshot_id,
+        session,
+    )
+    return PlainTextResponse(snapshot.markdown_export or "", media_type="text/markdown")
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -10332,6 +10477,9 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     bundle_releases = context["bundle_releases"]
     latest_bundle_release_progress = context["latest_bundle_release_progress"]
     bundle_release_feedbacks = context["bundle_release_feedbacks"]
+    bundle_release_acceptance_packet_snapshots = context[
+        "bundle_release_acceptance_packet_snapshots"
+    ]
     latest_bundle_release_closeout = context["latest_bundle_release_closeout"]
     latest_bundle_release_acceptance_packet = context["latest_bundle_release_acceptance_packet"]
     briefs = context["briefs"]
@@ -10399,6 +10547,15 @@ def _build_project_bundle_zip(session: Session) -> bytes:
             "metadata/project-bundle-release-feedback.json",
             _json_dump(
                 [_serialize_research_brief(feedback) for feedback in bundle_release_feedbacks]
+            ),
+        )
+        archive.writestr(
+            "metadata/project-bundle-release-acceptance-packet-snapshots.json",
+            _json_dump(
+                [
+                    _serialize_research_brief(snapshot)
+                    for snapshot in bundle_release_acceptance_packet_snapshots
+                ]
             ),
         )
         if latest_bundle_release_closeout:
@@ -10481,11 +10638,30 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                     f"artifacts/releases/project-bundle-release-feedback-{feedback.id}.md",
                     feedback.markdown_export,
                 )
+        for snapshot in bundle_release_acceptance_packet_snapshots:
+            if snapshot.markdown_export:
+                _write_markdown(
+                    archive,
+                    (
+                        "artifacts/releases/"
+                        f"project-bundle-release-acceptance-packet-snapshot-{snapshot.id}.md"
+                    ),
+                    snapshot.markdown_export,
+                )
         if bundle_release_feedbacks and bundle_release_feedbacks[0].markdown_export:
             _write_markdown(
                 archive,
                 "artifacts/releases/latest-project-bundle-release-feedback.md",
                 bundle_release_feedbacks[0].markdown_export,
+            )
+        if (
+            bundle_release_acceptance_packet_snapshots
+            and bundle_release_acceptance_packet_snapshots[0].markdown_export
+        ):
+            _write_markdown(
+                archive,
+                "artifacts/releases/latest-project-bundle-release-acceptance-packet-snapshot.md",
+                bundle_release_acceptance_packet_snapshots[0].markdown_export,
             )
         if latest_bundle_release_closeout:
             _write_markdown(
@@ -10559,6 +10735,9 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         _project_bundle_release_progress(bundle_releases[0], session) if bundle_releases else None
     )
     bundle_release_feedbacks = _project_bundle_release_feedbacks(session, limit=12)
+    bundle_release_acceptance_packet_snapshots = (
+        _project_bundle_release_acceptance_packet_snapshots(session, limit=12)
+    )
     latest_bundle_release_closeout = (
         _project_bundle_release_closeout(bundle_releases[0], session) if bundle_releases else None
     )
@@ -10587,6 +10766,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         bundle_releases=bundle_releases,
         latest_bundle_release_progress=latest_bundle_release_progress,
         bundle_release_feedbacks=bundle_release_feedbacks,
+        bundle_release_acceptance_packet_snapshots=bundle_release_acceptance_packet_snapshots,
         latest_bundle_release_closeout=latest_bundle_release_closeout,
         latest_bundle_release_acceptance_packet=latest_bundle_release_acceptance_packet,
         briefs=briefs,
@@ -10610,6 +10790,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "bundle_releases": bundle_releases,
         "latest_bundle_release_progress": latest_bundle_release_progress,
         "bundle_release_feedbacks": bundle_release_feedbacks,
+        "bundle_release_acceptance_packet_snapshots": (bundle_release_acceptance_packet_snapshots),
         "latest_bundle_release_closeout": latest_bundle_release_closeout,
         "latest_bundle_release_acceptance_packet": latest_bundle_release_acceptance_packet,
         "briefs": briefs,
@@ -10683,6 +10864,42 @@ def _project_bundle_release_feedbacks(
         for feedback in feedbacks
         if (feedback.summary_json or {}).get("release_id") == release_id
     ][: max(1, min(limit, 50))]
+
+
+def _project_bundle_release_acceptance_packet_snapshots(
+    session: Session,
+    *,
+    release_id: str | None = None,
+    limit: int = 12,
+) -> list[ResearchBrief]:
+    fetch_limit = max(1, min(limit, 50)) if release_id is None else 200
+    snapshots = (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "project_bundle_release_acceptance_packet")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(fetch_limit)
+        .all()
+    )
+    if release_id is None:
+        return snapshots
+    return [
+        snapshot
+        for snapshot in snapshots
+        if (snapshot.summary_json or {}).get("release_id") == release_id
+    ][: max(1, min(limit, 50))]
+
+
+def _get_project_bundle_release_acceptance_packet_snapshot_or_404(
+    release_id: str,
+    snapshot_id: str,
+    session: Session,
+) -> ResearchBrief:
+    snapshot = session.get(ResearchBrief, snapshot_id)
+    if snapshot is None or snapshot.scope != "project_bundle_release_acceptance_packet":
+        raise HTTPException(status_code=404, detail="Release acceptance packet snapshot not found")
+    if (snapshot.summary_json or {}).get("release_id") != release_id:
+        raise HTTPException(status_code=404, detail="Release acceptance packet snapshot not found")
+    return snapshot
 
 
 def _clean_project_bundle_feedback_items(items: list[str]) -> list[str]:
@@ -11140,6 +11357,7 @@ def _project_bundle_manifest(
     bundle_releases: list[ResearchBrief],
     latest_bundle_release_progress: ProjectBundleReleaseProgressResponse | None,
     bundle_release_feedbacks: list[ResearchBrief],
+    bundle_release_acceptance_packet_snapshots: list[ResearchBrief],
     latest_bundle_release_closeout: ProjectBundleReleaseCloseoutResponse | None,
     latest_bundle_release_acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse | None,
     briefs: list[ResearchBrief],
@@ -11156,6 +11374,11 @@ def _project_bundle_manifest(
     )
     latest_bundle_release_feedback = (
         bundle_release_feedbacks[0].summary_json if bundle_release_feedbacks else {}
+    ) or {}
+    latest_bundle_release_acceptance_packet_snapshot = (
+        bundle_release_acceptance_packet_snapshots[0].summary_json
+        if bundle_release_acceptance_packet_snapshots
+        else {}
     ) or {}
     return {
         "bundle_type": "research_project_bundle",
@@ -11353,6 +11576,23 @@ def _project_bundle_manifest(
             )
             if latest_bundle_release_acceptance_packet
             else 0
+        ),
+        "project_bundle_release_acceptance_packet_snapshot_count": len(
+            bundle_release_acceptance_packet_snapshots
+        ),
+        "latest_project_bundle_release_acceptance_packet_snapshot_id": (
+            bundle_release_acceptance_packet_snapshots[0].id
+            if bundle_release_acceptance_packet_snapshots
+            else ""
+        ),
+        "latest_project_bundle_release_acceptance_packet_snapshot_release_id": (
+            latest_bundle_release_acceptance_packet_snapshot.get("release_id", "")
+        ),
+        "latest_project_bundle_release_acceptance_packet_snapshot_status": (
+            latest_bundle_release_acceptance_packet_snapshot.get("acceptance_status", "")
+        ),
+        "latest_project_bundle_release_acceptance_packet_snapshot_ready_for_signoff": (
+            latest_bundle_release_acceptance_packet_snapshot.get("ready_for_signoff", False)
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
@@ -12014,6 +12254,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("latest_project_bundle_release_acceptance_packet_available"):
         lines.append(
             "- `artifacts/releases/latest-project-bundle-release-acceptance-packet.md`: customer/advisor acceptance status and signoff checklist."
+        )
+    if manifest.get("project_bundle_release_acceptance_packet_snapshot_count", 0):
+        lines.append(
+            "- `artifacts/releases/latest-project-bundle-release-acceptance-packet-snapshot.md`: persisted release acceptance/signoff snapshot."
         )
     lines.extend(
         [

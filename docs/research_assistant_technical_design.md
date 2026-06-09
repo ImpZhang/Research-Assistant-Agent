@@ -1212,6 +1212,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/export/project-bundle/releases/{release_id}/acceptance-packet` is the customer/advisor-facing release acceptance view. It recomputes the release progress, latest feedback, closeout response, and `project_bundle_release_closeout` tasks, then returns `ProjectBundleReleaseAcceptancePacketResponse` with `acceptance_status`, `ready_for_signoff`, `signoff_confirmed`, an acceptance checklist, remaining actions, open closeout tasks, and Markdown. `/export/project-bundle` writes `metadata/project-bundle-release-acceptance-packet.json`, `artifacts/releases/latest-project-bundle-release-acceptance-packet.md`, and manifest fields for acceptance status, signoff readiness, remaining action count, and open closeout task count.
 
+`/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots` persists the current acceptance packet as a `ResearchBrief` with scope `project_bundle_release_acceptance_packet`. The snapshot stores the source release id/title, acceptance status, signoff flags, closeout status, remaining actions, checklist, closeout-task summary, release-progress summary, latest feedback id, source generation time, persisted generation time, and the Markdown signoff packet. List/detail/export endpoints expose saved snapshots, `ArtifactGraphService.link_project_bundle_release_acceptance_packet` creates `project_bundle_release_has_acceptance_packet` edges, and `/export/project-bundle` writes `metadata/project-bundle-release-acceptance-packet-snapshots.json`, per-snapshot Markdown artifacts, the latest snapshot Markdown artifact, and manifest fields for snapshot count/latest id/release/status/signoff readiness.
+
 `/export/project-bundle/readiness` is the read-only gate before building or sharing the handoff zip. It calls the same project bundle context builder used by `/export/project-bundle`, reads the generated manifest, and returns a checklist for project scope, quality gates, triage snapshot history, triage comparison, pilot report history, pilot comparison, claim validation queue, research plans, opportunity radar, optional advisor briefs, and blocked task review. The response includes readiness score/level, missing required checks, quick actions, the manifest summary, and Markdown export, so Workbench, MCP tools, and external planners see the same delivery state that the zip manifest will later encode.
 
 `/export/project-bundle/readiness/tasks` converts bundle readiness gaps into `ResearchTask` records with `owner_type=project_bundle_readiness` and `due_phase=bundle_handoff_follow_up`. Required missing checks become critical/high handoff work, optional warnings can be included for final polish, and a delivery-ready state falls back to a final review/export task. `ArtifactGraphService.link_project_bundle_readiness_tasks` writes `project_bundle_readiness_creates_task` edges so handoff gaps appear in GraphRAG-lite traces, task boards, advisor briefs, and future external planner handoff.
@@ -1361,6 +1363,10 @@ POST /research/export/project-bundle/releases/{release_id}/feedback/{feedback_id
 GET  /research/export/project-bundle/releases/{release_id}/closeout
 POST /research/export/project-bundle/releases/{release_id}/closeout/tasks
 GET  /research/export/project-bundle/releases/{release_id}/acceptance-packet
+POST /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots
+GET  /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots
+GET  /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/{snapshot_id}
+GET  /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/{snapshot_id}/export/markdown
 GET  /research/export/project-bundle
 POST /research/briefs
 GET  /research/briefs

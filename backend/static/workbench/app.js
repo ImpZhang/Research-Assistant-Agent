@@ -23,6 +23,7 @@ const state = {
   latestProjectBundleReadinessSnapshotId: "",
   latestProjectBundleReleaseId: "",
   latestProjectBundleReleaseFeedbackId: "",
+  latestProjectBundleReleaseAcceptancePacketSnapshotId: "",
   latestResearchPlanId: "",
   researchProfile: null,
   onboardingReadiness: null,
@@ -1952,6 +1953,78 @@ async function loadProjectBundleReleaseAcceptancePacket() {
   }
 }
 
+async function saveProjectBundleReleaseAcceptancePacketSnapshot() {
+  renderResult(
+    "workflowResult",
+    "Saving project bundle release acceptance packet snapshot...",
+    "warn",
+  );
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before saving an acceptance snapshot.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Workbench Project Bundle Release Acceptance Packet Snapshot",
+          created_by: "workbench",
+        }),
+      },
+    );
+    state.latestProjectBundleReleaseAcceptancePacketSnapshotId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Saved release acceptance snapshot <code>${escapeHtml(body.id)}</code> with status <code>${escapeHtml(body.summary.acceptance_status)}</code>.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function listProjectBundleReleaseAcceptancePacketSnapshots() {
+  renderResult("workflowResult", "Loading release acceptance packet snapshots...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before loading acceptance snapshots.",
+        "warn",
+      );
+      return;
+    }
+    const snapshots = await api(
+      `/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots?limit=6`,
+    );
+    if (snapshots.length) {
+      state.latestProjectBundleReleaseAcceptancePacketSnapshotId = snapshots[0].id;
+    }
+    const lines = ["# Release Acceptance Packet Snapshots", ""];
+    if (!snapshots.length) {
+      lines.push("- No release acceptance packet snapshots saved.");
+    }
+    for (const snapshot of snapshots) {
+      const status = snapshot.summary.acceptance_status || "unknown";
+      const ready = snapshot.summary.ready_for_signoff ? "ready" : "not ready";
+      lines.push(`- \`${snapshot.id}\` ${snapshot.title}: ${status}, ${ready}`);
+    }
+    $("dossierPreview").textContent = lines.join("\n");
+    renderResult("workflowResult", `Loaded ${snapshots.length} acceptance snapshots.`);
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -2718,6 +2791,14 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReleaseAcceptancePacketButton").addEventListener(
     "click",
     loadProjectBundleReleaseAcceptancePacket,
+  );
+  $("projectBundleReleaseAcceptancePacketSnapshotButton").addEventListener(
+    "click",
+    saveProjectBundleReleaseAcceptancePacketSnapshot,
+  );
+  $("projectBundleReleaseAcceptancePacketSnapshotsButton").addEventListener(
+    "click",
+    listProjectBundleReleaseAcceptancePacketSnapshots,
   );
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(

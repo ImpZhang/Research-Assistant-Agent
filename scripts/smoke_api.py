@@ -250,6 +250,13 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("research status did not include project bundle release closeout tasks")
     if "project_bundle_release_acceptance_packets" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include project bundle release acceptance")
+    if (
+        "project_bundle_release_acceptance_packet_snapshots"
+        not in status["implemented_capabilities"]
+    ):
+        raise RuntimeError(
+            "research status did not include project bundle release acceptance snapshots"
+        )
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -466,6 +473,22 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("tool manifest did not include project bundle release closeout tasks")
     if "get_project_bundle_release_acceptance_packet" not in manifest_names:
         raise RuntimeError("tool manifest did not include project bundle release acceptance")
+    if "create_project_bundle_release_acceptance_packet_snapshot" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project bundle release acceptance snapshot creator"
+        )
+    if "list_project_bundle_release_acceptance_packet_snapshots" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project bundle release acceptance snapshot lister"
+        )
+    if "get_project_bundle_release_acceptance_packet_snapshot" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project bundle release acceptance snapshot reader"
+        )
+    if "export_project_bundle_release_acceptance_packet_snapshot_markdown" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project bundle release acceptance snapshot export"
+        )
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
@@ -2384,6 +2407,80 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         not in project_bundle_release_acceptance_packet["markdown_export"]
     ):
         raise RuntimeError("project bundle release acceptance markdown missed title")
+    project_bundle_release_acceptance_snapshot = require_ok(
+        client.post(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/acceptance-packet/snapshots",
+            json_body={
+                "title": "Smoke Project Bundle Release Acceptance Snapshot",
+                "created_by": "smoke",
+            },
+        ),
+        "project bundle release acceptance snapshot",
+    )
+    if (
+        project_bundle_release_acceptance_snapshot["scope"]
+        != "project_bundle_release_acceptance_packet"
+    ):
+        raise RuntimeError("project bundle release acceptance snapshot used wrong scope")
+    if (
+        project_bundle_release_acceptance_snapshot["summary"]["release_id"]
+        != project_bundle_release["id"]
+    ):
+        raise RuntimeError("project bundle release acceptance snapshot used wrong release id")
+    if project_bundle_release_acceptance_snapshot["summary"]["acceptance_status"] != "blocked":
+        raise RuntimeError("project bundle release acceptance snapshot missed blocked status")
+    if project_bundle_release_acceptance_snapshot["summary"]["ready_for_signoff"]:
+        raise RuntimeError("project bundle release acceptance snapshot should not be ready")
+    if (
+        "# Project Bundle Release Acceptance Packet"
+        not in project_bundle_release_acceptance_snapshot["markdown_export"]
+    ):
+        raise RuntimeError("project bundle release acceptance snapshot markdown missed title")
+    project_bundle_release_acceptance_snapshots = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/acceptance-packet/snapshots?limit=5"
+        ),
+        "project bundle release acceptance snapshot list",
+    )
+    if (
+        not project_bundle_release_acceptance_snapshots
+        or project_bundle_release_acceptance_snapshots[0]["id"]
+        != project_bundle_release_acceptance_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle release acceptance snapshot list order was wrong")
+    project_bundle_release_acceptance_snapshot_detail = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/acceptance-packet/snapshots/"
+            f"{project_bundle_release_acceptance_snapshot['id']}"
+        ),
+        "project bundle release acceptance snapshot detail",
+    )
+    if (
+        project_bundle_release_acceptance_snapshot_detail["id"]
+        != project_bundle_release_acceptance_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle release acceptance snapshot detail used wrong id")
+    project_bundle_release_acceptance_snapshot_markdown = client.get(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release['id']}/acceptance-packet/snapshots/"
+        f"{project_bundle_release_acceptance_snapshot['id']}/export/markdown"
+    )
+    if project_bundle_release_acceptance_snapshot_markdown.status_code != 200:
+        raise RuntimeError("project bundle release acceptance snapshot markdown export failed")
+    if (
+        "# Project Bundle Release Acceptance Packet"
+        not in project_bundle_release_acceptance_snapshot_markdown.json()
+    ):
+        raise RuntimeError("project bundle release acceptance snapshot export missed title")
+    project_bundle_release_acceptance_snapshot_edges = require_ok(
+        client.get("/research/graph/edges?edge_type=project_bundle_release_has_acceptance_packet"),
+        "project bundle release acceptance snapshot graph edges",
+    )
+    if not project_bundle_release_acceptance_snapshot_edges:
+        raise RuntimeError("project bundle release acceptance snapshot did not create graph edge")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2416,6 +2513,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/project-bundle-release-feedback.json",
             "metadata/project-bundle-release-closeout.json",
             "metadata/project-bundle-release-acceptance-packet.json",
+            "metadata/project-bundle-release-acceptance-packet-snapshots.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
@@ -2437,6 +2535,11 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "artifacts/releases/latest-project-bundle-release-feedback.md",
             "artifacts/releases/latest-project-bundle-release-closeout.md",
             "artifacts/releases/latest-project-bundle-release-acceptance-packet.md",
+            (
+                "artifacts/releases/project-bundle-release-acceptance-packet-snapshot-"
+                f"{project_bundle_release_acceptance_snapshot['id']}.md"
+            ),
+            "artifacts/releases/latest-project-bundle-release-acceptance-packet-snapshot.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -2474,6 +2577,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
         project_bundle_release_acceptance_metadata = json.loads(
             archive.read("metadata/project-bundle-release-acceptance-packet.json")
+        )
+        project_bundle_release_acceptance_snapshot_metadata = json.loads(
+            archive.read("metadata/project-bundle-release-acceptance-packet-snapshots.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -2641,6 +2747,36 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError("project bundle release acceptance metadata used wrong release id")
     if project_bundle_release_acceptance_metadata["acceptance_status"] != "blocked":
         raise RuntimeError("project bundle release acceptance metadata missed blocked status")
+    if project_bundle_manifest["project_bundle_release_acceptance_packet_snapshot_count"] < 1:
+        raise RuntimeError("project bundle manifest missed release acceptance snapshots")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_acceptance_packet_snapshot_id"]
+        != project_bundle_release_acceptance_snapshot["id"]
+    ):
+        raise RuntimeError(
+            "project bundle manifest did not point at latest release acceptance snapshot"
+        )
+    if (
+        project_bundle_manifest[
+            "latest_project_bundle_release_acceptance_packet_snapshot_release_id"
+        ]
+        != project_bundle_release["id"]
+    ):
+        raise RuntimeError("project bundle manifest acceptance snapshot used wrong release id")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_acceptance_packet_snapshot_status"]
+        != "blocked"
+    ):
+        raise RuntimeError("project bundle manifest acceptance snapshot missed blocked status")
+    if project_bundle_manifest[
+        "latest_project_bundle_release_acceptance_packet_snapshot_ready_for_signoff"
+    ]:
+        raise RuntimeError("project bundle manifest acceptance snapshot should not be ready")
+    if (
+        project_bundle_release_acceptance_snapshot_metadata[0]["id"]
+        != project_bundle_release_acceptance_snapshot["id"]
+    ):
+        raise RuntimeError("project bundle acceptance snapshot metadata order was wrong")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -3089,6 +3225,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_release_acceptance_remaining_actions": len(
             project_bundle_release_acceptance_packet["remaining_actions"]
         ),
+        "project_bundle_release_acceptance_snapshot_id": (
+            project_bundle_release_acceptance_snapshot["id"]
+        ),
+        "project_bundle_release_acceptance_snapshot_count": project_bundle_manifest[
+            "project_bundle_release_acceptance_packet_snapshot_count"
+        ],
         "project_bundle_latest_release_recipient": project_bundle_manifest[
             "latest_project_bundle_release_recipient"
         ],
