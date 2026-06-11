@@ -130,6 +130,10 @@ def test_research_status() -> None:
     assert (
         "project_bundle_release_review_outcome_task_generation" in body["implemented_capabilities"]
     )
+    assert (
+        "project_bundle_release_review_outcome_progress_tracking"
+        in body["implemented_capabilities"]
+    )
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
@@ -262,6 +266,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_bundle_release_review_outcome" in names
     assert "export_project_bundle_release_review_outcome_markdown" in names
     assert "create_tasks_from_project_bundle_release_review_outcome" in names
+    assert "get_project_bundle_release_review_outcome_progress" in names
     assert "get_idea_readiness" in names
     assert "get_idea_quality_gate" in names
     assert "create_tasks_from_idea_quality_gate" in names
@@ -613,6 +618,21 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
         "body",
     ]
     assert project_bundle_release_review_outcome_tasks["annotations"]["sideEffectHint"] is True
+
+    project_bundle_release_review_outcome_progress = tools[
+        "get_project_bundle_release_review_outcome_progress"
+    ]
+    assert project_bundle_release_review_outcome_progress["http"]["method"] == "GET"
+    assert (
+        project_bundle_release_review_outcome_progress["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/review-session/"
+        "outcomes/{outcome_id}/progress"
+    )
+    assert project_bundle_release_review_outcome_progress["input_schema"]["required"] == [
+        "release_id",
+        "outcome_id",
+    ]
+    assert project_bundle_release_review_outcome_progress["annotations"]["readOnlyHint"] is True
 
     project_bundle_readiness_tasks = tools["create_tasks_from_project_bundle_readiness"]
     assert project_bundle_readiness_tasks["http"]["method"] == "POST"
@@ -990,6 +1010,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "projectBundleReleaseReviewOutcomeButton" in response.text
     assert "projectBundleReleaseReviewOutcomesButton" in response.text
     assert "projectBundleReleaseReviewOutcomeTasksButton" in response.text
+    assert "projectBundleReleaseReviewOutcomeProgressButton" in response.text
     assert "projectBundleReadinessButton" in response.text
     assert "projectBundleReadinessTasksButton" in response.text
     assert "projectBundleReadinessSnapshotButton" in response.text
@@ -1117,6 +1138,10 @@ def test_workbench_static_assets_are_served() -> None:
         "/research/export/project-bundle/releases/${releaseId}/review-session/outcomes/${outcomeId}/tasks"
         in script.text
     )
+    assert (
+        "/research/export/project-bundle/releases/${releaseId}/review-session/outcomes/${outcomeId}/progress"
+        in script.text
+    )
     assert "/research/export/project-bundle/readiness" in script.text
     assert "/research/export/project-bundle/readiness/tasks" in script.text
     assert "/research/export/project-bundle/readiness/snapshots" in script.text
@@ -1141,6 +1166,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "recordProjectBundleReleaseReviewOutcome" in script.text
     assert "listProjectBundleReleaseReviewOutcomes" in script.text
     assert "createProjectBundleReleaseReviewOutcomeTasks" in script.text
+    assert "loadProjectBundleReleaseReviewOutcomeProgress" in script.text
     assert "loadProjectBundleReadiness" in script.text
     assert "createProjectBundleReadinessTasks" in script.text
     assert "saveProjectBundleReadinessSnapshot" in script.text
@@ -3797,6 +3823,35 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert project_bundle_release_review_outcome_task_edges.status_code == 200
     assert project_bundle_release_review_outcome_task_edges.json()
 
+    project_bundle_release_review_outcome_progress = client.get(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/review-session/outcomes/"
+        f"{project_bundle_release_review_outcome_body['id']}/progress"
+    )
+    assert project_bundle_release_review_outcome_progress.status_code == 200
+    project_bundle_release_review_outcome_progress_body = (
+        project_bundle_release_review_outcome_progress.json()
+    )
+    assert (
+        project_bundle_release_review_outcome_progress_body["release_id"]
+        == project_bundle_release_body["id"]
+    )
+    assert (
+        project_bundle_release_review_outcome_progress_body["outcome_id"]
+        == project_bundle_release_review_outcome_body["id"]
+    )
+    assert project_bundle_release_review_outcome_progress_body["task_summary"]["task_count"] >= len(
+        project_bundle_release_review_outcome_task_body["tasks"]
+    )
+    assert project_bundle_release_review_outcome_progress_body["completion_ratio"] == 0.0
+    assert (
+        project_bundle_release_review_outcome_progress_body["task_summary"]["open_task_count"] >= 1
+    )
+    assert (
+        "# Project Bundle Release Review Outcome Progress"
+        in project_bundle_release_review_outcome_progress_body["markdown_export"]
+    )
+
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200
     assert project_bundle.headers["content-type"] == "application/zip"
@@ -3827,6 +3882,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "metadata/project-bundle-release-acceptance-packet-snapshot-comparison.json" in names
         assert "metadata/project-bundle-release-review-session.json" in names
         assert "metadata/project-bundle-release-review-outcomes.json" in names
+        assert "metadata/project-bundle-release-review-outcome-progress.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         assert "metadata/claim-validation-queue.json" in names
@@ -3870,6 +3926,9 @@ Future work should preserve proposal drafts as reviewable artifacts.
             f"{project_bundle_release_review_outcome_body['id']}.md"
         ) in names
         assert "artifacts/releases/latest-project-bundle-release-review-outcome.md" in names
+        assert (
+            "artifacts/releases/latest-project-bundle-release-review-outcome-progress.md" in names
+        )
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         bundled_claim_queue = json.loads(archive.read("metadata/claim-validation-queue.json"))
         bundled_triage_comparison = json.loads(
@@ -3913,6 +3972,9 @@ Future work should preserve proposal drafts as reviewable artifacts.
         )
         bundled_project_bundle_release_review_outcomes = json.loads(
             archive.read("metadata/project-bundle-release-review-outcomes.json")
+        )
+        bundled_project_bundle_release_review_outcome_progress = json.loads(
+            archive.read("metadata/project-bundle-release-review-outcome-progress.json")
         )
         assert project_manifest["idea_count"] >= 1
         assert readiness_manifest["bundle_type"] == "research_project_bundle"
@@ -4144,6 +4206,32 @@ Future work should preserve proposal drafts as reviewable artifacts.
         )
         assert (
             bundled_project_bundle_release_review_outcomes[0]["id"]
+            == project_bundle_release_review_outcome_body["id"]
+        )
+        assert (
+            project_manifest["latest_project_bundle_release_review_outcome_progress_available"]
+            is True
+        )
+        assert (
+            project_manifest[
+                "latest_project_bundle_release_review_outcome_progress_completion_ratio"
+            ]
+            == project_bundle_release_review_outcome_progress_body["completion_ratio"]
+        )
+        assert (
+            project_manifest[
+                "latest_project_bundle_release_review_outcome_progress_open_task_count"
+            ]
+            >= 1
+        )
+        assert (
+            project_manifest[
+                "latest_project_bundle_release_review_outcome_progress_blocked_task_count"
+            ]
+            >= 0
+        )
+        assert (
+            bundled_project_bundle_release_review_outcome_progress["outcome_id"]
             == project_bundle_release_review_outcome_body["id"]
         )
         assert project_manifest["opportunity_count"] >= 1

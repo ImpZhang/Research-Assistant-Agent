@@ -285,6 +285,13 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "research status did not include project bundle release review outcome tasks"
         )
+    if (
+        "project_bundle_release_review_outcome_progress_tracking"
+        not in status["implemented_capabilities"]
+    ):
+        raise RuntimeError(
+            "research status did not include project bundle release review outcome progress"
+        )
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -558,6 +565,10 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     if "create_tasks_from_project_bundle_release_review_outcome" not in manifest_names:
         raise RuntimeError(
             "tool manifest did not include project bundle release review outcome tasks"
+        )
+    if "get_project_bundle_release_review_outcome_progress" not in manifest_names:
+        raise RuntimeError(
+            "tool manifest did not include project bundle release review outcome progress"
         )
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
@@ -2829,6 +2840,32 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     if not project_bundle_release_review_outcome_task_edges:
         raise RuntimeError("project bundle release review outcome task did not create graph edge")
+    project_bundle_release_review_outcome_progress = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/review-session/outcomes/"
+            f"{project_bundle_release_review_outcome['id']}/progress"
+        ),
+        "project bundle release review outcome progress",
+    )
+    if project_bundle_release_review_outcome_progress["release_id"] != project_bundle_release["id"]:
+        raise RuntimeError("project bundle release review outcome progress used wrong release id")
+    if (
+        project_bundle_release_review_outcome_progress["outcome_id"]
+        != project_bundle_release_review_outcome["id"]
+    ):
+        raise RuntimeError("project bundle release review outcome progress used wrong outcome id")
+    if project_bundle_release_review_outcome_progress["task_summary"]["task_count"] < len(
+        project_bundle_release_review_outcome_tasks["tasks"]
+    ):
+        raise RuntimeError("project bundle release review outcome progress missed tasks")
+    if project_bundle_release_review_outcome_progress["completion_ratio"] != 0.0:
+        raise RuntimeError("project bundle release review outcome progress should start at zero")
+    if (
+        "# Project Bundle Release Review Outcome Progress"
+        not in project_bundle_release_review_outcome_progress["markdown_export"]
+    ):
+        raise RuntimeError("project bundle release review outcome progress markdown missed title")
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2865,6 +2902,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/project-bundle-release-acceptance-packet-snapshot-comparison.json",
             "metadata/project-bundle-release-review-session.json",
             "metadata/project-bundle-release-review-outcomes.json",
+            "metadata/project-bundle-release-review-outcome-progress.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
@@ -2901,6 +2939,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
                 f"{project_bundle_release_review_outcome['id']}.md"
             ),
             "artifacts/releases/latest-project-bundle-release-review-outcome.md",
+            "artifacts/releases/latest-project-bundle-release-review-outcome-progress.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -2952,6 +2991,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
         project_bundle_release_review_outcome_metadata = json.loads(
             archive.read("metadata/project-bundle-release-review-outcomes.json")
+        )
+        project_bundle_release_review_outcome_progress_metadata = json.loads(
+            archive.read("metadata/project-bundle-release-review-outcome-progress.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -3239,6 +3281,36 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         != (project_bundle_release_review_outcome["id"])
     ):
         raise RuntimeError("project bundle review outcome metadata order was wrong")
+    if not project_bundle_manifest[
+        "latest_project_bundle_release_review_outcome_progress_available"
+    ]:
+        raise RuntimeError("project bundle manifest missed review outcome progress")
+    if (
+        project_bundle_manifest[
+            "latest_project_bundle_release_review_outcome_progress_completion_ratio"
+        ]
+        != project_bundle_release_review_outcome_progress["completion_ratio"]
+    ):
+        raise RuntimeError("project bundle manifest review outcome progress ratio diverged")
+    if (
+        project_bundle_manifest[
+            "latest_project_bundle_release_review_outcome_progress_open_task_count"
+        ]
+        < 1
+    ):
+        raise RuntimeError("project bundle manifest review outcome progress missed open tasks")
+    if (
+        project_bundle_manifest[
+            "latest_project_bundle_release_review_outcome_progress_blocked_task_count"
+        ]
+        < 0
+    ):
+        raise RuntimeError("project bundle manifest review outcome progress blockers diverged")
+    if (
+        project_bundle_release_review_outcome_progress_metadata["outcome_id"]
+        != project_bundle_release_review_outcome["id"]
+    ):
+        raise RuntimeError("project bundle review outcome progress metadata used wrong outcome id")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -3717,6 +3789,12 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         ],
         "project_bundle_release_review_outcome_task_count": len(
             project_bundle_release_review_outcome_tasks["tasks"]
+        ),
+        "project_bundle_release_review_outcome_progress_completion": (
+            project_bundle_release_review_outcome_progress["completion_ratio"]
+        ),
+        "project_bundle_release_review_outcome_progress_open_count": (
+            project_bundle_release_review_outcome_progress["task_summary"]["open_task_count"]
         ),
         "project_bundle_latest_release_recipient": project_bundle_manifest[
             "latest_project_bundle_release_recipient"

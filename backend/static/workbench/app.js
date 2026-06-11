@@ -2310,6 +2310,47 @@ async function createProjectBundleReleaseReviewOutcomeTasks() {
   }
 }
 
+async function loadProjectBundleReleaseReviewOutcomeProgress() {
+  renderResult("workflowResult", "Loading release review outcome progress...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before loading review outcome progress.",
+        "warn",
+      );
+      return;
+    }
+    let outcomeId = state.latestProjectBundleReleaseReviewOutcomeId;
+    if (!outcomeId) {
+      const outcomes = await api(
+        `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes?limit=1`,
+      );
+      if (!outcomes.length) {
+        renderResult(
+          "workflowResult",
+          "Record a release review outcome before loading outcome progress.",
+          "warn",
+        );
+        return;
+      }
+      outcomeId = outcomes[0].id;
+      state.latestProjectBundleReleaseReviewOutcomeId = outcomeId;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes/${outcomeId}/progress`,
+    );
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Review outcome follow-up is ${(body.completion_ratio * 100).toFixed(1)}% complete. Open tasks: ${body.task_summary.open_task_count || 0}; blockers: ${body.task_summary.blocked_task_count || 0}.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -3112,6 +3153,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReleaseReviewOutcomeTasksButton").addEventListener(
     "click",
     createProjectBundleReleaseReviewOutcomeTasks,
+  );
+  $("projectBundleReleaseReviewOutcomeProgressButton").addEventListener(
+    "click",
+    loadProjectBundleReleaseReviewOutcomeProgress,
   );
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(
