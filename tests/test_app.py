@@ -115,13 +115,16 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
     compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
     deployment = (root / "docs" / "deployment.md").read_text(encoding="utf-8")
+    migration = (root / "docs" / "database_migration_strategy.md").read_text(encoding="utf-8")
 
     assert "uvicorn backend.app:app" in dockerfile
     assert "API_KEY_AUTH_ENABLED" in compose
     assert "/health/ready" in compose
     assert "X-Research-Assistant-Key" in deployment
     assert "WRITE_AUDIT_ENABLED" in deployment
+    assert "database_migration_strategy.md" in deployment
     assert "MCP bridge" in deployment
+    assert "No automatic migration execution" in migration
 
 
 def test_research_status() -> None:

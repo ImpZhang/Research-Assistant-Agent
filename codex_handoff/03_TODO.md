@@ -215,12 +215,16 @@ Goal:
 
 - Make the project safer for real pilot usage.
 
+Completed slice:
+
+- Documented the database migration strategy in `docs/database_migration_strategy.md` without adding migration tooling or changing production data.
+
 Likely work:
 
-- Add database migration approach.
+- Introduce migration tooling only after operator approval and dependency sync approval.
 - Add user/project scoping model.
 - Add API key audit records.
-- Add write-operation audit log.
+- Add write-operation audit log persistence/export hardening.
 - Add backup/restore script for `/data`.
 - Add stricter upload limits and file validation.
 

@@ -57,6 +57,7 @@ Before starting or upgrading a customer-pilot service:
 - [ ] Set `API_KEY_AUTH_ENABLED=true` and use a long random `API_KEY` for browser, MCP, and scripted access.
 - [ ] Confirm `RESEARCH_DB_URL` and `PAPER_UPLOAD_DIR` point at persistent storage, not an ephemeral build directory.
 - [ ] Back up `/app/data` or the equivalent data volume before rebuilds, migrations, or host moves.
+- [ ] If SQLAlchemy models changed, review `docs/database_migration_strategy.md` and confirm no implicit startup migration is being relied on.
 - [ ] Start or rebuild the service only during an approved deployment window.
 - [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`.
 - [ ] Open `/workbench`, save the API key in the top bar, refresh Pilot Launch, and confirm the first-run empty/error states are actionable.

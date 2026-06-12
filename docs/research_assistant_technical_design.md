@@ -1280,6 +1280,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 生产化薄层由 `backend/app.py` 负责，而不混入科研 workflow service：`/health/ready` 检查 database 和 paper upload directory，`API_KEY_AUTH_ENABLED=true` 时对 `/research/*` 启用 API key guard，支持 `X-Research-Assistant-Key` 与 `Authorization: Bearer`。`Dockerfile` 和 `docker-compose.yml` 提供单容器客户试点入口，compose 使用 `/app/data` volume 保存 SQLite 与上传文件，并默认要求设置 `API_KEY`。
 
+Database migration policy is documented in `docs/database_migration_strategy.md`. Current startup only creates missing tables with SQLAlchemy metadata; customer-pilot schema changes must be explicit, backed up, and reviewed before introducing Alembic or running migrations against `/app/data`.
+
 Workbench 的 `api()` helper 会读取本地保存的 API key，并只对 `/research/*` 自动注入 `X-Research-Assistant-Key`。页面顶栏提供保存和清除按钮，使浏览器试点能与后端 API key guard 和 MCP bridge auth forwarding 使用同一份部署 secret。
 
 Workbench 前端使用统一的 `workbenchErrorMessage`、`renderWorkbenchError` 和 `renderWorkbenchEmpty` helpers 渲染 first-run API/key/network/missing-input 状态。该层只改变浏览器提示，不改变后端 API、持久化模型或权限判断。

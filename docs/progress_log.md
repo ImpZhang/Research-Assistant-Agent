@@ -200,3 +200,21 @@ Verification completed:
 - `.venv/bin/ruff check tests/test_app.py` passed.
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 3.50s`.
+
+
+## 2026-06-12 - Database Migration Strategy
+
+Documentation maintenance completed:
+
+- Added `docs/database_migration_strategy.md` to document the current SQLAlchemy `create_all` state, first-pilot schema-change policy, future Alembic direction, pre-migration checklist, SQLite constraints, acceptance criteria, and open questions.
+- Linked the strategy from README, deployment checklist, technical design, and handoff TODO.
+- Kept this as documentation-only work; no dependencies, migration directories, database commands, or service behavior changed.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `git --no-pager diff --check` passed.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format tests/test_app.py` reformatted the touched test file.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `1 passed in 3.12s`.
