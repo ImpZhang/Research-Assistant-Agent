@@ -273,3 +273,23 @@ Verification completed:
 - Reviewed `docs/admin_authorization_policy.md` for secret-safe placeholder-only guidance.
 - `git --no-pager diff --check` passed.
 - No runtime code, dependencies, services, databases, or secret files were touched.
+
+
+## 2026-06-12 - Admin-Gated Write Audit Summary
+
+Implemented in progress:
+
+- Added default-off `AUDIT_ADMIN_EXPORT_ENABLED` settings and `AUDIT_ADMIN_KEY_HEADER_NAME` placeholder documentation without adding real secrets.
+- Added `GET /research/admin/write-audit/summary`, registered only when the admin export flag is enabled.
+- Added sanitized JSONL aggregate summary logic that reports counts, status classes, routes, and recent request ids without actor labels, key fingerprints, request bodies, or raw events.
+- Added tests for default-disabled behavior, normal API-key-only denial, wrong admin key denial, and successful sanitized summary output.
+- Updated README, deployment notes, audit design, technical design, admin authorization policy, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/app.py backend/research/config.py backend/research/routes.py backend/research/schemas.py backend/research/services/write_audit_service.py tests/test_app.py` reformatted one file, then left files unchanged on rerun.
+- `.venv/bin/ruff check backend/app.py backend/research/config.py backend/research/routes.py backend/research/schemas.py backend/research/services/write_audit_service.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py backend/research/config.py backend/research/routes.py backend/research/schemas.py backend/research/services/write_audit_service.py tests/test_app.py` passed.
+- Focused pytest passed: `7 passed in 3.60s`.
+- Full `tests/test_app.py` passed with verbose durations: `43 passed in 762.87s (0:12:42)`.

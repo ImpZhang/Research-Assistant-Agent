@@ -471,7 +471,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-See `docs/deployment.md` for the runtime contract, pilot deployment checklist, `/app/data` backup/restore operator notes, ready checks, API key calls, Workbench key storage, MCP bridge auth forwarding, and backup notes. Write-operation audit logging has a configurable JSONL prototype and is designed in `docs/write_operation_audit_design.md` before database persistence changes are introduced. Admin-only audit access rules are documented in `docs/admin_authorization_policy.md`. Database migration policy is documented in `docs/database_migration_strategy.md` before migration tooling is introduced.
+See `docs/deployment.md` for the runtime contract, pilot deployment checklist, `/app/data` backup/restore operator notes, ready checks, API key calls, Workbench key storage, MCP bridge auth forwarding, and backup notes. Write-operation audit logging has a configurable JSONL prototype and a default-off admin-gated summary endpoint described in `docs/write_operation_audit_design.md`. Admin-only audit access rules are documented in `docs/admin_authorization_policy.md`. Database migration policy is documented in `docs/database_migration_strategy.md` before migration tooling is introduced.
 
 ## Near-Term Roadmap
 

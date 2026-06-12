@@ -156,21 +156,157 @@ def test_write_operation_audit_disabled_by_default(tmp_path, monkeypatch) -> Non
     assert not (tmp_path / "write-operations.jsonl").exists()
 
 
+def test_write_audit_admin_summary_disabled_by_default(monkeypatch) -> None:
+    monkeypatch.setenv("AUDIT_ADMIN_EXPORT_ENABLED", "false")
+    monkeypatch.delenv("AUDIT_ADMIN_KEY", raising=False)
+
+    client = TestClient(create_app())
+    response = client.get("/research/admin/write-audit/summary")
+
+    assert response.status_code == 404
+
+
+def test_write_audit_admin_summary_requires_separate_admin_key(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("AUDIT_ADMIN_EXPORT_ENABLED", "true")
+    monkeypatch.setenv("AUDIT_ADMIN_KEY", "pytest-admin")
+    monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
+    monkeypatch.setenv("API_KEY", "pytest-secret")
+    monkeypatch.setenv("WRITE_AUDIT_DIR", str(tmp_path))
+
+    client = TestClient(create_app())
+    admin_path = "/research/admin/write-audit/summary"
+
+    admin_only = client.get(
+        admin_path,
+        headers={"X-Research-Assistant-Admin-Key": "pytest-admin"},
+    )
+    pilot_only = client.get(
+        admin_path,
+        headers={"X-Research-Assistant-Key": "pytest-secret"},
+    )
+    wrong_admin = client.get(
+        admin_path,
+        headers={
+            "X-Research-Assistant-Key": "pytest-secret",
+            "X-Research-Assistant-Admin-Key": "wrong-admin",
+        },
+    )
+    ok = client.get(
+        admin_path,
+        headers={
+            "X-Research-Assistant-Key": "pytest-secret",
+            "X-Research-Assistant-Admin-Key": "pytest-admin",
+        },
+    )
+
+    assert admin_only.status_code == 401
+    assert pilot_only.status_code == 401
+    assert wrong_admin.status_code == 403
+    assert ok.status_code == 200
+    assert ok.json()["audit_file_present"] is False
+
+
+def test_write_audit_admin_summary_returns_sanitized_aggregates(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("AUDIT_ADMIN_EXPORT_ENABLED", "true")
+    monkeypatch.setenv("AUDIT_ADMIN_KEY", "pytest-admin")
+    monkeypatch.setenv("WRITE_AUDIT_DIR", str(tmp_path))
+
+    audit_path = tmp_path / "write-operations.jsonl"
+    audit_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "created_at": "2026-06-12T01:00:00+00:00",
+                        "request_id": "req-one",
+                        "actor_type": "workbench",
+                        "actor_label": "do-not-expose-label",
+                        "method": "PUT",
+                        "path_template": "/research/profile",
+                        "operation": "update",
+                        "entity_type": "profile",
+                        "status": "success",
+                        "http_status": 200,
+                        "metadata": {"api_key_fingerprint": "sha256:do-not-expose"},
+                    }
+                ),
+                "not-json",
+                json.dumps(
+                    {
+                        "created_at": "2026-06-12T01:01:00+00:00",
+                        "request_id": "req-two",
+                        "actor_type": "api_client",
+                        "method": "POST",
+                        "path_template": "/research/papers/upload",
+                        "operation": "upload",
+                        "entity_type": "paper",
+                        "status": "failure",
+                        "http_status": 422,
+                        "error_type": "ValidationError",
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    client = TestClient(create_app())
+    response = client.get(
+        "/research/admin/write-audit/summary",
+        headers={"X-Research-Assistant-Admin-Key": "pytest-admin"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["audit_file_present"] is True
+    assert body["event_count"] == 2
+    assert body["total_line_count"] == 3
+    assert body["invalid_line_count"] == 1
+    assert body["counts_by_operation"] == {"update": 1, "upload": 1}
+    assert body["counts_by_entity_type"] == {"paper": 1, "profile": 1}
+    assert body["counts_by_status"] == {"failure": 1, "success": 1}
+    assert body["counts_by_http_status"] == {"200": 1, "422": 1}
+    assert body["counts_by_actor_type"] == {"api_client": 1, "workbench": 1}
+    assert body["counts_by_route"] == {
+        "/research/papers/upload": 1,
+        "/research/profile": 1,
+    }
+    assert body["counts_by_error_type"] == {"ValidationError": 1}
+    assert body["recent_request_ids"] == ["req-one", "req-two"]
+
+    raw_response = response.text
+    assert "pytest-admin" not in raw_response
+    assert "do-not-expose-label" not in raw_response
+    assert "sha256:do-not-expose" not in raw_response
+
+
 def test_deployment_artifacts_document_customer_runtime() -> None:
     root = Path(__file__).resolve().parents[1]
     dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
     compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
     deployment = (root / "docs" / "deployment.md").read_text(encoding="utf-8")
     migration = (root / "docs" / "database_migration_strategy.md").read_text(encoding="utf-8")
+    admin_policy = (root / "docs" / "admin_authorization_policy.md").read_text(encoding="utf-8")
+    env_example = (root / ".env.example").read_text(encoding="utf-8")
 
     assert "uvicorn backend.app:app" in dockerfile
     assert "API_KEY_AUTH_ENABLED" in compose
     assert "/health/ready" in compose
     assert "X-Research-Assistant-Key" in deployment
     assert "WRITE_AUDIT_ENABLED" in deployment
+    assert "admin_authorization_policy.md" in deployment
     assert "database_migration_strategy.md" in deployment
     assert "MCP bridge" in deployment
     assert "No automatic migration execution" in migration
+    assert "AUDIT_ADMIN_EXPORT_ENABLED" in env_example
+    assert "regular pilot API key is not admin authorization" in admin_policy
 
 
 def test_research_status() -> None:
@@ -247,6 +383,7 @@ def test_research_status() -> None:
     assert "mcp_stdio_http_bridge" in body["implemented_capabilities"]
     assert "mcp_bridge_policy_controls" in body["implemented_capabilities"]
     assert "write_operation_audit_jsonl" in body["implemented_capabilities"]
+    assert "write_operation_audit_admin_summary" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]

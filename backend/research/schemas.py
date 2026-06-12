@@ -896,6 +896,28 @@ class ResearchOverviewResponse(BaseModel):
     message: str
 
 
+class WriteAuditSummaryResponse(BaseModel):
+    generated_at: datetime
+    source: str = "jsonl"
+    audit_file_present: bool = False
+    event_count: int = 0
+    total_line_count: int = 0
+    lines_scanned: int = 0
+    invalid_line_count: int = 0
+    truncated: bool = False
+    max_events_scanned: int = 1000
+    latest_created_at: str = ""
+    counts_by_operation: dict[str, int] = Field(default_factory=dict)
+    counts_by_entity_type: dict[str, int] = Field(default_factory=dict)
+    counts_by_status: dict[str, int] = Field(default_factory=dict)
+    counts_by_http_status: dict[str, int] = Field(default_factory=dict)
+    counts_by_actor_type: dict[str, int] = Field(default_factory=dict)
+    counts_by_route: dict[str, int] = Field(default_factory=dict)
+    counts_by_error_type: dict[str, int] = Field(default_factory=dict)
+    recent_request_ids: list[str] = Field(default_factory=list)
+    message: str
+
+
 class ProjectTriageBriefResponse(BaseModel):
     generated_at: datetime
     idea_count: int = 0

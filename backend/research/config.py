@@ -42,6 +42,20 @@ class Settings:
         "WRITE_AUDIT_CLIENT_HEADER_NAME",
         "X-Research-Assistant-Client",
     )
+    audit_admin_export_enabled: bool = os.getenv(
+        "AUDIT_ADMIN_EXPORT_ENABLED",
+        "false",
+    ).lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    audit_admin_key: str = os.getenv("AUDIT_ADMIN_KEY", "")
+    audit_admin_key_header_name: str = os.getenv(
+        "AUDIT_ADMIN_KEY_HEADER_NAME",
+        "X-Research-Assistant-Admin-Key",
+    )
     request_id_header_name: str = os.getenv("REQUEST_ID_HEADER_NAME", "X-Request-ID")
     external_literature_search_enabled: bool = (
         os.getenv("EXTERNAL_LITERATURE_SEARCH_ENABLED", "false").lower() == "true"

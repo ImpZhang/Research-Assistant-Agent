@@ -62,7 +62,7 @@ The first code prototype is disabled by default. Set `WRITE_AUDIT_ENABLED=true` 
 
 ## Authorization Dependency
 
-Read-only audit summary/export endpoints should wait until `docs/admin_authorization_policy.md` is implemented. The normal pilot API key is not sufficient admin authorization because Workbench, scripts, and the MCP bridge may share it during customer pilots.
+The first read-only audit summary endpoint is implemented as `GET /research/admin/write-audit/summary`, but it is registered only when `AUDIT_ADMIN_EXPORT_ENABLED=true`. It returns sanitized aggregate counts from JSONL audit records and requires the separate admin key header configured by `AUDIT_ADMIN_KEY_HEADER_NAME`; the normal pilot API key is not sufficient admin authorization because Workbench, scripts, and the MCP bridge may share it during customer pilots. Raw JSONL export remains out of scope until retention and operator workflow are explicit.
 
 ## Storage Options
 

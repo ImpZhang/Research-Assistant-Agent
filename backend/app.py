@@ -7,7 +7,7 @@ import secrets
 import time
 import uuid
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,11 +16,13 @@ from sqlalchemy import text
 from backend.research.config import settings
 from backend.research.db import engine, init_db
 from backend.research.routes import router as research_router
+from backend.research.schemas import WriteAuditSummaryResponse
 from backend.research.services.write_audit_service import (
     append_write_audit_event,
     entity_type_for_path,
     is_write_operation,
     operation_for_request,
+    summarize_write_audit_events,
     write_audit_enabled,
 )
 
@@ -151,6 +153,14 @@ def create_app() -> FastAPI:
             return payload
         return JSONResponse(status_code=503, content=payload)
 
+    if _audit_admin_export_enabled():
+
+        @app.get("/research/admin/write-audit/summary", response_model=WriteAuditSummaryResponse)
+        def write_audit_summary(
+            _admin_key_fingerprint: str = Depends(_require_audit_admin_access),
+        ) -> WriteAuditSummaryResponse:
+            return WriteAuditSummaryResponse(**summarize_write_audit_events())
+
     @app.get("/", include_in_schema=False)
     def root():
         return RedirectResponse(url="/workbench")
@@ -167,9 +177,6 @@ def create_app() -> FastAPI:
 
     app.include_router(research_router)
     return app
-
-
-app = create_app()
 
 
 def _requires_api_key(path: str) -> bool:
@@ -201,6 +208,44 @@ def _request_id_header_name() -> str:
 
 def _write_audit_client_header_name() -> str:
     return os.getenv("WRITE_AUDIT_CLIENT_HEADER_NAME") or settings.write_audit_client_header_name
+
+
+def _audit_admin_export_enabled() -> bool:
+    raw = os.getenv("AUDIT_ADMIN_EXPORT_ENABLED")
+    if raw is None:
+        return settings.audit_admin_export_enabled
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _configured_audit_admin_key() -> str:
+    return os.getenv("AUDIT_ADMIN_KEY") or settings.audit_admin_key
+
+
+def _audit_admin_key_header_name() -> str:
+    return os.getenv("AUDIT_ADMIN_KEY_HEADER_NAME") or settings.audit_admin_key_header_name
+
+
+def _request_audit_admin_key(request: Request) -> str:
+    return request.headers.get(_audit_admin_key_header_name(), "").strip()
+
+
+def _require_audit_admin_access(request: Request) -> str:
+    configured_key = _configured_audit_admin_key()
+    if not configured_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Audit admin export is enabled but AUDIT_ADMIN_KEY is not configured.",
+        )
+    supplied_key = _request_audit_admin_key(request)
+    if not supplied_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Audit admin key required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not secrets.compare_digest(supplied_key, configured_key):
+        raise HTTPException(status_code=403, detail="Valid audit admin key required.")
+    return _secret_fingerprint(supplied_key)
 
 
 def _audit_actor_label(request: Request) -> str:
@@ -251,3 +296,6 @@ def _paper_upload_dir_ready() -> dict:
         }
     except Exception as exc:
         return {"ok": False, "path": settings.paper_upload_dir, "error": str(exc)}
+
+
+app = create_app()

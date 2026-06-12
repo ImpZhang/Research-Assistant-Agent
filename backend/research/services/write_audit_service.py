@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter, deque
 from datetime import UTC, datetime
 import json
 import os
@@ -27,6 +28,95 @@ def write_audit_dir() -> Path:
 
 def write_audit_path() -> Path:
     return write_audit_dir() / WRITE_AUDIT_FILENAME
+
+
+def summarize_write_audit_events(max_events: int = 1000) -> dict[str, Any]:
+    path = write_audit_path()
+    summary = {
+        "generated_at": datetime.now(UTC),
+        "source": "jsonl",
+        "audit_file_present": path.exists(),
+        "event_count": 0,
+        "total_line_count": 0,
+        "lines_scanned": 0,
+        "invalid_line_count": 0,
+        "truncated": False,
+        "max_events_scanned": max_events,
+        "latest_created_at": "",
+        "counts_by_operation": {},
+        "counts_by_entity_type": {},
+        "counts_by_status": {},
+        "counts_by_http_status": {},
+        "counts_by_actor_type": {},
+        "counts_by_route": {},
+        "counts_by_error_type": {},
+        "recent_request_ids": [],
+        "message": "No write-operation audit file found.",
+    }
+    if not path.exists():
+        return summary
+
+    recent_lines: deque[str] = deque(maxlen=max_events)
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            summary["total_line_count"] += 1
+            recent_lines.append(line)
+
+    summary["truncated"] = summary["total_line_count"] > max_events
+    summary["lines_scanned"] = len(recent_lines)
+
+    counts_by_operation: Counter[str] = Counter()
+    counts_by_entity_type: Counter[str] = Counter()
+    counts_by_status: Counter[str] = Counter()
+    counts_by_http_status: Counter[str] = Counter()
+    counts_by_actor_type: Counter[str] = Counter()
+    counts_by_route: Counter[str] = Counter()
+    counts_by_error_type: Counter[str] = Counter()
+    recent_request_ids: list[str] = []
+
+    for line in recent_lines:
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            summary["invalid_line_count"] += 1
+            continue
+        if not isinstance(event, Mapping):
+            summary["invalid_line_count"] += 1
+            continue
+
+        summary["event_count"] += 1
+        _count_string(event, "operation", counts_by_operation)
+        _count_string(event, "entity_type", counts_by_entity_type)
+        _count_string(event, "status", counts_by_status)
+        _count_string(event, "actor_type", counts_by_actor_type)
+        _count_string(event, "path_template", counts_by_route)
+        _count_string(event, "error_type", counts_by_error_type)
+        http_status = event.get("http_status")
+        if isinstance(http_status, int):
+            counts_by_http_status[str(http_status)] += 1
+        request_id = event.get("request_id")
+        if isinstance(request_id, str) and request_id:
+            recent_request_ids.append(request_id)
+        created_at = event.get("created_at")
+        if isinstance(created_at, str) and created_at:
+            summary["latest_created_at"] = created_at
+
+    summary.update(
+        {
+            "counts_by_operation": _sorted_counts(counts_by_operation),
+            "counts_by_entity_type": _sorted_counts(counts_by_entity_type),
+            "counts_by_status": _sorted_counts(counts_by_status),
+            "counts_by_http_status": _sorted_counts(counts_by_http_status),
+            "counts_by_actor_type": _sorted_counts(counts_by_actor_type),
+            "counts_by_route": _sorted_counts(counts_by_route),
+            "counts_by_error_type": _sorted_counts(counts_by_error_type),
+            "recent_request_ids": recent_request_ids[-20:],
+            "message": "Generated sanitized write-operation audit summary.",
+        }
+    )
+    return summary
 
 
 def is_write_operation(method: str, path: str) -> bool:
@@ -82,6 +172,16 @@ def append_write_audit_event(event: Mapping[str, Any]) -> Path:
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n")
     return path
+
+
+def _count_string(event: Mapping[str, Any], key: str, counter: Counter[str]) -> None:
+    value = event.get(key)
+    if isinstance(value, str) and value:
+        counter[value] += 1
+
+
+def _sorted_counts(counter: Counter[str]) -> dict[str, int]:
+    return dict(sorted(counter.items()))
 
 
 def _sanitize_event(event: Mapping[str, Any]) -> dict[str, Any]:

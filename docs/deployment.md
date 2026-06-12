@@ -31,9 +31,14 @@ WRITE_AUDIT_ENABLED=true
 WRITE_AUDIT_DIR=/app/data/audit
 WRITE_AUDIT_CLIENT_HEADER_NAME=X-Research-Assistant-Client
 REQUEST_ID_HEADER_NAME=X-Request-ID
+
+# Optional operator-only audit summary gate, disabled by default.
+AUDIT_ADMIN_EXPORT_ENABLED=false
+AUDIT_ADMIN_KEY=
+AUDIT_ADMIN_KEY_HEADER_NAME=X-Research-Assistant-Admin-Key
 ```
 
-Audit records are JSONL metadata only. They may include a short SHA-256 API-key fingerprint prefix for correlation, but must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials. Operator-only audit summary/export features must follow `docs/admin_authorization_policy.md`; the regular pilot API key is not admin authorization by itself.
+Audit records are JSONL metadata only. They may include a short SHA-256 API-key fingerprint prefix for correlation, but must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials. Operator-only audit summary/export features must follow `docs/admin_authorization_policy.md`; the regular pilot API key is not admin authorization by itself. When `AUDIT_ADMIN_EXPORT_ENABLED=true`, the read-only summary endpoint is available at `GET /research/admin/write-audit/summary` and requires the separate admin key header.
 
 Model provider variables can stay empty for deterministic fallback behavior, or be filled with OpenAI-compatible endpoints:
 

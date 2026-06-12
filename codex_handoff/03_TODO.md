@@ -221,12 +221,13 @@ Completed slices:
 - Added upload extension and size validation before writing uploaded papers to disk.
 - Added secret-safe API key fingerprint metadata to JSONL write-operation audit records.
 - Documented the admin authorization boundary for future audit summary/export access.
+- Added a default-off, admin-gated write-operation audit summary endpoint.
 
 Likely work:
 
 - Introduce migration tooling only after operator approval and dependency sync approval.
 - Add user/project scoping model.
-- Add API key audit summaries only after the documented admin authorization policy is implemented in code.
+- Add raw audit export only after retention and operator workflow are explicit.
 - Add write-operation audit log persistence/export hardening.
 - Add backup/restore script for `/data`.
 - Consider MIME sniffing or antivirus scanning for stricter customer environments.
