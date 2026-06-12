@@ -471,7 +471,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-See `docs/deployment.md` for the runtime contract, pilot deployment checklist, ready checks, API key calls, Workbench key storage, MCP bridge auth forwarding, and backup notes.
+See `docs/deployment.md` for the runtime contract, pilot deployment checklist, ready checks, API key calls, Workbench key storage, MCP bridge auth forwarding, and backup notes. Write-operation audit logging is designed in `docs/write_operation_audit_design.md` before persistence changes are introduced.
 
 ## Near-Term Roadmap
 

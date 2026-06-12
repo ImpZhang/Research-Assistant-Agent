@@ -110,3 +110,19 @@ Verification completed:
 
 - `git --no-pager diff --check` passed.
 - Documentation-only change; no service start, dependency install, or business-code test was required.
+
+
+## 2026-06-12 - Write Operation Audit Design
+
+Documentation maintenance completed:
+
+- Added `docs/write_operation_audit_design.md` to define purpose, non-goals, event shape, capture points, JSONL-first storage, redaction rules, acceptance criteria, and open questions.
+- Linked the audit design from README, requirements, technical design, and handoff TODO.
+- Kept this as design-only work; no middleware, persistence, route, deployment, or service behavior changed.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `git --no-pager diff --check` passed.
+- Reviewed `docs/write_operation_audit_design.md` for secret-safe redaction guidance and design-only scope.
+- Documentation-only change; no service start, dependency install, or business-code test was required.

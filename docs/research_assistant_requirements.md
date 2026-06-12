@@ -1099,6 +1099,8 @@ HTTP tool bridge spec 之上需要提供一个 dependency-light 的 stdio MCP-to
 
 MCP bridge 需要提供最小托管控制：支持 read-only mode、allow/deny tool filters、环境变量配置和 health-check JSON 输出。外部客户端初次接入时应能只暴露只读工具或明确 allowlist，避免把 cancel/update/create 类写操作默认交给未知客户端。
 
+系统需要为写操作提供 operator-facing audit trail：所有 create/update/upload/cancel/retry/export 等状态改变操作，应记录非敏感 metadata，包括 actor/client label、route/tool、operation、entity id、status、request id、policy 和部署 commit。audit trail 不得保存原始请求体、上传内容、API key、cookie、私钥、`.env` 值或模型 provider credential；首次实现应优先使用 `/app/data/audit/write-operations.jsonl`，待迁移方案稳定后再考虑数据库表。
+
 面向客户试点时，后端需要提供最小生产化保护：`/health/ready` readiness 检查、默认关闭但可通过环境变量开启的 `/research/*` API key 保护、可持久化 `/data` 的 Docker/docker-compose 部署入口，以及 MCP bridge 的 API key 转发能力。这样系统可以先进入内测/客户试用，而不是只能在开发机裸跑。
 
 Workbench 需要配套 API key 输入、保存和清除能力：客户在浏览器中保存 key 后，所有 `/research/*` 请求自动携带认证 header，避免“后端已开启保护但前端无法使用”的试点断点。
