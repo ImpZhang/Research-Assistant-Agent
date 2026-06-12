@@ -225,11 +225,12 @@ Completed slices:
 - Added lightweight upload content sniffing before uploaded papers are written to disk.
 - Documented write-operation audit retention and operator export workflow before raw export code.
 - Added a default-off, admin-gated, bounded raw JSONL write-audit export endpoint.
+- Documented the user/project scoping model in `docs/user_project_scoping_design.md` before adding schema migrations.
 
 Likely work:
 
 - Introduce migration tooling only after operator approval and dependency sync approval.
-- Add user/project scoping model.
+- Implement user/project scoping only after migration tooling and auth identity are explicit.
 - Add write-operation audit rotation/cleanup hardening only after backup workflow approval.
 - Add write-operation audit log persistence hardening.
 - Add backup/restore script for `/data`.

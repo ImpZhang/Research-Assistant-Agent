@@ -490,3 +490,4 @@ See `docs/deployment.md` for the runtime contract, pilot deployment checklist, `
 - `docs/database_migration_strategy.md`
 - `docs/write_operation_audit_design.md`
 - `docs/write_audit_retention_policy.md`
+- `docs/user_project_scoping_design.md`

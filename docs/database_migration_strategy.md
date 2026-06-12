@@ -32,6 +32,10 @@ Expected shape:
 - Add a dry-run or current-head check to deployment verification before applying migrations.
 - Document rollback expectations per migration. SQLite rollbacks may require restore-from-backup rather than reversible DDL.
 
+## Project Scoping Migration Candidate
+
+User/project scoping should follow `docs/user_project_scoping_design.md`: create default user/project rows, backfill project-scoped tables, add `project_id` indexes, then enforce route-level isolation before tightening nullability. This should happen only after migration tooling and auth identity are explicit.
+
 ## Pre-Migration Checklist
 
 Before applying any migration to a pilot database:

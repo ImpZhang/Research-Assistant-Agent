@@ -351,3 +351,21 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/app.py backend/research/routes.py backend/research/services/write_audit_service.py tests/test_app.py` passed.
 - Focused pytest passed: `6 passed in 3.16s`.
 - Full `tests/test_app.py` passed with verbose durations: `46 passed in 796.39s (0:13:16)`.
+
+
+## 2026-06-12 - User Project Scoping Design
+
+Implemented in progress:
+
+- Added `docs/user_project_scoping_design.md` to define the target user, project, and membership model before migrations.
+- Clarified that current `created_by`, `owner_type`, and artifact `scope` values are not authorization boundaries.
+- Defined default-project compatibility, request scope resolution, API behavior, Workbench/MCP forwarding, migration sequencing, and future acceptance criteria.
+- Updated README, technical design, database migration strategy, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- Reviewed `docs/user_project_scoping_design.md` for migration-safe, secret-free scoping guidance.
+- `grep -R "user_project_scoping_design" -n README.md docs codex_handoff/03_TODO.md` confirmed cross-document references.
+- `git --no-pager diff --check` passed.
+- No runtime code, dependencies, services, databases, schema migrations, or secret files were touched.
