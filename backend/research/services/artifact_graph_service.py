@@ -1080,6 +1080,50 @@ class ArtifactGraphService:
             },
         )
 
+    def link_project_bundle_release_review_outcome_signoff(
+        self,
+        outcome: ResearchBrief,
+        signoff: ResearchBrief,
+    ) -> None:
+        outcome_summary = outcome.summary_json or {}
+        signoff_summary = signoff.summary_json or {}
+        outcome_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release_review_outcome",
+            label=outcome.title,
+            canonical_key=outcome.id,
+            payload={
+                "release_id": outcome_summary.get("release_id", ""),
+                "recipient": outcome_summary.get("recipient", ""),
+                "review_decision": outcome_summary.get("review_decision", ""),
+                "signoff_confirmed": outcome_summary.get("signoff_confirmed", False),
+                "owner_type": "project_bundle_release_review_outcome",
+            },
+        )
+        signoff_node = self.graph.get_or_create_node(
+            node_type="project_bundle_release_review_outcome_signoff",
+            label=signoff.title,
+            canonical_key=signoff.id,
+            payload={
+                "release_id": signoff_summary.get("release_id", ""),
+                "outcome_id": signoff_summary.get("outcome_id", ""),
+                "approver": signoff_summary.get("approver", ""),
+                "signoff_decision": signoff_summary.get("signoff_decision", ""),
+                "signoff_confirmed": signoff_summary.get("signoff_confirmed", False),
+                "condition_count": len(signoff_summary.get("conditions") or []),
+                "evidence_link_count": len(signoff_summary.get("evidence_links") or []),
+                "owner_type": "project_bundle_release_review_outcome_signoff",
+            },
+        )
+        self.graph.create_edge(
+            source_node=outcome_node,
+            target_node=signoff_node,
+            edge_type="project_bundle_release_review_outcome_has_signoff",
+            payload={
+                "signoff_decision": signoff_summary.get("signoff_decision", ""),
+                "signoff_confirmed": signoff_summary.get("signoff_confirmed", False),
+            },
+        )
+
     def link_project_bundle_release_review_outcome_tasks(
         self,
         outcome: ResearchBrief,

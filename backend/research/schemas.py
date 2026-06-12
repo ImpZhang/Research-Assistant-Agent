@@ -1236,6 +1236,22 @@ class ProjectBundleReleaseReviewOutcomeProgressResponse(BaseModel):
     message: str
 
 
+class ProjectBundleReleaseReviewOutcomeSignoffCreate(BaseModel):
+    title: str = "Project Bundle Release Review Outcome Signoff"
+    signoff_decision: Literal[
+        "signed_off",
+        "signed_off_with_notes",
+        "deferred",
+        "declined",
+    ] = "deferred"
+    approver: str = "advisor_or_customer"
+    signoff_notes: str = ""
+    accepted_artifacts: list[str] = Field(default_factory=list)
+    conditions: list[str] = Field(default_factory=list)
+    evidence_links: list[str] = Field(default_factory=list)
+    created_by: str = "researcher"
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

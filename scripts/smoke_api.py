@@ -292,6 +292,8 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "research status did not include project bundle release review outcome progress"
         )
+    if "project_bundle_release_review_outcome_signoffs" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include release review outcome signoffs")
     if "advisor_brief_execution_context" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include advisor brief execution context")
     if "advisor_brief_triage_context" not in status["implemented_capabilities"]:
@@ -570,6 +572,14 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         raise RuntimeError(
             "tool manifest did not include project bundle release review outcome progress"
         )
+    if "record_project_bundle_release_review_outcome_signoff" not in manifest_names:
+        raise RuntimeError("tool manifest did not include release review outcome signoff")
+    if "list_project_bundle_release_review_outcome_signoffs" not in manifest_names:
+        raise RuntimeError("tool manifest did not include release review outcome signoff list")
+    if "get_project_bundle_release_review_outcome_signoff" not in manifest_names:
+        raise RuntimeError("tool manifest did not include release review outcome signoff detail")
+    if "export_project_bundle_release_review_outcome_signoff_markdown" not in manifest_names:
+        raise RuntimeError("tool manifest did not include release review outcome signoff markdown")
     if "get_idea_readiness" not in manifest_names:
         raise RuntimeError("tool manifest did not include idea readiness tool")
     if "get_idea_quality_gate" not in manifest_names:
@@ -2866,6 +2876,108 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         not in project_bundle_release_review_outcome_progress["markdown_export"]
     ):
         raise RuntimeError("project bundle release review outcome progress markdown missed title")
+
+    project_bundle_release_review_outcome_signoff = require_ok(
+        client.post(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/review-session/outcomes/"
+            f"{project_bundle_release_review_outcome['id']}/signoffs",
+            json_body={
+                "title": "Smoke Project Bundle Release Review Outcome Signoff",
+                "signoff_decision": "deferred",
+                "approver": "smoke advisor",
+                "signoff_notes": "Smoke signoff evidence captured before final approval.",
+                "accepted_artifacts": [
+                    "Project bundle",
+                    "Release review outcome",
+                    "Outcome progress report",
+                ],
+                "conditions": ["Complete remaining release review outcome tasks."],
+                "evidence_links": [
+                    "artifacts/releases/latest-project-bundle-release-review-outcome-progress.md"
+                ],
+                "created_by": "smoke",
+            },
+        ),
+        "project bundle release review outcome signoff",
+    )
+    if project_bundle_release_review_outcome_signoff["scope"] != (
+        "project_bundle_release_review_outcome_signoff"
+    ):
+        raise RuntimeError("project bundle release review outcome signoff used wrong scope")
+    if (
+        project_bundle_release_review_outcome_signoff["summary"]["release_id"]
+        != project_bundle_release["id"]
+    ):
+        raise RuntimeError("project bundle release review outcome signoff used wrong release id")
+    if (
+        project_bundle_release_review_outcome_signoff["summary"]["outcome_id"]
+        != project_bundle_release_review_outcome["id"]
+    ):
+        raise RuntimeError("project bundle release review outcome signoff used wrong outcome id")
+    if project_bundle_release_review_outcome_signoff["summary"]["signoff_decision"] != "deferred":
+        raise RuntimeError("project bundle release review outcome signoff missed decision")
+    if project_bundle_release_review_outcome_signoff["summary"]["signoff_confirmed"]:
+        raise RuntimeError("project bundle release review outcome signoff should be deferred")
+    if project_bundle_release_review_outcome_signoff["summary"]["progress_open_task_count"] < 1:
+        raise RuntimeError("project bundle release review outcome signoff missed progress snapshot")
+    if (
+        "# Project Bundle Release Review Outcome Signoff"
+        not in project_bundle_release_review_outcome_signoff["markdown_export"]
+    ):
+        raise RuntimeError("project bundle release review outcome signoff markdown missed title")
+    project_bundle_release_review_outcome_signoffs = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/review-session/outcomes/"
+            f"{project_bundle_release_review_outcome['id']}/signoffs?limit=5"
+        ),
+        "project bundle release review outcome signoffs",
+    )
+    if (
+        not project_bundle_release_review_outcome_signoffs
+        or project_bundle_release_review_outcome_signoffs[0]["id"]
+        != project_bundle_release_review_outcome_signoff["id"]
+    ):
+        raise RuntimeError("project bundle release review outcome signoff list missed latest")
+    fetched_project_bundle_release_review_outcome_signoff = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/review-session/outcomes/"
+            f"{project_bundle_release_review_outcome['id']}/signoffs/"
+            f"{project_bundle_release_review_outcome_signoff['id']}"
+        ),
+        "project bundle release review outcome signoff detail",
+    )
+    if (
+        fetched_project_bundle_release_review_outcome_signoff["id"]
+        != project_bundle_release_review_outcome_signoff["id"]
+    ):
+        raise RuntimeError("project bundle release review outcome signoff detail used wrong id")
+    project_bundle_release_review_outcome_signoff_markdown = require_ok(
+        client.get(
+            "/research/export/project-bundle/releases/"
+            f"{project_bundle_release['id']}/review-session/outcomes/"
+            f"{project_bundle_release_review_outcome['id']}/signoffs/"
+            f"{project_bundle_release_review_outcome_signoff['id']}/export/markdown"
+        ),
+        "project bundle release review outcome signoff markdown",
+    )
+    if (
+        "# Project Bundle Release Review Outcome Signoff"
+        not in project_bundle_release_review_outcome_signoff_markdown
+    ):
+        raise RuntimeError("project bundle release review outcome signoff export missed title")
+    project_bundle_release_review_outcome_signoff_edges = require_ok(
+        client.get(
+            "/research/graph/edges?edge_type=project_bundle_release_review_outcome_has_signoff"
+        ),
+        "project bundle release review outcome signoff graph edges",
+    )
+    if not project_bundle_release_review_outcome_signoff_edges:
+        raise RuntimeError(
+            "project bundle release review outcome signoff did not create graph edge"
+        )
     project_bundle_response = client.get("/research/export/project-bundle")
     if project_bundle_response.status_code != 200:
         raise RuntimeError(
@@ -2903,6 +3015,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             "metadata/project-bundle-release-review-session.json",
             "metadata/project-bundle-release-review-outcomes.json",
             "metadata/project-bundle-release-review-outcome-progress.json",
+            "metadata/project-bundle-release-review-outcome-signoffs.json",
             "metadata/quality-gate-overview.json",
             "metadata/opportunity-radar.json",
             "metadata/claim-validation-queue.json",
@@ -2940,6 +3053,11 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
             ),
             "artifacts/releases/latest-project-bundle-release-review-outcome.md",
             "artifacts/releases/latest-project-bundle-release-review-outcome-progress.md",
+            (
+                "artifacts/releases/project-bundle-release-review-outcome-signoff-"
+                f"{project_bundle_release_review_outcome_signoff['id']}.md"
+            ),
+            "artifacts/releases/latest-project-bundle-release-review-outcome-signoff.md",
         }
         missing_project_files = required_project_files - project_bundle_files
         if missing_project_files:
@@ -2994,6 +3112,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         )
         project_bundle_release_review_outcome_progress_metadata = json.loads(
             archive.read("metadata/project-bundle-release-review-outcome-progress.json")
+        )
+        project_bundle_release_review_outcome_signoff_metadata = json.loads(
+            archive.read("metadata/project-bundle-release-review-outcome-signoffs.json")
         )
     if project_bundle_manifest["idea_count"] < 1:
         raise RuntimeError("project bundle manifest did not include ideas")
@@ -3311,6 +3432,51 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         != project_bundle_release_review_outcome["id"]
     ):
         raise RuntimeError("project bundle review outcome progress metadata used wrong outcome id")
+    if project_bundle_manifest["project_bundle_release_review_outcome_signoff_count"] < 1:
+        raise RuntimeError("project bundle manifest missed release review outcome signoffs")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_review_outcome_signoff_id"]
+        != project_bundle_release_review_outcome_signoff["id"]
+    ):
+        raise RuntimeError("project bundle manifest did not point at latest review outcome signoff")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_review_outcome_signoff_release_id"]
+        != project_bundle_release["id"]
+    ):
+        raise RuntimeError("project bundle manifest review outcome signoff used wrong release id")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_review_outcome_signoff_outcome_id"]
+        != project_bundle_release_review_outcome["id"]
+    ):
+        raise RuntimeError("project bundle manifest review outcome signoff used wrong outcome id")
+    if (
+        project_bundle_manifest["latest_project_bundle_release_review_outcome_signoff_decision"]
+        != "deferred"
+    ):
+        raise RuntimeError("project bundle manifest review outcome signoff missed decision")
+    if project_bundle_manifest[
+        "latest_project_bundle_release_review_outcome_signoff_record_confirmed"
+    ]:
+        raise RuntimeError("project bundle manifest review outcome signoff should be deferred")
+    if (
+        project_bundle_manifest[
+            "latest_project_bundle_release_review_outcome_signoff_progress_completion_ratio"
+        ]
+        != project_bundle_release_review_outcome_signoff["summary"]["progress_completion_ratio"]
+    ):
+        raise RuntimeError("project bundle manifest review outcome signoff progress diverged")
+    if (
+        project_bundle_manifest[
+            "latest_project_bundle_release_review_outcome_signoff_progress_open_task_count"
+        ]
+        < 1
+    ):
+        raise RuntimeError("project bundle manifest review outcome signoff missed open tasks")
+    if (
+        project_bundle_release_review_outcome_signoff_metadata[0]["id"]
+        != project_bundle_release_review_outcome_signoff["id"]
+    ):
+        raise RuntimeError("project bundle review outcome signoff metadata order was wrong")
     if project_bundle_manifest["opportunity_count"] < 1:
         raise RuntimeError("project bundle manifest did not include opportunities")
     if project_bundle_manifest["claim_validation_queue_count"] < 1:
@@ -3796,6 +3962,15 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "project_bundle_release_review_outcome_progress_open_count": (
             project_bundle_release_review_outcome_progress["task_summary"]["open_task_count"]
         ),
+        "project_bundle_release_review_outcome_signoff_id": (
+            project_bundle_release_review_outcome_signoff["id"]
+        ),
+        "project_bundle_release_review_outcome_signoff_count": project_bundle_manifest[
+            "project_bundle_release_review_outcome_signoff_count"
+        ],
+        "project_bundle_release_review_outcome_signoff_decision": project_bundle_manifest[
+            "latest_project_bundle_release_review_outcome_signoff_decision"
+        ],
         "project_bundle_latest_release_recipient": project_bundle_manifest[
             "latest_project_bundle_release_recipient"
         ],

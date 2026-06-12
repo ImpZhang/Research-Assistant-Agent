@@ -134,6 +134,7 @@ def test_research_status() -> None:
         "project_bundle_release_review_outcome_progress_tracking"
         in body["implemented_capabilities"]
     )
+    assert "project_bundle_release_review_outcome_signoffs" in body["implemented_capabilities"]
     assert "advisor_brief_execution_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_context" in body["implemented_capabilities"]
     assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
@@ -267,6 +268,10 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "export_project_bundle_release_review_outcome_markdown" in names
     assert "create_tasks_from_project_bundle_release_review_outcome" in names
     assert "get_project_bundle_release_review_outcome_progress" in names
+    assert "record_project_bundle_release_review_outcome_signoff" in names
+    assert "list_project_bundle_release_review_outcome_signoffs" in names
+    assert "get_project_bundle_release_review_outcome_signoff" in names
+    assert "export_project_bundle_release_review_outcome_signoff_markdown" in names
     assert "get_idea_readiness" in names
     assert "get_idea_quality_gate" in names
     assert "create_tasks_from_idea_quality_gate" in names
@@ -633,6 +638,74 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
         "outcome_id",
     ]
     assert project_bundle_release_review_outcome_progress["annotations"]["readOnlyHint"] is True
+
+    project_bundle_release_review_outcome_signoff = tools[
+        "record_project_bundle_release_review_outcome_signoff"
+    ]
+    assert project_bundle_release_review_outcome_signoff["http"]["method"] == "POST"
+    assert (
+        project_bundle_release_review_outcome_signoff["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/review-session/"
+        "outcomes/{outcome_id}/signoffs"
+    )
+    assert project_bundle_release_review_outcome_signoff["input_schema"]["required"] == [
+        "release_id",
+        "outcome_id",
+        "body",
+    ]
+    assert project_bundle_release_review_outcome_signoff["annotations"]["sideEffectHint"] is True
+
+    project_bundle_release_review_outcome_signoff_list = tools[
+        "list_project_bundle_release_review_outcome_signoffs"
+    ]
+    assert project_bundle_release_review_outcome_signoff_list["http"]["method"] == "GET"
+    assert (
+        project_bundle_release_review_outcome_signoff_list["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/review-session/"
+        "outcomes/{outcome_id}/signoffs"
+    )
+    assert project_bundle_release_review_outcome_signoff_list["input_schema"]["required"] == [
+        "release_id",
+        "outcome_id",
+    ]
+    assert project_bundle_release_review_outcome_signoff_list["annotations"]["readOnlyHint"] is True
+
+    project_bundle_release_review_outcome_signoff_detail = tools[
+        "get_project_bundle_release_review_outcome_signoff"
+    ]
+    assert project_bundle_release_review_outcome_signoff_detail["http"]["method"] == "GET"
+    assert (
+        project_bundle_release_review_outcome_signoff_detail["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/review-session/"
+        "outcomes/{outcome_id}/signoffs/{signoff_id}"
+    )
+    assert project_bundle_release_review_outcome_signoff_detail["input_schema"]["required"] == [
+        "release_id",
+        "outcome_id",
+        "signoff_id",
+    ]
+    assert (
+        project_bundle_release_review_outcome_signoff_detail["annotations"]["readOnlyHint"] is True
+    )
+
+    project_bundle_release_review_outcome_signoff_markdown = tools[
+        "export_project_bundle_release_review_outcome_signoff_markdown"
+    ]
+    assert project_bundle_release_review_outcome_signoff_markdown["http"]["method"] == "GET"
+    assert (
+        project_bundle_release_review_outcome_signoff_markdown["http"]["path"]
+        == "/research/export/project-bundle/releases/{release_id}/review-session/"
+        "outcomes/{outcome_id}/signoffs/{signoff_id}/export/markdown"
+    )
+    assert project_bundle_release_review_outcome_signoff_markdown["input_schema"]["required"] == [
+        "release_id",
+        "outcome_id",
+        "signoff_id",
+    ]
+    assert (
+        project_bundle_release_review_outcome_signoff_markdown["annotations"]["readOnlyHint"]
+        is True
+    )
 
     project_bundle_readiness_tasks = tools["create_tasks_from_project_bundle_readiness"]
     assert project_bundle_readiness_tasks["http"]["method"] == "POST"
@@ -1011,6 +1084,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "projectBundleReleaseReviewOutcomesButton" in response.text
     assert "projectBundleReleaseReviewOutcomeTasksButton" in response.text
     assert "projectBundleReleaseReviewOutcomeProgressButton" in response.text
+    assert "projectBundleReleaseReviewOutcomeSignoffButton" in response.text
+    assert "projectBundleReleaseReviewOutcomeSignoffsButton" in response.text
     assert "projectBundleReadinessButton" in response.text
     assert "projectBundleReadinessTasksButton" in response.text
     assert "projectBundleReadinessSnapshotButton" in response.text
@@ -1140,6 +1215,10 @@ def test_workbench_static_assets_are_served() -> None:
     )
     assert (
         "/research/export/project-bundle/releases/${releaseId}/review-session/outcomes/${outcomeId}/progress"
+        in script.text
+    )
+    assert (
+        "/research/export/project-bundle/releases/${releaseId}/review-session/outcomes/${outcomeId}/signoffs"
         in script.text
     )
     assert "/research/export/project-bundle/readiness" in script.text
@@ -3852,6 +3931,100 @@ Future work should preserve proposal drafts as reviewable artifacts.
         in project_bundle_release_review_outcome_progress_body["markdown_export"]
     )
 
+    project_bundle_release_review_outcome_signoff = client.post(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/review-session/outcomes/"
+        f"{project_bundle_release_review_outcome_body['id']}/signoffs",
+        json={
+            "title": "Pytest Project Bundle Release Review Outcome Signoff",
+            "signoff_decision": "deferred",
+            "approver": "pytest advisor",
+            "signoff_notes": "Pytest signoff evidence captured before final approval.",
+            "accepted_artifacts": [
+                "Project bundle",
+                "Release review outcome",
+                "Outcome progress report",
+            ],
+            "conditions": ["Complete remaining release review outcome tasks."],
+            "evidence_links": [
+                "artifacts/releases/latest-project-bundle-release-review-outcome-progress.md"
+            ],
+            "created_by": "pytest",
+        },
+    )
+    assert project_bundle_release_review_outcome_signoff.status_code == 200
+    project_bundle_release_review_outcome_signoff_body = (
+        project_bundle_release_review_outcome_signoff.json()
+    )
+    assert (
+        project_bundle_release_review_outcome_signoff_body["scope"]
+        == "project_bundle_release_review_outcome_signoff"
+    )
+    assert (
+        project_bundle_release_review_outcome_signoff_body["summary"]["release_id"]
+        == project_bundle_release_body["id"]
+    )
+    assert (
+        project_bundle_release_review_outcome_signoff_body["summary"]["outcome_id"]
+        == project_bundle_release_review_outcome_body["id"]
+    )
+    assert (
+        project_bundle_release_review_outcome_signoff_body["summary"]["signoff_decision"]
+        == "deferred"
+    )
+    assert (
+        project_bundle_release_review_outcome_signoff_body["summary"]["signoff_confirmed"] is False
+    )
+    assert (
+        project_bundle_release_review_outcome_signoff_body["summary"]["progress_open_task_count"]
+        >= 1
+    )
+    assert (
+        "# Project Bundle Release Review Outcome Signoff"
+        in project_bundle_release_review_outcome_signoff_body["markdown_export"]
+    )
+
+    listed_project_bundle_release_review_outcome_signoffs = client.get(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/review-session/outcomes/"
+        f"{project_bundle_release_review_outcome_body['id']}/signoffs?limit=5"
+    )
+    assert listed_project_bundle_release_review_outcome_signoffs.status_code == 200
+    assert (
+        listed_project_bundle_release_review_outcome_signoffs.json()[0]["id"]
+        == project_bundle_release_review_outcome_signoff_body["id"]
+    )
+
+    fetched_project_bundle_release_review_outcome_signoff = client.get(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/review-session/outcomes/"
+        f"{project_bundle_release_review_outcome_body['id']}/signoffs/"
+        f"{project_bundle_release_review_outcome_signoff_body['id']}"
+    )
+    assert fetched_project_bundle_release_review_outcome_signoff.status_code == 200
+    assert (
+        fetched_project_bundle_release_review_outcome_signoff.json()["id"]
+        == project_bundle_release_review_outcome_signoff_body["id"]
+    )
+
+    exported_project_bundle_release_review_outcome_signoff = client.get(
+        "/research/export/project-bundle/releases/"
+        f"{project_bundle_release_body['id']}/review-session/outcomes/"
+        f"{project_bundle_release_review_outcome_body['id']}/signoffs/"
+        f"{project_bundle_release_review_outcome_signoff_body['id']}/export/markdown"
+    )
+    assert exported_project_bundle_release_review_outcome_signoff.status_code == 200
+    assert (
+        "# Project Bundle Release Review Outcome Signoff"
+        in exported_project_bundle_release_review_outcome_signoff.text
+    )
+
+    project_bundle_release_review_outcome_signoff_edges = client.get(
+        "/research/graph/edges?edge_type=project_bundle_release_review_outcome_has_signoff"
+    )
+    assert project_bundle_release_review_outcome_signoff_edges.status_code == 200
+    assert project_bundle_release_review_outcome_signoff_edges.json()
+
     project_bundle = client.get("/research/export/project-bundle")
     assert project_bundle.status_code == 200
     assert project_bundle.headers["content-type"] == "application/zip"
@@ -3883,6 +4056,7 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert "metadata/project-bundle-release-review-session.json" in names
         assert "metadata/project-bundle-release-review-outcomes.json" in names
         assert "metadata/project-bundle-release-review-outcome-progress.json" in names
+        assert "metadata/project-bundle-release-review-outcome-signoffs.json" in names
         assert "metadata/quality-gate-overview.json" in names
         assert "metadata/opportunity-radar.json" in names
         assert "metadata/claim-validation-queue.json" in names
@@ -3929,6 +4103,11 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert (
             "artifacts/releases/latest-project-bundle-release-review-outcome-progress.md" in names
         )
+        assert (
+            "artifacts/releases/project-bundle-release-review-outcome-signoff-"
+            f"{project_bundle_release_review_outcome_signoff_body['id']}.md"
+        ) in names
+        assert "artifacts/releases/latest-project-bundle-release-review-outcome-signoff.md" in names
         project_manifest = json.loads(archive.read("metadata/manifest.json"))
         bundled_claim_queue = json.loads(archive.read("metadata/claim-validation-queue.json"))
         bundled_triage_comparison = json.loads(
@@ -3975,6 +4154,9 @@ Future work should preserve proposal drafts as reviewable artifacts.
         )
         bundled_project_bundle_release_review_outcome_progress = json.loads(
             archive.read("metadata/project-bundle-release-review-outcome-progress.json")
+        )
+        bundled_project_bundle_release_review_outcome_signoffs = json.loads(
+            archive.read("metadata/project-bundle-release-review-outcome-signoffs.json")
         )
         assert project_manifest["idea_count"] >= 1
         assert readiness_manifest["bundle_type"] == "research_project_bundle"
@@ -4233,6 +4415,47 @@ Future work should preserve proposal drafts as reviewable artifacts.
         assert (
             bundled_project_bundle_release_review_outcome_progress["outcome_id"]
             == project_bundle_release_review_outcome_body["id"]
+        )
+        assert project_manifest["project_bundle_release_review_outcome_signoff_count"] >= 1
+        assert (
+            project_manifest["latest_project_bundle_release_review_outcome_signoff_id"]
+            == project_bundle_release_review_outcome_signoff_body["id"]
+        )
+        assert (
+            project_manifest["latest_project_bundle_release_review_outcome_signoff_release_id"]
+            == project_bundle_release_body["id"]
+        )
+        assert (
+            project_manifest["latest_project_bundle_release_review_outcome_signoff_outcome_id"]
+            == project_bundle_release_review_outcome_body["id"]
+        )
+        assert (
+            project_manifest["latest_project_bundle_release_review_outcome_signoff_decision"]
+            == "deferred"
+        )
+        assert (
+            project_manifest[
+                "latest_project_bundle_release_review_outcome_signoff_record_confirmed"
+            ]
+            is False
+        )
+        assert (
+            project_manifest[
+                "latest_project_bundle_release_review_outcome_signoff_progress_completion_ratio"
+            ]
+            == project_bundle_release_review_outcome_signoff_body["summary"][
+                "progress_completion_ratio"
+            ]
+        )
+        assert (
+            project_manifest[
+                "latest_project_bundle_release_review_outcome_signoff_progress_open_task_count"
+            ]
+            >= 1
+        )
+        assert (
+            bundled_project_bundle_release_review_outcome_signoffs[0]["id"]
+            == project_bundle_release_review_outcome_signoff_body["id"]
         )
         assert project_manifest["opportunity_count"] >= 1
         assert project_manifest["claim_validation_queue_count"] >= 1

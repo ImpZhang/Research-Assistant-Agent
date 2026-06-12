@@ -37,3 +37,22 @@ Next planned work:
 2. Add schema, routes, graph links, tool manifest entries, project bundle metadata/artifacts, Workbench controls, tests, smoke coverage, README, and docs.
 3. Verify with ruff, pytest, and smoke.
 4. Commit and push the completed feature.
+
+## 2026-06-12 - Release Review Outcome Signoff Evidence
+
+Implemented in progress:
+
+- Added release review outcome signoff schema, API routes, tool manifest entries, graph linkage, project bundle metadata/Markdown artifacts, Workbench controls, pytest coverage, smoke coverage, README, and requirements/design documentation.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/research/routes.py backend/research/schemas.py backend/research/services/artifact_graph_service.py tests/test_app.py scripts/smoke_api.py` passed.
+- `.venv/bin/ruff format --check backend/research/routes.py backend/research/schemas.py backend/research/services/artifact_graph_service.py tests/test_app.py scripts/smoke_api.py` passed after formatting touched Python files.
+- Focused pytest passed: `5 passed in 474.12s`.
+- Full pytest passed: `43 passed in 752.08s`.
+- Smoke API passed with `tool_manifest_count=118`, `tool_bridge_count=118`, `project_bundle_file_count=166`, and deferred release review outcome signoff evidence in the project bundle summary.
+
+Ready for commit:
+
+- Commit and push the completed feature.

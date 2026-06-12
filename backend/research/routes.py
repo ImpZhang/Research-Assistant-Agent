@@ -140,6 +140,7 @@ from backend.research.schemas import (
     ProjectBundleReleaseProgressResponse,
     ProjectBundleReleaseReviewOutcomeCreate,
     ProjectBundleReleaseReviewOutcomeProgressResponse,
+    ProjectBundleReleaseReviewOutcomeSignoffCreate,
     ProjectBundleReleaseReviewOutcomeTaskGenerateRequest,
     ProjectBundleReleaseReviewSessionResponse,
     ProjectBundleReleaseReviewSessionTaskGenerateRequest,
@@ -351,6 +352,7 @@ def status() -> ProjectStatus:
             "project_bundle_release_review_outcomes",
             "project_bundle_release_review_outcome_task_generation",
             "project_bundle_release_review_outcome_progress_tracking",
+            "project_bundle_release_review_outcome_signoffs",
             "advisor_research_briefs",
             "advisor_brief_execution_context",
             "advisor_brief_evidence_context",
@@ -858,6 +860,51 @@ def tool_manifest() -> ToolManifestResponse:
                 "outcomes/{outcome_id}/progress"
             ),
             output_model="ProjectBundleReleaseReviewOutcomeProgressResponse",
+        ),
+        ToolManifestItem(
+            name="record_project_bundle_release_review_outcome_signoff",
+            description=(
+                "Persist signoff evidence, approver notes, accepted artifacts, conditions, "
+                "and the current review outcome follow-up progress snapshot."
+            ),
+            method="POST",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/review-session/"
+                "outcomes/{outcome_id}/signoffs"
+            ),
+            input_model="ProjectBundleReleaseReviewOutcomeSignoffCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_project_bundle_release_review_outcome_signoffs",
+            description="List saved signoff evidence records for one release review outcome.",
+            method="GET",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/review-session/"
+                "outcomes/{outcome_id}/signoffs"
+            ),
+            output_model="list[ResearchBriefRead]",
+        ),
+        ToolManifestItem(
+            name="get_project_bundle_release_review_outcome_signoff",
+            description="Load one saved release review outcome signoff evidence record.",
+            method="GET",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/review-session/"
+                "outcomes/{outcome_id}/signoffs/{signoff_id}"
+            ),
+            output_model="ResearchBriefDetail",
+        ),
+        ToolManifestItem(
+            name="export_project_bundle_release_review_outcome_signoff_markdown",
+            description="Export a saved release review outcome signoff evidence record as Markdown.",
+            method="GET",
+            path=(
+                "/research/export/project-bundle/releases/{release_id}/review-session/"
+                "outcomes/{outcome_id}/signoffs/{signoff_id}/export/markdown"
+            ),
+            output_model="text/markdown",
         ),
         ToolManifestItem(
             name="get_project_bundle_readiness",
@@ -10764,6 +10811,140 @@ def get_project_bundle_release_review_outcome_progress(
     return _project_bundle_release_review_outcome_progress(outcome, session)
 
 
+@router.post(
+    "/export/project-bundle/releases/{release_id}/review-session/outcomes/{outcome_id}/signoffs",
+    response_model=ResearchBriefDetail,
+)
+def record_project_bundle_release_review_outcome_signoff(
+    release_id: str,
+    outcome_id: str,
+    payload: ProjectBundleReleaseReviewOutcomeSignoffCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    _get_project_bundle_release_or_404(release_id, session)
+    outcome = _get_project_bundle_release_review_outcome_or_404(
+        release_id,
+        outcome_id,
+        session,
+    )
+    outcome_summary = outcome.summary_json or {}
+    progress = _project_bundle_release_review_outcome_progress(outcome, session)
+    title = payload.title or "Project Bundle Release Review Outcome Signoff"
+    generated_at = datetime.now(timezone.utc)
+    signoff_confirmed = payload.signoff_decision in {"signed_off", "signed_off_with_notes"}
+    markdown_export = _render_project_bundle_release_review_outcome_signoff_markdown(
+        generated_at=generated_at,
+        outcome=outcome,
+        progress=progress,
+        payload=payload,
+        signoff_confirmed=signoff_confirmed,
+    )
+    signoff = ResearchBrief(
+        title=title,
+        scope="project_bundle_release_review_outcome_signoff",
+        idea_ids_json=[],
+        summary_json={
+            "release_id": release_id,
+            "outcome_id": outcome.id,
+            "outcome_title": outcome.title,
+            "recipient": outcome_summary.get("recipient", "advisor_or_customer"),
+            "review_decision": outcome_summary.get("review_decision", ""),
+            "outcome_signoff_confirmed": outcome_summary.get("signoff_confirmed", False),
+            "signoff_decision": payload.signoff_decision,
+            "signoff_confirmed": signoff_confirmed,
+            "approver": payload.approver,
+            "signoff_notes": payload.signoff_notes,
+            "accepted_artifacts": payload.accepted_artifacts,
+            "conditions": payload.conditions,
+            "evidence_links": payload.evidence_links,
+            "outcome_progress_summary": progress.task_summary,
+            "progress_completion_ratio": progress.completion_ratio,
+            "progress_open_task_count": progress.task_summary.get("open_task_count", 0),
+            "progress_blocked_task_count": progress.task_summary.get("blocked_task_count", 0),
+            "progress_done_task_count": progress.task_summary.get("done_task_count", 0),
+            "source_outcome_generated_at": outcome_summary.get("generated_at", ""),
+            "progress_generated_at": progress.generated_at.isoformat(),
+            "generated_at": generated_at.isoformat(),
+        },
+        markdown_export=markdown_export,
+        created_by=payload.created_by or "researcher",
+    )
+    session.add(signoff)
+    session.commit()
+    session.refresh(signoff)
+    ArtifactGraphService(GraphService(session)).link_project_bundle_release_review_outcome_signoff(
+        outcome,
+        signoff,
+    )
+    session.commit()
+    return _serialize_research_brief(signoff, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/review-session/outcomes/{outcome_id}/signoffs",
+    response_model=list[ResearchBriefRead],
+)
+def list_project_bundle_release_review_outcome_signoffs(
+    release_id: str,
+    outcome_id: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    _get_project_bundle_release_or_404(release_id, session)
+    _get_project_bundle_release_review_outcome_or_404(release_id, outcome_id, session)
+    return [
+        _serialize_research_brief(signoff)
+        for signoff in _project_bundle_release_review_outcome_signoffs(
+            session,
+            release_id=release_id,
+            outcome_id=outcome_id,
+            limit=limit,
+        )
+    ]
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/review-session/"
+    "outcomes/{outcome_id}/signoffs/{signoff_id}",
+    response_model=ResearchBriefDetail,
+)
+def get_project_bundle_release_review_outcome_signoff(
+    release_id: str,
+    outcome_id: str,
+    signoff_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    _get_project_bundle_release_or_404(release_id, session)
+    signoff = _get_project_bundle_release_review_outcome_signoff_or_404(
+        release_id,
+        outcome_id,
+        signoff_id,
+        session,
+    )
+    return _serialize_research_brief(signoff, include_markdown=True)
+
+
+@router.get(
+    "/export/project-bundle/releases/{release_id}/review-session/"
+    "outcomes/{outcome_id}/signoffs/{signoff_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_project_bundle_release_review_outcome_signoff_markdown(
+    release_id: str,
+    outcome_id: str,
+    signoff_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    _get_project_bundle_release_or_404(release_id, session)
+    signoff = _get_project_bundle_release_review_outcome_signoff_or_404(
+        release_id,
+        outcome_id,
+        signoff_id,
+        session,
+    )
+    return PlainTextResponse(signoff.markdown_export or "", media_type="text/markdown")
+
+
 @router.get("/export/project-bundle")
 def export_project_bundle(
     session: Session = Depends(get_session),
@@ -10912,6 +11093,7 @@ def _build_project_bundle_zip(session: Session) -> bytes:
     latest_bundle_release_acceptance_packet = context["latest_bundle_release_acceptance_packet"]
     latest_bundle_release_review_session = context["latest_bundle_release_review_session"]
     bundle_release_review_outcomes = context["bundle_release_review_outcomes"]
+    bundle_release_review_outcome_signoffs = context["bundle_release_review_outcome_signoffs"]
     latest_bundle_release_review_outcome_progress = context[
         "latest_bundle_release_review_outcome_progress"
     ]
@@ -11015,6 +11197,15 @@ def _build_project_bundle_zip(session: Session) -> bytes:
             "metadata/project-bundle-release-review-outcomes.json",
             _json_dump(
                 [_serialize_research_brief(outcome) for outcome in bundle_release_review_outcomes]
+            ),
+        )
+        archive.writestr(
+            "metadata/project-bundle-release-review-outcome-signoffs.json",
+            _json_dump(
+                [
+                    _serialize_research_brief(signoff)
+                    for signoff in bundle_release_review_outcome_signoffs
+                ]
             ),
         )
         if latest_bundle_release_review_outcome_progress:
@@ -11163,6 +11354,25 @@ def _build_project_bundle_zip(session: Session) -> bytes:
                 "artifacts/releases/latest-project-bundle-release-review-outcome-progress.md",
                 latest_bundle_release_review_outcome_progress.markdown_export,
             )
+        for signoff in bundle_release_review_outcome_signoffs:
+            if signoff.markdown_export:
+                _write_markdown(
+                    archive,
+                    (
+                        "artifacts/releases/"
+                        f"project-bundle-release-review-outcome-signoff-{signoff.id}.md"
+                    ),
+                    signoff.markdown_export,
+                )
+        if (
+            bundle_release_review_outcome_signoffs
+            and bundle_release_review_outcome_signoffs[0].markdown_export
+        ):
+            _write_markdown(
+                archive,
+                "artifacts/releases/latest-project-bundle-release-review-outcome-signoff.md",
+                bundle_release_review_outcome_signoffs[0].markdown_export,
+            )
         for brief in briefs:
             if brief.markdown_export:
                 _write_markdown(
@@ -11260,6 +11470,10 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         session,
         limit=12,
     )
+    bundle_release_review_outcome_signoffs = _project_bundle_release_review_outcome_signoffs(
+        session,
+        limit=12,
+    )
     latest_bundle_release_review_outcome_progress = (
         _project_bundle_release_review_outcome_progress(bundle_release_review_outcomes[0], session)
         if bundle_release_review_outcomes
@@ -11293,6 +11507,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         latest_bundle_release_acceptance_packet=latest_bundle_release_acceptance_packet,
         latest_bundle_release_review_session=latest_bundle_release_review_session,
         bundle_release_review_outcomes=bundle_release_review_outcomes,
+        bundle_release_review_outcome_signoffs=bundle_release_review_outcome_signoffs,
         latest_bundle_release_review_outcome_progress=(
             latest_bundle_release_review_outcome_progress
         ),
@@ -11325,6 +11540,7 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
         "latest_bundle_release_acceptance_packet": latest_bundle_release_acceptance_packet,
         "latest_bundle_release_review_session": latest_bundle_release_review_session,
         "bundle_release_review_outcomes": bundle_release_review_outcomes,
+        "bundle_release_review_outcome_signoffs": bundle_release_review_outcome_signoffs,
         "latest_bundle_release_review_outcome_progress": (
             latest_bundle_release_review_outcome_progress
         ),
@@ -11458,6 +11674,49 @@ def _get_project_bundle_release_review_outcome_or_404(
     if (outcome.summary_json or {}).get("release_id") != release_id:
         raise HTTPException(status_code=404, detail="Release review outcome not found")
     return outcome
+
+
+def _project_bundle_release_review_outcome_signoffs(
+    session: Session,
+    *,
+    release_id: str | None = None,
+    outcome_id: str | None = None,
+    limit: int = 12,
+) -> list[ResearchBrief]:
+    fetch_limit = max(1, min(limit, 50)) if release_id is None and outcome_id is None else 200
+    signoffs = (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "project_bundle_release_review_outcome_signoff")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(fetch_limit)
+        .all()
+    )
+    if release_id is None and outcome_id is None:
+        return signoffs
+    filtered = []
+    for signoff in signoffs:
+        summary = signoff.summary_json or {}
+        if release_id is not None and summary.get("release_id") != release_id:
+            continue
+        if outcome_id is not None and summary.get("outcome_id") != outcome_id:
+            continue
+        filtered.append(signoff)
+    return filtered[: max(1, min(limit, 50))]
+
+
+def _get_project_bundle_release_review_outcome_signoff_or_404(
+    release_id: str,
+    outcome_id: str,
+    signoff_id: str,
+    session: Session,
+) -> ResearchBrief:
+    signoff = session.get(ResearchBrief, signoff_id)
+    if signoff is None or signoff.scope != "project_bundle_release_review_outcome_signoff":
+        raise HTTPException(status_code=404, detail="Release review outcome signoff not found")
+    summary = signoff.summary_json or {}
+    if summary.get("release_id") != release_id or summary.get("outcome_id") != outcome_id:
+        raise HTTPException(status_code=404, detail="Release review outcome signoff not found")
+    return signoff
 
 
 def _get_project_bundle_release_acceptance_packet_snapshot_or_404(
@@ -12098,6 +12357,61 @@ def _render_project_bundle_release_review_outcome_markdown(
     return "\n".join(lines).strip() + "\n"
 
 
+def _render_project_bundle_release_review_outcome_signoff_markdown(
+    *,
+    generated_at: datetime,
+    outcome: ResearchBrief,
+    progress: ProjectBundleReleaseReviewOutcomeProgressResponse,
+    payload: ProjectBundleReleaseReviewOutcomeSignoffCreate,
+    signoff_confirmed: bool,
+) -> str:
+    outcome_summary = outcome.summary_json or {}
+    lines = [
+        "# Project Bundle Release Review Outcome Signoff",
+        "",
+        f"- Release Id: `{outcome_summary.get('release_id', '')}`",
+        f"- Outcome Id: `{outcome.id}`",
+        f"- Outcome Title: {outcome.title}",
+        f"- Generated At: `{generated_at.isoformat()}`",
+        f"- Recipient: {outcome_summary.get('recipient', 'advisor_or_customer')}",
+        f"- Review Decision: {outcome_summary.get('review_decision', '')}",
+        f"- Outcome Signoff Confirmed: {outcome_summary.get('signoff_confirmed', False)}",
+        f"- Signoff Decision: {payload.signoff_decision}",
+        f"- Signoff Confirmed: {signoff_confirmed}",
+        f"- Approver: {payload.approver}",
+        f"- Progress Completion Ratio: {progress.completion_ratio}",
+        f"- Open Tasks: {progress.task_summary.get('open_task_count', 0)}",
+        f"- Done Tasks: {progress.task_summary.get('done_task_count', 0)}",
+        f"- Blocked Tasks: {progress.task_summary.get('blocked_task_count', 0)}",
+        "",
+        "## Signoff Notes",
+        "",
+        payload.signoff_notes or "No signoff notes recorded.",
+        "",
+        "## Accepted Artifacts",
+        "",
+    ]
+    _append_project_bundle_feedback_items(lines, payload.accepted_artifacts)
+    lines.extend(["", "## Conditions", ""])
+    _append_project_bundle_feedback_items(lines, payload.conditions)
+    lines.extend(["", "## Evidence Links", ""])
+    _append_project_bundle_feedback_items(lines, payload.evidence_links)
+    lines.extend(["", "## Progress Snapshot", ""])
+    lines.append(f"- Task Count: {progress.task_summary.get('task_count', 0)}")
+    lines.append(f"- By Status: {progress.task_summary.get('by_status', {})}")
+    lines.append(f"- By Priority: {progress.task_summary.get('by_priority', {})}")
+    lines.extend(["", "## Next Tasks", ""])
+    if progress.next_tasks:
+        for task in progress.next_tasks:
+            description = f": {task.description}" if task.description else ""
+            lines.append(
+                f"- `{task.id}` `{task.priority}` `{task.status}` {task.title}{description}"
+            )
+    else:
+        lines.append("- None.")
+    return "\n".join(lines).strip() + "\n"
+
+
 def _project_bundle_release_acceptance_packet(
     release: ResearchBrief,
     session: Session,
@@ -12602,6 +12916,7 @@ def _project_bundle_manifest(
     latest_bundle_release_acceptance_packet: ProjectBundleReleaseAcceptancePacketResponse | None,
     latest_bundle_release_review_session: ProjectBundleReleaseReviewSessionResponse | None,
     bundle_release_review_outcomes: list[ResearchBrief],
+    bundle_release_review_outcome_signoffs: list[ResearchBrief],
     latest_bundle_release_review_outcome_progress: (
         ProjectBundleReleaseReviewOutcomeProgressResponse | None
     ),
@@ -12628,6 +12943,14 @@ def _project_bundle_manifest(
     latest_bundle_release_review_outcome = (
         bundle_release_review_outcomes[0].summary_json if bundle_release_review_outcomes else {}
     ) or {}
+    latest_bundle_release_review_outcome_signoff = (
+        bundle_release_review_outcome_signoffs[0].summary_json
+        if bundle_release_review_outcome_signoffs
+        else {}
+    ) or {}
+    latest_bundle_release_review_outcome_signoff_progress_summary = (
+        latest_bundle_release_review_outcome_signoff.get("outcome_progress_summary") or {}
+    )
     latest_bundle_release_review_outcome_progress_summary = (
         latest_bundle_release_review_outcome_progress.task_summary
         if latest_bundle_release_review_outcome_progress
@@ -12934,6 +13257,44 @@ def _project_bundle_manifest(
         ),
         "latest_project_bundle_release_review_outcome_progress_blocked_task_count": (
             latest_bundle_release_review_outcome_progress_summary.get("blocked_task_count", 0)
+        ),
+        "project_bundle_release_review_outcome_signoff_count": len(
+            bundle_release_review_outcome_signoffs
+        ),
+        "latest_project_bundle_release_review_outcome_signoff_id": (
+            bundle_release_review_outcome_signoffs[0].id
+            if bundle_release_review_outcome_signoffs
+            else ""
+        ),
+        "latest_project_bundle_release_review_outcome_signoff_release_id": (
+            latest_bundle_release_review_outcome_signoff.get("release_id", "")
+        ),
+        "latest_project_bundle_release_review_outcome_signoff_outcome_id": (
+            latest_bundle_release_review_outcome_signoff.get("outcome_id", "")
+        ),
+        "latest_project_bundle_release_review_outcome_signoff_decision": (
+            latest_bundle_release_review_outcome_signoff.get("signoff_decision", "")
+        ),
+        "latest_project_bundle_release_review_outcome_signoff_record_confirmed": (
+            latest_bundle_release_review_outcome_signoff.get("signoff_confirmed", False)
+        ),
+        "latest_project_bundle_release_review_outcome_signoff_approver": (
+            latest_bundle_release_review_outcome_signoff.get("approver", "")
+        ),
+        "latest_project_bundle_release_review_outcome_signoff_progress_completion_ratio": (
+            latest_bundle_release_review_outcome_signoff.get("progress_completion_ratio", 0.0)
+        ),
+        "latest_project_bundle_release_review_outcome_signoff_progress_open_task_count": (
+            latest_bundle_release_review_outcome_signoff_progress_summary.get(
+                "open_task_count",
+                0,
+            )
+        ),
+        "latest_project_bundle_release_review_outcome_signoff_progress_blocked_task_count": (
+            latest_bundle_release_review_outcome_signoff_progress_summary.get(
+                "blocked_task_count",
+                0,
+            )
         ),
         "opportunity_count": opportunity_radar.opportunity_count,
         "top_opportunity_score": (
@@ -13594,6 +13955,7 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
         f"- Bundle Release Notes: {manifest['project_bundle_release_count']}",
         f"- Bundle Release Feedback: {manifest['project_bundle_release_feedback_count']}",
         f"- Release Review Outcomes: {manifest['project_bundle_release_review_outcome_count']}",
+        f"- Release Review Outcome Signoffs: {manifest['project_bundle_release_review_outcome_signoff_count']}",
         f"- Latest Release Closeout: {manifest['latest_project_bundle_release_closeout_status'] or 'not_available'}",
         "",
         "## Start Here",
@@ -13657,6 +14019,10 @@ def _render_project_bundle_readme(manifest: dict[str, Any]) -> str:
     if manifest.get("latest_project_bundle_release_review_outcome_progress_available"):
         lines.append(
             "- `artifacts/releases/latest-project-bundle-release-review-outcome-progress.md`: latest review outcome follow-up progress, blockers, and next tasks."
+        )
+    if manifest.get("project_bundle_release_review_outcome_signoff_count", 0):
+        lines.append(
+            "- `artifacts/releases/latest-project-bundle-release-review-outcome-signoff.md`: latest review outcome signoff evidence, conditions, and progress snapshot."
         )
     lines.extend(
         [

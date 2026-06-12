@@ -25,6 +25,7 @@ const state = {
   latestProjectBundleReleaseFeedbackId: "",
   latestProjectBundleReleaseAcceptancePacketSnapshotId: "",
   latestProjectBundleReleaseReviewOutcomeId: "",
+  latestProjectBundleReleaseReviewOutcomeSignoffId: "",
   latestResearchPlanId: "",
   researchProfile: null,
   onboardingReadiness: null,
@@ -2351,6 +2352,124 @@ async function loadProjectBundleReleaseReviewOutcomeProgress() {
   }
 }
 
+
+
+async function ensureProjectBundleReleaseReviewOutcomeId(releaseId) {
+  let outcomeId = state.latestProjectBundleReleaseReviewOutcomeId;
+  if (outcomeId) {
+    return outcomeId;
+  }
+  const outcomes = await api(
+    `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes?limit=1`,
+  );
+  if (!outcomes.length) {
+    return "";
+  }
+  outcomeId = outcomes[0].id;
+  state.latestProjectBundleReleaseReviewOutcomeId = outcomeId;
+  return outcomeId;
+}
+
+async function recordProjectBundleReleaseReviewOutcomeSignoff() {
+  renderResult("workflowResult", "Recording release review outcome signoff...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before recording outcome signoff.",
+        "warn",
+      );
+      return;
+    }
+    const outcomeId = await ensureProjectBundleReleaseReviewOutcomeId(releaseId);
+    if (!outcomeId) {
+      renderResult(
+        "workflowResult",
+        "Record a release review outcome before recording signoff evidence.",
+        "warn",
+      );
+      return;
+    }
+    const body = await api(
+      `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes/${outcomeId}/signoffs`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Workbench Project Bundle Release Review Outcome Signoff",
+          signoff_decision: "deferred",
+          approver: "advisor_or_customer",
+          signoff_notes:
+            "Workbench signoff evidence captured with the current review outcome progress snapshot.",
+          accepted_artifacts: [
+            "Project bundle",
+            "Release review outcome",
+            "Review outcome progress report",
+          ],
+          conditions: ["Complete open release review outcome follow-up tasks."],
+          evidence_links: [
+            "artifacts/releases/latest-project-bundle-release-review-outcome-progress.md",
+          ],
+          created_by: "workbench",
+        }),
+      },
+    );
+    state.latestProjectBundleReleaseReviewOutcomeSignoffId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Recorded release review outcome signoff <code>${escapeHtml(body.id)}</code> with decision <code>${escapeHtml(body.summary.signoff_decision)}</code>.`,
+    );
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
+async function listProjectBundleReleaseReviewOutcomeSignoffs() {
+  renderResult("workflowResult", "Loading release review outcome signoffs...", "warn");
+  try {
+    const releaseId = await ensureProjectBundleReleaseId();
+    if (!releaseId) {
+      renderResult(
+        "workflowResult",
+        "Save a project bundle release note before loading outcome signoffs.",
+        "warn",
+      );
+      return;
+    }
+    const outcomeId = await ensureProjectBundleReleaseReviewOutcomeId(releaseId);
+    if (!outcomeId) {
+      renderResult(
+        "workflowResult",
+        "Record a release review outcome before loading signoff evidence.",
+        "warn",
+      );
+      return;
+    }
+    const signoffs = await api(
+      `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes/${outcomeId}/signoffs?limit=6`,
+    );
+    if (signoffs.length) {
+      state.latestProjectBundleReleaseReviewOutcomeSignoffId = signoffs[0].id;
+    }
+    const lines = ["# Release Review Outcome Signoffs", ""];
+    if (!signoffs.length) {
+      lines.push("- No release review outcome signoffs saved.");
+    }
+    for (const signoff of signoffs) {
+      const decision = signoff.summary.signoff_decision || "pending";
+      const approver = signoff.summary.approver || "unknown";
+      const confirmed = signoff.summary.signoff_confirmed ? "confirmed" : "not confirmed";
+      lines.push(`- \`${signoff.id}\` ${signoff.title}: ${decision}, ${confirmed}, ${approver}`);
+    }
+    $("dossierPreview").textContent = lines.join("\n");
+    renderResult("workflowResult", `Loaded ${signoffs.length} release review outcome signoffs.`);
+  } catch (error) {
+    renderResult("workflowResult", escapeHtml(error.message), "error");
+  }
+}
+
 async function loadProjectBundleReadiness() {
   renderResult("workflowResult", "Checking project bundle readiness...", "warn");
   try {
@@ -3157,6 +3276,14 @@ document.addEventListener("DOMContentLoaded", () => {
   $("projectBundleReleaseReviewOutcomeProgressButton").addEventListener(
     "click",
     loadProjectBundleReleaseReviewOutcomeProgress,
+  );
+  $("projectBundleReleaseReviewOutcomeSignoffButton").addEventListener(
+    "click",
+    recordProjectBundleReleaseReviewOutcomeSignoff,
+  );
+  $("projectBundleReleaseReviewOutcomeSignoffsButton").addEventListener(
+    "click",
+    listProjectBundleReleaseReviewOutcomeSignoffs,
   );
   $("projectBundleReadinessButton").addEventListener("click", loadProjectBundleReadiness);
   $("projectBundleReadinessTasksButton").addEventListener(
