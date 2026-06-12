@@ -143,6 +143,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Local hashed embedding index for evidence, gaps, and ideas.
 - Markdown export for paper cards and idea dossiers.
 - GraphRAG-lite node and edge persistence.
+- Read-only GraphRAG-lite stats for node/edge type counts, orphan edge counts, and duplicate edge group counts.
 - Query-time lexical/vector context retrieval over evidence, gaps, ideas, and graph neighborhoods.
 - Synchronous workflow job trace with input, output, status, progress, and errors.
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
@@ -430,6 +431,7 @@ GET  /research/ideas/{idea_id}/feedback
 GET  /research/ideas/{idea_id}/export/markdown
 
 POST /research/search/context
+GET  /research/graph/stats
 GET  /research/graph/nodes
 GET  /research/graph/edges
 POST /research/workflows/literature-to-ideas

@@ -1578,7 +1578,7 @@ ARK_API_KEY=
 - 完整 indexing/community summary 成本高。
 - 一上来接完整框架会挤压核心产品工作流。
 
-P6 revisit 结论记录在 `docs/graphrag_langgraph_deerflow_evaluation.md`：当前继续保留 GraphRAG-lite，只有在语料规模、全局社区摘要、跨项目关系推理或离线索引需求明确后，才引入完整 GraphRAG pipeline。
+P6 revisit 结论记录在 `docs/graphrag_langgraph_deerflow_evaluation.md`：当前继续保留 GraphRAG-lite，只有在语料规模、全局社区摘要、跨项目关系推理或离线索引需求明确后，才引入完整 GraphRAG pipeline。`GET /research/graph/stats` 是当前 graph observability 的第一步，会返回节点/边总量、类型分布、孤儿边数量和重复边组数量，便于在完整 GraphRAG 前先发现轻量图谱质量问题。
 
 ## 13.3 GraphRAG-lite 节点与边
 

@@ -438,3 +438,21 @@ Verification completed:
 - `grep -R "graphrag_langgraph_deerflow_evaluation" -n README.md docs codex_handoff/03_TODO.md` confirmed cross-document references.
 - `git --no-pager diff --check` passed.
 - Documentation-only change; no dependency install, service start, migration, queue worker, or business-code test was required.
+
+## 2026-06-12 - GraphRAG-Lite Stats Endpoint
+
+Implemented in progress:
+
+- Added `GET /research/graph/stats` for read-only GraphRAG-lite observability.
+- Reported total node/edge counts, node type counts, edge type counts, orphan edge count, and duplicate edge group count.
+- Added the endpoint to the stable tool manifest as `get_graph_stats` without side effects.
+- Added focused test coverage and smoke API coverage for the stats endpoint.
+- Updated README, technical design, P6 evaluation notes, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/research/services/graph_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py scripts/smoke_api.py` left files unchanged.
+- `.venv/bin/ruff check backend/research/services/graph_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py scripts/smoke_api.py` passed.
+- `.venv/bin/ruff format --check backend/research/services/graph_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py scripts/smoke_api.py` passed.
+- Focused pytest passed: `2 passed in 2.91s`.

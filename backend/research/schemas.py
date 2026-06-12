@@ -1660,6 +1660,15 @@ class ResearchEdgeRead(BaseModel):
     updated_at: datetime
 
 
+class GraphStatsResponse(BaseModel):
+    node_count: int = 0
+    edge_count: int = 0
+    node_type_counts: dict[str, int] = Field(default_factory=dict)
+    edge_type_counts: dict[str, int] = Field(default_factory=dict)
+    orphan_edge_count: int = 0
+    duplicate_edge_group_count: int = 0
+
+
 class ContextSearchRequest(BaseModel):
     query: str
     paper_ids: list[str] = Field(default_factory=list)

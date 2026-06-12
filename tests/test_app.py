@@ -566,6 +566,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     names = {tool["name"] for tool in body["tools"]}
     assert "upload_paper" in names
     assert "search_research_context" in names
+    assert "get_graph_stats" in names
     assert "get_research_profile" in names
     assert "update_research_profile" in names
     assert "create_research_plan" in names
@@ -5518,6 +5519,17 @@ Future work should expose graph nodes and edges through the API.
     assert "paper_has_evidence" in edge_types
     assert "gap_supported_by_evidence" in edge_types
     assert "idea_addresses_gap" in edge_types
+
+    stats = client.get("/research/graph/stats")
+    assert stats.status_code == 200
+    stats_body = stats.json()
+    assert stats_body["node_count"] >= len(nodes.json())
+    assert stats_body["edge_count"] >= len(edges.json())
+    assert stats_body["node_type_counts"]["paper"] >= 1
+    assert stats_body["node_type_counts"]["evidence"] >= 1
+    assert stats_body["edge_type_counts"]["paper_has_evidence"] >= 1
+    assert stats_body["orphan_edge_count"] == 0
+    assert stats_body["duplicate_edge_group_count"] >= 0
 
 
 def test_structured_card_extraction_falls_back_without_model_config() -> None:

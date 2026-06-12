@@ -98,7 +98,7 @@ Treat DeerFlow as a possible external consumer later:
 Prefer these smaller improvements first:
 
 - Add graph edge quality checks for duplicate or orphan edges.
-- Add graph stats/readiness reporting for node counts, edge counts, and common edge types.
+- Continue graph stats/readiness reporting beyond the initial `/research/graph/stats` node/edge, orphan, and duplicate counts.
 - Improve retrieval scoring and ranking explainability.
 - Add bounded graph-neighborhood controls such as depth, edge type filters, and owner/project scope after scoping is implemented.
 - Add tests for graph expansion limits and high-cardinality edge sets.

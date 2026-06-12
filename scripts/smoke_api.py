@@ -3699,6 +3699,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     )
     nodes = require_ok(client.get("/research/graph/nodes"), "graph nodes")
     edges = require_ok(client.get("/research/graph/edges"), "graph edges")
+    graph_stats = require_ok(client.get("/research/graph/stats"), "graph stats")
 
     return {
         "health": health,
@@ -3706,6 +3707,9 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
         "phase": status["phase"],
         "tool_manifest_count": len(tool_manifest["tools"]),
         "tool_bridge_count": len(tool_bridge["tools"]),
+        "graph_stats_node_count": graph_stats["node_count"],
+        "graph_stats_edge_count": graph_stats["edge_count"],
+        "graph_stats_orphan_edge_count": graph_stats["orphan_edge_count"],
         "research_profile_name": setup_wizard["profile"]["name"],
         "workbench_available": "Research Assistant Workbench" in workbench,
         "setup_wizard_readiness_level": setup_wizard["readiness"]["readiness_level"],

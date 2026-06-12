@@ -178,6 +178,7 @@ from backend.research.schemas import (
     ResearchBriefDetail,
     ResearchBriefRead,
     ResearchEdgeRead,
+    GraphStatsResponse,
     ResearchGapRead,
     ResearchNodeRead,
     ResearchOpportunityItem,
@@ -434,6 +435,13 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/search/context",
             input_model="ContextSearchRequest",
             output_model="ContextSearchResponse",
+        ),
+        ToolManifestItem(
+            name="get_graph_stats",
+            description="Read GraphRAG-lite node, edge, type, orphan, and duplicate counts.",
+            method="GET",
+            path="/research/graph/stats",
+            output_model="GraphStatsResponse",
         ),
         ToolManifestItem(
             name="search_literature",
@@ -14609,6 +14617,11 @@ def _serialize_edge(edge) -> ResearchEdgeRead:
         created_at=edge.created_at,
         updated_at=edge.updated_at,
     )
+
+
+@router.get("/graph/stats", response_model=GraphStatsResponse)
+def get_graph_stats(session: Session = Depends(get_session)) -> GraphStatsResponse:
+    return GraphStatsResponse(**GraphService(session).get_stats())
 
 
 @router.get("/graph/nodes", response_model=list[ResearchNodeRead])

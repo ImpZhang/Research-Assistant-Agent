@@ -1,4 +1,5 @@
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, aliased
 
 from backend.research.models import ResearchEdge, ResearchNode
 
@@ -18,6 +19,53 @@ class GraphService:
         if edge_type:
             query = query.filter(ResearchEdge.edge_type == edge_type)
         return query.limit(limit).all()
+
+    def get_stats(self) -> dict:
+        source_node = aliased(ResearchNode)
+        target_node = aliased(ResearchNode)
+        duplicate_edges = (
+            self.session.query(
+                ResearchEdge.source_node_id,
+                ResearchEdge.target_node_id,
+                ResearchEdge.edge_type,
+                func.count(ResearchEdge.id).label("edge_count"),
+            )
+            .group_by(
+                ResearchEdge.source_node_id,
+                ResearchEdge.target_node_id,
+                ResearchEdge.edge_type,
+            )
+            .having(func.count(ResearchEdge.id) > 1)
+            .subquery()
+        )
+        orphan_edge_count = (
+            self.session.query(func.count(ResearchEdge.id))
+            .outerjoin(source_node, ResearchEdge.source_node_id == source_node.id)
+            .outerjoin(target_node, ResearchEdge.target_node_id == target_node.id)
+            .filter(or_(source_node.id.is_(None), target_node.id.is_(None)))
+            .scalar()
+            or 0
+        )
+        duplicate_edge_group_count = (
+            self.session.query(func.count()).select_from(duplicate_edges).scalar() or 0
+        )
+        return {
+            "node_count": self.session.query(func.count(ResearchNode.id)).scalar() or 0,
+            "edge_count": self.session.query(func.count(ResearchEdge.id)).scalar() or 0,
+            "node_type_counts": self._count_by(ResearchNode.node_type),
+            "edge_type_counts": self._count_by(ResearchEdge.edge_type),
+            "orphan_edge_count": orphan_edge_count,
+            "duplicate_edge_group_count": duplicate_edge_group_count,
+        }
+
+    def _count_by(self, column) -> dict[str, int]:
+        rows = (
+            self.session.query(column, func.count().label("item_count"))
+            .group_by(column)
+            .order_by(func.count().desc(), column.asc())
+            .all()
+        )
+        return {str(value): int(count) for value, count in rows}
 
     def get_or_create_node(
         self,
