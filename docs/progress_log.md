@@ -53,6 +53,21 @@ Verification completed:
 - Full pytest passed: `43 passed in 752.08s`.
 - Smoke API passed with `tool_manifest_count=118`, `tool_bridge_count=118`, `project_bundle_file_count=166`, and deferred release review outcome signoff evidence in the project bundle summary.
 
-Ready for commit:
+Committed and pushed:
 
-- Commit and push the completed feature.
+- `d2e0741 Add release review outcome signoff evidence`.
+
+## 2026-06-12 - Workbench Pilot Launch Status
+
+Implemented in progress:
+
+- Added a read-only Workbench Pilot Launch panel that aggregates onboarding readiness, onboarding progress, and project cockpit state.
+- Added static tests and documentation for the customer-pilot first screen.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `git --no-pager diff --check` passed.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 3.55s`.

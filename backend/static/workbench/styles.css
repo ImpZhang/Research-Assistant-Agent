@@ -278,6 +278,43 @@ textarea {
   align-items: end;
 }
 
+.pilot-launch-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.pilot-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pilot-metric {
+  min-width: 0;
+  border-top: 3px solid var(--line);
+  padding-top: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.pilot-metric span,
+.pilot-metric small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pilot-metric strong {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.pilot-action-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
 .profile-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -428,7 +465,8 @@ code {
   .controls-grid,
   .profile-grid,
   .api-key-control,
-  .two-column {
+  .two-column,
+  .pilot-metrics {
     grid-template-columns: 1fr;
   }
 
@@ -436,7 +474,8 @@ code {
     grid-column: auto;
   }
 
-  .topbar {
+  .topbar,
+  .pilot-launch-heading {
     display: grid;
   }
 }

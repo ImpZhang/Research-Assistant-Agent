@@ -1110,6 +1110,8 @@ GET  /research/ideas/{idea_id}/feedback
 
 `/tasks/{task_id}/events` 保存任务执行历史。创建 backlog 时自动写入 `created` event；`PATCH /tasks/{task_id}` 会写入 `task_updated` event；研究者或后续 agent 可以追加 `note/progress/blocker/decision/evidence` event，记录为什么任务推进、阻塞或完成。
 
+Workbench 的 Pilot Launch 面板在页面加载和手动刷新时并行读取 `/research/onboarding/readiness`、`/research/onboarding/progress?limit=100` 和 `/research/cockpit`。前端只渲染 readiness level/score、required setup completion、cockpit phase/readiness、open/blocked onboarding task count 和 next operating actions；它不调用写接口，避免客户打开 Workbench 时改变远端状态。
+
 Workbench task board 使用同一组 task API：`GET /tasks` 读取当前 idea 或全局任务，`PATCH /tasks/{task_id}` 将选中任务推进为 doing/done/blocked。它不复制 task 状态逻辑，只是给研究者一个最短路径，把自动生成的任务真正推进起来。
 
 `/experiment-plans/{plan_id}/runs` 是第一版实验执行记录：它把 experiment plan 的一次执行落成 `ExperimentRun` artifact，保存 task id、dataset snapshot、parameters、metric results、artifact links、conclusion、notes 和 Markdown run report。创建或更新 run 会写入关联 task 的 `experiment_run_created/experiment_run_updated` event，让任务进展和实验结果在同一条执行日志里可追溯。

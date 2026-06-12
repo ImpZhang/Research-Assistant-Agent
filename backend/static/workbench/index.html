@@ -18,6 +18,7 @@
         </div>
 
         <nav class="nav-list" aria-label="Workbench sections">
+          <a href="#pilot-launch">Pilot Launch</a>
           <a href="#onboarding">Onboarding</a>
           <a href="#ingest">Ingest</a>
           <a href="#workflow">Workflow</a>
@@ -51,6 +52,39 @@
             <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API Docs</a>
           </div>
         </header>
+
+        <section id="pilot-launch" class="band pilot-launch">
+          <div class="section-heading pilot-launch-heading">
+            <div>
+              <h3>Pilot Launch</h3>
+              <p>Current customer pilot state, setup progress, and next operating action.</p>
+            </div>
+            <button id="pilotLaunchRefreshButton" type="button">Refresh</button>
+          </div>
+          <div id="pilotLaunchMetrics" class="pilot-metrics" aria-live="polite">
+            <div class="pilot-metric">
+              <span>Readiness</span>
+              <strong>Waiting</strong>
+              <small>No status loaded.</small>
+            </div>
+            <div class="pilot-metric">
+              <span>Onboarding</span>
+              <strong>Waiting</strong>
+              <small>No progress loaded.</small>
+            </div>
+            <div class="pilot-metric">
+              <span>Cockpit</span>
+              <strong>Waiting</strong>
+              <small>No phase loaded.</small>
+            </div>
+            <div class="pilot-metric">
+              <span>Tasks</span>
+              <strong>Waiting</strong>
+              <small>No task state loaded.</small>
+            </div>
+          </div>
+          <div id="pilotLaunchResult" class="result-block muted">Launch status not loaded.</div>
+        </section>
 
         <section id="onboarding" class="band">
           <div class="section-heading">

@@ -1105,6 +1105,10 @@ def test_workbench_static_assets_are_served() -> None:
     assert "apiKeyInput" in response.text
     assert "saveApiKeyButton" in response.text
     assert "clearApiKeyButton" in response.text
+    assert "pilot-launch" in response.text
+    assert "pilotLaunchRefreshButton" in response.text
+    assert "pilotLaunchMetrics" in response.text
+    assert "pilotLaunchResult" in response.text
     assert "onboardingButton" in response.text
     assert "onboardingMarkdownButton" in response.text
     assert "onboardingTasksButton" in response.text
@@ -1125,6 +1129,10 @@ def test_workbench_static_assets_are_served() -> None:
     assert "withAuthHeaders" in script.text
     assert "downloadWithAuth" in script.text
     assert "/research/onboarding/readiness" in script.text
+    assert "/research/onboarding/progress?limit=100" in script.text
+    assert "/research/cockpit" in script.text
+    assert "loadPilotLaunch" in script.text
+    assert "renderPilotMetric" in script.text
     assert "/research/onboarding/setup" in script.text
     assert "/research/onboarding/tasks" in script.text
     assert "/research/onboarding/progress" in script.text

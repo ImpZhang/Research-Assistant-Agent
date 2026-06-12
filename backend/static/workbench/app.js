@@ -787,6 +787,76 @@ async function createAdvisorActionSession() {
   }
 }
 
+
+function renderPilotMetric(label, value, detail) {
+  return `
+    <div class="pilot-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(detail)}</small>
+    </div>
+  `;
+}
+
+function renderPilotActionList(actions) {
+  if (!actions.length) {
+    return "";
+  }
+  return `<ol class="pilot-action-list">${actions
+    .map((action) => `<li>${escapeHtml(action)}</li>`)
+    .join("")}</ol>`;
+}
+
+async function loadPilotLaunch() {
+  renderResult("pilotLaunchResult", "Refreshing launch status...", "warn");
+  try {
+    const [readiness, progress, cockpit] = await Promise.all([
+      api("/research/onboarding/readiness"),
+      api("/research/onboarding/progress?limit=100"),
+      api("/research/cockpit"),
+    ]);
+    const taskSummary = progress.task_summary || {};
+    const metrics = [
+      renderPilotMetric(
+        "Readiness",
+        readiness.readiness_level,
+        `${Math.round((readiness.readiness_score || 0) * 100)}% setup score`,
+      ),
+      renderPilotMetric(
+        "Onboarding",
+        `${readiness.required_done}/${readiness.required_total}`,
+        `${readiness.missing_required.length} required gaps`,
+      ),
+      renderPilotMetric("Cockpit", cockpit.phase, cockpit.readiness_level),
+      renderPilotMetric(
+        "Tasks",
+        `${taskSummary.open_task_count || 0} open`,
+        `${taskSummary.blocked_task_count || 0} blocked`,
+      ),
+    ];
+    $("pilotLaunchMetrics").innerHTML = metrics.join("");
+    const primaryAction =
+      (cockpit.primary_next_action && cockpit.primary_next_action.label) || progress.next_action;
+    const actions = [
+      primaryAction,
+      ...(readiness.recommended_actions || []).slice(0, 3),
+      ...(cockpit.risk_alerts || []).slice(0, 2),
+    ].filter(Boolean);
+    renderResult(
+      "pilotLaunchResult",
+      `Pilot readiness <code>${escapeHtml(readiness.readiness_level)}</code>; cockpit phase <code>${escapeHtml(cockpit.phase)}</code>.${renderPilotActionList(actions)}`,
+    );
+  } catch (error) {
+    $("pilotLaunchMetrics").innerHTML = [
+      renderPilotMetric("Readiness", "Unavailable", "Check API connection."),
+      renderPilotMetric("Onboarding", "Unavailable", "Refresh after setup."),
+      renderPilotMetric("Cockpit", "Unavailable", "Refresh after workflow."),
+      renderPilotMetric("Tasks", "Unavailable", "Refresh after tasks."),
+    ].join("");
+    renderResult("pilotLaunchResult", escapeHtml(error.message), "error");
+  }
+}
+
 function renderList(title, items, mapper) {
   if (!items || !items.length) {
     return `<h4>${escapeHtml(title)}</h4><div class="empty-state">No records.</div>`;
@@ -3162,6 +3232,7 @@ document.addEventListener("DOMContentLoaded", () => {
       saveApiKey();
     }
   });
+  $("pilotLaunchRefreshButton").addEventListener("click", loadPilotLaunch);
   $("loadProfileButton").addEventListener("click", loadResearchProfile);
   $("previewProfileButton").addEventListener("click", previewResearchProfile);
   $("contextSearchForm").addEventListener("submit", searchContext);
@@ -3336,6 +3407,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("savePortfolioButton").addEventListener("click", savePortfolio);
   loadApiKey();
   checkHealth();
+  loadPilotLaunch();
   loadResearchProfile();
   refreshJobs();
 });
