@@ -884,6 +884,8 @@ novelty check 需要能一键转成 task board 任务：把 recommended actions 
 
 Workbench 需要提供第一屏 pilot launch status：打开页面时应以只读方式聚合 onboarding readiness、onboarding progress 和 project cockpit，展示 readiness、required setup completion、cockpit phase、open/blocked task count 和 next operating actions。该面板不得自动创建任务或写入数据，只作为早期客户试点的当前状态入口。
 
+Workbench 需要提供一致的 first-run 空状态和错误状态：缺少 API key、API 不可达、未选择论文、未保存 pilot report snapshot 等早期试点断点，必须显示可执行的下一步提示，而不是只暴露底层异常文本。
+
 Workbench 需要提供最小可用 task board：能按当前 idea 和状态读取任务，选择任务，并把任务更新为 doing、done 或 blocked。所有操作必须走同一套 `/research/tasks` API，避免前端维护第二份任务状态。
 
 系统需要提供 idea activity timeline：按时间聚合 proposal、experiment、decision、assumption audit、evidence ledger、research plan 和 task event，返回结构化 events 与 Markdown 日志，用于导师汇报、handoff 和后续 agent 接手时快速理解一个 idea 的历史。

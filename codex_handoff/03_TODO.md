@@ -175,23 +175,24 @@ Goal:
 
 - Move from "developer pilot" to "early customer pilot".
 
-Completed slice:
+Completed slices:
 
 - Added a read-only Workbench Pilot Launch panel in `298f187 Add Workbench pilot launch status`.
 - The panel aggregates onboarding readiness, onboarding progress, and cockpit state without writing data.
+- Added Workbench empty/error state helpers for API-key, network, and missing-input first-run failures.
 
 Next likely work:
 
-- Improve Workbench information architecture around first-run and delivery workflows.
-- Strengthen empty/error states for API-key auth, missing papers, missing ideas, empty tasks, and missing bundle release artifacts.
+- Improve Workbench information architecture around delivery workflows.
+- Strengthen empty states for missing ideas, empty tasks, and missing bundle release artifacts.
 - Add route-level audit events for writes.
 - Add or expand deployment checklist coverage.
 
 Suggested next narrow slices:
 
-1. Add Workbench empty/error state helpers and apply them to first-run workflow calls.
-2. Add a deployment checklist section to `docs/deployment.md` and README.
-3. Design write-operation audit logging before introducing persistence changes.
+1. Add a deployment checklist section to `docs/deployment.md` and README.
+2. Design write-operation audit logging before introducing persistence changes.
+3. Extend Workbench empty states to later delivery workflows such as bundle releases and claim queues.
 
 Files:
 

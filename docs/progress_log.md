@@ -79,3 +79,20 @@ Documentation maintenance completed:
 - Marked release review outcome signoff evidence as completed in `codex_handoff/03_TODO.md`.
 - Recorded the first completed P3 slice and split remaining customer-pilot hardening into narrower follow-up tasks.
 - Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+## 2026-06-12 - Workbench First-Run State Helpers
+
+Implemented in progress:
+
+- Added Workbench helpers for API-key, network, and generic API errors.
+- Routed repeated Workbench error rendering through the helper so first-run failures show actionable retry guidance.
+- Added empty-state rendering for missing paper uploads and missing pilot report snapshots.
+- Added static tests and documentation for the customer-pilot first-run state behavior.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `git --no-pager diff --check` passed.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 3.56s`.

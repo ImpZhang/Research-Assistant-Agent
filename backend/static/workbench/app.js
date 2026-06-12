@@ -68,6 +68,32 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+function workbenchErrorMessage(error) {
+  const message = error && error.message
+    ? String(error.message)
+    : String(error || "Unknown error.");
+  const escaped = escapeHtml(message);
+  if (message.startsWith("401") || message.toLowerCase().includes("unauthorized")) {
+    return `${escaped}<br />Save a valid API key in the top bar, then retry.`;
+  }
+  if (
+    message.includes("Failed to fetch") ||
+    message.includes("NetworkError") ||
+    message.includes("Load failed")
+  ) {
+    return `${escaped}<br />Check that the API server is reachable, then retry.`;
+  }
+  return escaped;
+}
+
+function renderWorkbenchError(targetId, error) {
+  renderResult(targetId, workbenchErrorMessage(error), "error");
+}
+
+function renderWorkbenchEmpty(targetId, message) {
+  renderResult(targetId, escapeHtml(message), "warn");
+}
+
 function parseCsv(value) {
   return String(value || "")
     .split(",")
@@ -204,7 +230,7 @@ async function loadOnboardingReadiness(previewMarkdown = false) {
       `Readiness <code>${escapeHtml(body.readiness_level)}</code> ${score}%. Required ${body.required_done}/${body.required_total}; missing ${body.missing_required.length}.<br />${checklist}${actions}`,
     );
   } catch (error) {
-    renderResult("onboardingResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("onboardingResult", error);
   }
 }
 
@@ -222,7 +248,7 @@ async function createOnboardingTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Onboarding tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("onboardingResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("onboardingResult", error);
   }
 }
 
@@ -236,7 +262,7 @@ async function loadOnboardingProgress() {
       `Onboarding completion ${Math.round((body.task_summary.completion_ratio || 0) * 100)}%. Open: ${body.task_summary.open_task_count}; blocked: ${body.task_summary.blocked_task_count}.<br />Next: ${escapeHtml(body.next_action)}.`,
     );
   } catch (error) {
-    renderResult("onboardingResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("onboardingResult", error);
   }
 }
 
@@ -250,7 +276,7 @@ async function loadPilotReport() {
       `Pilot report <code>${escapeHtml(body.report_status)}</code>. Phase <code>${escapeHtml(body.cockpit_phase)}</code>; readiness <code>${escapeHtml(body.readiness_level)}</code>.<br />${escapeHtml(body.executive_summary)}`,
     );
   } catch (error) {
-    renderResult("onboardingResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("onboardingResult", error);
   }
 }
 
@@ -272,13 +298,13 @@ async function savePilotReportSnapshot() {
       `Saved pilot report snapshot <code>${escapeHtml(body.id)}</code> with ${body.markdown_export_chars} Markdown chars.`,
     );
   } catch (error) {
-    renderResult("onboardingResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("onboardingResult", error);
   }
 }
 
 async function createPilotReportSnapshotTasks() {
   if (!state.latestPilotReportSnapshotId) {
-    renderResult("onboardingResult", "Save a pilot report snapshot first.", "warn");
+    renderWorkbenchEmpty("onboardingResult", "Save a pilot report snapshot first.");
     return;
   }
   renderResult("onboardingResult", "Creating pilot report snapshot tasks...", "warn");
@@ -303,7 +329,7 @@ async function createPilotReportSnapshotTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Pilot report tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("onboardingResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("onboardingResult", error);
   }
 }
 
@@ -312,7 +338,7 @@ async function comparePilotReportSnapshots() {
   try {
     const snapshots = await api("/research/pilot/report/snapshots?limit=2");
     if (snapshots.length < 2) {
-      renderResult("onboardingResult", "Save at least two pilot report snapshots first.", "warn");
+      renderWorkbenchEmpty("onboardingResult", "Save at least two pilot report snapshots first.");
       return;
     }
     const [candidate, baseline] = snapshots;
@@ -330,7 +356,7 @@ async function comparePilotReportSnapshots() {
       `${escapeHtml(body.summary)}<br />Risks +${body.added_risks.length}/-${body.removed_risks.length}; next actions +${body.added_next_actions.length}/-${body.removed_next_actions.length}.`,
     );
   } catch (error) {
-    renderResult("onboardingResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("onboardingResult", error);
   }
 }
 
@@ -339,7 +365,7 @@ async function createPilotReportSnapshotComparisonTasks() {
   try {
     const snapshots = await api("/research/pilot/report/snapshots?limit=2");
     if (snapshots.length < 2) {
-      renderResult("onboardingResult", "Save at least two pilot report snapshots first.", "warn");
+      renderWorkbenchEmpty("onboardingResult", "Save at least two pilot report snapshots first.");
       return;
     }
     const [candidate, baseline] = snapshots;
@@ -362,7 +388,7 @@ async function createPilotReportSnapshotComparisonTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Pilot report comparison tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("onboardingResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("onboardingResult", error);
   }
 }
 
@@ -441,7 +467,7 @@ async function loadResearchProfile() {
       `Loaded profile <code>${escapeHtml(body.name)}</code> with ${body.primary_domains.length} domains and ${body.resource_constraints.length} constraints.`,
     );
   } catch (error) {
-    renderResult("profileResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("profileResult", error);
   }
 }
 
@@ -463,7 +489,7 @@ async function saveResearchProfile(event) {
       `Saved profile <code>${escapeHtml(body.name)}</code>. Ranking and briefs will use these constraints.`,
     );
   } catch (error) {
-    renderResult("profileResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("profileResult", error);
   }
 }
 
@@ -487,7 +513,7 @@ async function runProjectSetupWizard(event) {
       `${escapeHtml(body.message)} Readiness <code>${escapeHtml(body.readiness.readiness_level)}</code> ${score}%.<br />${renderList("Next steps", body.recommended_next_steps, (step) => step)}`,
     );
   } catch (error) {
-    renderResult("onboardingResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("onboardingResult", error);
   }
 }
 
@@ -498,7 +524,7 @@ async function previewResearchProfile() {
     $("dossierPreview").textContent = markdown;
     renderResult("profileResult", "Loaded profile Markdown preview.");
   } catch (error) {
-    renderResult("profileResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("profileResult", error);
   }
 }
 
@@ -506,7 +532,7 @@ async function uploadPaper(event) {
   event.preventDefault();
   const file = $("paperFile").files[0];
   if (!file) {
-    renderResult("uploadResult", "Choose a paper file first.", "warn");
+    renderWorkbenchEmpty("uploadResult", "Choose a paper file first.");
     return;
   }
 
@@ -525,13 +551,13 @@ async function uploadPaper(event) {
       `<strong>${escapeHtml(body.message)}</strong><br />Sections: ${body.section_count}, chunks: ${body.chunk_count}, evidence: ${body.evidence_count}`,
     );
   } catch (error) {
-    renderResult("uploadResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("uploadResult", error);
   }
 }
 
 async function runWorkflow() {
   if (!state.paperId) {
-    renderResult("workflowResult", "Upload a paper before running the workflow.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Upload a paper before running the workflow.");
     return;
   }
 
@@ -553,7 +579,7 @@ async function runWorkflow() {
     startPollingJob(body.id);
     await refreshJobs();
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -593,7 +619,7 @@ async function pollJob(jobId) {
       await refreshJobs();
     }
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -663,7 +689,7 @@ async function searchContext(event) {
     ];
     renderResult("contextResult", rows.join(""));
   } catch (error) {
-    renderResult("contextResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("contextResult", error);
   }
 }
 
@@ -687,7 +713,7 @@ async function searchLiterature(event) {
       `<strong>External:</strong> ${escapeHtml(body.external_status)}<br />${renderList("Results", body.items, (item) => `${item.provider}: ${item.title}`)}`,
     );
   } catch (error) {
-    renderResult("literatureResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("literatureResult", error);
   }
 }
 
@@ -716,7 +742,7 @@ async function askAdvisorChat(event) {
       `<strong>${escapeHtml(body.intent)}</strong> phase <code>${escapeHtml(body.cockpit_phase || "n/a")}</code>, readiness <code>${escapeHtml(body.readiness_level || "n/a")}</code>.<br />${escapeHtml(body.answer)}<br />Actions: ${body.recommended_actions.length}; citations: ${body.cited_evidences.length + body.cited_gaps.length + body.cited_ideas.length}.`,
     );
   } catch (error) {
-    renderResult("advisorChatResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("advisorChatResult", error);
   }
 }
 
@@ -747,7 +773,7 @@ async function createAdvisorChatTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Advisor tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("advisorChatResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("advisorChatResult", error);
   }
 }
 
@@ -783,7 +809,7 @@ async function createAdvisorActionSession() {
       `${escapeHtml(body.message)}<br />Intent <code>${escapeHtml(body.chat.intent)}</code>; open tasks: ${body.progress_summary.open_task_count}; snapshot: <code>${escapeHtml(body.progress_summary.snapshot_id || "none")}</code>.`,
     );
   } catch (error) {
-    renderResult("advisorChatResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("advisorChatResult", error);
   }
 }
 
@@ -853,7 +879,7 @@ async function loadPilotLaunch() {
       renderPilotMetric("Cockpit", "Unavailable", "Refresh after workflow."),
       renderPilotMetric("Tasks", "Unavailable", "Refresh after tasks."),
     ].join("");
-    renderResult("pilotLaunchResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("pilotLaunchResult", error);
   }
 }
 
@@ -933,7 +959,7 @@ async function handleJobAction(event) {
     );
     await refreshJobs();
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -992,7 +1018,7 @@ async function refineLatestIdea() {
     );
     await loadDossier();
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1018,7 +1044,7 @@ async function refreshNoveltySearch() {
       `Novelty refresh <code>${escapeHtml(body.id)}</code>: ${escapeHtml(body.risk_level)} risk with ${body.collision_signals.length} signals.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1043,7 +1069,7 @@ async function createNoveltyTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Novelty tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1074,7 +1100,7 @@ async function createRelatedWorkMatrix() {
       `Saved related work matrix <code>${escapeHtml(body.id)}</code> with ${body.items.length} rows.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1102,7 +1128,7 @@ async function createProposalDraft() {
       `Saved proposal draft <code>${escapeHtml(body.id)}</code> for idea <code>${escapeHtml(body.idea_id)}</code>.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1131,7 +1157,7 @@ async function reviewProposalDraft() {
       `Reviewed proposal <code>${escapeHtml(body.proposal_draft_id)}</code>: ${escapeHtml(body.decision)} (${body.readiness_score}).`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1161,7 +1187,7 @@ async function reviseProposalDraft() {
       `Saved proposal revision <code>${escapeHtml(body.id)}</code> with ${body.applied_revisions.length} applied actions.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1186,7 +1212,7 @@ async function createTaskBacklog() {
       `${escapeHtml(body.message)}<br />${renderList("Tasks", body.tasks.slice(0, 8), (task) => `${task.priority} ${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1211,7 +1237,7 @@ async function saveTaskSnapshot() {
       `Saved task snapshot <code>${escapeHtml(body.id)}</code> with ${body.task_ids.length} tasks.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1260,7 +1286,7 @@ async function loadTaskBoard() {
     $("dossierPreview").textContent = renderTaskBoardMarkdown(tasks);
     renderResult("workflowResult", `Loaded ${tasks.length} tasks into the workbench task board.`);
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1287,7 +1313,7 @@ async function updateSelectedTask(status) {
     );
     await loadTaskBoard();
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1316,7 +1342,7 @@ async function recordClaimValidationResult() {
     );
     await loadTaskBoard();
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1356,7 +1382,7 @@ async function createExperimentRun() {
       `Recorded experiment run <code>${escapeHtml(body.id)}</code> with status ${escapeHtml(body.status)}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1379,7 +1405,7 @@ async function analyzeExperimentRun() {
       `Analyzed run <code>${escapeHtml(body.experiment_run_id)}</code>: ${escapeHtml(body.decision)} (${body.confidence}).`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1401,7 +1427,7 @@ async function createAnalysisTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Analysis tasks", body.tasks, (task) => `${task.priority} ${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1427,7 +1453,7 @@ async function createDecisionMemo() {
       `Created decision memo <code>${escapeHtml(body.id)}</code> with ${body.next_commitments.length} commitments.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1452,7 +1478,7 @@ async function createDecisionMemoTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Decision tasks", body.tasks, (task) => `${task.priority} ${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1475,7 +1501,7 @@ async function createAssumptionAudit() {
       `Created assumption audit <code>${escapeHtml(body.id)}</code> with ${body.assumptions.length} assumptions.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1499,7 +1525,7 @@ async function createEvidenceLedger() {
       `Created evidence ledger <code>${escapeHtml(body.id)}</code> with ${body.claims.length} claims, coverage ${body.coverage_score}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1524,7 +1550,7 @@ async function createEvidenceLedgerTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Ledger tasks", body.tasks.slice(0, 8), (task) => `${task.priority} ${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1545,7 +1571,7 @@ async function loadClaimValidationPacket() {
       `Loaded claim packet <code>${escapeHtml(claimId)}</code> with ${body.supporting_evidence.length} supporting evidence records and ${body.related_tasks.length} related tasks.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1563,7 +1589,7 @@ async function loadClaimValidationQueue() {
       `Loaded ${body.items.length} claim validation queue items across ${body.summary.idea_count || 0} ideas.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1587,7 +1613,7 @@ async function createClaimValidationQueueTasks() {
     );
     await loadTaskBoard();
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1605,7 +1631,7 @@ async function loadIdeaLineage() {
       `${escapeHtml(body.message)} Graph edge types: ${Object.keys(body.graph_edge_summary).length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1620,7 +1646,7 @@ async function loadIdeaTimeline() {
     $("dossierPreview").textContent = body.markdown_export;
     renderResult("workflowResult", `${escapeHtml(body.message)} Latest events: ${body.events.length}.`);
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1638,7 +1664,7 @@ async function loadIdeaProgress() {
       `${escapeHtml(body.message)} Next: ${escapeHtml(body.recommended_next_step)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1656,7 +1682,7 @@ async function loadResearchPacket() {
       `${escapeHtml(body.message)} Open tasks: ${body.open_tasks.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1674,7 +1700,7 @@ async function downloadIdeaBundle() {
       `Downloaded bundle export for idea <code>${escapeHtml(state.latestIdeaId)}</code>.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1684,7 +1710,7 @@ async function downloadProjectBundle() {
     await downloadWithAuth("/research/export/project-bundle", "research-project-bundle.zip");
     renderResult("workflowResult", "Downloaded project bundle export.");
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1708,7 +1734,7 @@ async function saveProjectBundleReleaseNote() {
       `Saved project bundle release note <code>${escapeHtml(body.id)}</code> for ${escapeHtml(body.summary.recipient)}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1731,7 +1757,7 @@ async function listProjectBundleReleaseNotes() {
     $("dossierPreview").textContent = lines.join("\n");
     renderResult("workflowResult", `Loaded ${releases.length} project bundle release notes.`);
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1768,7 +1794,7 @@ async function createProjectBundleReleaseTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Project bundle release tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1796,7 +1822,7 @@ async function loadProjectBundleReleaseProgress() {
       `Release follow-up is ${(body.completion_ratio * 100).toFixed(1)}% complete. Open tasks: ${body.task_summary.open_task_count || 0}; blockers: ${body.task_summary.blocked_task_count || 0}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1851,7 +1877,7 @@ async function recordProjectBundleReleaseFeedback() {
       `Recorded release feedback <code>${escapeHtml(body.id)}</code> with status <code>${escapeHtml(body.summary.feedback_status)}</code>.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1885,7 +1911,7 @@ async function listProjectBundleReleaseFeedback() {
     $("dossierPreview").textContent = lines.join("\n");
     renderResult("workflowResult", `Loaded ${feedbackRecords.length} release feedback records.`);
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1937,7 +1963,7 @@ async function createProjectBundleReleaseFeedbackTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Release feedback tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1960,7 +1986,7 @@ async function loadProjectBundleReleaseCloseout() {
       `Release closeout is <code>${escapeHtml(body.closeout_status)}</code>. Ready: ${body.ready_to_close}. Next actions: ${body.next_actions.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -1996,7 +2022,7 @@ async function createProjectBundleReleaseCloseoutTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Release closeout tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2021,7 +2047,7 @@ async function loadProjectBundleReleaseAcceptancePacket() {
       `Release acceptance is <code>${escapeHtml(body.acceptance_status)}</code>. Ready for signoff: ${body.ready_for_signoff}. Remaining actions: ${body.remaining_actions.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2059,7 +2085,7 @@ async function saveProjectBundleReleaseAcceptancePacketSnapshot() {
       `Saved release acceptance snapshot <code>${escapeHtml(body.id)}</code> with status <code>${escapeHtml(body.summary.acceptance_status)}</code>.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2093,7 +2119,7 @@ async function listProjectBundleReleaseAcceptancePacketSnapshots() {
     $("dossierPreview").textContent = lines.join("\n");
     renderResult("workflowResult", `Loaded ${snapshots.length} acceptance snapshots.`);
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2137,7 +2163,7 @@ async function compareProjectBundleReleaseAcceptancePacketSnapshots() {
       `${escapeHtml(body.summary)}<br />New actions: ${body.added_remaining_actions.length}. New checklist gaps: ${body.newly_blocked_checklist_items.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2186,7 +2212,7 @@ async function createProjectBundleReleaseAcceptancePacketSnapshotComparisonTasks
       `${escapeHtml(body.message)}<br />${renderList("Acceptance comparison tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2211,7 +2237,7 @@ async function loadProjectBundleReleaseReviewSession() {
       `Release review is <code>${escapeHtml(body.review_status)}</code>. Decisions: ${body.decisions_needed.length}. Follow-up actions: ${body.follow_up_actions.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2247,7 +2273,7 @@ async function createProjectBundleReleaseReviewSessionTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Release review tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2290,7 +2316,7 @@ async function recordProjectBundleReleaseReviewOutcome() {
       `Recorded release review outcome <code>${escapeHtml(body.id)}</code> with decision <code>${escapeHtml(body.summary.review_decision)}</code>.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2324,7 +2350,7 @@ async function listProjectBundleReleaseReviewOutcomes() {
     $("dossierPreview").textContent = lines.join("\n");
     renderResult("workflowResult", `Loaded ${outcomes.length} release review outcomes.`);
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2377,7 +2403,7 @@ async function createProjectBundleReleaseReviewOutcomeTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Review outcome tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2418,7 +2444,7 @@ async function loadProjectBundleReleaseReviewOutcomeProgress() {
       `Review outcome follow-up is ${(body.completion_ratio * 100).toFixed(1)}% complete. Open tasks: ${body.task_summary.open_task_count || 0}; blockers: ${body.task_summary.blocked_task_count || 0}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2492,7 +2518,7 @@ async function recordProjectBundleReleaseReviewOutcomeSignoff() {
       `Recorded release review outcome signoff <code>${escapeHtml(body.id)}</code> with decision <code>${escapeHtml(body.summary.signoff_decision)}</code>.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2536,7 +2562,7 @@ async function listProjectBundleReleaseReviewOutcomeSignoffs() {
     $("dossierPreview").textContent = lines.join("\n");
     renderResult("workflowResult", `Loaded ${signoffs.length} release review outcome signoffs.`);
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2550,7 +2576,7 @@ async function loadProjectBundleReadiness() {
       `Bundle readiness <code>${escapeHtml(body.readiness_level)}</code> (${body.readiness_score}). Missing required checks: ${body.missing_required.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2568,7 +2594,7 @@ async function createProjectBundleReadinessTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Bundle readiness tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2590,7 +2616,7 @@ async function saveProjectBundleReadinessSnapshot() {
       `Saved bundle readiness snapshot <code>${escapeHtml(body.id)}</code> with score ${body.summary.readiness_score}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2613,7 +2639,7 @@ async function listProjectBundleReadinessSnapshots() {
     $("dossierPreview").textContent = lines.join("\n");
     renderResult("workflowResult", `Loaded ${snapshots.length} bundle readiness snapshots.`);
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2644,7 +2670,7 @@ async function compareProjectBundleReadinessSnapshots() {
       `${escapeHtml(body.summary)}<br />Score delta: <code>${escapeHtml(scoreDelta)}</code>.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2679,7 +2705,7 @@ async function createProjectBundleReadinessComparisonTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Bundle readiness comparison tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2697,7 +2723,7 @@ async function loadIdeaReadiness() {
       `Readiness ${body.readiness_score}: <strong>${escapeHtml(body.decision)}</strong>. Blockers: ${body.blockers.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2715,7 +2741,7 @@ async function loadIdeaQualityGate() {
       `Quality gate ${body.gate_score}: <strong>${escapeHtml(body.decision)}</strong>. Actions: ${body.recommended_actions.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2737,7 +2763,7 @@ async function createQualityGateTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Quality-gate tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2759,7 +2785,7 @@ async function createReadinessTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Readiness tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2774,7 +2800,7 @@ async function loadProjectCockpit() {
       `Cockpit phase <code>${escapeHtml(body.phase)}</code>, readiness <code>${escapeHtml(body.readiness_level)}</code>.<br />Primary: ${escapeHtml(primaryAction)}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2792,7 +2818,7 @@ async function createProjectCockpitTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Cockpit tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2806,7 +2832,7 @@ async function loadProjectOverview() {
       `${escapeHtml(body.message)} Recommended actions: ${body.recommended_actions.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2820,7 +2846,7 @@ async function loadProjectTriageBrief() {
       `${escapeHtml(body.message)} Next actions: ${body.next_actions.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2831,7 +2857,7 @@ async function loadProjectTriageMarkdown() {
     $("dossierPreview").textContent = markdown;
     renderResult("workflowResult", "Loaded project triage Markdown export.");
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2855,7 +2881,7 @@ async function saveProjectTriageSnapshot() {
       `Saved project triage snapshot <code>${escapeHtml(body.id)}</code> with ${body.next_actions.length} next actions.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2878,7 +2904,7 @@ async function compareProjectTriageSnapshots() {
     $("dossierPreview").textContent = body.markdown_export;
     renderResult("workflowResult", escapeHtml(body.summary));
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2908,7 +2934,7 @@ async function createProjectTriageComparisonTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Comparison tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2930,7 +2956,7 @@ async function createProjectTriageTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Triage tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2944,7 +2970,7 @@ async function loadProjectReadinessOverview() {
       `${escapeHtml(body.message)} Average readiness: ${body.average_readiness}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2958,7 +2984,7 @@ async function loadProjectQualityOverview() {
       `${escapeHtml(body.message)} Average gate score: ${body.average_gate_score}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2980,7 +3006,7 @@ async function createProjectQualityTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Project gate tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -2997,7 +3023,7 @@ async function loadOpportunityRadar() {
       `${escapeHtml(body.message)} Top opportunities: ${body.top_opportunities.length}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -3022,7 +3048,7 @@ async function createOpportunityRadarTasks() {
       `${escapeHtml(body.message)}<br />${renderList("Radar tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -3045,7 +3071,7 @@ async function createAdvisorBrief() {
       `Saved advisor brief <code>${escapeHtml(body.id)}</code> for ${body.idea_ids.length} ideas.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -3069,7 +3095,7 @@ async function createResearchPlan() {
       `Created plan <code>${escapeHtml(body.id)}</code> with ${body.plan_items.length} plan items.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -3092,7 +3118,7 @@ async function createResearchPlanTasks() {
     );
     await refreshJobs();
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -3111,7 +3137,7 @@ async function loadResearchPlanProgress() {
       `${escapeHtml(body.message)} Completion: ${body.task_summary.completion_ratio}. Open: ${body.task_summary.open_task_count}.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -3146,7 +3172,7 @@ async function rankIdeas() {
     });
     $("dossierPreview").textContent = markdown;
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -3172,7 +3198,7 @@ async function shortlistLatestIdea() {
     );
     await rankIdeas();
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 
@@ -3197,7 +3223,7 @@ async function savePortfolio() {
       `Saved portfolio <code>${escapeHtml(body.id)}</code> with ${body.idea_ids.length} ideas.`,
     );
   } catch (error) {
-    renderResult("workflowResult", escapeHtml(error.message), "error");
+    renderWorkbenchError("workflowResult", error);
   }
 }
 

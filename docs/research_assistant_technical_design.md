@@ -1282,6 +1282,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 Workbench 的 `api()` helper 会读取本地保存的 API key，并只对 `/research/*` 自动注入 `X-Research-Assistant-Key`。页面顶栏提供保存和清除按钮，使浏览器试点能与后端 API key guard 和 MCP bridge auth forwarding 使用同一份部署 secret。
 
+Workbench 前端使用统一的 `workbenchErrorMessage`、`renderWorkbenchError` 和 `renderWorkbenchEmpty` helpers 渲染 first-run API/key/network/missing-input 状态。该层只改变浏览器提示，不改变后端 API、持久化模型或权限判断。
+
 `/profile` stores durable researcher/project context: domains, active questions, target venues, methodological preferences, resource constraints, risk tolerance, negative preferences, and ranking weights. Ranking reads this profile by default, while advisor briefs include profile constraints so shortlist decisions are grounded in the user's actual research situation rather than only intrinsic idea scores.
 
 `/plans` creates persisted research execution plan snapshots. Each plan combines the current research profile, profile-aware ranked ideas, and open/blocked tasks into a 7/14+ day action plan with phases, task ids, success checks, source ids, and Markdown export. It is the planning artifact between "idea is promising" and "what should I do this week".
