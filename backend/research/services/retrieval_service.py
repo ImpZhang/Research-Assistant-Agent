@@ -38,6 +38,7 @@ class RetrievalService:
         paper_ids: list[str] | None = None,
         limit: int = 8,
         include_graph: bool = True,
+        graph_edge_types: list[str] | None = None,
     ) -> ContextSearchResult:
         terms = self._terms(query)
         if not terms:
@@ -60,7 +61,13 @@ class RetrievalService:
         graph_nodes: list[ResearchNode] = []
         graph_edges: list[ResearchEdge] = []
         if include_graph:
-            graph_nodes, graph_edges = self._expand_graph_context(evidences, gaps, ideas, limit * 4)
+            graph_nodes, graph_edges = self._expand_graph_context(
+                evidences,
+                gaps,
+                ideas,
+                limit * 4,
+                graph_edge_types=graph_edge_types or [],
+            )
 
         return ContextSearchResult(
             evidences=evidences,
@@ -181,6 +188,7 @@ class RetrievalService:
         gaps: list[ScoredItem],
         ideas: list[ScoredItem],
         limit: int,
+        graph_edge_types: list[str] | None = None,
     ) -> tuple[list[ResearchNode], list[ResearchEdge]]:
         evidence_ids = {scored.item.id for scored in evidences}
         canonical_keys = evidence_ids.union(scored.item.id for scored in gaps).union(
@@ -195,12 +203,13 @@ class RetrievalService:
         )
         seed_node_ids = {node.id for node in seed_nodes}
 
-        candidate_edges = (
-            self.session.query(ResearchEdge)
-            .order_by(ResearchEdge.created_at.desc())
-            .limit(800)
-            .all()
+        edge_query = self.session.query(ResearchEdge).order_by(ResearchEdge.created_at.desc())
+        allowed_edge_types = sorted(
+            {edge_type for edge_type in graph_edge_types or [] if edge_type}
         )
+        if allowed_edge_types:
+            edge_query = edge_query.filter(ResearchEdge.edge_type.in_(allowed_edge_types))
+        candidate_edges = edge_query.limit(800).all()
         edges = []
         for edge in candidate_edges:
             edge_evidence_ids = set(edge.evidence_ids_json or [])

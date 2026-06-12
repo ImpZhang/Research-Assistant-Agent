@@ -300,6 +300,7 @@ Completed so far:
 
 - Documented the P6 GraphRAG/LangGraph/DeerFlow evaluation in `docs/graphrag_langgraph_deerflow_evaluation.md`; current recommendation is to keep GraphRAG-lite and service-layer workflows until explicit scale/durability/tool-sandbox triggers appear.
 - Added a read-only `GET /research/graph/stats` endpoint for GraphRAG-lite node/edge type counts, orphan edge counts, and duplicate edge group counts.
+- Added optional `graph_edge_types` filtering to `/research/search/context` so graph neighborhood expansion can be narrowed without changing default retrieval behavior.
 
 Likely work:
 

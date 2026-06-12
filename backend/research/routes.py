@@ -14556,6 +14556,7 @@ def search_research_context(
             paper_ids=payload.paper_ids,
             limit=payload.limit,
             include_graph=payload.include_graph,
+            graph_edge_types=payload.graph_edge_types,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

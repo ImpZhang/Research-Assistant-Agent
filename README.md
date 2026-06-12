@@ -144,7 +144,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Markdown export for paper cards and idea dossiers.
 - GraphRAG-lite node and edge persistence.
 - Read-only GraphRAG-lite stats for node/edge type counts, orphan edge counts, and duplicate edge group counts.
-- Query-time lexical/vector context retrieval over evidence, gaps, ideas, and graph neighborhoods.
+- Query-time lexical/vector context retrieval over evidence, gaps, ideas, and optionally filtered graph neighborhoods.
 - Synchronous workflow job trace with input, output, status, progress, and errors.
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
 - Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.

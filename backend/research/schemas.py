@@ -1674,6 +1674,7 @@ class ContextSearchRequest(BaseModel):
     paper_ids: list[str] = Field(default_factory=list)
     limit: int = 8
     include_graph: bool = True
+    graph_edge_types: list[str] = Field(default_factory=list)
 
 
 class ScoredEvidenceRead(BaseModel):

@@ -5483,6 +5483,22 @@ Future work should make GraphRAG context retrieval stronger.
     assert body["graph_edges"]
     assert "Matched" in body["answer_brief"]
 
+    filtered_response = client.post(
+        "/research/search/context",
+        json={
+            "query": "diagnostic metric graph retrieval",
+            "paper_ids": [paper_id],
+            "limit": 5,
+            "include_graph": True,
+            "graph_edge_types": ["paper_has_evidence"],
+        },
+    )
+    assert filtered_response.status_code == 200
+    filtered_body = filtered_response.json()
+    assert filtered_body["evidences"]
+    assert filtered_body["graph_edges"]
+    assert {edge["edge_type"] for edge in filtered_body["graph_edges"]} == {"paper_has_evidence"}
+
 
 def test_graph_rag_lite_records_workflow_links() -> None:
     client = TestClient(create_app())

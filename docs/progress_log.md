@@ -456,3 +456,21 @@ Verification completed:
 - `.venv/bin/ruff check backend/research/services/graph_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py scripts/smoke_api.py` passed.
 - `.venv/bin/ruff format --check backend/research/services/graph_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py scripts/smoke_api.py` passed.
 - Focused pytest passed: `2 passed in 2.91s`.
+
+## 2026-06-12 - Context Search Graph Edge Filters
+
+Implemented in progress:
+
+- Added optional `graph_edge_types` to `ContextSearchRequest` and `RetrievalService.search_context`.
+- Kept default context search behavior unchanged when no edge type filter is supplied.
+- Filtered only GraphRAG-lite neighbor expansion edges, leaving evidence, gap, idea, and vector retrieval behavior unchanged.
+- Added focused test coverage for filtering context search graph edges to `paper_has_evidence`.
+- Updated README, technical design, P6 evaluation notes, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/research/services/retrieval_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` reformatted two files.
+- `.venv/bin/ruff check backend/research/services/retrieval_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/research/services/retrieval_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
+- Focused pytest passed: `2 passed in 45.65s`.
