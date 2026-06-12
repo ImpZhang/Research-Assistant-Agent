@@ -126,3 +126,21 @@ Verification completed:
 - `git --no-pager diff --check` passed.
 - Reviewed `docs/write_operation_audit_design.md` for secret-safe redaction guidance and design-only scope.
 - Documentation-only change; no service start, dependency install, or business-code test was required.
+
+## 2026-06-12 - Workbench Delivery Empty States
+
+Implemented in progress:
+
+- Reused `renderWorkbenchEmpty` for workflow preconditions that require an upstream idea, proposal, task board, experiment run, evidence ledger, release note, feedback record, acceptance snapshot, review outcome, signoff evidence, bundle readiness snapshot, triage snapshot, or research plan.
+- Preserved loading/creating/recording progress states on `renderResult(..., "warn")` so empty states remain distinct from in-flight work.
+- Added static Workbench assertions for delivery empty-state copy.
+- Updated README, requirements, technical design, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- Confirmed no old-style precondition `renderResult(..., "warn")` calls remain for `first`/`before`/`at least` workflow empty states.
+- `git --no-pager diff --check` passed.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 3.38s`.

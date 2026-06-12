@@ -1133,6 +1133,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "renderWorkbenchEmpty" in script.text
     assert "Save a valid API key in the top bar" in script.text
     assert "Check that the API server is reachable" in script.text
+    assert "Save a project bundle release note before creating release tasks" in script.text
+    assert "Record a release review outcome before recording signoff evidence" in script.text
     assert "/research/onboarding/readiness" in script.text
     assert "/research/onboarding/progress?limit=100" in script.text
     assert "/research/cockpit" in script.text

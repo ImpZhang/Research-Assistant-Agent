@@ -182,18 +182,19 @@ Completed slices:
 - Added Workbench empty/error state helpers for API-key, network, and missing-input first-run failures.
 - Added a pilot deployment checklist to `docs/deployment.md` and linked it from README.
 - Designed write-operation audit logging in `docs/write_operation_audit_design.md` before persistence changes.
+- Extended Workbench empty states to delivery workflows such as bundle releases, review outcomes, snapshots, and research plans.
 
 Next likely work:
 
 - Improve Workbench information architecture around delivery workflows.
-- Strengthen empty states for missing ideas, empty tasks, and missing bundle release artifacts.
+- Add backup/restore operator notes for `/app/data` once the deployment target is fixed.
 - Implement route-level audit events for writes after confirming the JSONL-first design.
 
 Suggested next narrow slices:
 
-1. Extend Workbench empty states to later delivery workflows such as bundle releases and claim queues.
-2. Add backup/restore operator notes for `/app/data` once the deployment target is fixed.
-3. Prototype JSONL write-operation audit helper and middleware behind explicit approval.
+1. Add backup/restore operator notes for `/app/data` once the deployment target is fixed.
+2. Prototype JSONL write-operation audit helper and middleware behind explicit approval.
+3. Group Workbench delivery controls into clearer sections once behavior is stable.
 
 Files:
 

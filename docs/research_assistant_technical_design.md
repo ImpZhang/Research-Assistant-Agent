@@ -1284,6 +1284,8 @@ Workbench 的 `api()` helper 会读取本地保存的 API key，并只对 `/rese
 
 Workbench 前端使用统一的 `workbenchErrorMessage`、`renderWorkbenchError` 和 `renderWorkbenchEmpty` helpers 渲染 first-run API/key/network/missing-input 状态。该层只改变浏览器提示，不改变后端 API、持久化模型或权限判断。
 
+`renderWorkbenchEmpty` 同样覆盖 delivery workflow 的缺失上游 artifact 分支，例如 release note、feedback、acceptance snapshot、review outcome/signoff、bundle readiness snapshot、triage snapshot 和 research plan。进度提示仍使用 `renderResult(..., "warn")`，避免把 loading 状态和 empty 状态混在一起。
+
 `/profile` stores durable researcher/project context: domains, active questions, target venues, methodological preferences, resource constraints, risk tolerance, negative preferences, and ranking weights. Ranking reads this profile by default, while advisor briefs include profile constraints so shortlist decisions are grounded in the user's actual research situation rather than only intrinsic idea scores.
 
 `/plans` creates persisted research execution plan snapshots. Each plan combines the current research profile, profile-aware ranked ideas, and open/blocked tasks into a 7/14+ day action plan with phases, task ids, success checks, source ids, and Markdown export. It is the planning artifact between "idea is promising" and "what should I do this week".

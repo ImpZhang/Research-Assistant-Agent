@@ -974,7 +974,7 @@ async function loadDossier() {
         return;
       }
     }
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   try {
@@ -987,7 +987,7 @@ async function loadDossier() {
 
 async function refineLatestIdea() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Refining latest idea...", "warn");
@@ -1024,7 +1024,7 @@ async function refineLatestIdea() {
 
 async function refreshNoveltySearch() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Refreshing novelty search...", "warn");
@@ -1050,7 +1050,7 @@ async function refreshNoveltySearch() {
 
 async function createNoveltyTasks() {
   if (!state.latestIdeaId || !state.latestNoveltyCheckId) {
-    renderResult("workflowResult", "Refresh novelty before creating novelty tasks.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Refresh novelty before creating novelty tasks.");
     return;
   }
   renderResult("workflowResult", "Creating novelty follow-up tasks...", "warn");
@@ -1075,7 +1075,7 @@ async function createNoveltyTasks() {
 
 async function createRelatedWorkMatrix() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Building related work matrix...", "warn");
@@ -1106,7 +1106,7 @@ async function createRelatedWorkMatrix() {
 
 async function createProposalDraft() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Drafting proposal...", "warn");
@@ -1134,7 +1134,7 @@ async function createProposalDraft() {
 
 async function reviewProposalDraft() {
   if (!state.latestIdeaId || !state.latestProposalDraftId) {
-    renderResult("workflowResult", "Create a proposal draft first.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Create a proposal draft first.");
     return;
   }
   renderResult("workflowResult", "Reviewing proposal readiness...", "warn");
@@ -1163,7 +1163,7 @@ async function reviewProposalDraft() {
 
 async function reviseProposalDraft() {
   if (!state.latestIdeaId || !state.latestProposalDraftId) {
-    renderResult("workflowResult", "Create a proposal draft first.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Create a proposal draft first.");
     return;
   }
   renderResult("workflowResult", "Revising proposal from review actions...", "warn");
@@ -1193,7 +1193,7 @@ async function reviseProposalDraft() {
 
 async function createTaskBacklog() {
   if (!state.latestIdeaId || !state.latestProposalDraftId || !state.latestProposalRevisionId) {
-    renderResult("workflowResult", "Create a proposal revision first.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Create a proposal revision first.");
     return;
   }
   renderResult("workflowResult", "Creating task backlog...", "warn");
@@ -1293,7 +1293,7 @@ async function loadTaskBoard() {
 async function updateSelectedTask(status) {
   const taskId = $("taskSelect").value || state.latestTaskIds[0];
   if (!taskId) {
-    renderResult("workflowResult", "Load a task board before updating a task.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Load a task board before updating a task.");
     return;
   }
   renderResult("workflowResult", `Updating task <code>${escapeHtml(taskId)}</code>...`, "warn");
@@ -1320,7 +1320,7 @@ async function updateSelectedTask(status) {
 async function recordClaimValidationResult() {
   const taskId = $("taskSelect").value || state.latestTaskIds[0];
   if (!taskId) {
-    renderResult("workflowResult", "Load a claim validation task first.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Load a claim validation task first.");
     return;
   }
   renderResult("workflowResult", `Recording claim result for <code>${escapeHtml(taskId)}</code>...`, "warn");
@@ -1348,7 +1348,7 @@ async function recordClaimValidationResult() {
 
 async function createExperimentRun() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Recording experiment run...", "warn");
@@ -1388,7 +1388,7 @@ async function createExperimentRun() {
 
 async function analyzeExperimentRun() {
   if (!state.latestExperimentRunId) {
-    renderResult("workflowResult", "Record an experiment run first.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Record an experiment run first.");
     return;
   }
   renderResult("workflowResult", "Analyzing experiment run...", "warn");
@@ -1411,7 +1411,7 @@ async function analyzeExperimentRun() {
 
 async function createAnalysisTasks() {
   if (!state.latestExperimentAnalysisId) {
-    renderResult("workflowResult", "Analyze an experiment run first.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Analyze an experiment run first.");
     return;
   }
   renderResult("workflowResult", "Creating analysis follow-up tasks...", "warn");
@@ -1433,7 +1433,7 @@ async function createAnalysisTasks() {
 
 async function createDecisionMemo() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Creating idea decision memo...", "warn");
@@ -1459,7 +1459,7 @@ async function createDecisionMemo() {
 
 async function createDecisionMemoTasks() {
   if (!state.latestIdeaId || !state.latestDecisionMemoId) {
-    renderResult("workflowResult", "Create a decision memo first.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Create a decision memo first.");
     return;
   }
   renderResult("workflowResult", "Creating decision follow-up tasks...", "warn");
@@ -1484,7 +1484,7 @@ async function createDecisionMemoTasks() {
 
 async function createAssumptionAudit() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Auditing idea assumptions...", "warn");
@@ -1507,7 +1507,7 @@ async function createAssumptionAudit() {
 
 async function createEvidenceLedger() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Building claim-level evidence ledger...", "warn");
@@ -1531,7 +1531,7 @@ async function createEvidenceLedger() {
 
 async function createEvidenceLedgerTasks() {
   if (!state.latestIdeaId || !state.latestEvidenceLedgerId) {
-    renderResult("workflowResult", "Create an evidence ledger first.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Create an evidence ledger first.");
     return;
   }
   renderResult("workflowResult", "Creating evidence follow-up tasks...", "warn");
@@ -1556,7 +1556,7 @@ async function createEvidenceLedgerTasks() {
 
 async function loadClaimValidationPacket() {
   if (!state.latestIdeaId || !state.latestEvidenceLedgerId) {
-    renderResult("workflowResult", "Create an evidence ledger first.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Create an evidence ledger first.");
     return;
   }
   const claimId = state.latestClaimId || "C1";
@@ -1619,7 +1619,7 @@ async function createClaimValidationQueueTasks() {
 
 async function loadIdeaLineage() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Loading idea lineage...", "warn");
@@ -1637,7 +1637,7 @@ async function loadIdeaLineage() {
 
 async function loadIdeaTimeline() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Loading idea timeline...", "warn");
@@ -1652,7 +1652,7 @@ async function loadIdeaTimeline() {
 
 async function loadIdeaProgress() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Loading idea progress...", "warn");
@@ -1670,7 +1670,7 @@ async function loadIdeaProgress() {
 
 async function loadResearchPacket() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Loading idea research packet...", "warn");
@@ -1688,7 +1688,7 @@ async function loadResearchPacket() {
 
 async function downloadIdeaBundle() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   const url = `/research/ideas/${encodeURIComponent(state.latestIdeaId)}/export/bundle`;
@@ -1768,10 +1768,9 @@ async function createProjectBundleReleaseTasks() {
     if (!releaseId) {
       const releases = await api("/research/export/project-bundle/releases?limit=1");
       if (!releases.length) {
-        renderResult(
+        renderWorkbenchEmpty(
           "workflowResult",
           "Save a project bundle release note before creating release tasks.",
-          "warn",
         );
         return;
       }
@@ -1805,10 +1804,9 @@ async function loadProjectBundleReleaseProgress() {
     if (!releaseId) {
       const releases = await api("/research/export/project-bundle/releases?limit=1");
       if (!releases.length) {
-        renderResult(
+        renderWorkbenchEmpty(
           "workflowResult",
           "Save a project bundle release note before checking release progress.",
-          "warn",
         );
         return;
       }
@@ -1845,10 +1843,9 @@ async function recordProjectBundleReleaseFeedback() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before recording feedback.",
-        "warn",
       );
       return;
     }
@@ -1886,10 +1883,9 @@ async function listProjectBundleReleaseFeedback() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before loading feedback.",
-        "warn",
       );
       return;
     }
@@ -1920,10 +1916,9 @@ async function createProjectBundleReleaseFeedbackTasks() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before creating feedback tasks.",
-        "warn",
       );
       return;
     }
@@ -1933,10 +1928,9 @@ async function createProjectBundleReleaseFeedbackTasks() {
         `/research/export/project-bundle/releases/${releaseId}/feedback?limit=1`,
       );
       if (!feedbackRecords.length) {
-        renderResult(
+        renderWorkbenchEmpty(
           "workflowResult",
           "Record project bundle release feedback before creating feedback tasks.",
-          "warn",
         );
         return;
       }
@@ -1972,10 +1966,9 @@ async function loadProjectBundleReleaseCloseout() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before loading closeout.",
-        "warn",
       );
       return;
     }
@@ -1995,10 +1988,9 @@ async function createProjectBundleReleaseCloseoutTasks() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before creating closeout tasks.",
-        "warn",
       );
       return;
     }
@@ -2031,10 +2023,9 @@ async function loadProjectBundleReleaseAcceptancePacket() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before loading the acceptance packet.",
-        "warn",
       );
       return;
     }
@@ -2060,10 +2051,9 @@ async function saveProjectBundleReleaseAcceptancePacketSnapshot() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before saving an acceptance snapshot.",
-        "warn",
       );
       return;
     }
@@ -2094,10 +2084,9 @@ async function listProjectBundleReleaseAcceptancePacketSnapshots() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before loading acceptance snapshots.",
-        "warn",
       );
       return;
     }
@@ -2128,10 +2117,9 @@ async function compareProjectBundleReleaseAcceptancePacketSnapshots() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before comparing acceptance snapshots.",
-        "warn",
       );
       return;
     }
@@ -2139,10 +2127,9 @@ async function compareProjectBundleReleaseAcceptancePacketSnapshots() {
       `/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots?limit=2`,
     );
     if (snapshots.length < 2) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save at least two acceptance snapshots before comparing them.",
-        "warn",
       );
       return;
     }
@@ -2172,10 +2159,9 @@ async function createProjectBundleReleaseAcceptancePacketSnapshotComparisonTasks
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before creating acceptance comparison tasks.",
-        "warn",
       );
       return;
     }
@@ -2183,10 +2169,9 @@ async function createProjectBundleReleaseAcceptancePacketSnapshotComparisonTasks
       `/research/export/project-bundle/releases/${releaseId}/acceptance-packet/snapshots?limit=2`,
     );
     if (snapshots.length < 2) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save at least two acceptance snapshots before creating comparison tasks.",
-        "warn",
       );
       return;
     }
@@ -2221,10 +2206,9 @@ async function loadProjectBundleReleaseReviewSession() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before loading the review session.",
-        "warn",
       );
       return;
     }
@@ -2246,10 +2230,9 @@ async function createProjectBundleReleaseReviewSessionTasks() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before creating review tasks.",
-        "warn",
       );
       return;
     }
@@ -2282,10 +2265,9 @@ async function recordProjectBundleReleaseReviewOutcome() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before recording a review outcome.",
-        "warn",
       );
       return;
     }
@@ -2325,10 +2307,9 @@ async function listProjectBundleReleaseReviewOutcomes() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before loading review outcomes.",
-        "warn",
       );
       return;
     }
@@ -2359,10 +2340,9 @@ async function createProjectBundleReleaseReviewOutcomeTasks() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before creating review outcome tasks.",
-        "warn",
       );
       return;
     }
@@ -2372,10 +2352,9 @@ async function createProjectBundleReleaseReviewOutcomeTasks() {
         `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes?limit=1`,
       );
       if (!outcomes.length) {
-        renderResult(
+        renderWorkbenchEmpty(
           "workflowResult",
           "Record a release review outcome before creating outcome tasks.",
-          "warn",
         );
         return;
       }
@@ -2412,10 +2391,9 @@ async function loadProjectBundleReleaseReviewOutcomeProgress() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before loading review outcome progress.",
-        "warn",
       );
       return;
     }
@@ -2425,10 +2403,9 @@ async function loadProjectBundleReleaseReviewOutcomeProgress() {
         `/research/export/project-bundle/releases/${releaseId}/review-session/outcomes?limit=1`,
       );
       if (!outcomes.length) {
-        renderResult(
+        renderWorkbenchEmpty(
           "workflowResult",
           "Record a release review outcome before loading outcome progress.",
-          "warn",
         );
         return;
       }
@@ -2471,19 +2448,17 @@ async function recordProjectBundleReleaseReviewOutcomeSignoff() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before recording outcome signoff.",
-        "warn",
       );
       return;
     }
     const outcomeId = await ensureProjectBundleReleaseReviewOutcomeId(releaseId);
     if (!outcomeId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Record a release review outcome before recording signoff evidence.",
-        "warn",
       );
       return;
     }
@@ -2527,19 +2502,17 @@ async function listProjectBundleReleaseReviewOutcomeSignoffs() {
   try {
     const releaseId = await ensureProjectBundleReleaseId();
     if (!releaseId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save a project bundle release note before loading outcome signoffs.",
-        "warn",
       );
       return;
     }
     const outcomeId = await ensureProjectBundleReleaseReviewOutcomeId(releaseId);
     if (!outcomeId) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Record a release review outcome before loading signoff evidence.",
-        "warn",
       );
       return;
     }
@@ -2648,10 +2621,9 @@ async function compareProjectBundleReadinessSnapshots() {
   try {
     const snapshots = await api("/research/export/project-bundle/readiness/snapshots?limit=2");
     if (snapshots.length < 2) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save at least two bundle readiness snapshots before comparing them.",
-        "warn",
       );
       return;
     }
@@ -2679,10 +2651,9 @@ async function createProjectBundleReadinessComparisonTasks() {
   try {
     const snapshots = await api("/research/export/project-bundle/readiness/snapshots?limit=2");
     if (snapshots.length < 2) {
-      renderResult(
+      renderWorkbenchEmpty(
         "workflowResult",
         "Save at least two bundle readiness snapshots before creating comparison tasks.",
-        "warn",
       );
       return;
     }
@@ -2711,7 +2682,7 @@ async function createProjectBundleReadinessComparisonTasks() {
 
 async function loadIdeaReadiness() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Scoring idea readiness...", "warn");
@@ -2729,7 +2700,7 @@ async function loadIdeaReadiness() {
 
 async function loadIdeaQualityGate() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Running idea quality gate...", "warn");
@@ -2747,7 +2718,7 @@ async function loadIdeaQualityGate() {
 
 async function createQualityGateTasks() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Creating quality-gate follow-up tasks...", "warn");
@@ -2769,7 +2740,7 @@ async function createQualityGateTasks() {
 
 async function createReadinessTasks() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   renderResult("workflowResult", "Creating readiness follow-up tasks...", "warn");
@@ -2890,7 +2861,10 @@ async function compareProjectTriageSnapshots() {
   try {
     const snapshots = await api("/research/triage/snapshots?limit=2");
     if (snapshots.length < 2) {
-      renderResult("workflowResult", "Save at least two triage snapshots before comparing.", "warn");
+      renderWorkbenchEmpty(
+        "workflowResult",
+        "Save at least two triage snapshots before comparing.",
+      );
       return;
     }
     const body = await api("/research/triage/snapshots/compare", {
@@ -2913,7 +2887,10 @@ async function createProjectTriageComparisonTasks() {
   try {
     const snapshots = await api("/research/triage/snapshots?limit=2");
     if (snapshots.length < 2) {
-      renderResult("workflowResult", "Save at least two triage snapshots before creating comparison tasks.", "warn");
+      renderWorkbenchEmpty(
+        "workflowResult",
+        "Save at least two triage snapshots before creating comparison tasks.",
+      );
       return;
     }
     const body = await api("/research/triage/snapshots/compare/tasks", {
@@ -3101,7 +3078,7 @@ async function createResearchPlan() {
 
 async function createResearchPlanTasks() {
   if (!state.latestResearchPlanId) {
-    renderResult("workflowResult", "Create a research plan before generating plan tasks.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Create a research plan before generating plan tasks.");
     return;
   }
   renderResult("workflowResult", "Creating tasks from research plan...", "warn");
@@ -3124,7 +3101,7 @@ async function createResearchPlanTasks() {
 
 async function loadResearchPlanProgress() {
   if (!state.latestResearchPlanId) {
-    renderResult("workflowResult", "Create a research plan before loading plan progress.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Create a research plan before loading plan progress.");
     return;
   }
   renderResult("workflowResult", "Loading research plan progress...", "warn");
@@ -3178,7 +3155,7 @@ async function rankIdeas() {
 
 async function shortlistLatestIdea() {
   if (!state.latestIdeaId) {
-    renderResult("workflowResult", "Run a workflow first so an idea id is available.", "warn");
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   try {
