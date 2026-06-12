@@ -38,7 +38,7 @@ A first implementation may prefer a separate header such as `X-Research-Assistan
 
 The current implementation registers `GET /research/admin/write-audit/summary` only when `AUDIT_ADMIN_EXPORT_ENABLED=true`. The endpoint returns sanitized aggregate counts from `write-operations.jsonl`; it does not return raw events, actor labels, API-key fingerprints, request bodies, uploaded content, prompts, model responses, or credentials. Requests must include the separate admin key header configured by `AUDIT_ADMIN_KEY_HEADER_NAME`. If `/research/*` API-key protection is enabled, callers also need the normal pilot API key to pass the outer API guard.
 
-Raw JSONL export is not implemented yet.
+Raw JSONL export is not implemented yet; retention and operator workflow expectations are documented in `docs/write_audit_retention_policy.md`.
 
 ## Audit Summary Rules
 

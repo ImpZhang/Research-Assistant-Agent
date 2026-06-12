@@ -313,3 +313,20 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/research/services/document_ingestion.py backend/research/routes.py tests/test_app.py` passed.
 - Focused pytest passed: `7 passed in 5.85s`.
 - Full `tests/test_app.py` passed with verbose durations: `45 passed in 759.05s (0:12:39)`.
+
+
+## 2026-06-12 - Write Audit Retention Policy
+
+Implemented in progress:
+
+- Added `docs/write_audit_retention_policy.md` to define first-pilot JSONL retention targets and operator raw-export workflow.
+- Clarified that raw audit export remains unimplemented until the documented retention workflow is implemented in code.
+- Updated README, deployment notes, audit design, admin authorization policy, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- Reviewed `docs/write_audit_retention_policy.md` for secret-safe placeholder-only guidance.
+- `grep -R "write_audit_retention_policy" -n README.md docs codex_handoff/03_TODO.md` confirmed cross-document references.
+- `git --no-pager diff --check` passed.
+- No runtime code, dependencies, services, databases, raw audit exports, or secret files were touched.
