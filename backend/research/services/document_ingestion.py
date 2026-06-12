@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import re
 
@@ -50,12 +51,27 @@ class DocumentIngestionService:
         self.session = session
 
     async def ingest_upload(self, file: UploadFile) -> IngestionResult:
-        upload_dir = Path(settings.paper_upload_dir)
+        upload_dir = Path(os.getenv("PAPER_UPLOAD_DIR") or settings.paper_upload_dir)
         upload_dir.mkdir(parents=True, exist_ok=True)
 
         filename = Path(file.filename or "uploaded_document").name
+        suffix = Path(filename).suffix.lower()
+        allowed_extensions = self._allowed_upload_extensions()
+        if suffix not in allowed_extensions:
+            allowed = ", ".join(sorted(allowed_extensions))
+            raise ValueError(
+                f"Unsupported file type: {suffix or 'none'}. Supported types: {allowed}"
+            )
+
         file_path = upload_dir / filename
         content = await file.read()
+        if not content:
+            raise ValueError("Uploaded file is empty.")
+        max_bytes = self._upload_max_bytes()
+        if max_bytes > 0 and len(content) > max_bytes:
+            raise ValueError(
+                f"Uploaded file is too large: {len(content)} bytes. Max allowed size is {max_bytes} bytes."
+            )
         file_path.write_bytes(content)
 
         text = self._extract_text(file_path)
@@ -163,6 +179,25 @@ class DocumentIngestionService:
             chunk_count=chunk_count,
             evidence_count=evidence_count,
         )
+
+    def _allowed_upload_extensions(self) -> set[str]:
+        raw = (
+            os.getenv("PAPER_UPLOAD_ALLOWED_EXTENSIONS") or settings.paper_upload_allowed_extensions
+        )
+        extensions = set()
+        for item in raw.split(","):
+            extension = item.strip().lower()
+            if not extension:
+                continue
+            extensions.add(extension if extension.startswith(".") else f".{extension}")
+        return extensions or {".txt", ".md", ".pdf"}
+
+    def _upload_max_bytes(self) -> int:
+        raw = os.getenv("PAPER_UPLOAD_MAX_BYTES") or str(settings.paper_upload_max_bytes)
+        try:
+            return max(0, int(raw))
+        except ValueError:
+            return settings.paper_upload_max_bytes
 
     def _extract_text(self, file_path: Path) -> str:
         suffix = file_path.suffix.lower()

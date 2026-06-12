@@ -215,9 +215,10 @@ Goal:
 
 - Make the project safer for real pilot usage.
 
-Completed slice:
+Completed slices:
 
 - Documented the database migration strategy in `docs/database_migration_strategy.md` without adding migration tooling or changing production data.
+- Added upload extension and size validation before writing uploaded papers to disk.
 
 Likely work:
 
@@ -226,7 +227,7 @@ Likely work:
 - Add API key audit records.
 - Add write-operation audit log persistence/export hardening.
 - Add backup/restore script for `/data`.
-- Add stricter upload limits and file validation.
+- Consider MIME sniffing or antivirus scanning for stricter customer environments.
 
 Files:
 

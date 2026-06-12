@@ -134,6 +134,7 @@ def test_research_status() -> None:
     body = response.json()
     assert body["phase"] == "phase_0_foundation"
     assert "sqlalchemy_models" in body["implemented_capabilities"]
+    assert "upload_size_extension_guard" in body["implemented_capabilities"]
     assert "research_profile_constraints" in body["implemented_capabilities"]
     assert "research_plan_snapshots" in body["implemented_capabilities"]
     assert "research_plan_task_generation" in body["implemented_capabilities"]
@@ -1653,6 +1654,35 @@ def test_project_pilot_report_snapshots_persist_and_export_markdown() -> None:
         "pilot_report_comparison_added_quick_action",
         "pilot_report_comparison_review",
     }
+
+
+def test_upload_rejects_unsupported_file_type(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("malware.exe", b"not a paper", "application/octet-stream")},
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported file type" in response.json()["detail"]
+    assert not (tmp_path / "malware.exe").exists()
+
+
+def test_upload_rejects_file_larger_than_limit(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setenv("PAPER_UPLOAD_MAX_BYTES", "8")
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("too_large.txt", b"0123456789", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert "too large" in response.json()["detail"]
+    assert not (tmp_path / "too_large.txt").exists()
 
 
 def test_upload_text_paper() -> None:

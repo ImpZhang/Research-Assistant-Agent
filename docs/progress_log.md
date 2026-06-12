@@ -218,3 +218,23 @@ Verification completed:
 - `.venv/bin/ruff format tests/test_app.py` reformatted the touched test file.
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - `.venv/bin/pytest -q tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `1 passed in 3.12s`.
+
+## 2026-06-12 - Upload Size And Extension Guardrails
+
+Implemented in progress:
+
+- Added upload extension validation before writing paper files to disk, defaulting to `.txt`, `.md`, and `.pdf`.
+- Added `PAPER_UPLOAD_MAX_BYTES` with a 10 MiB default and rejection before writing oversized uploads to disk.
+- Added runtime env support for `PAPER_UPLOAD_DIR`, `PAPER_UPLOAD_ALLOWED_EXTENSIONS`, and `PAPER_UPLOAD_MAX_BYTES` so pilot deployments can tune upload policy without code changes.
+- Added tests for unsupported extension rejection and oversized upload rejection.
+- Updated `.env.example`, deployment docs, technical design, status capability, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `git --no-pager diff --check` passed.
+- `.venv/bin/ruff format backend/research/config.py backend/research/routes.py backend/research/services/document_ingestion.py tests/test_app.py` reformatted one file.
+- `.venv/bin/ruff check backend/research/config.py backend/research/routes.py backend/research/services/document_ingestion.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/research/config.py backend/research/routes.py backend/research/services/document_ingestion.py tests/test_app.py` passed.
+- Focused pytest passed: `5 passed in 4.85s`.
+- Full `tests/test_app.py` passed: `39 passed in 737.83s (0:12:17)`.

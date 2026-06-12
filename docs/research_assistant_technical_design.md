@@ -1278,6 +1278,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `scripts/mcp_http_bridge.py` is the first runnable MCP bridge. It is a dependency-light stdio JSON-RPC adapter that implements `initialize`, `tools/list`, and `tools/call`, loads `/research/tools/mcp-spec`, and forwards calls to the FastAPI HTTP routes. Binary bundle responses are returned as base64 text payloads so MCP clients can still receive zip exports without SDK-specific extensions. The bridge also supports `--read-only`, repeated `--allow-tool`, repeated `--deny-tool`, API-key forwarding, environment-variable policy configuration, and `--health-check` JSON output for managed deployment checks.
 
+Upload ingestion validates extension and size before writing files to `PAPER_UPLOAD_DIR`; operators can tune `PAPER_UPLOAD_ALLOWED_EXTENSIONS` and `PAPER_UPLOAD_MAX_BYTES` for pilot deployments.
+
 生产化薄层由 `backend/app.py` 负责，而不混入科研 workflow service：`/health/ready` 检查 database 和 paper upload directory，`API_KEY_AUTH_ENABLED=true` 时对 `/research/*` 启用 API key guard，支持 `X-Research-Assistant-Key` 与 `Authorization: Bearer`。`Dockerfile` 和 `docker-compose.yml` 提供单容器客户试点入口，compose 使用 `/app/data` volume 保存 SQLite 与上传文件，并默认要求设置 `API_KEY`。
 
 Database migration policy is documented in `docs/database_migration_strategy.md`. Current startup only creates missing tables with SQLAlchemy metadata; customer-pilot schema changes must be explicit, backed up, and reviewed before introducing Alembic or running migrations against `/app/data`.

@@ -20,6 +20,8 @@ API_KEY_AUTH_ENABLED=true
 API_KEY=replace-with-a-long-random-secret
 RESEARCH_DB_URL=sqlite:////app/data/research/research_assistant.db
 PAPER_UPLOAD_DIR=/app/data/papers
+PAPER_UPLOAD_ALLOWED_EXTENSIONS=.txt,.md,.pdf
+PAPER_UPLOAD_MAX_BYTES=10485760
 ```
 
 Optional write-operation audit trail:

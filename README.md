@@ -45,7 +45,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Production-readiness checks with `/health/ready`, optional API-key protection for `/research/*`, Dockerfile, and docker-compose pilot deployment.
 - SQLite/SQLAlchemy research database.
 - Research profile for durable domains, goals, constraints, risk tolerance, target venues, and ranking weights.
-- Upload and ingest `.txt`, `.md`, and `.pdf` papers.
+- Upload and ingest size-limited `.txt`, `.md`, and `.pdf` papers.
 - Section, chunk, and evidence extraction.
 - Heuristic paper card extraction.
 - OpenAI-compatible structured paper card extraction with safe heuristic fallback.

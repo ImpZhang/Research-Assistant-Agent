@@ -16,6 +16,11 @@ class Settings:
         "sqlite:///./data/research/research_assistant.db",
     )
     paper_upload_dir: str = os.getenv("PAPER_UPLOAD_DIR", "./data/papers")
+    paper_upload_allowed_extensions: str = os.getenv(
+        "PAPER_UPLOAD_ALLOWED_EXTENSIONS",
+        ".txt,.md,.pdf",
+    )
+    paper_upload_max_bytes: int = int(os.getenv("PAPER_UPLOAD_MAX_BYTES", "10485760"))
     graph_rag_lite_enabled: bool = os.getenv("GRAPH_RAG_LITE_ENABLED", "true").lower() != "false"
     mcp_enabled: bool = os.getenv("MCP_ENABLED", "false").lower() == "true"
     api_key_auth_enabled: bool = os.getenv("API_KEY_AUTH_ENABLED", "false").lower() in {
