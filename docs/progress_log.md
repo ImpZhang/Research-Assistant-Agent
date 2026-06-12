@@ -96,3 +96,17 @@ Verification completed:
 - `.venv/bin/ruff check tests/test_app.py` passed.
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 3.56s`.
+
+## 2026-06-12 - Pilot Deployment Checklist
+
+Documentation maintenance completed:
+
+- Added a customer-pilot deployment checklist covering remote git state, `.env` handling, API-key protection, persistent storage, backups, health checks, Workbench verification, MCP bridge checks, and operator approval for state-changing commands.
+- Linked the checklist from README deployment notes.
+- Updated handoff TODO so the next P3 slices focus on write-operation audit design and later Workbench delivery empty states.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `git --no-pager diff --check` passed.
+- Documentation-only change; no service start, dependency install, or business-code test was required.

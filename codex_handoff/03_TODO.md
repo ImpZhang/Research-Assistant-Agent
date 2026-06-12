@@ -180,19 +180,19 @@ Completed slices:
 - Added a read-only Workbench Pilot Launch panel in `298f187 Add Workbench pilot launch status`.
 - The panel aggregates onboarding readiness, onboarding progress, and cockpit state without writing data.
 - Added Workbench empty/error state helpers for API-key, network, and missing-input first-run failures.
+- Added a pilot deployment checklist to `docs/deployment.md` and linked it from README.
 
 Next likely work:
 
 - Improve Workbench information architecture around delivery workflows.
 - Strengthen empty states for missing ideas, empty tasks, and missing bundle release artifacts.
 - Add route-level audit events for writes.
-- Add or expand deployment checklist coverage.
 
 Suggested next narrow slices:
 
-1. Add a deployment checklist section to `docs/deployment.md` and README.
-2. Design write-operation audit logging before introducing persistence changes.
-3. Extend Workbench empty states to later delivery workflows such as bundle releases and claim queues.
+1. Design write-operation audit logging before introducing persistence changes.
+2. Extend Workbench empty states to later delivery workflows such as bundle releases and claim queues.
+3. Add backup/restore operator notes for `/app/data` once the deployment target is fixed.
 
 Files:
 

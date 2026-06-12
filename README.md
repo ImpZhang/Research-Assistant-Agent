@@ -471,7 +471,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-See `docs/deployment.md` for the runtime contract, ready checks, API key calls, Workbench key storage, MCP bridge auth forwarding, and backup notes.
+See `docs/deployment.md` for the runtime contract, pilot deployment checklist, ready checks, API key calls, Workbench key storage, MCP bridge auth forwarding, and backup notes.
 
 ## Near-Term Roadmap
 

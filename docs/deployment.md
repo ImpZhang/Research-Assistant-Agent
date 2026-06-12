@@ -36,6 +36,24 @@ JUDGE_BASE_URL=
 JUDGE_API_KEY=
 ```
 
+## Pilot Deployment Checklist
+
+Before starting or upgrading a customer-pilot service:
+
+- [ ] Confirm the remote source-of-truth worktree is clean except for known handoff-only files: `git status --short`.
+- [ ] Confirm the branch and commit intended for deployment: `git branch --show-current` and `git log --oneline -5`.
+- [ ] Create or update `.env` from `.env.example` outside version control; never commit real API keys, cookies, private keys, or database credentials.
+- [ ] Set `API_KEY_AUTH_ENABLED=true` and use a long random `API_KEY` for browser, MCP, and scripted access.
+- [ ] Confirm `RESEARCH_DB_URL` and `PAPER_UPLOAD_DIR` point at persistent storage, not an ephemeral build directory.
+- [ ] Back up `/app/data` or the equivalent data volume before rebuilds, migrations, or host moves.
+- [ ] Start or rebuild the service only during an approved deployment window.
+- [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`.
+- [ ] Open `/workbench`, save the API key in the top bar, refresh Pilot Launch, and confirm the first-run empty/error states are actionable.
+- [ ] If MCP clients are used, run the bridge health check with the same API key and the intended read-only or allow/deny policy.
+- [ ] Record the deployed commit, verification commands, and rollback note in the project progress log or release notes.
+
+Commands that rebuild containers, restart services, change file ownership, or modify databases should be run only after explicit operator approval.
+
 ## Docker Compose
 
 ```bash
