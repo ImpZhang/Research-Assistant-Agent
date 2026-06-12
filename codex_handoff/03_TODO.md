@@ -220,12 +220,13 @@ Completed slices:
 - Documented the database migration strategy in `docs/database_migration_strategy.md` without adding migration tooling or changing production data.
 - Added upload extension and size validation before writing uploaded papers to disk.
 - Added secret-safe API key fingerprint metadata to JSONL write-operation audit records.
+- Documented the admin authorization boundary for future audit summary/export access.
 
 Likely work:
 
 - Introduce migration tooling only after operator approval and dependency sync approval.
 - Add user/project scoping model.
-- Add API key audit summaries only after admin authorization rules are explicit.
+- Add API key audit summaries only after the documented admin authorization policy is implemented in code.
 - Add write-operation audit log persistence/export hardening.
 - Add backup/restore script for `/data`.
 - Consider MIME sniffing or antivirus scanning for stricter customer environments.

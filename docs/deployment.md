@@ -33,7 +33,7 @@ WRITE_AUDIT_CLIENT_HEADER_NAME=X-Research-Assistant-Client
 REQUEST_ID_HEADER_NAME=X-Request-ID
 ```
 
-Audit records are JSONL metadata only. They may include a short SHA-256 API-key fingerprint prefix for correlation, but must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials.
+Audit records are JSONL metadata only. They may include a short SHA-256 API-key fingerprint prefix for correlation, but must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials. Operator-only audit summary/export features must follow `docs/admin_authorization_policy.md`; the regular pilot API key is not admin authorization by itself.
 
 Model provider variables can stay empty for deterministic fallback behavior, or be filled with OpenAI-compatible endpoints:
 
@@ -64,6 +64,7 @@ Before starting or upgrading a customer-pilot service:
 - [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`.
 - [ ] Open `/workbench`, save the API key in the top bar, refresh Pilot Launch, and confirm the first-run empty/error states are actionable.
 - [ ] If MCP clients are used, run the bridge health check with the same API key and the intended read-only or allow/deny policy.
+- [ ] If audit summary/export features are enabled in a future release, confirm the separate admin authorization gate described in `docs/admin_authorization_policy.md`.
 - [ ] Record the deployed commit, verification commands, and rollback note in the project progress log or release notes.
 
 Commands that rebuild containers, restart services, change file ownership, or modify databases should be run only after explicit operator approval.

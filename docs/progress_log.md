@@ -257,3 +257,19 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/app.py tests/test_app.py` passed.
 - Focused pytest passed: `4 passed in 4.27s`.
 - Full `tests/test_app.py` passed: `40 passed in 750.26s (0:12:30)`.
+
+
+## 2026-06-12 - Admin Authorization Policy
+
+Implemented in progress:
+
+- Added `docs/admin_authorization_policy.md` to define the operator-only boundary for future audit summary/export features.
+- Clarified that the regular pilot API key is not admin authorization by itself because Workbench, scripts, and MCP clients may share it.
+- Updated deployment, audit design, README, and handoff TODO references without adding endpoints or changing runtime behavior.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- Reviewed `docs/admin_authorization_policy.md` for secret-safe placeholder-only guidance.
+- `git --no-pager diff --check` passed.
+- No runtime code, dependencies, services, databases, or secret files were touched.

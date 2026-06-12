@@ -54,11 +54,15 @@ Recommended rollout order:
 4. Let routes enrich `request.state.audit_context` with entity ids after successful writes.
 5. Have the MCP bridge forward a non-secret client label and tool name when calling HTTP routes.
 6. Have Workbench include a generated request id or client label without storing secrets.
-7. Add an optional read-only admin/export path only after authorization rules are explicit.
+7. Add an optional read-only admin/export path only after the policy in `docs/admin_authorization_policy.md` is implemented.
 
 ## Current Prototype
 
 The first code prototype is disabled by default. Set `WRITE_AUDIT_ENABLED=true` and `WRITE_AUDIT_DIR=/app/data/audit` to append JSONL records for non-GET `/research/*` requests. The middleware records route templates, request ids, client labels, API-key fingerprint prefixes when a key is supplied, policy headers, operation/entity categories, status, HTTP code, duration, commit sha when provided, and query parameter names. It does not read request bodies or serialize payloads, and it never writes API-key values.
+
+## Authorization Dependency
+
+Read-only audit summary/export endpoints should wait until `docs/admin_authorization_policy.md` is implemented. The normal pilot API key is not sufficient admin authorization because Workbench, scripts, and the MCP bridge may share it during customer pilots.
 
 ## Storage Options
 
