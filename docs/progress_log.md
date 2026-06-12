@@ -388,3 +388,21 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/app.py backend/research/routes.py tests/test_app.py` passed.
 - Focused pytest passed: `4 passed in 4.48s`.
 - Full `tests/test_app.py` passed with verbose durations: `47 passed in 771.24s (0:12:51)`.
+
+## 2026-06-12 - Durable Workflow Queue Design
+
+Documentation maintenance completed:
+
+- Added `docs/workflow_queue_design.md` to document the current FastAPI `BackgroundTasks` + `jobs` table contract and the future durable queue migration path.
+- Compared DB-backed worker leasing, RQ/Redis, Celery/Dramatiq, and Temporal without adding dependencies or changing runtime behavior.
+- Documented API compatibility requirements for async workflow queueing, job polling, artifact hydration, cancel, and retry.
+- Recorded future job leasing, heartbeat, retry, and idempotency fields as migration-gated work.
+- Updated README, technical design, and handoff TODO references.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `grep -R "workflow_queue_design" -n README.md docs/research_assistant_technical_design.md codex_handoff/03_TODO.md` confirmed cross-document references.
+- Reviewed `docs/workflow_queue_design.md` for design-only scope and secret-safe operator guidance.
+- `git --no-pager diff --check` passed.
+- Documentation-only change; no dependency install, service start, worker start, migration, or business-code test was required.

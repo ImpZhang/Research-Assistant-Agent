@@ -259,6 +259,17 @@ Candidate options:
 - Dramatiq for lighter background jobs.
 - Temporal only if workflow durability and visibility become central.
 
+Completed so far:
+
+- Documented the durable workflow queue design in `docs/workflow_queue_design.md` before adding dependencies, services, migrations, or changing runtime behavior.
+
+Likely work:
+
+- Confirm the deployment queue backend and worker process policy before adding Redis, RQ, Celery, Dramatiq, or Temporal.
+- Keep `/research/workflows/literature-to-ideas/async`, `/research/jobs/{job_id}`, retry, cancel, and artifact routes backward compatible during any migration.
+- Add queue/worker readiness checks only after the operator confirms the deployment topology.
+- Add job leasing, heartbeat, retry, and idempotency fields only after the database migration path is approved.
+
 Files:
 
 - `backend/research/services/workflow_service.py`
@@ -266,6 +277,7 @@ Files:
 - `backend/research/models.py`
 - `docker-compose.yml`
 - `docs/research_assistant_technical_design.md`
+- `docs/workflow_queue_design.md`
 
 Do not do this before customer-facing flow gaps unless the user explicitly prioritizes reliability over feature completion.
 
