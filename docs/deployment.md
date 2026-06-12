@@ -33,7 +33,7 @@ WRITE_AUDIT_CLIENT_HEADER_NAME=X-Research-Assistant-Client
 REQUEST_ID_HEADER_NAME=X-Request-ID
 ```
 
-Audit records are JSONL metadata only and must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials.
+Audit records are JSONL metadata only. They may include a short SHA-256 API-key fingerprint prefix for correlation, but must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials.
 
 Model provider variables can stay empty for deterministic fallback behavior, or be filled with OpenAI-compatible endpoints:
 

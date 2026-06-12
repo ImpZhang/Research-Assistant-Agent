@@ -238,3 +238,22 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/research/config.py backend/research/routes.py backend/research/services/document_ingestion.py tests/test_app.py` passed.
 - Focused pytest passed: `5 passed in 4.85s`.
 - Full `tests/test_app.py` passed: `39 passed in 737.83s (0:12:17)`.
+
+
+## 2026-06-12 - API Key Fingerprints In Write Audit
+
+Implemented in progress:
+
+- Added short SHA-256 API-key fingerprint prefixes to write-operation audit metadata when an API key is supplied.
+- Preserved secret safety by never serializing API key values, request bodies, or payload text into audit JSONL records.
+- Added tests for successful authenticated writes and failed 401 writes to prove fingerprints are recorded without key disclosure.
+- Updated deployment docs, audit design, technical design, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/app.py tests/test_app.py` left files unchanged.
+- `.venv/bin/ruff check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py tests/test_app.py` passed.
+- Focused pytest passed: `4 passed in 4.27s`.
+- Full `tests/test_app.py` passed: `40 passed in 750.26s (0:12:30)`.

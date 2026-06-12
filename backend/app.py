@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -65,6 +66,8 @@ def create_app() -> FastAPI:
                 },
             )
         supplied_key = _request_api_key(request)
+        if supplied_key:
+            request.state.api_key_fingerprint = _secret_fingerprint(supplied_key)
         if not supplied_key or not secrets.compare_digest(supplied_key, configured_key):
             return JSONResponse(
                 status_code=401,
@@ -97,6 +100,12 @@ def create_app() -> FastAPI:
             route = request.scope.get("route")
             path_template = getattr(route, "path", request.url.path)
             status_code = getattr(response, "status_code", 500)
+            metadata = {
+                "query_keys": sorted(request.query_params.keys()),
+            }
+            api_key_fingerprint = getattr(request.state, "api_key_fingerprint", "")
+            if api_key_fingerprint:
+                metadata["api_key_fingerprint"] = api_key_fingerprint
             event = {
                 "request_id": request_id,
                 "actor_type": _audit_actor_type(request),
@@ -112,9 +121,7 @@ def create_app() -> FastAPI:
                 "policy": request.headers.get("X-Research-Assistant-Policy") or "direct_api",
                 "duration_ms": duration_ms,
                 "commit_sha": os.getenv("APP_COMMIT_SHA") or os.getenv("GIT_COMMIT_SHA") or None,
-                "metadata": {
-                    "query_keys": sorted(request.query_params.keys()),
-                },
+                "metadata": metadata,
             }
             audit_context = getattr(request.state, "audit_context", {}) or {}
             event.update({key: audit_context.get(key) for key in ("entity_id",)})
@@ -209,6 +216,10 @@ def _audit_actor_type(request: Request) -> str:
     if label:
         return "api_client"
     return "unknown"
+
+
+def _secret_fingerprint(value: str) -> str:
+    return f"sha256:{hashlib.sha256(value.encode('utf-8')).hexdigest()[:12]}"
 
 
 def _request_api_key(request: Request) -> str:

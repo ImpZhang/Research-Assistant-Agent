@@ -58,7 +58,7 @@ Recommended rollout order:
 
 ## Current Prototype
 
-The first code prototype is disabled by default. Set `WRITE_AUDIT_ENABLED=true` and `WRITE_AUDIT_DIR=/app/data/audit` to append JSONL records for non-GET `/research/*` requests. The middleware records route templates, request ids, client labels, policy headers, operation/entity categories, status, HTTP code, duration, commit sha when provided, and query parameter names. It does not read request bodies or serialize payloads.
+The first code prototype is disabled by default. Set `WRITE_AUDIT_ENABLED=true` and `WRITE_AUDIT_DIR=/app/data/audit` to append JSONL records for non-GET `/research/*` requests. The middleware records route templates, request ids, client labels, API-key fingerprint prefixes when a key is supplied, policy headers, operation/entity categories, status, HTTP code, duration, commit sha when provided, and query parameter names. It does not read request bodies or serialize payloads, and it never writes API-key values.
 
 ## Storage Options
 

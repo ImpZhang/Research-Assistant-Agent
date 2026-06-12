@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -90,10 +91,55 @@ def test_write_operation_audit_jsonl_records_sanitized_metadata(tmp_path, monkey
     assert event["http_status"] == 200
     assert event["policy"] == "direct_api"
     assert event["metadata"]["query_keys"] == ["preview"]
+    assert event["metadata"]["api_key_fingerprint"] == (
+        "sha256:" + hashlib.sha256(b"pytest-secret").hexdigest()[:12]
+    )
 
     raw_audit = audit_path.read_text()
     assert "pytest-secret" not in raw_audit
     assert "do-not-log-body" not in raw_audit
+
+
+def test_write_operation_audit_records_failed_api_key_fingerprint(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("WRITE_AUDIT_ENABLED", "true")
+    monkeypatch.setenv("WRITE_AUDIT_DIR", str(tmp_path))
+    monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
+    monkeypatch.setenv("API_KEY", "pytest-secret")
+
+    client = TestClient(create_app())
+    response = client.put(
+        "/research/profile",
+        headers={
+            "X-Research-Assistant-Key": "wrong-secret",
+            "X-Research-Assistant-Client": "pytest-script",
+            "X-Request-ID": "req-audit-denied",
+        },
+        json={"name": "Denied Audit Profile"},
+    )
+
+    assert response.status_code == 401
+
+    audit_path = tmp_path / "write-operations.jsonl"
+    records = [json.loads(line) for line in audit_path.read_text().splitlines()]
+    assert len(records) == 1
+    event = records[0]
+    assert event["request_id"] == "req-audit-denied"
+    assert event["actor_type"] == "api_client"
+    assert event["actor_label"] == "pytest-script"
+    assert event["method"] == "PUT"
+    assert event["status"] == "failure"
+    assert event["http_status"] == 401
+    assert event["metadata"]["api_key_fingerprint"] == (
+        "sha256:" + hashlib.sha256(b"wrong-secret").hexdigest()[:12]
+    )
+
+    raw_audit = audit_path.read_text()
+    assert "wrong-secret" not in raw_audit
+    assert "pytest-secret" not in raw_audit
+    assert "Denied Audit Profile" not in raw_audit
 
 
 def test_write_operation_audit_disabled_by_default(tmp_path, monkeypatch) -> None:
