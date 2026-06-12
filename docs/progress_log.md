@@ -144,3 +144,19 @@ Verification completed:
 - `.venv/bin/ruff check tests/test_app.py` passed.
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 3.38s`.
+
+## 2026-06-12 - Data Backup And Restore Notes
+
+Documentation maintenance completed:
+
+- Added `/app/data` backup/restore operator notes to `docs/deployment.md` for the compose service and Docker volume.
+- Documented what the backup must include, what secrets must stay outside git/public bundles, and why cold backup is the preferred first-pilot path.
+- Added restore guardrails: do not restore over a live service volume, back up current data first, and verify health/readiness/Workbench after restore.
+- Linked the backup/restore notes from README and updated handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `git --no-pager diff --check` passed.
+- Reviewed backup/restore examples to avoid destructive restore-over-live-volume guidance.
+- Documentation-only change; no service start, Docker command, dependency install, or business-code test was required.

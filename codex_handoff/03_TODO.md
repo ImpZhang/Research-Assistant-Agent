@@ -183,18 +183,19 @@ Completed slices:
 - Added a pilot deployment checklist to `docs/deployment.md` and linked it from README.
 - Designed write-operation audit logging in `docs/write_operation_audit_design.md` before persistence changes.
 - Extended Workbench empty states to delivery workflows such as bundle releases, review outcomes, snapshots, and research plans.
+- Added `/app/data` backup/restore operator notes to `docs/deployment.md`.
 
 Next likely work:
 
 - Improve Workbench information architecture around delivery workflows.
-- Add backup/restore operator notes for `/app/data` once the deployment target is fixed.
 - Implement route-level audit events for writes after confirming the JSONL-first design.
+- Decide whether backup/restore should become a checked script after deployment target details are fixed.
 
 Suggested next narrow slices:
 
-1. Add backup/restore operator notes for `/app/data` once the deployment target is fixed.
-2. Prototype JSONL write-operation audit helper and middleware behind explicit approval.
-3. Group Workbench delivery controls into clearer sections once behavior is stable.
+1. Prototype JSONL write-operation audit helper and middleware behind explicit approval.
+2. Group Workbench delivery controls into clearer sections once behavior is stable.
+3. Add a checked backup script only after the operator confirms the deployment host/volume naming convention.
 
 Files:
 

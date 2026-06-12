@@ -62,6 +62,49 @@ docker compose up --build
 
 The compose file mounts a named volume at `/app/data`, so SQLite data, uploaded papers, and generated artifacts survive container restarts.
 
+## Backup And Restore Notes
+
+The production compose file declares a `research_assistant_data` volume mounted at `/app/data`. Docker Compose usually creates an engine volume named `<compose-project>_research_assistant_data`, so confirm the actual volume name before backing up or restoring.
+
+Back up this data before rebuilds, host moves, database migrations, or destructive maintenance. A backup should include:
+
+- `/app/data/research/research_assistant.db` and related SQLite sidecar files if present.
+- `/app/data/papers` uploaded paper files.
+- Generated bundle, brief, and workflow artifacts under `/app/data`.
+
+Keep `.env`, API keys, cookies, private keys, and provider credentials in a separate secret manager or operator vault. Do not put them in git or public handoff bundles.
+
+Cold backup is the preferred first-pilot path because SQLite and uploaded files can be copied consistently while the service is stopped. Example operator flow, only after explicit approval:
+
+```bash
+mkdir -p backups
+docker compose stop research-assistant-agent
+docker run --rm \
+  -v research-assistant-agent_research_assistant_data:/data:ro \
+  -v "$PWD/backups:/backup" \
+  alpine sh -lc 'tar -C /data -czf /backup/research-assistant-data-YYYYMMDD-HHMMSS.tgz .'
+docker compose start research-assistant-agent
+```
+
+If the Compose project name differs from the example, confirm the actual volume name first with `docker volume ls` and do not guess.
+
+Restore should never write over a live service volume. Prefer restoring into a new empty target volume, then switching Compose to that volume only after operator review. Example operator flow, only after explicit approval:
+
+```bash
+docker compose stop research-assistant-agent
+# Optional but recommended: back up the current volume before restore.
+docker volume create research_assistant_data_restore
+docker run --rm \
+  -v research_assistant_data_restore:/data \
+  -v "$PWD/backups:/backup:ro" \
+  alpine sh -lc 'tar -C /data -xzf /backup/research-assistant-data-YYYYMMDD-HHMMSS.tgz'
+# Review the restored volume, then update the compose volume mapping or perform an approved volume swap.
+docker compose start research-assistant-agent
+curl http://127.0.0.1:8000/health/ready
+```
+
+After restore or volume swap, verify `/health/ready`, authenticated `/research/status`, Workbench Pilot Launch, and a known project bundle or paper record before sharing the service again.
+
 Check the service:
 
 ```bash
