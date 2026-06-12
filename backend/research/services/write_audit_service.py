@@ -13,6 +13,22 @@ from backend.research.config import settings
 WRITE_AUDIT_FILENAME = "write-operations.jsonl"
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 TRUTHY = {"1", "true", "yes", "on"}
+SENSITIVE_METADATA_TERMS = (
+    "api_key",
+    "token",
+    "cookie",
+    "secret",
+    "password",
+    "credential",
+    "private_key",
+    "request_body",
+    "body",
+    "payload",
+    "content",
+    "prompt",
+    "model_response",
+)
+METADATA_KEY_ALLOWLIST = {"api_key_fingerprint", "query_keys"}
 
 
 def write_audit_enabled() -> bool:
@@ -28,6 +44,42 @@ def write_audit_dir() -> Path:
 
 def write_audit_path() -> Path:
     return write_audit_dir() / WRITE_AUDIT_FILENAME
+
+
+def export_write_audit_events(
+    *,
+    max_records: int = 100,
+    start_created_at: str = "",
+    end_created_at: str = "",
+) -> list[dict[str, Any]]:
+    path = write_audit_path()
+    if not path.exists() or max_records < 1:
+        return []
+
+    records: list[dict[str, Any]] = []
+    bounded_max = min(max_records, 1000)
+    with path.open(encoding="utf-8") as handle:
+        for line in handle:
+            event = _load_audit_event(line)
+            if event is None or not _event_in_created_at_range(
+                event,
+                start_created_at=start_created_at,
+                end_created_at=end_created_at,
+            ):
+                continue
+            records.append(_sanitize_event(event))
+            if len(records) >= bounded_max:
+                break
+    return records
+
+
+def render_write_audit_export_jsonl(records: list[dict[str, Any]]) -> str:
+    if not records:
+        return ""
+    return (
+        "\n".join(json.dumps(record, ensure_ascii=True, sort_keys=True) for record in records)
+        + "\n"
+    )
 
 
 def summarize_write_audit_events(max_events: int = 1000) -> dict[str, Any]:
@@ -75,15 +127,10 @@ def summarize_write_audit_events(max_events: int = 1000) -> dict[str, Any]:
     recent_request_ids: list[str] = []
 
     for line in recent_lines:
-        if not line.strip():
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            summary["invalid_line_count"] += 1
-            continue
-        if not isinstance(event, Mapping):
-            summary["invalid_line_count"] += 1
+        event = _load_audit_event(line)
+        if event is None:
+            if line.strip():
+                summary["invalid_line_count"] += 1
             continue
 
         summary["event_count"] += 1
@@ -174,6 +221,32 @@ def append_write_audit_event(event: Mapping[str, Any]) -> Path:
     return path
 
 
+def _load_audit_event(line: str) -> Mapping[str, Any] | None:
+    if not line.strip():
+        return None
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(event, Mapping):
+        return None
+    return event
+
+
+def _event_in_created_at_range(
+    event: Mapping[str, Any],
+    *,
+    start_created_at: str,
+    end_created_at: str,
+) -> bool:
+    created_at = event.get("created_at")
+    if not isinstance(created_at, str) or not created_at:
+        return not start_created_at and not end_created_at
+    if start_created_at and created_at < start_created_at:
+        return False
+    return not (end_created_at and created_at > end_created_at)
+
+
 def _count_string(event: Mapping[str, Any], key: str, counter: Counter[str]) -> None:
     value = event.get(key)
     if isinstance(value, str) and value:
@@ -219,10 +292,18 @@ def _sanitize_event(event: Mapping[str, Any]) -> dict[str, Any]:
 def _sanitize_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
     sanitized: dict[str, Any] = {}
     for key, value in metadata.items():
-        if value is None:
+        normalized_key = str(key)
+        if value is None or _metadata_key_is_sensitive(normalized_key):
             continue
         if isinstance(value, (str, int, float, bool)):
-            sanitized[str(key)] = value
+            sanitized[normalized_key] = value
         elif isinstance(value, list) and all(isinstance(item, str) for item in value):
-            sanitized[str(key)] = value[:20]
+            sanitized[normalized_key] = value[:20]
     return sanitized
+
+
+def _metadata_key_is_sensitive(key: str) -> bool:
+    normalized = key.strip().lower()
+    if normalized in METADATA_KEY_ALLOWLIST:
+        return False
+    return any(term in normalized for term in SENSITIVE_METADATA_TERMS)

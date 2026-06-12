@@ -224,13 +224,14 @@ Completed slices:
 - Added a default-off, admin-gated write-operation audit summary endpoint.
 - Added lightweight upload content sniffing before uploaded papers are written to disk.
 - Documented write-operation audit retention and operator export workflow before raw export code.
+- Added a default-off, admin-gated, bounded raw JSONL write-audit export endpoint.
 
 Likely work:
 
 - Introduce migration tooling only after operator approval and dependency sync approval.
 - Add user/project scoping model.
-- Add raw audit export only after the documented retention/operator workflow is implemented in code.
-- Add write-operation audit log persistence/export hardening.
+- Add write-operation audit rotation/cleanup hardening only after backup workflow approval.
+- Add write-operation audit log persistence hardening.
 - Add backup/restore script for `/data`.
 - Consider antivirus scanning or deeper MIME inspection for stricter customer environments.
 

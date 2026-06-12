@@ -5,8 +5,8 @@ This document defines the first-pilot retention and operator workflow for write-
 ## Scope
 
 - Current audit storage: `/app/data/audit/write-operations.jsonl` or `WRITE_AUDIT_DIR/write-operations.jsonl`.
-- Current public surface: no raw audit export endpoint.
-- Current operator surface: default-off admin summary at `GET /research/admin/write-audit/summary`.
+- Current public surface: no unauthenticated or normal-user raw audit export endpoint.
+- Current operator surface: default-off admin summary at `GET /research/admin/write-audit/summary` and bounded raw JSONL export at `GET /research/admin/write-audit/export`.
 - Audit records are sanitized metadata only; they must never include request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, provider credentials, prompts, model responses, or database connection strings.
 
 ## First-Pilot Retention Target
@@ -23,11 +23,11 @@ This policy does not require deleting existing audit data automatically. Automat
 
 ## Operator Export Workflow
 
-Raw JSONL export is not implemented yet. Before adding it, the workflow should require:
+Raw JSONL export is implemented as a bounded, default-off admin endpoint. Operator use should still require:
 
 - Explicit operator approval for the export purpose, time window, destination, and recipient.
 - `AUDIT_ADMIN_EXPORT_ENABLED=true` and a separate admin authorization gate as defined in `docs/admin_authorization_policy.md`.
-- A bounded time window or maximum line count; no unbounded full-file downloads by default.
+- A bounded time window or `max_records` limit; no unbounded full-file downloads by default.
 - Export into an operator-only directory, not into the repo, project bundle, Workbench local storage, or public handoff package.
 - A sanitized summary review before raw JSONL leaves the server.
 - A progress-log or release-note entry containing the exported time window and destination class, not the exported contents.
@@ -36,7 +36,7 @@ Do not put raw audit exports in git, issue trackers, chat transcripts, model pro
 
 ## Future Implementation Gates
 
-A future raw export endpoint or script should satisfy these checks:
+The implemented endpoint and any future raw export script should satisfy these checks:
 
 - Disabled by default behind an explicit feature flag.
 - Requires admin auth in addition to any normal pilot API key guard.

@@ -161,9 +161,11 @@ def test_write_audit_admin_summary_disabled_by_default(monkeypatch) -> None:
     monkeypatch.delenv("AUDIT_ADMIN_KEY", raising=False)
 
     client = TestClient(create_app())
-    response = client.get("/research/admin/write-audit/summary")
+    summary = client.get("/research/admin/write-audit/summary")
+    export = client.get("/research/admin/write-audit/export")
 
-    assert response.status_code == 404
+    assert summary.status_code == 404
+    assert export.status_code == 404
 
 
 def test_write_audit_admin_summary_requires_separate_admin_key(
@@ -177,36 +179,48 @@ def test_write_audit_admin_summary_requires_separate_admin_key(
     monkeypatch.setenv("WRITE_AUDIT_DIR", str(tmp_path))
 
     client = TestClient(create_app())
-    admin_path = "/research/admin/write-audit/summary"
+    admin_paths = (
+        "/research/admin/write-audit/summary",
+        "/research/admin/write-audit/export",
+    )
 
-    admin_only = client.get(
-        admin_path,
-        headers={"X-Research-Assistant-Admin-Key": "pytest-admin"},
-    )
-    pilot_only = client.get(
-        admin_path,
-        headers={"X-Research-Assistant-Key": "pytest-secret"},
-    )
-    wrong_admin = client.get(
-        admin_path,
-        headers={
-            "X-Research-Assistant-Key": "pytest-secret",
-            "X-Research-Assistant-Admin-Key": "wrong-admin",
-        },
-    )
-    ok = client.get(
-        admin_path,
+    for admin_path in admin_paths:
+        admin_only = client.get(
+            admin_path,
+            headers={"X-Research-Assistant-Admin-Key": "pytest-admin"},
+        )
+        pilot_only = client.get(
+            admin_path,
+            headers={"X-Research-Assistant-Key": "pytest-secret"},
+        )
+        wrong_admin = client.get(
+            admin_path,
+            headers={
+                "X-Research-Assistant-Key": "pytest-secret",
+                "X-Research-Assistant-Admin-Key": "wrong-admin",
+            },
+        )
+        ok = client.get(
+            admin_path,
+            headers={
+                "X-Research-Assistant-Key": "pytest-secret",
+                "X-Research-Assistant-Admin-Key": "pytest-admin",
+            },
+        )
+
+        assert admin_only.status_code == 401
+        assert pilot_only.status_code == 401
+        assert wrong_admin.status_code == 403
+        assert ok.status_code == 200
+
+    summary = client.get(
+        "/research/admin/write-audit/summary",
         headers={
             "X-Research-Assistant-Key": "pytest-secret",
             "X-Research-Assistant-Admin-Key": "pytest-admin",
         },
     )
-
-    assert admin_only.status_code == 401
-    assert pilot_only.status_code == 401
-    assert wrong_admin.status_code == 403
-    assert ok.status_code == 200
-    assert ok.json()["audit_file_present"] is False
+    assert summary.json()["audit_file_present"] is False
 
 
 def test_write_audit_admin_summary_returns_sanitized_aggregates(
@@ -285,6 +299,100 @@ def test_write_audit_admin_summary_returns_sanitized_aggregates(
     assert "pytest-admin" not in raw_response
     assert "do-not-expose-label" not in raw_response
     assert "sha256:do-not-expose" not in raw_response
+
+
+def test_write_audit_admin_export_returns_bounded_sanitized_jsonl(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("AUDIT_ADMIN_EXPORT_ENABLED", "true")
+    monkeypatch.setenv("AUDIT_ADMIN_KEY", "pytest-admin")
+    monkeypatch.setenv("WRITE_AUDIT_DIR", str(tmp_path))
+
+    audit_path = tmp_path / "write-operations.jsonl"
+    audit_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "created_at": "2026-06-12T01:00:00+00:00",
+                        "request_id": "req-before-window",
+                        "operation": "update",
+                        "entity_type": "profile",
+                        "status": "success",
+                        "http_status": 200,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "created_at": "2026-06-12T01:01:00+00:00",
+                        "request_id": "req-export-one",
+                        "actor_type": "workbench",
+                        "actor_label": "pytest-workbench",
+                        "method": "PUT",
+                        "path_template": "/research/profile",
+                        "operation": "update",
+                        "entity_type": "profile",
+                        "status": "success",
+                        "http_status": 200,
+                        "request_body": "do-not-export-body",
+                        "api_key": "raw-secret-key",
+                        "metadata": {
+                            "api_key": "raw-secret-metadata",
+                            "api_key_fingerprint": "sha256:abcdef123456",
+                            "query_keys": ["preview"],
+                            "prompt_text": "do-not-export-prompt",
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "created_at": "2026-06-12T01:02:00+00:00",
+                        "request_id": "req-export-two",
+                        "actor_type": "api_client",
+                        "method": "POST",
+                        "path_template": "/research/papers/upload",
+                        "operation": "upload",
+                        "entity_type": "paper",
+                        "status": "failure",
+                        "http_status": 422,
+                        "error_type": "ValidationError",
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    client = TestClient(create_app())
+    response = client.get(
+        "/research/admin/write-audit/export",
+        params={
+            "start_created_at": "2026-06-12T01:01:00+00:00",
+            "end_created_at": "2026-06-12T01:02:00+00:00",
+            "max_records": "1",
+        },
+        headers={"X-Research-Assistant-Admin-Key": "pytest-admin"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-Research-Assistant-Export-Records"] == "1"
+    exported = [json.loads(line) for line in response.text.splitlines()]
+    assert len(exported) == 1
+    assert exported[0]["request_id"] == "req-export-one"
+    assert exported[0]["metadata"] == {
+        "api_key_fingerprint": "sha256:abcdef123456",
+        "query_keys": ["preview"],
+    }
+
+    raw_response = response.text
+    assert "raw-secret-key" not in raw_response
+    assert "raw-secret-metadata" not in raw_response
+    assert "do-not-export-body" not in raw_response
+    assert "do-not-export-prompt" not in raw_response
+    assert "req-before-window" not in raw_response
+    assert "req-export-two" not in raw_response
 
 
 def test_deployment_artifacts_document_customer_runtime() -> None:
@@ -385,6 +493,7 @@ def test_research_status() -> None:
     assert "mcp_bridge_policy_controls" in body["implemented_capabilities"]
     assert "write_operation_audit_jsonl" in body["implemented_capabilities"]
     assert "write_operation_audit_admin_summary" in body["implemented_capabilities"]
+    assert "write_operation_audit_admin_export" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]

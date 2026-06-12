@@ -7,9 +7,9 @@ import secrets
 import time
 import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -20,8 +20,10 @@ from backend.research.schemas import WriteAuditSummaryResponse
 from backend.research.services.write_audit_service import (
     append_write_audit_event,
     entity_type_for_path,
+    export_write_audit_events,
     is_write_operation,
     operation_for_request,
+    render_write_audit_export_jsonl,
     summarize_write_audit_events,
     write_audit_enabled,
 )
@@ -160,6 +162,24 @@ def create_app() -> FastAPI:
             _admin_key_fingerprint: str = Depends(_require_audit_admin_access),
         ) -> WriteAuditSummaryResponse:
             return WriteAuditSummaryResponse(**summarize_write_audit_events())
+
+        @app.get("/research/admin/write-audit/export")
+        def write_audit_export(
+            _admin_key_fingerprint: str = Depends(_require_audit_admin_access),
+            max_records: int = Query(default=100, ge=1, le=1000),
+            start_created_at: str = Query(default="", max_length=80),
+            end_created_at: str = Query(default="", max_length=80),
+        ) -> PlainTextResponse:
+            records = export_write_audit_events(
+                max_records=max_records,
+                start_created_at=start_created_at,
+                end_created_at=end_created_at,
+            )
+            return PlainTextResponse(
+                content=render_write_audit_export_jsonl(records),
+                media_type="application/x-ndjson",
+                headers={"X-Research-Assistant-Export-Records": str(len(records))},
+            )
 
     @app.get("/", include_in_schema=False)
     def root():

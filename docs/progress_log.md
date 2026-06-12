@@ -330,3 +330,24 @@ Verification completed:
 - `grep -R "write_audit_retention_policy" -n README.md docs codex_handoff/03_TODO.md` confirmed cross-document references.
 - `git --no-pager diff --check` passed.
 - No runtime code, dependencies, services, databases, raw audit exports, or secret files were touched.
+
+
+## 2026-06-12 - Admin-Gated Write Audit Raw Export
+
+Implemented in progress:
+
+- Added `GET /research/admin/write-audit/export`, registered only when `AUDIT_ADMIN_EXPORT_ENABLED=true`.
+- Reused the separate audit admin key gate and kept normal pilot API-key-only callers unauthorized.
+- Added bounded export filters with `max_records`, `start_created_at`, and `end_created_at` query parameters.
+- Re-sanitized exported events with the existing field allowlist plus metadata sensitive-key filtering before rendering JSONL.
+- Added tests for default-disabled behavior, admin authorization, bounded export, time-window filtering, and secret/body/prompt exclusion.
+- Updated README, deployment notes, audit design, retention policy, admin authorization policy, status capability, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/app.py backend/research/routes.py backend/research/services/write_audit_service.py tests/test_app.py` reformatted one file after the export route and service changes.
+- `.venv/bin/ruff check backend/app.py backend/research/routes.py backend/research/services/write_audit_service.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py backend/research/routes.py backend/research/services/write_audit_service.py tests/test_app.py` passed.
+- Focused pytest passed: `6 passed in 3.16s`.
+- Full `tests/test_app.py` passed with verbose durations: `46 passed in 796.39s (0:13:16)`.
