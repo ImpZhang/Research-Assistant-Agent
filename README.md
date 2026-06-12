@@ -492,3 +492,4 @@ See `docs/deployment.md` for the runtime contract, pilot deployment checklist, `
 - `docs/write_audit_retention_policy.md`
 - `docs/user_project_scoping_design.md`
 - `docs/workflow_queue_design.md`
+- `docs/graphrag_langgraph_deerflow_evaluation.md`

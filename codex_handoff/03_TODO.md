@@ -296,12 +296,23 @@ When to revisit:
 - Knowledge graph scale exceeds simple relational node/edge traversal.
 - Users ask for automatic deep research reports across many tools and sources.
 
+Completed so far:
+
+- Documented the P6 GraphRAG/LangGraph/DeerFlow evaluation in `docs/graphrag_langgraph_deerflow_evaluation.md`; current recommendation is to keep GraphRAG-lite and service-layer workflows until explicit scale/durability/tool-sandbox triggers appear.
+
+Likely work:
+
+- Strengthen GraphRAG-lite edge quality, retrieval ranking, and graph observability before adding a full GraphRAG indexing/community-summary pipeline.
+- Use LangGraph only for a new isolated workflow once resumable DAG state, checkpointing, or human-in-the-loop control is required.
+- Treat DeerFlow as a future external planner/tool consumer through the stable tool manifest and MCP bridge, not as the core runtime.
+
 Files:
 
 - `docs/research_assistant_technical_design.md`
 - `backend/research/services/graph_service.py`
 - `backend/research/services/retrieval_service.py`
 - `backend/research/services/workflow_service.py`
+- `docs/graphrag_langgraph_deerflow_evaluation.md`
 
 Default:
 

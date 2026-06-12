@@ -421,3 +421,20 @@ Verification completed:
 - Reviewed `codex_handoff/03_TODO.md` Priority 3 and Priority 4 sections for stale completed work.
 - `git --no-pager diff --check` passed.
 - Documentation-only change; no dependency install, service start, migration, backup command, or business-code test was required.
+
+## 2026-06-12 - GraphRAG LangGraph DeerFlow Revisit
+
+Documentation maintenance completed:
+
+- Added `docs/graphrag_langgraph_deerflow_evaluation.md` to record the P6 evaluation of heavier graph retrieval and orchestration options.
+- Documented current implementation boundaries: relational GraphRAG-lite nodes/edges, lexical/vector/context search, graph neighbor expansion, service-layer workflows, and placeholder LangGraph modules.
+- Recommended keeping GraphRAG-lite and service-layer workflows for now, while treating full GraphRAG, deeper LangGraph runtime use, and DeerFlow as trigger-gated future options.
+- Updated README, technical design, and handoff TODO references.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- Reviewed `graph_service.py`, `retrieval_service.py`, `models.py`, graph/search routes, tests, smoke coverage, and technical design references.
+- `grep -R "graphrag_langgraph_deerflow_evaluation" -n README.md docs codex_handoff/03_TODO.md` confirmed cross-document references.
+- `git --no-pager diff --check` passed.
+- Documentation-only change; no dependency install, service start, migration, queue worker, or business-code test was required.
