@@ -278,6 +278,7 @@ def status() -> ProjectStatus:
             "paper_registry_api",
             "document_ingestion_api",
             "upload_size_extension_guard",
+            "upload_content_sniffing_guard",
             "evidence_extraction",
             "paper_card_extraction",
             "structured_extraction_adapter",

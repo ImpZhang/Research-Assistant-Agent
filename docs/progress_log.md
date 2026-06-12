@@ -293,3 +293,23 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/app.py backend/research/config.py backend/research/routes.py backend/research/schemas.py backend/research/services/write_audit_service.py tests/test_app.py` passed.
 - Focused pytest passed: `7 passed in 3.60s`.
 - Full `tests/test_app.py` passed with verbose durations: `43 passed in 762.87s (0:12:42)`.
+
+
+## 2026-06-12 - Upload Content Sniffing Guardrails
+
+Implemented in progress:
+
+- Added lightweight content sniffing before uploaded papers are written to disk.
+- Rejected `.txt` and `.md` uploads that contain null bytes or are not UTF-8 text.
+- Rejected `.pdf` uploads that do not start with a PDF header before invoking PDF parsing or writing the file.
+- Added tests proving binary text and fake PDF uploads fail before files are persisted.
+- Updated README, deployment notes, technical design, status capability, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/research/services/document_ingestion.py backend/research/routes.py tests/test_app.py` reformatted one file.
+- `.venv/bin/ruff check backend/research/services/document_ingestion.py backend/research/routes.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/research/services/document_ingestion.py backend/research/routes.py tests/test_app.py` passed.
+- Focused pytest passed: `7 passed in 5.85s`.
+- Full `tests/test_app.py` passed with verbose durations: `45 passed in 759.05s (0:12:39)`.

@@ -317,6 +317,7 @@ def test_research_status() -> None:
     assert body["phase"] == "phase_0_foundation"
     assert "sqlalchemy_models" in body["implemented_capabilities"]
     assert "upload_size_extension_guard" in body["implemented_capabilities"]
+    assert "upload_content_sniffing_guard" in body["implemented_capabilities"]
     assert "research_profile_constraints" in body["implemented_capabilities"]
     assert "research_plan_snapshots" in body["implemented_capabilities"]
     assert "research_plan_task_generation" in body["implemented_capabilities"]
@@ -1866,6 +1867,34 @@ def test_upload_rejects_file_larger_than_limit(tmp_path, monkeypatch) -> None:
     assert response.status_code == 400
     assert "too large" in response.json()["detail"]
     assert not (tmp_path / "too_large.txt").exists()
+
+
+def test_upload_rejects_binary_text_file_before_writing(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("fake_text.txt", b"Title\x00binary payload", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert "appears to be binary" in response.json()["detail"]
+    assert not (tmp_path / "fake_text.txt").exists()
+
+
+def test_upload_rejects_pdf_without_pdf_header_before_writing(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("fake.pdf", b"not actually a pdf", "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert "does not appear to be a PDF document" in response.json()["detail"]
+    assert not (tmp_path / "fake.pdf").exists()
 
 
 def test_upload_text_paper() -> None:

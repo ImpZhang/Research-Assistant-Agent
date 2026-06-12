@@ -72,6 +72,7 @@ class DocumentIngestionService:
             raise ValueError(
                 f"Uploaded file is too large: {len(content)} bytes. Max allowed size is {max_bytes} bytes."
             )
+        self._validate_upload_content(filename, suffix, content)
         file_path.write_bytes(content)
 
         text = self._extract_text(file_path)
@@ -198,6 +199,17 @@ class DocumentIngestionService:
             return max(0, int(raw))
         except ValueError:
             return settings.paper_upload_max_bytes
+
+    def _validate_upload_content(self, filename: str, suffix: str, content: bytes) -> None:
+        if suffix == ".pdf" and not content.startswith(b"%PDF-"):
+            raise ValueError(f"Uploaded file {filename} does not appear to be a PDF document.")
+        if suffix in {".txt", ".md"}:
+            if b"\x00" in content:
+                raise ValueError(f"Uploaded file {filename} appears to be binary, not text.")
+            try:
+                content.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError(f"Uploaded file {filename} must be UTF-8 encoded text.") from exc
 
     def _extract_text(self, file_path: Path) -> str:
         suffix = file_path.suffix.lower()

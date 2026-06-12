@@ -24,6 +24,8 @@ PAPER_UPLOAD_ALLOWED_EXTENSIONS=.txt,.md,.pdf
 PAPER_UPLOAD_MAX_BYTES=10485760
 ```
 
+Paper uploads validate extension, size, and lightweight content signatures before writing files to `PAPER_UPLOAD_DIR`. Text and Markdown uploads must be UTF-8 text without null bytes; PDF uploads must start with a PDF header.
+
 Optional write-operation audit trail:
 
 ```bash

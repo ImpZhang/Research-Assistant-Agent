@@ -222,6 +222,7 @@ Completed slices:
 - Added secret-safe API key fingerprint metadata to JSONL write-operation audit records.
 - Documented the admin authorization boundary for future audit summary/export access.
 - Added a default-off, admin-gated write-operation audit summary endpoint.
+- Added lightweight upload content sniffing before uploaded papers are written to disk.
 
 Likely work:
 
@@ -230,7 +231,7 @@ Likely work:
 - Add raw audit export only after retention and operator workflow are explicit.
 - Add write-operation audit log persistence/export hardening.
 - Add backup/restore script for `/data`.
-- Consider MIME sniffing or antivirus scanning for stricter customer environments.
+- Consider antivirus scanning or deeper MIME inspection for stricter customer environments.
 
 Files:
 
