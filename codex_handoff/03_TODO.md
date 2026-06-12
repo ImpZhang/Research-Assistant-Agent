@@ -186,17 +186,19 @@ Completed slices:
 - Added `/app/data` backup/restore operator notes to `docs/deployment.md`.
 - Added a disabled-by-default JSONL write-operation audit helper and middleware prototype.
 - Grouped Workbench dossier controls into idea loop, task board, project delivery, and project operations sections.
+- Added admin-gated write-operation audit summary and bounded raw JSONL export endpoints after documenting admin authorization and retention/export policy.
 
 Next likely work:
 
 - Decide whether backup/restore should become a checked script after deployment target details are fixed.
 - Decide whether write-operation audit should graduate from JSONL to database persistence after migration strategy is settled.
-- Add a read-only audit summary/export endpoint only after admin authorization rules are explicit.
+- Decide whether write-operation audit rotation/cleanup should be implemented after backup/retention decisions are settled.
+- Run a remote smoke workflow against the current main branch when the operator approves service startup.
 
 Suggested next narrow slices:
 
 1. Add a checked backup script only after the operator confirms the deployment host/volume naming convention.
-2. Add a read-only audit summary/export endpoint only after admin authorization rules are explicit.
+2. Add audit rotation/cleanup only after the backup workflow and retention policy are confirmed.
 3. Run a remote smoke workflow against the current main branch when the operator approves service startup.
 
 Files:
@@ -234,7 +236,7 @@ Likely work:
 - Implement user/project scoping only after migration tooling and auth identity are explicit.
 - Add write-operation audit rotation/cleanup hardening only after backup workflow approval.
 - Add deeper write-operation audit log persistence hardening after rotation/backup decisions.
-- Add backup/restore script for `/data`.
+- Add backup/restore script for `/data` only after the operator confirms the deployment host/volume naming convention.
 - Consider antivirus scanning or deeper MIME inspection for stricter customer environments.
 
 Files:

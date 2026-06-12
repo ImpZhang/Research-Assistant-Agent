@@ -406,3 +406,18 @@ Verification completed:
 - Reviewed `docs/workflow_queue_design.md` for design-only scope and secret-safe operator guidance.
 - `git --no-pager diff --check` passed.
 - Documentation-only change; no dependency install, service start, worker start, migration, or business-code test was required.
+
+## 2026-06-12 - Handoff TODO Consistency Refresh
+
+Documentation maintenance completed:
+
+- Updated Priority 3 handoff TODO to reflect that admin-gated write-audit summary and bounded raw JSONL export endpoints are already complete.
+- Replaced the stale audit summary/export next slice with audit rotation/cleanup guidance gated on backup and retention decisions.
+- Clarified that a checked `/data` backup script still waits for operator confirmation of deployment host and volume naming.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- Reviewed `codex_handoff/03_TODO.md` Priority 3 and Priority 4 sections for stale completed work.
+- `git --no-pager diff --check` passed.
+- Documentation-only change; no dependency install, service start, migration, backup command, or business-code test was required.
