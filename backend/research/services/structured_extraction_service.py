@@ -60,7 +60,13 @@ class StructuredExtractionService:
                 user_prompt=user_prompt,
             )
             parsed = PaperCardPayload.model_validate(payload)
-        except (requests.RequestException, KeyError, ValueError, ValidationError, json.JSONDecodeError) as exc:
+        except (
+            requests.RequestException,
+            KeyError,
+            ValueError,
+            ValidationError,
+            json.JSONDecodeError,
+        ) as exc:
             card = self.heuristic.extract_heuristic_card(paper_id)
             card.extraction_model = f"heuristic_v0_after_model_error:{type(exc).__name__}"
             card.extraction_status = "completed_with_model_fallback"

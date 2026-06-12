@@ -21,7 +21,9 @@ class GapService:
     def get_gap(self, gap_id: str) -> ResearchGap | None:
         return self.session.get(ResearchGap, gap_id)
 
-    def mine_gaps(self, paper_ids: list[str] | None = None, max_gaps: int = 10) -> list[ResearchGap]:
+    def mine_gaps(
+        self, paper_ids: list[str] | None = None, max_gaps: int = 10
+    ) -> list[ResearchGap]:
         query = self.session.query(Evidence).filter(
             Evidence.evidence_type.in_(["limitation", "future_work", "problem"])
         )

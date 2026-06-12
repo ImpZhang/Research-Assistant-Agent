@@ -54,7 +54,13 @@ class StructuredIdeaService:
             for idea in ideas:
                 self.session.refresh(idea)
             return ideas
-        except (requests.RequestException, KeyError, ValueError, ValidationError, json.JSONDecodeError):
+        except (
+            requests.RequestException,
+            KeyError,
+            ValueError,
+            ValidationError,
+            json.JSONDecodeError,
+        ):
             self.session.rollback()
             return self.heuristic.generate_from_gaps(gap_ids, max_ideas_per_gap)
 

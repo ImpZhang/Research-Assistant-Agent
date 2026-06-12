@@ -65,7 +65,9 @@ class EmbeddingService:
             idea_count=idea_count,
         )
 
-    def ensure_indexed(self, paper_ids: list[str] | None = None, limit: int = 500) -> EmbeddingRebuildStats:
+    def ensure_indexed(
+        self, paper_ids: list[str] | None = None, limit: int = 500
+    ) -> EmbeddingRebuildStats:
         return self.rebuild_index(paper_ids=paper_ids, limit=limit)
 
     def search(
@@ -88,7 +90,9 @@ class EmbeddingService:
             score = self.cosine_similarity(query_vector, row.vector_json or [])
             if score <= 0:
                 continue
-            hits.append(VectorHit(owner_type=row.owner_type, owner_id=row.owner_id, score=round(score, 4)))
+            hits.append(
+                VectorHit(owner_type=row.owner_type, owner_id=row.owner_id, score=round(score, 4))
+            )
 
         hits.sort(key=lambda hit: hit.score, reverse=True)
         return hits[: max(1, min(limit, 100))]
@@ -121,14 +125,21 @@ class EmbeddingService:
             self._upsert_embedding(
                 owner_type="evidence",
                 owner_id=evidence.id,
-                text=" ".join([evidence.evidence_type, evidence.summary, evidence.text, evidence.supports]),
+                text=" ".join(
+                    [evidence.evidence_type, evidence.summary, evidence.text, evidence.supports]
+                ),
                 payload={"paper_id": evidence.paper_id, "evidence_type": evidence.evidence_type},
             )
             count += 1
         return count
 
     def _index_gaps(self, paper_ids: list[str], limit: int) -> int:
-        candidates = self.session.query(ResearchGap).order_by(ResearchGap.updated_at.desc()).limit(limit).all()
+        candidates = (
+            self.session.query(ResearchGap)
+            .order_by(ResearchGap.updated_at.desc())
+            .limit(limit)
+            .all()
+        )
         count = 0
         for gap in candidates:
             if paper_ids and not set(gap.source_paper_ids_json or []).intersection(paper_ids):
@@ -146,7 +157,10 @@ class EmbeddingService:
                         " ".join(gap.possible_approaches_json or []),
                     ]
                 ),
-                payload={"source_paper_ids": gap.source_paper_ids_json or [], "gap_type": gap.gap_type},
+                payload={
+                    "source_paper_ids": gap.source_paper_ids_json or [],
+                    "gap_type": gap.gap_type,
+                },
             )
             count += 1
         return count
@@ -175,12 +189,17 @@ class EmbeddingService:
                         " ".join(idea.risks_json or []),
                     ]
                 ),
-                payload={"related_paper_ids": idea.related_paper_ids_json or [], "status": idea.status},
+                payload={
+                    "related_paper_ids": idea.related_paper_ids_json or [],
+                    "status": idea.status,
+                },
             )
             count += 1
         return count
 
-    def _upsert_embedding(self, owner_type: str, owner_id: str, text: str, payload: dict[str, Any]) -> None:
+    def _upsert_embedding(
+        self, owner_type: str, owner_id: str, text: str, payload: dict[str, Any]
+    ) -> None:
         text_hash = hashlib.sha256((text or "").encode("utf-8")).hexdigest()
         row = (
             self.session.query(ResearchEmbedding)

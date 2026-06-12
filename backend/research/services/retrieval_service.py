@@ -51,7 +51,9 @@ class RetrievalService:
         evidences = self._score_evidences(terms, paper_ids or [], limit)
         gaps = self._score_gaps(terms, paper_ids or [], limit)
         ideas = self._score_ideas(terms, paper_ids or [], limit)
-        evidences = self._merge_vector_hits("evidence", evidences, vector_hits, paper_ids or [], limit)
+        evidences = self._merge_vector_hits(
+            "evidence", evidences, vector_hits, paper_ids or [], limit
+        )
         gaps = self._merge_vector_hits("gap", gaps, vector_hits, paper_ids or [], limit)
         ideas = self._merge_vector_hits("idea", ideas, vector_hits, paper_ids or [], limit)
 
@@ -104,7 +106,9 @@ class RetrievalService:
         paper_ids: list[str],
         limit: int,
     ) -> list[ScoredItem]:
-        candidates = self.session.query(ResearchGap).order_by(ResearchGap.created_at.desc()).limit(500).all()
+        candidates = (
+            self.session.query(ResearchGap).order_by(ResearchGap.created_at.desc()).limit(500).all()
+        )
         if paper_ids:
             candidates = [
                 gap
@@ -191,7 +195,12 @@ class RetrievalService:
         )
         seed_node_ids = {node.id for node in seed_nodes}
 
-        candidate_edges = self.session.query(ResearchEdge).order_by(ResearchEdge.created_at.desc()).limit(800).all()
+        candidate_edges = (
+            self.session.query(ResearchEdge)
+            .order_by(ResearchEdge.created_at.desc())
+            .limit(800)
+            .all()
+        )
         edges = []
         for edge in candidate_edges:
             edge_evidence_ids = set(edge.evidence_ids_json or [])

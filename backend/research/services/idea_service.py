@@ -105,14 +105,26 @@ class IdeaService:
                 "than a broad combination of existing techniques."
             ),
             datasets_json=["To be selected from source-paper datasets and related benchmarks."],
-            baselines_json=["Source paper baseline", "Strong recent method", "Ablated proposed variant"],
-            metrics_json=["Task metric", "Gap-specific diagnostic metric", "Efficiency/cost metric"],
+            baselines_json=[
+                "Source paper baseline",
+                "Strong recent method",
+                "Ablated proposed variant",
+            ],
+            metrics_json=[
+                "Task metric",
+                "Gap-specific diagnostic metric",
+                "Efficiency/cost metric",
+            ],
             risks_json=[
                 "The gap may already be addressed by newer external literature.",
                 "The proposed change may improve only a narrow benchmark slice.",
             ],
             resource_requirements="MVP experiment should fit a single small benchmark slice first.",
-            target_venues_json=["Workshop", "Domain conference", "Full conference after validation"],
+            target_venues_json=[
+                "Workshop",
+                "Domain conference",
+                "Full conference after validation",
+            ],
             score_json={
                 "novelty": 3.0,
                 "feasibility": 4.0,
