@@ -71,3 +71,11 @@ Verification completed:
 - `.venv/bin/ruff check tests/test_app.py` passed.
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 3.55s`.
+
+## 2026-06-12 - Handoff TODO Refresh
+
+Documentation maintenance completed:
+
+- Marked release review outcome signoff evidence as completed in `codex_handoff/03_TODO.md`.
+- Recorded the first completed P3 slice and split remaining customer-pilot hardening into narrower follow-up tasks.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.

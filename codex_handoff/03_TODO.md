@@ -68,9 +68,14 @@ Notes:
 - The project should pass without model credentials because deterministic fallbacks exist.
 - If `.env` is needed, create it from `.env.example` and fill local values outside this handoff documentation.
 
-## Priority 2: Finish Review Outcome Signoff Evidence Records
+## Completed: Review Outcome Signoff Evidence Records
 
-Goal:
+Status:
+
+- Completed remotely and pushed in `d2e0741 Add release review outcome signoff evidence`.
+- Verification completed with focused pytest, full pytest, and smoke API.
+
+Original goal:
 
 - Add durable signoff evidence for project bundle release review outcomes.
 
@@ -170,19 +175,23 @@ Goal:
 
 - Move from "developer pilot" to "early customer pilot".
 
-Likely work:
+Completed slice:
 
-- Improve Workbench information architecture.
-- Add clearer first-run path:
-  - setup profile;
-  - upload papers;
-  - run workflow;
-  - inspect cockpit;
-  - generate task board;
-  - export bundle.
-- Add stronger error states and empty states.
+- Added a read-only Workbench Pilot Launch panel in `298f187 Add Workbench pilot launch status`.
+- The panel aggregates onboarding readiness, onboarding progress, and cockpit state without writing data.
+
+Next likely work:
+
+- Improve Workbench information architecture around first-run and delivery workflows.
+- Strengthen empty/error states for API-key auth, missing papers, missing ideas, empty tasks, and missing bundle release artifacts.
 - Add route-level audit events for writes.
-- Add deployment checklist.
+- Add or expand deployment checklist coverage.
+
+Suggested next narrow slices:
+
+1. Add Workbench empty/error state helpers and apply them to first-run workflow calls.
+2. Add a deployment checklist section to `docs/deployment.md` and README.
+3. Design write-operation audit logging before introducing persistence changes.
 
 Files:
 
