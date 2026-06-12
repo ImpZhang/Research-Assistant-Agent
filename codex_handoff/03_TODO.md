@@ -184,18 +184,19 @@ Completed slices:
 - Designed write-operation audit logging in `docs/write_operation_audit_design.md` before persistence changes.
 - Extended Workbench empty states to delivery workflows such as bundle releases, review outcomes, snapshots, and research plans.
 - Added `/app/data` backup/restore operator notes to `docs/deployment.md`.
+- Added a disabled-by-default JSONL write-operation audit helper and middleware prototype.
 
 Next likely work:
 
 - Improve Workbench information architecture around delivery workflows.
-- Implement route-level audit events for writes after confirming the JSONL-first design.
 - Decide whether backup/restore should become a checked script after deployment target details are fixed.
+- Decide whether write-operation audit should graduate from JSONL to database persistence after migration strategy is settled.
 
 Suggested next narrow slices:
 
-1. Prototype JSONL write-operation audit helper and middleware behind explicit approval.
-2. Group Workbench delivery controls into clearer sections once behavior is stable.
-3. Add a checked backup script only after the operator confirms the deployment host/volume naming convention.
+1. Group Workbench delivery controls into clearer sections once behavior is stable.
+2. Add a checked backup script only after the operator confirms the deployment host/volume naming convention.
+3. Add a read-only audit summary/export endpoint only after admin authorization rules are explicit.
 
 Files:
 

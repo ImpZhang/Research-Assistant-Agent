@@ -56,6 +56,10 @@ Recommended rollout order:
 6. Have Workbench include a generated request id or client label without storing secrets.
 7. Add an optional read-only admin/export path only after authorization rules are explicit.
 
+## Current Prototype
+
+The first code prototype is disabled by default. Set `WRITE_AUDIT_ENABLED=true` and `WRITE_AUDIT_DIR=/app/data/audit` to append JSONL records for non-GET `/research/*` requests. The middleware records route templates, request ids, client labels, policy headers, operation/entity categories, status, HTTP code, duration, commit sha when provided, and query parameter names. It does not read request bodies or serialize payloads.
+
 ## Storage Options
 
 Recommended first implementation:

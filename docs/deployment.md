@@ -22,6 +22,17 @@ RESEARCH_DB_URL=sqlite:////app/data/research/research_assistant.db
 PAPER_UPLOAD_DIR=/app/data/papers
 ```
 
+Optional write-operation audit trail:
+
+```bash
+WRITE_AUDIT_ENABLED=true
+WRITE_AUDIT_DIR=/app/data/audit
+WRITE_AUDIT_CLIENT_HEADER_NAME=X-Research-Assistant-Client
+REQUEST_ID_HEADER_NAME=X-Request-ID
+```
+
+Audit records are JSONL metadata only and must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials.
+
 Model provider variables can stay empty for deterministic fallback behavior, or be filled with OpenAI-compatible endpoints:
 
 ```bash

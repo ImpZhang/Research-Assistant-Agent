@@ -363,6 +363,7 @@ def status() -> ProjectStatus:
             "mcp_tool_bridge_spec",
             "mcp_stdio_http_bridge",
             "mcp_bridge_policy_controls",
+            "write_operation_audit_jsonl",
             "human_idea_feedback",
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",

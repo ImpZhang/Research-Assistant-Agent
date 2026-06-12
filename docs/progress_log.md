@@ -160,3 +160,24 @@ Verification completed:
 - `git --no-pager diff --check` passed.
 - Reviewed backup/restore examples to avoid destructive restore-over-live-volume guidance.
 - Documentation-only change; no service start, Docker command, dependency install, or business-code test was required.
+
+
+## 2026-06-12 - JSONL Write Operation Audit Prototype
+
+Implemented in progress:
+
+- Added a disabled-by-default write-operation audit middleware for non-GET `/research/*` requests.
+- Added `backend/research/services/write_audit_service.py` for JSONL append, operation/entity categorization, and metadata sanitization.
+- Added non-secret config placeholders in `.env.example` and deployment docs.
+- Added tests proving JSONL records are written when enabled, default-disabled behavior is preserved, and API keys/request bodies are not serialized.
+- Updated README, technical design, audit design, status capability, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `git --no-pager diff --check` passed.
+- `.venv/bin/ruff check backend/app.py backend/research/config.py backend/research/routes.py backend/research/services/write_audit_service.py tests/test_app.py` passed.
+- `.venv/bin/ruff format backend/app.py backend/research/config.py backend/research/routes.py backend/research/services/write_audit_service.py tests/test_app.py` reformatted two files.
+- `.venv/bin/ruff format --check backend/app.py backend/research/config.py backend/research/routes.py backend/research/services/write_audit_service.py tests/test_app.py` passed.
+- Focused pytest passed: `5 passed in 4.68s`.
+- Full `tests/test_app.py` passed: `37 passed in 749.43s (0:12:29)`.

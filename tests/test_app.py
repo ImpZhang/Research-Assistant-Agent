@@ -55,6 +55,61 @@ def test_optional_api_key_guard_protects_research_routes(monkeypatch) -> None:
     assert bearer_ok.status_code == 200
 
 
+def test_write_operation_audit_jsonl_records_sanitized_metadata(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("WRITE_AUDIT_ENABLED", "true")
+    monkeypatch.setenv("WRITE_AUDIT_DIR", str(tmp_path))
+    monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
+    monkeypatch.setenv("API_KEY", "pytest-secret")
+
+    client = TestClient(create_app())
+    response = client.put(
+        "/research/profile?preview=true",
+        headers={
+            "X-Research-Assistant-Key": "pytest-secret",
+            "X-Research-Assistant-Client": "pytest-workbench",
+            "X-Request-ID": "req-audit-1",
+        },
+        json={"name": "Audit Test Profile", "notes": "do-not-log-body"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == "req-audit-1"
+
+    audit_path = tmp_path / "write-operations.jsonl"
+    records = [json.loads(line) for line in audit_path.read_text().splitlines()]
+    assert len(records) == 1
+    event = records[0]
+    assert event["request_id"] == "req-audit-1"
+    assert event["actor_type"] == "workbench"
+    assert event["actor_label"] == "pytest-workbench"
+    assert event["method"] == "PUT"
+    assert event["path_template"] == "/research/profile"
+    assert event["operation"] == "update"
+    assert event["entity_type"] == "profile"
+    assert event["status"] == "success"
+    assert event["http_status"] == 200
+    assert event["policy"] == "direct_api"
+    assert event["metadata"]["query_keys"] == ["preview"]
+
+    raw_audit = audit_path.read_text()
+    assert "pytest-secret" not in raw_audit
+    assert "do-not-log-body" not in raw_audit
+
+
+def test_write_operation_audit_disabled_by_default(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("WRITE_AUDIT_ENABLED", raising=False)
+    monkeypatch.setenv("WRITE_AUDIT_DIR", str(tmp_path))
+
+    client = TestClient(create_app())
+    response = client.put(
+        "/research/profile",
+        json={"name": "No Audit Profile"},
+    )
+
+    assert response.status_code == 200
+    assert not (tmp_path / "write-operations.jsonl").exists()
+
+
 def test_deployment_artifacts_document_customer_runtime() -> None:
     root = Path(__file__).resolve().parents[1]
     dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
@@ -65,6 +120,7 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "API_KEY_AUTH_ENABLED" in compose
     assert "/health/ready" in compose
     assert "X-Research-Assistant-Key" in deployment
+    assert "WRITE_AUDIT_ENABLED" in deployment
     assert "MCP bridge" in deployment
 
 
@@ -140,6 +196,7 @@ def test_research_status() -> None:
     assert "advisor_brief_triage_snapshot_comparison_context" in body["implemented_capabilities"]
     assert "mcp_stdio_http_bridge" in body["implemented_capabilities"]
     assert "mcp_bridge_policy_controls" in body["implemented_capabilities"]
+    assert "write_operation_audit_jsonl" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]

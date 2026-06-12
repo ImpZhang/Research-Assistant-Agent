@@ -26,6 +26,18 @@ class Settings:
     }
     api_key: str = os.getenv("API_KEY") or os.getenv("RESEARCH_ASSISTANT_API_KEY", "")
     api_key_header_name: str = os.getenv("API_KEY_HEADER_NAME", "X-Research-Assistant-Key")
+    write_audit_enabled: bool = os.getenv("WRITE_AUDIT_ENABLED", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    write_audit_dir: str = os.getenv("WRITE_AUDIT_DIR", "./data/audit")
+    write_audit_client_header_name: str = os.getenv(
+        "WRITE_AUDIT_CLIENT_HEADER_NAME",
+        "X-Research-Assistant-Client",
+    )
+    request_id_header_name: str = os.getenv("REQUEST_ID_HEADER_NAME", "X-Request-ID")
     external_literature_search_enabled: bool = (
         os.getenv("EXTERNAL_LITERATURE_SEARCH_ENABLED", "false").lower() == "true"
     )

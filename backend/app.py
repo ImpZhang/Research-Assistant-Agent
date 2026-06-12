@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
+import logging
 import os
 from pathlib import Path
 import secrets
+import time
+import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,12 +15,20 @@ from sqlalchemy import text
 from backend.research.config import settings
 from backend.research.db import engine, init_db
 from backend.research.routes import router as research_router
+from backend.research.services.write_audit_service import (
+    append_write_audit_event,
+    entity_type_for_path,
+    is_write_operation,
+    operation_for_request,
+    write_audit_enabled,
+)
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 WORKBENCH_DIR = STATIC_DIR / "workbench"
 WORKBENCH_INDEX = WORKBENCH_DIR / "index.html"
 PROTECTED_PATH_PREFIXES = ("/research",)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -61,6 +72,56 @@ def create_app() -> FastAPI:
                 headers={"WWW-Authenticate": "Bearer"},
             )
         return await call_next(request)
+
+    @app.middleware("http")
+    async def write_operation_audit(request: Request, call_next):
+        if not write_audit_enabled() or not is_write_operation(request.method, request.url.path):
+            return await call_next(request)
+
+        request_id = request.headers.get(_request_id_header_name()) or uuid.uuid4().hex
+        request.state.audit_context = {}
+        started_at = time.perf_counter()
+        response = None
+        error_type = None
+        try:
+            response = await call_next(request)
+            request_id_header = _request_id_header_name()
+            if request_id_header not in response.headers:
+                response.headers[request_id_header] = request_id
+            return response
+        except Exception as exc:
+            error_type = exc.__class__.__name__
+            raise
+        finally:
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+            route = request.scope.get("route")
+            path_template = getattr(route, "path", request.url.path)
+            status_code = getattr(response, "status_code", 500)
+            event = {
+                "request_id": request_id,
+                "actor_type": _audit_actor_type(request),
+                "actor_label": _audit_actor_label(request),
+                "method": request.method.upper(),
+                "path_template": path_template,
+                "tool_name": request.headers.get("X-Research-Assistant-Tool") or None,
+                "operation": operation_for_request(request.method, path_template),
+                "entity_type": entity_type_for_path(path_template),
+                "status": "success" if status_code < 400 and error_type is None else "failure",
+                "http_status": status_code,
+                "error_type": error_type,
+                "policy": request.headers.get("X-Research-Assistant-Policy") or "direct_api",
+                "duration_ms": duration_ms,
+                "commit_sha": os.getenv("APP_COMMIT_SHA") or os.getenv("GIT_COMMIT_SHA") or None,
+                "metadata": {
+                    "query_keys": sorted(request.query_params.keys()),
+                },
+            }
+            audit_context = getattr(request.state, "audit_context", {}) or {}
+            event.update({key: audit_context.get(key) for key in ("entity_id",)})
+            try:
+                append_write_audit_event(event)
+            except Exception:
+                logger.exception("Failed to append write-operation audit event")
 
     @app.get("/health")
     def health() -> dict:
@@ -125,6 +186,29 @@ def _configured_api_key() -> str:
 
 def _api_key_header_name() -> str:
     return os.getenv("API_KEY_HEADER_NAME") or settings.api_key_header_name
+
+
+def _request_id_header_name() -> str:
+    return os.getenv("REQUEST_ID_HEADER_NAME") or settings.request_id_header_name
+
+
+def _write_audit_client_header_name() -> str:
+    return os.getenv("WRITE_AUDIT_CLIENT_HEADER_NAME") or settings.write_audit_client_header_name
+
+
+def _audit_actor_label(request: Request) -> str:
+    return request.headers.get(_write_audit_client_header_name(), "").strip()
+
+
+def _audit_actor_type(request: Request) -> str:
+    label = _audit_actor_label(request).lower()
+    if "workbench" in label:
+        return "workbench"
+    if "mcp" in label:
+        return "mcp_bridge"
+    if label:
+        return "api_client"
+    return "unknown"
 
 
 def _request_api_key(request: Request) -> str:
