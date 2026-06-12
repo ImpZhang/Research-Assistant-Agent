@@ -1177,6 +1177,11 @@ def test_workbench_static_assets_are_served() -> None:
     assert "pilotReportSnapshotTasksButton" in response.text
     assert "setupWizardForm" in response.text
     assert "setupWizardButton" in response.text
+    assert "action-group-title" in response.text
+    assert "Idea Loop" in response.text
+    assert "Task Board" in response.text
+    assert "Project Delivery" in response.text
+    assert "Project Operations" in response.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200

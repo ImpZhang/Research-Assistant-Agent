@@ -181,3 +181,22 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/app.py backend/research/config.py backend/research/routes.py backend/research/services/write_audit_service.py tests/test_app.py` passed.
 - Focused pytest passed: `5 passed in 4.68s`.
 - Full `tests/test_app.py` passed: `37 passed in 749.43s (0:12:29)`.
+
+
+## 2026-06-12 - Workbench Delivery Control Grouping
+
+Implemented in progress:
+
+- Grouped the Workbench dossier controls into idea loop, task board, project delivery, and project operations action groups.
+- Preserved existing element ids and JavaScript bindings while making the long delivery workflow easier to scan.
+- Added responsive CSS so action groups collapse cleanly on narrow screens.
+- Added static Workbench assertions for the new grouping labels.
+- Updated README, technical design, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `git --no-pager diff --check` passed.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 3.50s`.

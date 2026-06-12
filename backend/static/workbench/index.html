@@ -313,100 +313,115 @@
             <p>Fetch the Markdown export for the first generated idea in the latest completed job.</p>
           </div>
           <div class="dossier-actions">
-            <textarea id="refineFocus" rows="2">sharpen novelty and first executable experiment</textarea>
-            <button id="refineIdeaButton" type="button">Refine Idea</button>
-            <button id="noveltyRefreshButton" type="button">Refresh Novelty</button>
-            <button id="noveltyTasksButton" type="button">Novelty Tasks</button>
-            <button id="relatedWorkButton" type="button">Related Work</button>
-            <button id="proposalDraftButton" type="button">Proposal Draft</button>
-            <button id="proposalReviewButton" type="button">Review Proposal</button>
-            <button id="proposalRevisionButton" type="button">Revise Proposal</button>
-            <button id="taskBacklogButton" type="button">Create Tasks</button>
-            <button id="experimentRunButton" type="button">Record Run</button>
-            <button id="experimentAnalysisButton" type="button">Analyze Run</button>
-            <button id="analysisTasksButton" type="button">Analysis Tasks</button>
-            <button id="decisionMemoButton" type="button">Decision Memo</button>
-            <button id="decisionMemoTasksButton" type="button">Memo Tasks</button>
-            <button id="assumptionAuditButton" type="button">Assumption Audit</button>
-            <button id="evidenceLedgerButton" type="button">Evidence Ledger</button>
-            <button id="evidenceLedgerTasksButton" type="button">Ledger Tasks</button>
-            <button id="claimPacketButton" type="button">Claim Packet</button>
-            <button id="claimQueueButton" type="button">Claim Queue</button>
-            <button id="claimQueueTasksButton" type="button">Queue Tasks</button>
-            <button id="taskSnapshotButton" type="button">Task Snapshot</button>
-            <select id="taskStatusFilter">
-              <option value="">All Tasks</option>
-              <option value="todo">Todo</option>
-              <option value="doing">Doing</option>
-              <option value="blocked">Blocked</option>
-              <option value="done">Done</option>
-            </select>
-            <select id="taskSelect"></select>
-            <button id="taskBoardButton" type="button">Task Board</button>
-            <button id="startTaskButton" type="button">Start</button>
-            <button id="completeTaskButton" type="button">Done</button>
-            <button id="blockTaskButton" type="button">Block</button>
-            <button id="claimResultButton" type="button">Claim Result</button>
-            <button id="lineageButton" type="button">Lineage</button>
-            <button id="timelineButton" type="button">Timeline</button>
-            <button id="progressButton" type="button">Progress</button>
-            <button id="researchPacketButton" type="button">Research Packet</button>
-            <button id="ideaBundleButton" type="button">Export Bundle</button>
-            <button id="projectBundleButton" type="button">Project Bundle</button>
-            <button id="projectBundleReleaseButton" type="button">Save Bundle Release</button>
-            <button id="projectBundleReleasesButton" type="button">Bundle Releases</button>
-            <button id="projectBundleReleaseTasksButton" type="button">Bundle Release Tasks</button>
-            <button id="projectBundleReleaseProgressButton" type="button">Release Progress</button>
-            <button id="projectBundleReleaseFeedbackButton" type="button">Record Feedback</button>
-            <button id="projectBundleReleaseFeedbackListButton" type="button">Release Feedback</button>
-            <button id="projectBundleReleaseFeedbackTasksButton" type="button">Feedback Tasks</button>
-            <button id="projectBundleReleaseCloseoutButton" type="button">Release Closeout</button>
-            <button id="projectBundleReleaseCloseoutTasksButton" type="button">Closeout Tasks</button>
-            <button id="projectBundleReleaseAcceptancePacketButton" type="button">Acceptance Packet</button>
-            <button id="projectBundleReleaseAcceptancePacketSnapshotButton" type="button">Save Acceptance</button>
-            <button id="projectBundleReleaseAcceptancePacketSnapshotsButton" type="button">Acceptance Snapshots</button>
-            <button id="projectBundleReleaseAcceptancePacketSnapshotCompareButton" type="button">Compare Acceptance</button>
-            <button id="projectBundleReleaseAcceptancePacketSnapshotTasksButton" type="button">Acceptance Tasks</button>
-            <button id="projectBundleReleaseReviewSessionButton" type="button">Release Review</button>
-            <button id="projectBundleReleaseReviewSessionTasksButton" type="button">Review Tasks</button>
-            <button id="projectBundleReleaseReviewOutcomeButton" type="button">Record Outcome</button>
-            <button id="projectBundleReleaseReviewOutcomesButton" type="button">Review Outcomes</button>
-            <button id="projectBundleReleaseReviewOutcomeTasksButton" type="button">Outcome Tasks</button>
-            <button id="projectBundleReleaseReviewOutcomeProgressButton" type="button">Outcome Progress</button>
-            <button id="projectBundleReleaseReviewOutcomeSignoffButton" type="button">Record Signoff</button>
-            <button id="projectBundleReleaseReviewOutcomeSignoffsButton" type="button">Outcome Signoffs</button>
-            <button id="projectBundleReadinessButton" type="button">Bundle Readiness</button>
-            <button id="projectBundleReadinessTasksButton" type="button">Bundle Tasks</button>
-            <button id="projectBundleReadinessSnapshotButton" type="button">Save Bundle Readiness</button>
-            <button id="projectBundleReadinessSnapshotsButton" type="button">Bundle Snapshots</button>
-            <button id="projectBundleReadinessSnapshotCompareButton" type="button">Compare Bundle Snapshots</button>
-            <button id="projectBundleReadinessComparisonTasksButton" type="button">Bundle Comparison Tasks</button>
-            <button id="readinessButton" type="button">Readiness</button>
-            <button id="qualityGateButton" type="button">Quality Gate</button>
-            <button id="qualityGateTasksButton" type="button">Gate Tasks</button>
-            <button id="readinessTasksButton" type="button">Readiness Tasks</button>
-            <button id="cockpitButton" type="button">Cockpit</button>
-            <button id="cockpitTasksButton" type="button">Cockpit Tasks</button>
-            <button id="overviewButton" type="button">Overview</button>
-            <button id="triageBriefButton" type="button">Triage Brief</button>
-            <button id="triageMarkdownButton" type="button">Triage Markdown</button>
-            <button id="triageSnapshotButton" type="button">Save Triage</button>
-            <button id="triageCompareButton" type="button">Compare Triage</button>
-            <button id="triageComparisonTasksButton" type="button">Comparison Tasks</button>
-            <button id="triageTasksButton" type="button">Triage Tasks</button>
-            <button id="readinessOverviewButton" type="button">Readiness Overview</button>
-            <button id="qualityOverviewButton" type="button">Quality Overview</button>
-            <button id="projectQualityTasksButton" type="button">Project Gate Tasks</button>
-            <button id="opportunityRadarButton" type="button">Opportunity Radar</button>
-            <button id="opportunityRadarTasksButton" type="button">Radar Tasks</button>
-            <button id="advisorBriefButton" type="button">Advisor Brief</button>
-            <button id="researchPlanButton" type="button">Research Plan</button>
-            <button id="researchPlanProgressButton" type="button">Plan Progress</button>
-            <button id="researchPlanTasksButton" type="button">Plan Tasks</button>
-            <button id="shortlistIdeaButton" type="button">Shortlist</button>
-            <button id="rankIdeasButton" type="button">Rank Ideas</button>
-            <button id="savePortfolioButton" type="button">Save Portfolio</button>
-            <button id="loadDossierButton" type="button">Load Latest Dossier</button>
+            <div class="action-group action-group-wide">
+              <span class="action-group-title">Idea Loop</span>
+              <textarea id="refineFocus" rows="2">sharpen novelty and first executable experiment</textarea>
+              <button id="refineIdeaButton" type="button">Refine Idea</button>
+              <button id="shortlistIdeaButton" type="button">Shortlist</button>
+              <button id="rankIdeasButton" type="button">Rank Ideas</button>
+              <button id="savePortfolioButton" type="button">Save Portfolio</button>
+              <button id="noveltyRefreshButton" type="button">Refresh Novelty</button>
+              <button id="noveltyTasksButton" type="button">Novelty Tasks</button>
+              <button id="relatedWorkButton" type="button">Related Work</button>
+              <button id="proposalDraftButton" type="button">Proposal Draft</button>
+              <button id="proposalReviewButton" type="button">Review Proposal</button>
+              <button id="proposalRevisionButton" type="button">Revise Proposal</button>
+              <button id="taskBacklogButton" type="button">Create Tasks</button>
+              <button id="experimentRunButton" type="button">Record Run</button>
+              <button id="experimentAnalysisButton" type="button">Analyze Run</button>
+              <button id="analysisTasksButton" type="button">Analysis Tasks</button>
+              <button id="decisionMemoButton" type="button">Decision Memo</button>
+              <button id="decisionMemoTasksButton" type="button">Memo Tasks</button>
+              <button id="assumptionAuditButton" type="button">Assumption Audit</button>
+              <button id="evidenceLedgerButton" type="button">Evidence Ledger</button>
+              <button id="evidenceLedgerTasksButton" type="button">Ledger Tasks</button>
+              <button id="claimPacketButton" type="button">Claim Packet</button>
+              <button id="lineageButton" type="button">Lineage</button>
+              <button id="timelineButton" type="button">Timeline</button>
+              <button id="progressButton" type="button">Progress</button>
+              <button id="researchPacketButton" type="button">Research Packet</button>
+              <button id="ideaBundleButton" type="button">Export Bundle</button>
+            </div>
+
+            <div class="action-group">
+              <span class="action-group-title">Task Board</span>
+              <button id="claimQueueButton" type="button">Claim Queue</button>
+              <button id="claimQueueTasksButton" type="button">Queue Tasks</button>
+              <button id="taskSnapshotButton" type="button">Task Snapshot</button>
+              <select id="taskStatusFilter">
+                <option value="">All Tasks</option>
+                <option value="todo">Todo</option>
+                <option value="doing">Doing</option>
+                <option value="blocked">Blocked</option>
+                <option value="done">Done</option>
+              </select>
+              <select id="taskSelect"></select>
+              <button id="taskBoardButton" type="button">Task Board</button>
+              <button id="startTaskButton" type="button">Start</button>
+              <button id="completeTaskButton" type="button">Done</button>
+              <button id="blockTaskButton" type="button">Block</button>
+              <button id="claimResultButton" type="button">Claim Result</button>
+            </div>
+
+            <div class="action-group action-group-delivery">
+              <span class="action-group-title">Project Delivery</span>
+              <button id="projectBundleButton" type="button">Project Bundle</button>
+              <button id="projectBundleReleaseButton" type="button">Save Bundle Release</button>
+              <button id="projectBundleReleasesButton" type="button">Bundle Releases</button>
+              <button id="projectBundleReleaseTasksButton" type="button">Bundle Release Tasks</button>
+              <button id="projectBundleReleaseProgressButton" type="button">Release Progress</button>
+              <button id="projectBundleReleaseFeedbackButton" type="button">Record Feedback</button>
+              <button id="projectBundleReleaseFeedbackListButton" type="button">Release Feedback</button>
+              <button id="projectBundleReleaseFeedbackTasksButton" type="button">Feedback Tasks</button>
+              <button id="projectBundleReleaseCloseoutButton" type="button">Release Closeout</button>
+              <button id="projectBundleReleaseCloseoutTasksButton" type="button">Closeout Tasks</button>
+              <button id="projectBundleReleaseAcceptancePacketButton" type="button">Acceptance Packet</button>
+              <button id="projectBundleReleaseAcceptancePacketSnapshotButton" type="button">Save Acceptance</button>
+              <button id="projectBundleReleaseAcceptancePacketSnapshotsButton" type="button">Acceptance Snapshots</button>
+              <button id="projectBundleReleaseAcceptancePacketSnapshotCompareButton" type="button">Compare Acceptance</button>
+              <button id="projectBundleReleaseAcceptancePacketSnapshotTasksButton" type="button">Acceptance Tasks</button>
+              <button id="projectBundleReleaseReviewSessionButton" type="button">Release Review</button>
+              <button id="projectBundleReleaseReviewSessionTasksButton" type="button">Review Tasks</button>
+              <button id="projectBundleReleaseReviewOutcomeButton" type="button">Record Outcome</button>
+              <button id="projectBundleReleaseReviewOutcomesButton" type="button">Review Outcomes</button>
+              <button id="projectBundleReleaseReviewOutcomeTasksButton" type="button">Outcome Tasks</button>
+              <button id="projectBundleReleaseReviewOutcomeProgressButton" type="button">Outcome Progress</button>
+              <button id="projectBundleReleaseReviewOutcomeSignoffButton" type="button">Record Signoff</button>
+              <button id="projectBundleReleaseReviewOutcomeSignoffsButton" type="button">Outcome Signoffs</button>
+              <button id="projectBundleReadinessButton" type="button">Bundle Readiness</button>
+              <button id="projectBundleReadinessTasksButton" type="button">Bundle Tasks</button>
+              <button id="projectBundleReadinessSnapshotButton" type="button">Save Bundle Readiness</button>
+              <button id="projectBundleReadinessSnapshotsButton" type="button">Bundle Snapshots</button>
+              <button id="projectBundleReadinessSnapshotCompareButton" type="button">Compare Bundle Snapshots</button>
+              <button id="projectBundleReadinessComparisonTasksButton" type="button">Bundle Comparison Tasks</button>
+            </div>
+
+            <div class="action-group action-group-wide">
+              <span class="action-group-title">Project Operations</span>
+              <button id="readinessButton" type="button">Readiness</button>
+              <button id="qualityGateButton" type="button">Quality Gate</button>
+              <button id="qualityGateTasksButton" type="button">Gate Tasks</button>
+              <button id="readinessTasksButton" type="button">Readiness Tasks</button>
+              <button id="cockpitButton" type="button">Cockpit</button>
+              <button id="cockpitTasksButton" type="button">Cockpit Tasks</button>
+              <button id="overviewButton" type="button">Overview</button>
+              <button id="triageBriefButton" type="button">Triage Brief</button>
+              <button id="triageMarkdownButton" type="button">Triage Markdown</button>
+              <button id="triageSnapshotButton" type="button">Save Triage</button>
+              <button id="triageCompareButton" type="button">Compare Triage</button>
+              <button id="triageComparisonTasksButton" type="button">Comparison Tasks</button>
+              <button id="triageTasksButton" type="button">Triage Tasks</button>
+              <button id="readinessOverviewButton" type="button">Readiness Overview</button>
+              <button id="qualityOverviewButton" type="button">Quality Overview</button>
+              <button id="projectQualityTasksButton" type="button">Project Gate Tasks</button>
+              <button id="opportunityRadarButton" type="button">Opportunity Radar</button>
+              <button id="opportunityRadarTasksButton" type="button">Radar Tasks</button>
+              <button id="advisorBriefButton" type="button">Advisor Brief</button>
+              <button id="researchPlanButton" type="button">Research Plan</button>
+              <button id="researchPlanProgressButton" type="button">Plan Progress</button>
+              <button id="researchPlanTasksButton" type="button">Plan Tasks</button>
+              <button id="loadDossierButton" type="button">Load Latest Dossier</button>
+            </div>
           </div>
           <pre id="dossierPreview" class="markdown-preview">No dossier loaded.</pre>
         </section>

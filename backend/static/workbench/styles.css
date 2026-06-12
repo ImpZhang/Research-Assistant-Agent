@@ -248,9 +248,44 @@ button:disabled {
 
 .dossier-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto auto;
-  gap: 10px;
-  align-items: end;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.action-group {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+
+.action-group-wide,
+.action-group-delivery {
+  grid-column: span 2;
+}
+
+.action-group-delivery {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.action-group-title,
+.action-group textarea {
+  grid-column: 1 / -1;
+}
+
+.action-group-title {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.action-group button,
+.action-group select {
+  width: 100%;
+  min-width: 0;
 }
 
 input[type="file"],
@@ -470,8 +505,15 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .wide-field {
+  .wide-field,
+  .action-group-wide,
+  .action-group-delivery {
     grid-column: auto;
+  }
+
+  .action-group,
+  .action-group-delivery {
+    grid-template-columns: 1fr;
   }
 
   .topbar,

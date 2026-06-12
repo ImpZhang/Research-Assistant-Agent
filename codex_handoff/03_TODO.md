@@ -185,18 +185,19 @@ Completed slices:
 - Extended Workbench empty states to delivery workflows such as bundle releases, review outcomes, snapshots, and research plans.
 - Added `/app/data` backup/restore operator notes to `docs/deployment.md`.
 - Added a disabled-by-default JSONL write-operation audit helper and middleware prototype.
+- Grouped Workbench dossier controls into idea loop, task board, project delivery, and project operations sections.
 
 Next likely work:
 
-- Improve Workbench information architecture around delivery workflows.
 - Decide whether backup/restore should become a checked script after deployment target details are fixed.
 - Decide whether write-operation audit should graduate from JSONL to database persistence after migration strategy is settled.
+- Add a read-only audit summary/export endpoint only after admin authorization rules are explicit.
 
 Suggested next narrow slices:
 
-1. Group Workbench delivery controls into clearer sections once behavior is stable.
-2. Add a checked backup script only after the operator confirms the deployment host/volume naming convention.
-3. Add a read-only audit summary/export endpoint only after admin authorization rules are explicit.
+1. Add a checked backup script only after the operator confirms the deployment host/volume naming convention.
+2. Add a read-only audit summary/export endpoint only after admin authorization rules are explicit.
+3. Run a remote smoke workflow against the current main branch when the operator approves service startup.
 
 Files:
 
