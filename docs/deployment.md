@@ -40,7 +40,7 @@ AUDIT_ADMIN_KEY=
 AUDIT_ADMIN_KEY_HEADER_NAME=X-Research-Assistant-Admin-Key
 ```
 
-Audit records are JSONL metadata only. They may include a short SHA-256 API-key fingerprint prefix for correlation, but must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials. Operator-only audit summary/export features must follow `docs/admin_authorization_policy.md`; audit retention and raw-export workflow are defined in `docs/write_audit_retention_policy.md`. The regular pilot API key is not admin authorization by itself. When `AUDIT_ADMIN_EXPORT_ENABLED=true`, the read-only summary endpoint is available at `GET /research/admin/write-audit/summary`, and bounded raw JSONL export is available at `GET /research/admin/write-audit/export`; both require the separate admin key header.
+`GET /health/ready` checks the audit directory when `WRITE_AUDIT_ENABLED=true`, so pilot deployments fail readiness if JSONL audit persistence cannot be prepared. Audit records are JSONL metadata only. They may include a short SHA-256 API-key fingerprint prefix for correlation, but must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials. Operator-only audit summary/export features must follow `docs/admin_authorization_policy.md`; audit retention and raw-export workflow are defined in `docs/write_audit_retention_policy.md`. The regular pilot API key is not admin authorization by itself. When `AUDIT_ADMIN_EXPORT_ENABLED=true`, the read-only summary endpoint is available at `GET /research/admin/write-audit/summary`, and bounded raw JSONL export is available at `GET /research/admin/write-audit/export`; both require the separate admin key header.
 
 Model provider variables can stay empty for deterministic fallback behavior, or be filled with OpenAI-compatible endpoints:
 
@@ -68,7 +68,7 @@ Before starting or upgrading a customer-pilot service:
 - [ ] Back up `/app/data` or the equivalent data volume before rebuilds, migrations, or host moves.
 - [ ] If SQLAlchemy models changed, review `docs/database_migration_strategy.md` and confirm no implicit startup migration is being relied on.
 - [ ] Start or rebuild the service only during an approved deployment window.
-- [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`.
+- [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`; if write audit is enabled, confirm the readiness payload includes an enabled, writable `write_audit_dir` check.
 - [ ] Open `/workbench`, save the API key in the top bar, refresh Pilot Launch, and confirm the first-run empty/error states are actionable.
 - [ ] If MCP clients are used, run the bridge health check with the same API key and the intended read-only or allow/deny policy.
 - [ ] If audit summary/export features are enabled in a future release, confirm the separate admin authorization gate described in `docs/admin_authorization_policy.md`.

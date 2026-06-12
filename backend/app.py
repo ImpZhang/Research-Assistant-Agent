@@ -25,6 +25,7 @@ from backend.research.services.write_audit_service import (
     operation_for_request,
     render_write_audit_export_jsonl,
     summarize_write_audit_events,
+    write_audit_dir,
     write_audit_enabled,
 )
 
@@ -143,6 +144,7 @@ def create_app() -> FastAPI:
         checks = {
             "database": _database_ready(),
             "paper_upload_dir": _paper_upload_dir_ready(),
+            "write_audit_dir": _write_audit_dir_ready(),
         }
         ready = all(item["ok"] for item in checks.values())
         payload = {
@@ -316,6 +318,21 @@ def _paper_upload_dir_ready() -> dict:
         }
     except Exception as exc:
         return {"ok": False, "path": settings.paper_upload_dir, "error": str(exc)}
+
+
+def _write_audit_dir_ready() -> dict:
+    if not write_audit_enabled():
+        return {"ok": True, "enabled": False, "path": str(write_audit_dir())}
+    try:
+        audit_dir = write_audit_dir()
+        audit_dir.mkdir(parents=True, exist_ok=True)
+        return {
+            "ok": audit_dir.is_dir() and os.access(audit_dir, os.W_OK),
+            "enabled": True,
+            "path": str(audit_dir),
+        }
+    except Exception as exc:
+        return {"ok": False, "enabled": True, "path": str(write_audit_dir()), "error": str(exc)}
 
 
 app = create_app()

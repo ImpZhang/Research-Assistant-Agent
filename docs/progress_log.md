@@ -369,3 +369,22 @@ Verification completed:
 - `grep -R "user_project_scoping_design" -n README.md docs codex_handoff/03_TODO.md` confirmed cross-document references.
 - `git --no-pager diff --check` passed.
 - No runtime code, dependencies, services, databases, schema migrations, or secret files were touched.
+
+
+## 2026-06-12 - Write Audit Readiness Check
+
+Implemented in progress:
+
+- Added `write_audit_dir` to `/health/ready` so deployments report audit persistence readiness.
+- Kept audit readiness non-blocking when `WRITE_AUDIT_ENABLED=false` and checked directory creation/writability when enabled.
+- Added tests for disabled and enabled audit readiness states plus the status capability flag.
+- Updated README, deployment notes, technical design, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/app.py backend/research/routes.py tests/test_app.py` left files unchanged.
+- `.venv/bin/ruff check backend/app.py backend/research/routes.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py backend/research/routes.py tests/test_app.py` passed.
+- Focused pytest passed: `4 passed in 4.48s`.
+- Full `tests/test_app.py` passed with verbose durations: `47 passed in 771.24s (0:12:51)`.

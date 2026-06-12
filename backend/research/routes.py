@@ -368,6 +368,7 @@ def status() -> ProjectStatus:
             "write_operation_audit_jsonl",
             "write_operation_audit_admin_summary",
             "write_operation_audit_admin_export",
+            "write_operation_audit_readiness_check",
             "human_idea_feedback",
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",

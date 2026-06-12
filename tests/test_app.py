@@ -29,6 +29,27 @@ def test_health_ready_checks_database_and_storage() -> None:
     assert body["status"] == "ready"
     assert body["checks"]["database"]["ok"] is True
     assert body["checks"]["paper_upload_dir"]["ok"] is True
+    assert body["checks"]["write_audit_dir"]["ok"] is True
+    assert body["checks"]["write_audit_dir"]["enabled"] is False
+
+
+def test_health_ready_checks_write_audit_dir_when_enabled(tmp_path, monkeypatch) -> None:
+    audit_dir = tmp_path / "audit"
+    monkeypatch.setenv("WRITE_AUDIT_ENABLED", "true")
+    monkeypatch.setenv("WRITE_AUDIT_DIR", str(audit_dir))
+
+    client = TestClient(create_app())
+    response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["checks"]["write_audit_dir"] == {
+        "ok": True,
+        "enabled": True,
+        "path": str(audit_dir),
+    }
+    assert audit_dir.is_dir()
 
 
 def test_optional_api_key_guard_protects_research_routes(monkeypatch) -> None:
@@ -494,6 +515,7 @@ def test_research_status() -> None:
     assert "write_operation_audit_jsonl" in body["implemented_capabilities"]
     assert "write_operation_audit_admin_summary" in body["implemented_capabilities"]
     assert "write_operation_audit_admin_export" in body["implemented_capabilities"]
+    assert "write_operation_audit_readiness_check" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
