@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.research.db import SessionLocal
-from backend.research.models import Paper, ResearchEdge
+from backend.research.models import Evidence, Paper, ResearchEdge
 from backend.research.services.graph_service import GraphService
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
@@ -5774,6 +5774,59 @@ The result keeps {marker} available while the response stays within the minimum 
     assert top_evidence["evidence"]["paper_id"] == paper_id
     assert marker in top_evidence["matched_terms"]
     assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
+
+
+def test_context_search_clamps_large_limit() -> None:
+    client = TestClient(create_app())
+    marker = f"largeclamp{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            title=f"Context Search Large Limit Clamp Paper {marker}",
+            filename="context_large_limit_clamp.txt",
+            source_type="pytest",
+            status="indexed",
+        )
+        session.add(paper)
+        session.flush()
+        paper_id = paper.id
+        for index in range(30):
+            session.add(
+                Evidence(
+                    paper_id=paper_id,
+                    evidence_type="limit_clamp",
+                    text=f"{marker} upper clamp evidence row {index}",
+                    summary=f"{marker} upper clamp summary {index}",
+                    supports=f"{marker} upper clamp support {index}",
+                    confidence=1.0,
+                    metadata_json={"fixture": "context_search_large_limit_clamp"},
+                )
+            )
+        session.commit()
+    finally:
+        session.close()
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": marker,
+            "paper_ids": [paper_id],
+            "limit": 99,
+            "include_graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["evidences"]) == 25
+    assert len(body["gaps"]) <= 25
+    assert len(body["ideas"]) <= 25
+    assert {item["evidence"]["paper_id"] for item in body["evidences"]} == {paper_id}
+    assert all(marker in item["matched_terms"] for item in body["evidences"])
+    assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
+    assert body["graph_nodes"] == []
+    assert body["graph_edges"] == []
 
 
 def test_context_search_paper_filter_evaluation_fixture() -> None:

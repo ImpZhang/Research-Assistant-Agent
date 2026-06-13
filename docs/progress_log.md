@@ -1195,3 +1195,23 @@ Verification completed:
 - `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
 - `bash scripts/check_context_search_evaluations.sh` passed: `6 passed in 76.41s`.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 61.00s`, deployment contracts `1 passed in 1.68s`, research workflow primitives `11 passed in 72.95s`, research planning contracts `3 passed in 73.64s`, write audit `7 passed in 4.11s`, workflow job controls `3 passed in 93.67s`, tool bridge contracts `10 passed in 2.18s`, GraphRAG-lite `2 passed in 3.08s`, and context search `6 passed in 76.39s`.
+
+## 2026-06-13 - Context Search Large Limit Clamp Fixture
+
+Implemented in progress:
+
+- Added a deterministic context-search evaluation that creates 30 synthetic evidence rows and posts `limit: 99` to verify the service clamps large requests to 25 bounded evidence results.
+- Added the new test to `scripts/check_context_search_evaluations.sh` so upper-limit handling stays covered before changing scoring weights or graph expansion.
+- Updated `codex_handoff/03_TODO.md` to describe lower/upper limit-clamping coverage in the focused context-search check.
+- Did not change retrieval implementation, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_context_search_clamps_large_limit` passed: `1 passed in 4.86s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_context_search_evaluations.sh` passed: `7 passed in 78.88s`.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 66.54s`, deployment contracts `1 passed in 1.67s`, research workflow primitives `11 passed in 73.35s`, research planning contracts `3 passed in 72.78s`, write audit `7 passed in 3.74s`, workflow job controls `3 passed in 95.53s`, tool bridge contracts `10 passed in 2.18s`, GraphRAG-lite `2 passed in 2.90s`, and context search `7 passed in 79.46s`.

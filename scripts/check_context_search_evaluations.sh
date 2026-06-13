@@ -10,5 +10,6 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_context_search_empty_query_guard_fixture \
   tests/test_app.py::test_context_search_deduplicates_repeated_query_terms \
   tests/test_app.py::test_context_search_clamps_non_positive_limit \
+  tests/test_app.py::test_context_search_clamps_large_limit \
   tests/test_app.py::test_context_search_paper_filter_evaluation_fixture \
   tests/test_app.py::test_context_search_returns_evidence_and_graph_context
