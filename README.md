@@ -273,7 +273,7 @@ Run the long focused research proposal check for proposal drafts, readiness revi
 bash scripts/check_research_proposal_contracts.sh
 ```
 
-Run focused pilot-readiness, first-run onboarding, and pilot-report guardrail checks without starting a service:
+Run focused pilot-readiness, status capability, first-run onboarding, and pilot-report guardrail checks without starting a service:
 
 ```bash
 bash scripts/check_pilot_readiness.sh

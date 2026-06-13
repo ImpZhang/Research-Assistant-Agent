@@ -898,3 +898,17 @@ Verification completed:
 
 - `bash scripts/check_research_workflow_primitives.sh` passed: `11 passed in 68.16s`.
 - `bash scripts/check_remote_safe_suite.sh` passed all nine default focused suites: pilot readiness `18 passed in 56.23s`, deployment contracts `1 passed in 1.64s`, research workflow primitives `11 passed in 67.50s`, research planning contracts `3 passed in 68.42s`, write audit `7 passed in 3.98s`, workflow job controls `3 passed in 85.95s`, tool bridge contracts `10 passed in 2.17s`, GraphRAG-lite `2 passed in 2.83s`, and context search `4 passed in 66.84s`.
+
+## 2026-06-13 - Research Status Capability Coverage
+
+Implemented in progress:
+
+- Added `test_research_status` to `scripts/check_pilot_readiness.sh` so the default remote-safe suite covers the `/research/status` capability contract.
+- Updated README, top-level TODO, and handoff TODO so pilot-readiness changes call out status capability coverage alongside health/readiness, upload/API-key guardrails, first-run onboarding, and pilot reports.
+- Kept the change scoped to existing `.venv` tools and in-process pytest targets; it does not install dependencies, start services, or require external API access.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_pilot_readiness.sh` passed: `19 passed in 59.05s`.
+- `bash scripts/check_remote_safe_suite.sh` passed all nine default focused suites: pilot readiness `19 passed in 57.65s`, deployment contracts `1 passed in 1.70s`, research workflow primitives `11 passed in 69.16s`, research planning contracts `3 passed in 69.01s`, write audit `7 passed in 3.82s`, workflow job controls `3 passed in 87.72s`, tool bridge contracts `10 passed in 2.16s`, GraphRAG-lite `2 passed in 2.88s`, and context search `4 passed in 70.42s`.
