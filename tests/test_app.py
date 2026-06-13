@@ -5670,6 +5670,22 @@ def _idea_paper_filter_leak_rate(items: list[dict], allowed_paper_ids: set[str])
     return round(len(leaked) / len(items), 4)
 
 
+def _hash_embedding_bucket(token: str) -> tuple[int, float]:
+    digest = hashlib.sha256(token.encode("utf-8")).digest()
+    index = int.from_bytes(digest[:4], "big") % 128
+    sign = 1.0 if digest[4] % 2 == 0 else -1.0
+    return index, sign
+
+
+def _find_hash_vector_collision(query_token: str) -> str:
+    target = _hash_embedding_bucket(query_token)
+    for index in range(50_000):
+        candidate = f"vectoronly{index}"
+        if query_token not in candidate and _hash_embedding_bucket(candidate) == target:
+            return candidate
+    raise AssertionError("Could not find deterministic hash-vector collision token")
+
+
 def _empty_query_guard_rate(client: TestClient, queries: list[str]) -> float:
     guarded = []
     for query in queries:
@@ -5725,6 +5741,64 @@ def test_context_search_no_match_fixture() -> None:
     assert body["graph_nodes"] == []
     assert body["graph_edges"] == []
     assert body["answer_brief"] == f"No context matched the query: {marker}"
+
+
+def test_context_search_vector_hit_rescues_lexical_miss() -> None:
+    client = TestClient(create_app())
+    query_token = f"semanticmiss{time.time_ns()}"
+    vector_token = _find_hash_vector_collision(query_token)
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            title=f"Context Search Vector Miss Paper {query_token}",
+            filename="context_vector_miss.txt",
+            source_type="pytest",
+            status="indexed",
+        )
+        session.add(paper)
+        session.flush()
+        evidence = Evidence(
+            paper_id=paper.id,
+            evidence_type="x",
+            text=vector_token,
+            summary=vector_token,
+            supports=vector_token,
+            confidence=0.0,
+            metadata_json={"fixture": "context_search_vector_lexical_miss"},
+        )
+        session.add(evidence)
+        session.commit()
+        paper_id = paper.id
+        evidence_id = evidence.id
+    finally:
+        session.close()
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": query_token,
+            "paper_ids": [paper_id],
+            "limit": 3,
+            "include_graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["evidences"]
+    assert body["graph_nodes"] == []
+    assert body["graph_edges"] == []
+    top_evidence = body["evidences"][0]
+    assert top_evidence["evidence"]["id"] == evidence_id
+    assert top_evidence["matched_terms"] == ["vector"]
+    assert top_evidence["score_breakdown"] == {
+        "lexical": 0.0,
+        "bonus": 0.0,
+        "phrase": 0.0,
+        "vector": 3.0,
+    }
+    assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
 
 
 def test_context_search_deduplicates_repeated_query_terms() -> None:

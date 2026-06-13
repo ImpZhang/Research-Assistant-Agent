@@ -1253,3 +1253,23 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_context_search_evaluations.sh` passed: `8 passed in 81.61s`.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 63.44s`, deployment contracts `1 passed in 1.68s`, research workflow primitives `11 passed in 75.05s`, research planning contracts `3 passed in 73.90s`, write audit `7 passed in 3.81s`, workflow job controls `3 passed in 95.88s`, tool bridge contracts `10 passed in 2.36s`, GraphRAG-lite `2 passed in 3.07s`, and context search `8 passed in 82.68s`.
+
+## 2026-06-13 - Context Search Vector Rescue Fixture
+
+Implemented in progress:
+
+- Added a deterministic lexical-miss/vector-hit context-search evaluation that finds a stable local hash-vector collision token, creates evidence that does not contain the query term, and verifies vector retrieval still returns it with lexical/bonus/phrase contributions at zero.
+- Added the new test to `scripts/check_context_search_evaluations.sh` so vector rescue behavior stays covered before changing scoring weights or embedding behavior.
+- Updated `docs/context_search_evaluation_plan.md` and `codex_handoff/03_TODO.md` to keep committed context-search evaluation coverage synchronized.
+- Did not change retrieval or embedding implementation, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_context_search_vector_hit_rescues_lexical_miss` passed: `1 passed in 4.92s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_context_search_evaluations.sh` passed: `9 passed in 81.95s`.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 63.02s`, deployment contracts `1 passed in 1.66s`, research workflow primitives `11 passed in 75.26s`, research planning contracts `3 passed in 74.88s`, write audit `7 passed in 3.93s`, workflow job controls `3 passed in 97.58s`, tool bridge contracts `10 passed in 2.70s`, GraphRAG-lite `2 passed in 2.86s`, and context search `9 passed in 85.58s`.

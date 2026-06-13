@@ -84,7 +84,7 @@ A first implementation should be a local test or script that:
 5. Compares returned ids, edge types, and score breakdowns against expected fixtures.
 6. Prints aggregate metrics and fails on regressions.
 
-Prefer pytest fixtures for small deterministic checks. Add a script only if metric output becomes too large for unit tests. Committed fixtures now cover evidence hit@k, MRR, graph edge hit/noise checks, score breakdown coverage, score breakdown total consistency, paper-filter leak checks, no-match scoped queries, and `empty_query_guard_rate` for empty, too-short, and punctuation-only queries. Run `bash scripts/check_context_search_evaluations.sh` as the focused remote check before changing scoring or graph-expansion behavior.
+Prefer pytest fixtures for small deterministic checks. Add a script only if metric output becomes too large for unit tests. Committed fixtures now cover evidence hit@k, MRR, graph edge hit/noise checks, score breakdown coverage, score breakdown total consistency, paper-filter leak checks, no-match scoped queries, lexical-miss/vector-hit rescue, and `empty_query_guard_rate` for empty, too-short, and punctuation-only queries. Run `bash scripts/check_context_search_evaluations.sh` as the focused remote check before changing scoring or graph-expansion behavior.
 
 ## Operational Guardrails
 
