@@ -2204,6 +2204,40 @@ Future work should add structured paper-card extraction.
     assert len(evidence_response.json()) == body["evidence_count"]
 
 
+def test_upload_markdown_paper_uses_default_allowed_extension(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+    content = b"""Markdown Upload Paper
+
+Abstract
+This Markdown fixture validates the documented default upload extension set.
+
+Method
+The Markdown upload path should reuse text ingestion, section detection, and evidence extraction.
+
+Conclusion
+Markdown papers should be indexed without requiring service startup.
+"""
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("markdown_paper.md", content, "text/markdown")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["paper"]["filename"] == "markdown_paper.md"
+    assert body["paper"]["status"] == "indexed"
+    assert body["section_count"] >= 3
+    assert body["chunk_count"] >= body["section_count"]
+    assert body["evidence_count"] >= 3
+    assert (tmp_path / "markdown_paper.md").exists()
+
+    evidence_response = client.get(f"/research/papers/{body['paper']['id']}/evidence")
+    assert evidence_response.status_code == 200
+    assert len(evidence_response.json()) == body["evidence_count"]
+
+
 def test_literature_search_returns_local_results_with_external_disabled() -> None:
     client = TestClient(create_app())
     marker = f"literaturesearchmarker{time.time_ns()}"

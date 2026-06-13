@@ -20,6 +20,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_upload_rejects_pdf_without_pdf_header_before_writing \
   tests/test_app.py::test_upload_sanitizes_path_traversal_filename \
   tests/test_app.py::test_upload_text_paper \
+  tests/test_app.py::test_upload_markdown_paper_uses_default_allowed_extension \
   tests/test_app.py::test_workbench_static_assets_are_served \
   tests/test_app.py::test_project_onboarding_readiness_tracks_first_run_and_upload \
   tests/test_app.py::test_project_setup_wizard_saves_profile_and_returns_readiness \
