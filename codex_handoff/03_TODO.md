@@ -196,7 +196,7 @@ Completed slices:
 - Added `scripts/check_secret_file_guard.sh` as a fast default-suite guard for sensitive-looking tracked filenames and required ignore patterns.
 - Added `scripts/check_handoff_docs.sh` as a fast default-suite guard for remote-first handoff document consistency.
 - Added `scripts/check_generated_file_guard.sh` as a fast default-suite guard for generated/cache/build artifacts and required ignore patterns.
-- Added `scripts/check_research_workflow_primitives.sh` as a focused remote check for local literature search, provider parsers, paper cards, structured extraction fallback, gap/idea generation, novelty screening, related-work matrices, and Markdown dossier exports.
+- Added `scripts/check_research_workflow_primitives.sh` as a focused remote check for local literature search, OpenAlex/arXiv/Semantic Scholar provider parsers, paper cards, structured extraction fallback, gap/idea generation, novelty screening, related-work matrices, and Markdown dossier exports.
 - Added `scripts/check_research_planning_contracts.sh` as a focused remote check for research profiles, advisor briefs, research plans, idea refinement, ranking, portfolios, agenda exports, and lineage/bundle planning metadata.
 - Added `scripts/check_research_proposal_contracts.sh` as a long focused remote check for proposal drafts, readiness reviews, revisions, revision follow-up tasks, and proposal Markdown exports; keep it separate from the default remote-safe suite unless runtime is reduced.
 - Added `scripts/check_remote_long_suite.sh` as the explicit long-check aggregate for focused checks that should not slow down the default remote-safe suite.

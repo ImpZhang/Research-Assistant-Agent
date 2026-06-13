@@ -2524,6 +2524,43 @@ Future work should connect OpenAlex and arXiv providers.
     assert any(item["source_id"] == paper_id for item in body["items"])
 
 
+def test_openalex_literature_item_parser() -> None:
+    payload = {
+        "id": "https://openalex.org/W2601012345",
+        "doi": "https://doi.org/10.0000/openalex-example",
+        "title": "Evidence Grounded Research Assistants",
+        "publication_year": 2026,
+        "primary_location": {"source": {"display_name": "OpenAlex Venue"}},
+        "cited_by_count": 17,
+        "authorships": [
+            {"author": {"display_name": "Ada Lovelace"}},
+            {"author": {"display_name": "Grace Hopper"}},
+            {"author": {"display_name": ""}},
+        ],
+        "abstract_inverted_index": {
+            "Evidence": [0],
+            "grounded": [1],
+            "agents": [2],
+        },
+    }
+
+    item = LiteratureSearchService(None)._openalex_item(payload, 1)
+
+    assert item.provider == "openalex"
+    assert item.source_id == "https://openalex.org/W2601012345"
+    assert item.title == "Evidence Grounded Research Assistants"
+    assert item.authors == ["Ada Lovelace", "Grace Hopper"]
+    assert item.year == 2026
+    assert item.venue == "OpenAlex Venue"
+    assert item.url == "https://doi.org/10.0000/openalex-example"
+    assert item.abstract == "Evidence grounded agents"
+    assert item.score == 9.0
+    assert item.metadata == {
+        "cited_by_count": 17,
+        "openalex_id": "https://openalex.org/W2601012345",
+    }
+
+
 def test_arxiv_literature_item_parser() -> None:
     namespace = {"atom": "http://www.w3.org/2005/Atom"}
     entry = ElementTree.fromstring(
