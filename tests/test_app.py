@@ -5777,6 +5777,25 @@ Future work should make GraphRAG context retrieval stronger.
     assert {edge["edge_type"] for edge in filtered_body["graph_edges"]} == {"paper_has_evidence"}
     assert _graph_noise_rate(filtered_body["graph_edges"], {"paper_has_evidence"}) == 0.0
 
+    unknown_filter_response = client.post(
+        "/research/search/context",
+        json={
+            "query": "diagnostic metric graph retrieval",
+            "paper_ids": [paper_id],
+            "limit": 5,
+            "include_graph": True,
+            "graph_edge_types": ["pytest_unknown_context_edge"],
+        },
+    )
+    assert unknown_filter_response.status_code == 200
+    unknown_filter_body = unknown_filter_response.json()
+    assert unknown_filter_body["evidences"]
+    assert unknown_filter_body["graph_edges"] == []
+    assert (
+        _graph_noise_rate(unknown_filter_body["graph_edges"], {"pytest_unknown_context_edge"})
+        == 0.0
+    )
+
 
 def test_graph_rag_lite_records_workflow_links() -> None:
     client = TestClient(create_app())

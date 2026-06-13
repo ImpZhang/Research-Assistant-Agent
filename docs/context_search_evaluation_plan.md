@@ -53,7 +53,7 @@ Start with deterministic ranking metrics:
 - `hit_at_3` and `hit_at_5` for broader context relevance;
 - `mrr` for expected primary artifacts;
 - `graph_edge_hit_rate` for expected edge types;
-- `graph_noise_rate` for unrelated edge types returned with filters;
+- `graph_noise_rate` for unrelated or unknown edge types returned with filters;
 - `score_breakdown_coverage` to ensure each result exposes lexical/bonus/phrase/vector keys;
 - `score_breakdown_total_match_rate` to ensure per-result score breakdown totals match visible scores within rounding tolerance;
 - `paper_filter_leak_rate` to ensure scoped context searches do not return evidence from excluded papers;

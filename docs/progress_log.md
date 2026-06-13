@@ -682,3 +682,16 @@ Verification completed:
 
 - Reviewed the documentation diff for `TODO.md`, `codex_handoff/03_TODO.md`, and `docs/context_search_evaluation_plan.md`.
 - `git --no-pager diff --check` passed with no whitespace errors.
+
+## 2026-06-13 - Context Search Unknown Edge Filter Fixture
+
+Implemented in progress:
+
+- Extended the context-search graph fixture with an unknown `graph_edge_types` allowlist value.
+- Verified scoped retrieval still returns evidence but graph edges stay empty instead of falling back to unrelated edge types.
+- Updated the context-search evaluation plan and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_context_search_evaluations.sh` passed: `4 passed in 69.73s`.
