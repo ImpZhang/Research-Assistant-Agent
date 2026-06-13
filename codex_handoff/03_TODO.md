@@ -309,6 +309,7 @@ Completed so far:
 - Added an empty-query guard evaluation fixture covering empty, too-short, and punctuation-only context-search queries.
 - Added a score-breakdown consistency fixture so lexical/bonus/phrase/vector totals must match visible context-search scores within rounding tolerance.
 - Tightened graph noise evaluation so filtered context-search graph edges must have zero unrelated edge types.
+- Added a paper-filter leak evaluation fixture so scoped context-search evidence cannot include excluded papers.
 
 Likely work:
 

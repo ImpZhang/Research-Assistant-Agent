@@ -5499,6 +5499,14 @@ def _graph_noise_rate(edges: list[dict], allowed_edge_types: set[str]) -> float:
     return round(len(noisy) / len(edges), 4)
 
 
+def _evidence_paper_filter_leak_rate(items: list[dict], allowed_paper_ids: set[str]) -> float:
+    if not items:
+        return 0.0
+
+    leaked = [item for item in items if item["evidence"]["paper_id"] not in allowed_paper_ids]
+    return round(len(leaked) / len(items), 4)
+
+
 def _empty_query_guard_rate(client: TestClient, queries: list[str]) -> float:
     guarded = []
     for query in queries:
@@ -5515,6 +5523,83 @@ def _empty_query_guard_rate(client: TestClient, queries: list[str]) -> float:
 def test_context_search_empty_query_guard_fixture() -> None:
     client = TestClient(create_app())
     assert _empty_query_guard_rate(client, ["", "to be", "??"]) == 1.0
+
+
+def test_context_search_paper_filter_evaluation_fixture() -> None:
+    client = TestClient(create_app())
+    marker = f"paperfilter{time.time_ns()}"
+    paper_a_marker = f"{marker}alpha"
+    paper_b_marker = f"{marker}beta"
+
+    upload_a = client.post(
+        "/research/papers/upload",
+        files={
+            "file": (
+                "paper_filter_a.txt",
+                f"""Paper Filter A {paper_a_marker}
+
+Abstract
+This paper studies {paper_a_marker} metric retrieval isolation.
+
+Method
+The method repeats {paper_a_marker} so unfiltered search can find paper A.
+""".encode(),
+                "text/plain",
+            )
+        },
+    )
+    assert upload_a.status_code == 200
+    paper_a_id = upload_a.json()["paper"]["id"]
+
+    upload_b = client.post(
+        "/research/papers/upload",
+        files={
+            "file": (
+                "paper_filter_b.txt",
+                f"""Paper Filter B {paper_b_marker}
+
+Abstract
+This paper studies {paper_b_marker} metric retrieval isolation.
+
+Method
+The method keeps metric evidence available for filtered search.
+""".encode(),
+                "text/plain",
+            )
+        },
+    )
+    assert upload_b.status_code == 200
+    paper_b_id = upload_b.json()["paper"]["id"]
+
+    unfiltered = client.post(
+        "/research/search/context",
+        json={
+            "query": f"{paper_a_marker} metric",
+            "limit": 5,
+            "include_graph": False,
+        },
+    )
+    assert unfiltered.status_code == 200
+    assert any(
+        item["evidence"]["paper_id"] == paper_a_id for item in unfiltered.json()["evidences"]
+    )
+
+    filtered = client.post(
+        "/research/search/context",
+        json={
+            "query": f"{paper_a_marker} metric",
+            "paper_ids": [paper_b_id],
+            "limit": 5,
+            "include_graph": False,
+        },
+    )
+    assert filtered.status_code == 200
+    filtered_body = filtered.json()
+    assert filtered_body["evidences"]
+    assert paper_a_id not in {item["evidence"]["paper_id"] for item in filtered_body["evidences"]}
+    assert _evidence_paper_filter_leak_rate(filtered_body["evidences"], {paper_b_id}) == 0.0
+    assert filtered_body["graph_nodes"] == []
+    assert filtered_body["graph_edges"] == []
 
 
 def test_job_cancel_and_retry_controls() -> None:

@@ -612,3 +612,20 @@ Verification completed:
 - `.venv/bin/ruff check tests/test_app.py` passed.
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - Focused pytest passed: `1 passed in 47.86s`.
+
+## 2026-06-13 - Context Search Paper Filter Fixture
+
+Implemented in progress:
+
+- Added an API-level `paper_filter_leak_rate` evaluation helper for context-search evidence.
+- Added a deterministic two-paper fixture that proves unfiltered search can find paper A while a `paper_ids=[paper B]` search does not leak paper A evidence.
+- Verified `include_graph=false` returns no graph nodes or edges in the scoped fixture.
+- Updated README, context-search evaluation plan, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` left the file unchanged.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- Focused pytest passed: `1 passed in 25.41s`.
