@@ -1573,3 +1573,24 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_research_workflow_primitives.sh` passed: `13 passed in 82.86s`.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `28 passed in 69.23s`, deployment contracts `1 passed in 1.64s`, research workflow primitives `13 passed in 82.38s`, research planning contracts `3 passed in 81.42s`, write audit `7 passed in 3.86s`, workflow job controls `3 passed in 105.75s`, tool bridge contracts `10 passed in 2.21s`, GraphRAG-lite `4 passed in 4.57s`, and context search `15 passed in 99.00s`.
+
+## 2026-06-14 - Literature Provider Partial Status Fixture
+
+Implemented in progress:
+
+- Added a deterministic no-network external literature search fixture covering mixed provider outcomes: OpenAlex and Semantic Scholar return results while arXiv raises a request timeout.
+- Verified partial external search keeps successful provider results and reports the failed provider in the status string.
+- Added the new test to `scripts/check_research_workflow_primitives.sh` so external provider status aggregation stays covered before changing literature search behavior.
+- Updated `codex_handoff/03_TODO.md` to keep workflow primitive coverage synchronized.
+- Did not call external APIs, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_external_literature_search_returns_partial_status` passed: `1 passed in 3.62s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_research_workflow_primitives.sh` passed: `14 passed in 81.99s`.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `28 passed in 70.97s`, deployment contracts `1 passed in 1.77s`, research workflow primitives `14 passed in 82.62s`, research planning contracts `3 passed in 81.75s`, write audit `7 passed in 3.89s`, workflow job controls `3 passed in 104.39s`, tool bridge contracts `10 passed in 2.35s`, GraphRAG-lite `4 passed in 4.25s`, and context search `15 passed in 97.27s`.

@@ -2545,6 +2545,75 @@ def test_external_literature_provider_config_normalization() -> None:
     assert providers == ["openalex", "arxiv", "semantic_scholar"]
 
 
+def test_external_literature_search_returns_partial_status(monkeypatch) -> None:
+    import requests
+
+    from backend.research.schemas import LiteratureSearchItem
+    from backend.research.services import literature_search_service
+
+    default_providers = literature_search_service.settings.external_literature_providers
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_providers",
+        "openalex,arxiv,semantic_scholar",
+    )
+
+    def openalex_items(self, query, limit):
+        return [
+            LiteratureSearchItem(
+                provider="openalex",
+                source_id="openalex-result",
+                title="OpenAlex Result",
+                authors=[],
+                year=None,
+                venue="",
+                url="",
+                abstract="",
+                score=10.0,
+                metadata={},
+            )
+        ]
+
+    def arxiv_failure(self, query, limit):
+        raise requests.Timeout("arxiv unavailable")
+
+    def semantic_scholar_items(self, query, limit):
+        return [
+            LiteratureSearchItem(
+                provider="semantic_scholar",
+                source_id="semantic-scholar-result",
+                title="Semantic Scholar Result",
+                authors=[],
+                year=None,
+                venue="",
+                url="",
+                abstract="",
+                score=9.0,
+                metadata={},
+            )
+        ]
+
+    monkeypatch.setattr(LiteratureSearchService, "_search_openalex", openalex_items)
+    monkeypatch.setattr(LiteratureSearchService, "_search_arxiv", arxiv_failure)
+    monkeypatch.setattr(
+        LiteratureSearchService,
+        "_search_semantic_scholar",
+        semantic_scholar_items,
+    )
+
+    try:
+        items, status = LiteratureSearchService(None)._search_external("agent", 5)
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_providers",
+            default_providers,
+        )
+
+    assert [item.provider for item in items] == ["openalex", "semantic_scholar"]
+    assert status == ("partial:openalex:completed,arxiv:failed:Timeout,semantic_scholar:completed")
+
+
 def test_openalex_literature_item_parser() -> None:
     payload = {
         "id": "https://openalex.org/W2601012345",
