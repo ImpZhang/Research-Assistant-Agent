@@ -474,3 +474,21 @@ Verification completed:
 - `.venv/bin/ruff check backend/research/services/retrieval_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
 - `.venv/bin/ruff format --check backend/research/services/retrieval_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
 - Focused pytest passed: `2 passed in 45.65s`.
+
+## 2026-06-13 - GraphRAG-Lite Duplicate Edge Reuse
+
+Implemented in progress:
+
+- Updated `GraphService.create_edge` to reuse an existing edge with the same source node, target node, and edge type.
+- Merged evidence ids without duplicates, merged payload metadata, and retained the higher edge weight when a duplicate write is requested.
+- Added service-level test coverage proving duplicate edge writes return the same edge and do not increase row count for that source/target/type.
+- Updated README, technical design, P6 evaluation notes, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/research/services/graph_service.py tests/test_app.py` left files unchanged.
+- `.venv/bin/ruff check backend/research/services/graph_service.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/research/services/graph_service.py tests/test_app.py` passed.
+- Service-level focused pytest passed: `1 passed in 3.41s`.
+- Existing GraphRAG-lite workflow link pytest passed: `1 passed in 2.58s`.

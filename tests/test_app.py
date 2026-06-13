@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.research.db import SessionLocal
+from backend.research.models import ResearchEdge
+from backend.research.services.graph_service import GraphService
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.workflow_service import WorkflowService
 
@@ -31,6 +33,61 @@ def test_health_ready_checks_database_and_storage() -> None:
     assert body["checks"]["paper_upload_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["enabled"] is False
+
+
+def test_graph_service_reuses_duplicate_edges() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+
+    session = SessionLocal()
+    try:
+        service = GraphService(session)
+        source = service.get_or_create_node(
+            node_type="pytest_graph_edge_reuse_source",
+            label="Pytest graph edge reuse source",
+            canonical_key="pytest-graph-edge-reuse-source",
+        )
+        target = service.get_or_create_node(
+            node_type="pytest_graph_edge_reuse_target",
+            label="Pytest graph edge reuse target",
+            canonical_key="pytest-graph-edge-reuse-target",
+        )
+        first = service.create_edge(
+            source_node=source,
+            target_node=target,
+            edge_type="pytest_reuses_duplicate_edge",
+            evidence_ids=["evidence-a"],
+            weight=0.25,
+            payload={"first": True},
+        )
+        second = service.create_edge(
+            source_node=source,
+            target_node=target,
+            edge_type="pytest_reuses_duplicate_edge",
+            evidence_ids=["evidence-b", "evidence-a"],
+            weight=0.75,
+            payload={"second": True},
+        )
+        session.commit()
+
+        assert second.id == first.id
+        edge = session.get(ResearchEdge, first.id)
+        assert edge is not None
+        assert edge.weight == 0.75
+        assert edge.evidence_ids_json == ["evidence-a", "evidence-b"]
+        assert edge.payload_json == {"first": True, "second": True}
+        duplicate_count = (
+            session.query(ResearchEdge)
+            .filter(
+                ResearchEdge.source_node_id == source.id,
+                ResearchEdge.target_node_id == target.id,
+                ResearchEdge.edge_type == "pytest_reuses_duplicate_edge",
+            )
+            .count()
+        )
+        assert duplicate_count == 1
+    finally:
+        session.close()
 
 
 def test_health_ready_checks_write_audit_dir_when_enabled(tmp_path, monkeypatch) -> None:

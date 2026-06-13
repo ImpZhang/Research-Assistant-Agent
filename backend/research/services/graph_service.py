@@ -110,6 +110,26 @@ class GraphService:
         weight: float = 1.0,
         payload: dict | None = None,
     ) -> ResearchEdge:
+        existing = (
+            self.session.query(ResearchEdge)
+            .filter(
+                ResearchEdge.source_node_id == source_node.id,
+                ResearchEdge.target_node_id == target_node.id,
+                ResearchEdge.edge_type == edge_type,
+            )
+            .order_by(ResearchEdge.created_at.asc(), ResearchEdge.id.asc())
+            .first()
+        )
+        if existing is not None:
+            existing.weight = max(existing.weight or 0.0, weight)
+            existing.evidence_ids_json = list(
+                dict.fromkeys([*(existing.evidence_ids_json or []), *(evidence_ids or [])])
+            )
+            if payload:
+                existing.payload_json = {**(existing.payload_json or {}), **payload}
+            self.session.flush()
+            return existing
+
         edge = ResearchEdge(
             source_node_id=source_node.id,
             target_node_id=target_node.id,

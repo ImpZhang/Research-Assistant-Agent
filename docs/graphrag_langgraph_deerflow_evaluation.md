@@ -99,6 +99,7 @@ Prefer these smaller improvements first:
 
 - Add graph edge quality checks for duplicate or orphan edges.
 - Continue graph stats/readiness reporting beyond the initial `/research/graph/stats` node/edge, orphan, and duplicate counts.
+- Continue edge quality hardening beyond new-write duplicate edge reuse, including historical duplicate cleanup only after backup/migration policy is explicit.
 - Improve retrieval scoring and ranking explainability.
 - Continue bounded graph-neighborhood controls beyond the initial `graph_edge_types` filter, such as depth controls and owner/project scope after scoping is implemented.
 - Add tests for graph expansion limits and high-cardinality edge sets.
