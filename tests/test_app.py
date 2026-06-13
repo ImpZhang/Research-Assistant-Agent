@@ -2211,6 +2211,32 @@ def test_upload_respects_allowed_extensions_override_before_writing(tmp_path, mo
     assert not (tmp_path / "blocked_markdown.md").exists()
 
 
+def test_upload_allowed_extensions_override_normalizes_values(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setenv("PAPER_UPLOAD_ALLOWED_EXTENSIONS", " txt, .MD , PDF ")
+    client = TestClient(create_app())
+    content = b"""Allowed Extension Normalization Upload Paper
+
+Abstract
+This markdown upload validates whitespace, dot, and case normalization for allowed extensions.
+
+Conclusion
+Configured extension lists should be operator-friendly during pilot setup.
+"""
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("normalized_extension.md", content, "text/markdown")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["paper"]["filename"] == "normalized_extension.md"
+    assert body["paper"]["status"] == "indexed"
+    assert body["evidence_count"] >= 2
+    assert (tmp_path / "normalized_extension.md").exists()
+
+
 def test_upload_accepts_uppercase_allowed_extension(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
     client = TestClient(create_app())
