@@ -173,6 +173,7 @@ scripts/
   check_graph_rag_lite.sh
   check_pilot_readiness.sh
   check_remote_safe_suite.sh
+  check_research_planning_contracts.sh
   check_research_workflow_primitives.sh
   check_tool_bridge_contracts.sh
   check_workflow_job_controls.sh
@@ -257,6 +258,12 @@ Run focused research workflow primitive checks for local literature search, pape
 
 ```bash
 bash scripts/check_research_workflow_primitives.sh
+```
+
+Run focused research planning checks for profiles, advisor briefs, plans, idea refinement, ranking, portfolios, and agenda exports:
+
+```bash
+bash scripts/check_research_planning_contracts.sh
 ```
 
 Run focused pilot-readiness, first-run onboarding, and pilot-report guardrail checks without starting a service:
