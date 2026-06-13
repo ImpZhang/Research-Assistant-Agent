@@ -643,3 +643,17 @@ Verification completed:
 
 - Confirmed the known password literal is absent from `AGENTS.md`, `TODO.md`, `README.md`, and `docs/progress_log.md`.
 - `git --no-pager diff --cached --check` passed with no whitespace errors.
+
+## 2026-06-13 - Context Search Evaluation Check Script
+
+Implemented in progress:
+
+- Added `scripts/check_context_search_evaluations.sh` as a focused remote check for context-search evaluation fixtures.
+- The script runs `.venv/bin/ruff check`, `.venv/bin/ruff format --check`, and the empty-query, paper-filter, and graph-context pytest fixtures.
+- Linked the script from README repository layout and verification instructions.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- First script attempt was interrupted by an SSH connection timeout; reconnect confirmed no lingering `pytest`, `ruff`, or script process.
+- Rerun `bash scripts/check_context_search_evaluations.sh` passed: `3 passed in 66.85s`.

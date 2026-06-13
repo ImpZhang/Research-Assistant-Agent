@@ -168,6 +168,7 @@ backend/
     services/      Research workflow services
 docs/
 scripts/
+  check_context_search_evaluations.sh
   smoke_api.py
 tests/
 ```
@@ -224,6 +225,12 @@ Run unit tests:
 
 ```bash
 uv run pytest -q
+```
+
+Run focused context-search evaluation checks on the remote `.venv`:
+
+```bash
+bash scripts/check_context_search_evaluations.sh
 ```
 
 Run the full in-process API smoke workflow:
