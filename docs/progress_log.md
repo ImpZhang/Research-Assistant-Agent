@@ -779,3 +779,16 @@ Verification completed:
 
 - `bash scripts/check_workflow_job_controls.sh` passed: `3 passed in 85.05s`.
 - `bash scripts/check_remote_safe_suite.sh` passed all five focused suites: pilot readiness `13 passed in 22.05s`, write audit `7 passed in 3.68s`, workflow job controls `3 passed in 86.43s`, GraphRAG-lite `2 passed in 2.86s`, and context search `4 passed in 66.83s`.
+
+## 2026-06-13 - Pilot Upload Happy-Path Check
+
+Implemented in progress:
+
+- Added `test_upload_text_paper` to `scripts/check_pilot_readiness.sh` so pilot-readiness checks cover both upload rejection guardrails and the valid text-upload happy path.
+- Updated handoff TODO to describe the expanded upload coverage.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_pilot_readiness.sh` passed: `14 passed in 22.13s`.
+- `bash scripts/check_remote_safe_suite.sh` passed all five focused suites: pilot readiness `14 passed in 21.76s`, write audit `7 passed in 3.81s`, workflow job controls `3 passed in 87.02s`, GraphRAG-lite `2 passed in 2.87s`, and context search `4 passed in 68.41s`.

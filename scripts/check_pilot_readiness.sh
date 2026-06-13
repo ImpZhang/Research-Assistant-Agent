@@ -16,6 +16,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_upload_rejects_file_larger_than_limit \
   tests/test_app.py::test_upload_rejects_binary_text_file_before_writing \
   tests/test_app.py::test_upload_rejects_pdf_without_pdf_header_before_writing \
+  tests/test_app.py::test_upload_text_paper \
   tests/test_app.py::test_workbench_static_assets_are_served \
   tests/test_app.py::test_project_onboarding_readiness_tracks_first_run_and_upload \
   tests/test_app.py::test_project_pilot_report_combines_onboarding_and_cockpit_state
