@@ -16,6 +16,7 @@ errors = []
 required_safe = [
     "bash scripts/check_suite_contracts.sh",
     "bash scripts/check_script_catalog.sh",
+    "bash scripts/check_secret_file_guard.sh",
     "bash scripts/check_focused_test_coverage.sh",
     "bash scripts/check_pilot_readiness.sh",
     "bash scripts/check_deployment_contracts.sh",

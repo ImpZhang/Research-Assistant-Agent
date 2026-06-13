@@ -972,3 +972,21 @@ Verification completed:
 - `bash scripts/check_script_catalog.sh` passed: `Check script catalog is synchronized.`
 - `bash scripts/check_suite_contracts.sh` passed: `Focused suite contracts are valid.`
 - `bash scripts/check_remote_safe_suite.sh` passed the suite contract guard, script catalog guard, focused coverage guard, and all nine default focused suites: pilot readiness `19 passed in 58.91s`, deployment contracts `1 passed in 1.66s`, research workflow primitives `11 passed in 69.75s`, research planning contracts `3 passed in 71.07s`, write audit `7 passed in 4.12s`, workflow job controls `3 passed in 89.37s`, tool bridge contracts `10 passed in 2.22s`, GraphRAG-lite `2 passed in 2.92s`, and context search `4 passed in 70.65s`.
+
+## 2026-06-13 - Secret File Guard
+
+Implemented in progress:
+
+- Added `scripts/check_secret_file_guard.sh` as a fast guard for sensitive-looking tracked filenames and required ignore patterns.
+- The guard allows `.env.example`, rejects tracked `.env`, `.env.*`, private-key/archive key suffixes, and filenames containing token/cookie/credential/secret markers.
+- Added `*.pem`, `*.key`, `*.p12`, and `*.pfx` to `.gitignore` without reading or printing any sensitive file contents.
+- Added the secret-file guard to `scripts/check_remote_safe_suite.sh` and updated `scripts/check_suite_contracts.sh` so default-suite composition requires it.
+- Linked the guard from README verification instructions, top-level TODO, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_secret_file_guard.sh` passed: `Secret file guard passed.`
+- `bash scripts/check_script_catalog.sh` passed: `Check script catalog is synchronized.`
+- `bash scripts/check_suite_contracts.sh` passed: `Focused suite contracts are valid.`
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, and coverage guards plus all nine default focused suites: pilot readiness `19 passed in 60.89s`, deployment contracts `1 passed in 1.67s`, research workflow primitives `11 passed in 68.26s`, research planning contracts `3 passed in 69.90s`, write audit `7 passed in 4.06s`, workflow job controls `3 passed in 90.04s`, tool bridge contracts `10 passed in 2.16s`, GraphRAG-lite `2 passed in 2.84s`, and context search `4 passed in 71.07s`.

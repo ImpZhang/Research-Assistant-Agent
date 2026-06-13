@@ -8,6 +8,7 @@ This top-level TODO is a stable index for the current remote-first handoff. The 
 - Check `git status --short`, branch, and recent commits before every edit round.
 - Preserve the two historical untracked root documents unless the operator explicitly asks to handle them.
 - Do not read or commit secrets, `.env` values, credentials, cookies, private keys, or production/private data.
+- Run `bash scripts/check_secret_file_guard.sh` before changing ignore rules or adding config/auth-related files.
 
 ## P1 - Pilot Readiness Without Service Changes
 

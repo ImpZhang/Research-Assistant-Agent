@@ -20,3 +20,7 @@ logs/
 
 .DS_Store
 Thumbs.db
+*.pem
+*.key
+*.p12
+*.pfx

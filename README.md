@@ -177,6 +177,7 @@ scripts/
   check_remote_safe_suite.sh
   check_research_planning_contracts.sh
   check_script_catalog.sh
+  check_secret_file_guard.sh
   check_suite_contracts.sh
   check_research_proposal_contracts.sh
   check_research_workflow_primitives.sh
@@ -251,6 +252,12 @@ Run the check-script catalog sync check so README and check script structure sta
 
 ```bash
 bash scripts/check_script_catalog.sh
+```
+
+Run the secret-file guard to catch sensitive-looking tracked filenames and required ignore patterns:
+
+```bash
+bash scripts/check_secret_file_guard.sh
 ```
 
 Run the focused-test coverage map check so new pytest tests stay assigned to a focused remote check:
