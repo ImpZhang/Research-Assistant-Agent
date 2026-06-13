@@ -695,3 +695,18 @@ Implemented in progress:
 Verification completed:
 
 - `bash scripts/check_context_search_evaluations.sh` passed: `4 passed in 69.73s`.
+
+## 2026-06-13 - Context Search Paper Filter Artifact Coverage
+
+Implemented in progress:
+
+- Extended the paper-filter evaluation fixture so scoped searches check gaps and ideas in addition to evidence.
+- Added gap and idea paper-filter leak-rate helpers based on `source_paper_ids` and `related_paper_ids`.
+- Updated the context-search evaluation plan and handoff TODO to describe artifact-level paper-filter coverage.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- First script run exposed an under-specified fixture: paper B lacked limitation/future-work evidence for gap mining.
+- Added explicit `Limitations` and `Future Work` sections to the fixture paper.
+- Rerun `bash scripts/check_context_search_evaluations.sh` passed: `4 passed in 68.22s`.

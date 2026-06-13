@@ -310,7 +310,7 @@ Completed so far:
 - Added a score-breakdown consistency fixture so lexical/bonus/phrase/vector totals must match visible context-search scores within rounding tolerance.
 - Tightened graph noise evaluation so filtered context-search graph edges must have zero unrelated edge types.
 - Added an unknown graph-edge-type filter regression so context search cannot fall back to unrelated graph edges.
-- Added a paper-filter leak evaluation fixture so scoped context-search evidence cannot include excluded papers.
+- Added a paper-filter leak evaluation fixture so scoped context-search evidence, gaps, and ideas cannot include excluded papers.
 - Added `scripts/check_context_search_evaluations.sh` as the focused remote check for context-search ranking, guard, filter, score-breakdown, and graph-context fixtures.
 
 Likely work:

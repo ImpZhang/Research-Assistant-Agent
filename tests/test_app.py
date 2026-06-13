@@ -5507,6 +5507,30 @@ def _evidence_paper_filter_leak_rate(items: list[dict], allowed_paper_ids: set[s
     return round(len(leaked) / len(items), 4)
 
 
+def _gap_paper_filter_leak_rate(items: list[dict], allowed_paper_ids: set[str]) -> float:
+    if not items:
+        return 0.0
+
+    leaked = [
+        item
+        for item in items
+        if not set(item["gap"]["source_paper_ids"]).intersection(allowed_paper_ids)
+    ]
+    return round(len(leaked) / len(items), 4)
+
+
+def _idea_paper_filter_leak_rate(items: list[dict], allowed_paper_ids: set[str]) -> float:
+    if not items:
+        return 0.0
+
+    leaked = [
+        item
+        for item in items
+        if not set(item["idea"]["related_paper_ids"]).intersection(allowed_paper_ids)
+    ]
+    return round(len(leaked) / len(items), 4)
+
+
 def _empty_query_guard_rate(client: TestClient, queries: list[str]) -> float:
     guarded = []
     for query in queries:
@@ -5563,6 +5587,12 @@ This paper studies {paper_b_marker} metric retrieval isolation.
 
 Method
 The method keeps metric evidence available for filtered search.
+
+Limitations
+The current paper still lacks cross-paper isolation checks for metric retrieval.
+
+Future Work
+Future work should add scoped gap and idea filters for metric retrieval.
 """.encode(),
                 "text/plain",
             )
@@ -5570,6 +5600,15 @@ The method keeps metric evidence available for filtered search.
     )
     assert upload_b.status_code == 200
     paper_b_id = upload_b.json()["paper"]["id"]
+
+    gaps_b = client.post("/research/gaps/mine", json={"paper_ids": [paper_b_id], "max_gaps": 1})
+    assert gaps_b.status_code == 200
+    assert gaps_b.json()["gaps"]
+    gap_b_id = gaps_b.json()["gaps"][0]["id"]
+
+    ideas_b = client.post(f"/research/gaps/{gap_b_id}/ideas")
+    assert ideas_b.status_code == 200
+    assert ideas_b.json()["ideas"]
 
     unfiltered = client.post(
         "/research/search/context",
@@ -5596,8 +5635,11 @@ The method keeps metric evidence available for filtered search.
     assert filtered.status_code == 200
     filtered_body = filtered.json()
     assert filtered_body["evidences"]
+    assert filtered_body["gaps"] or filtered_body["ideas"]
     assert paper_a_id not in {item["evidence"]["paper_id"] for item in filtered_body["evidences"]}
     assert _evidence_paper_filter_leak_rate(filtered_body["evidences"], {paper_b_id}) == 0.0
+    assert _gap_paper_filter_leak_rate(filtered_body["gaps"], {paper_b_id}) == 0.0
+    assert _idea_paper_filter_leak_rate(filtered_body["ideas"], {paper_b_id}) == 0.0
     assert filtered_body["graph_nodes"] == []
     assert filtered_body["graph_edges"] == []
 

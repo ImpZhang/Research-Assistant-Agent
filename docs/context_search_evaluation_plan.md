@@ -56,7 +56,7 @@ Start with deterministic ranking metrics:
 - `graph_noise_rate` for unrelated or unknown edge types returned with filters;
 - `score_breakdown_coverage` to ensure each result exposes lexical/bonus/phrase/vector keys;
 - `score_breakdown_total_match_rate` to ensure per-result score breakdown totals match visible scores within rounding tolerance;
-- `paper_filter_leak_rate` to ensure scoped context searches do not return evidence from excluded papers;
+- `paper_filter_leak_rate` to ensure scoped context searches do not return evidence, gaps, or ideas from excluded papers;
 - `empty_query_guard_rate` for invalid or too-short queries.
 
 Later, if model-backed judging is introduced, it must be optional and secret-safe.
