@@ -271,9 +271,7 @@ class RetrievalService:
                     matched_terms=["vector"],
                 )
 
-        merged = list(by_id.values())
-        merged.sort(key=lambda item: item.score, reverse=True)
-        return merged[:limit]
+        return self._ranked(list(by_id.values()), limit)
 
     def _matches_paper_filter(self, owner_type: str, item: Any, paper_ids: list[str]) -> bool:
         if not paper_ids:
@@ -301,9 +299,20 @@ class RetrievalService:
         return ScoredItem(item=item, score=round(score, 4), matched_terms=matched_terms)
 
     def _top(self, scored: list[ScoredItem], limit: int) -> list[ScoredItem]:
-        hits = [item for item in scored if item.score > 0]
-        hits.sort(key=lambda item: item.score, reverse=True)
+        return self._ranked([item for item in scored if item.score > 0], limit)
+
+    def _ranked(self, hits: list[ScoredItem], limit: int) -> list[ScoredItem]:
+        hits.sort(key=self._rank_key, reverse=True)
         return hits[:limit]
+
+    def _rank_key(self, scored: ScoredItem) -> tuple:
+        created_at = getattr(scored.item, "created_at", None)
+        return (
+            scored.score,
+            len(set(scored.matched_terms)),
+            created_at or "",
+            str(getattr(scored.item, "id", "")),
+        )
 
     def _terms(self, query: str) -> list[str]:
         seen = set()

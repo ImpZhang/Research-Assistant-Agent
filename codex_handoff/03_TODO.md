@@ -302,10 +302,11 @@ Completed so far:
 - Added a read-only `GET /research/graph/stats` endpoint for GraphRAG-lite node/edge type counts, orphan edge counts, and duplicate edge group counts.
 - Added optional `graph_edge_types` filtering to `/research/search/context` so graph neighborhood expansion can be narrowed without changing default retrieval behavior.
 - Added GraphRAG-lite duplicate-edge reuse for new edge writes by merging same source/target/type evidence ids, payload, and weight instead of inserting another row.
+- Added stable context-search ranking tie-breaks so same-score results prefer more matched terms, newer artifacts, and stable ids.
 
 Likely work:
 
-- Continue strengthening GraphRAG-lite retrieval ranking before adding a full GraphRAG indexing/community-summary pipeline.
+- Continue strengthening GraphRAG-lite retrieval scoring explainability before adding a full GraphRAG indexing/community-summary pipeline.
 - Consider historical duplicate-edge cleanup only after backup/migration policy is explicit.
 - Use LangGraph only for a new isolated workflow once resumable DAG state, checkpointing, or human-in-the-loop control is required.
 - Treat DeerFlow as a future external planner/tool consumer through the stable tool manifest and MCP bridge, not as the core runtime.

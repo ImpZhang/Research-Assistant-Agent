@@ -1,8 +1,10 @@
+from datetime import datetime, timezone
 import hashlib
 import io
 import json
 from pathlib import Path
 import time
+from types import SimpleNamespace
 import zipfile
 from xml.etree import ElementTree
 
@@ -13,6 +15,7 @@ from backend.research.db import SessionLocal
 from backend.research.models import ResearchEdge
 from backend.research.services.graph_service import GraphService
 from backend.research.services.literature_search_service import LiteratureSearchService
+from backend.research.services.retrieval_service import RetrievalService, ScoredItem
 from backend.research.services.workflow_service import WorkflowService
 
 
@@ -88,6 +91,40 @@ def test_graph_service_reuses_duplicate_edges() -> None:
         assert duplicate_count == 1
     finally:
         session.close()
+
+
+def test_context_search_ranking_tie_breaks_by_matched_terms_and_recency() -> None:
+    old_item = SimpleNamespace(
+        id="old-item",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    new_item = SimpleNamespace(
+        id="new-item",
+        created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+    )
+    more_terms_item = SimpleNamespace(
+        id="more-terms-item",
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+
+    ranked = RetrievalService(None)._top(
+        [
+            ScoredItem(item=old_item, score=3.0, matched_terms=["metric"]),
+            ScoredItem(item=new_item, score=3.0, matched_terms=["metric"]),
+            ScoredItem(
+                item=more_terms_item,
+                score=3.0,
+                matched_terms=["metric", "evidence"],
+            ),
+        ],
+        3,
+    )
+
+    assert [scored.item.id for scored in ranked] == [
+        "more-terms-item",
+        "new-item",
+        "old-item",
+    ]
 
 
 def test_health_ready_checks_write_audit_dir_when_enabled(tmp_path, monkeypatch) -> None:

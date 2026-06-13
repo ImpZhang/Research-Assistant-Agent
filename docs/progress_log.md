@@ -492,3 +492,21 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/research/services/graph_service.py tests/test_app.py` passed.
 - Service-level focused pytest passed: `1 passed in 3.41s`.
 - Existing GraphRAG-lite workflow link pytest passed: `1 passed in 2.58s`.
+
+## 2026-06-13 - Context Search Ranking Tie-Breaks
+
+Implemented in progress:
+
+- Added stable tie-break ranking for context search results after lexical and vector scoring.
+- Reused the same ranking helper for lexical-only hits and vector-merged hits.
+- Same-score results now prefer more matched terms, then newer artifacts, then stable ids.
+- Added focused unit coverage for the tie-break order and reran the context search graph/filter regression test.
+- Updated README, technical design, P6 evaluation notes, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/research/services/retrieval_service.py tests/test_app.py` left files unchanged.
+- `.venv/bin/ruff check backend/research/services/retrieval_service.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/research/services/retrieval_service.py tests/test_app.py` passed.
+- Focused pytest passed: `2 passed in 47.13s`.
