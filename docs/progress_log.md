@@ -1031,3 +1031,22 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `git --no-pager diff --check` passed with no whitespace errors.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `19 passed in 57.17s`, deployment contracts `1 passed in 1.65s`, research workflow primitives `11 passed in 69.78s`, research planning contracts `3 passed in 71.05s`, write audit `7 passed in 4.10s`, workflow job controls `3 passed in 90.21s`, tool bridge contracts `10 passed in 2.20s`, GraphRAG-lite `2 passed in 2.90s`, and context search `4 passed in 72.55s`.
+
+## 2026-06-13 - Upload Filename Sanitization Test
+
+Implemented in progress:
+
+- Added a focused upload guardrail test that posts a text paper with a path-traversal filename and verifies only the basename is persisted under `PAPER_UPLOAD_DIR`.
+- Added the new test to `scripts/check_pilot_readiness.sh` so upload filename sanitization stays in the no-service pilot-readiness suite.
+- Did not change upload implementation, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_upload_sanitizes_path_traversal_filename` passed: `1 passed in 3.64s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_pilot_readiness.sh` passed: `20 passed in 57.76s`.
+- `git --no-pager diff --check` passed with no whitespace errors.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `20 passed in 58.26s`, deployment contracts `1 passed in 1.67s`, research workflow primitives `11 passed in 71.08s`, research planning contracts `3 passed in 69.64s`, write audit `7 passed in 3.91s`, workflow job controls `3 passed in 90.72s`, tool bridge contracts `10 passed in 2.23s`, GraphRAG-lite `2 passed in 3.11s`, and context search `4 passed in 68.99s`.

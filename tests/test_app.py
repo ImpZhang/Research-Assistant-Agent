@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.research.db import SessionLocal
-from backend.research.models import ResearchEdge
+from backend.research.models import Paper, ResearchEdge
 from backend.research.services.graph_service import GraphService
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
@@ -2121,6 +2121,41 @@ def test_upload_rejects_pdf_without_pdf_header_before_writing(tmp_path, monkeypa
     assert response.status_code == 400
     assert "does not appear to be a PDF document" in response.json()["detail"]
     assert not (tmp_path / "fake.pdf").exists()
+
+
+def test_upload_sanitizes_path_traversal_filename(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path / "papers"))
+    client = TestClient(create_app())
+    content = b"""Path Sanitization Upload Paper
+
+Abstract
+This upload validates that file names cannot escape the configured paper directory.
+
+Conclusion
+The stored file should use only the submitted basename.
+"""
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("../escape_attempt.txt", content, "text/plain")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["paper"]["filename"] == "escape_attempt.txt"
+    assert (tmp_path / "papers" / "escape_attempt.txt").exists()
+    assert not (tmp_path / "escape_attempt.txt").exists()
+
+    session = SessionLocal()
+    try:
+        stored_paper = session.get(Paper, body["paper"]["id"])
+        assert stored_paper is not None
+        assert (
+            Path(stored_paper.file_path).resolve()
+            == (tmp_path / "papers" / "escape_attempt.txt").resolve()
+        )
+    finally:
+        session.close()
 
 
 def test_upload_text_paper() -> None:
