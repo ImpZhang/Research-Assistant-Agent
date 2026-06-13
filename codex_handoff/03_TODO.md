@@ -231,11 +231,13 @@ Completed slices:
 - Added a default-off, admin-gated, bounded raw JSONL write-audit export endpoint.
 - Documented the user/project scoping model in `docs/user_project_scoping_design.md` before adding schema migrations.
 - Added write-operation audit directory readiness checks for pilot deployments.
+- Added `scripts/check_write_audit_guardrails.sh` as a focused remote check for JSONL write-audit sanitization, default-off behavior, admin gating, sanitized summary, and bounded raw export behavior.
 
 Likely work:
 
 - Introduce migration tooling only after operator approval and dependency sync approval.
 - Implement user/project scoping only after migration tooling and auth identity are explicit.
+- Run `bash scripts/check_write_audit_guardrails.sh` before changing write-audit logging, admin summary, or raw export behavior.
 - Add write-operation audit rotation/cleanup hardening only after backup workflow approval.
 - Add deeper write-operation audit log persistence hardening after rotation/backup decisions.
 - Add backup/restore script for `/data` only after the operator confirms the deployment host/volume naming convention.

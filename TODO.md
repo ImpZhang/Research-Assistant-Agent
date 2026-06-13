@@ -20,6 +20,7 @@ This top-level TODO is a stable index for the current remote-first handoff. The 
 ## P2 - Operator-Approved Hardening
 
 - Backup/restore scripts only after deployment host and volume naming are confirmed.
+- Run `bash scripts/check_write_audit_guardrails.sh` before changing write-audit logging, admin summary, or raw export behavior.
 - Write-audit rotation or cleanup only after backup and retention policy are confirmed.
 - Database migration tooling only after dependency sync and migration approach are approved.
 - User/project scoping only after migration tooling and auth identity are explicit.

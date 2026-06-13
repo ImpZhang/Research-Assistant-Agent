@@ -749,3 +749,18 @@ Implemented in progress:
 Verification completed:
 
 - `bash scripts/check_remote_safe_suite.sh` passed all three focused suites: pilot readiness `13 passed in 22.48s`, GraphRAG-lite `2 passed in 2.39s`, and context search `4 passed in 67.51s`.
+
+## 2026-06-13 - Write Audit Guardrail Check Script
+
+Implemented in progress:
+
+- Added `scripts/check_write_audit_guardrails.sh` as a focused remote check for JSONL write-audit sanitization, failed-key fingerprinting, default-off behavior, admin gating, sanitized summary, and bounded raw export behavior.
+- Added the write-audit guardrail script to `scripts/check_remote_safe_suite.sh`.
+- Linked the script from README verification instructions, top-level TODO, and handoff TODO.
+- Kept the script scoped to existing `.venv` tools and in-process pytest targets; it does not read production audit logs, install dependencies, or start services.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_write_audit_guardrails.sh` passed: `7 passed in 3.81s`.
+- `bash scripts/check_remote_safe_suite.sh` passed all four focused suites: pilot readiness `13 passed in 23.30s`, write audit `7 passed in 3.88s`, GraphRAG-lite `2 passed in 2.84s`, and context search `4 passed in 68.06s`.

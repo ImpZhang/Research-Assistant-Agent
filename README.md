@@ -172,6 +172,7 @@ scripts/
   check_graph_rag_lite.sh
   check_pilot_readiness.sh
   check_remote_safe_suite.sh
+  check_write_audit_guardrails.sh
   smoke_api.py
 tests/
 ```
@@ -246,6 +247,12 @@ Run focused pilot-readiness guardrail checks without starting a service:
 
 ```bash
 bash scripts/check_pilot_readiness.sh
+```
+
+Run focused write-audit guardrail checks without reading production audit logs:
+
+```bash
+bash scripts/check_write_audit_guardrails.sh
 ```
 
 Run the current remote-safe focused suite without starting services:
