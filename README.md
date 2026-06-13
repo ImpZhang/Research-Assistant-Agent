@@ -485,6 +485,13 @@ See `docs/deployment.md` for the runtime contract, pilot deployment checklist, `
 - Harden auth, deployment observability, and richer binary artifact handling around the lightweight MCP bridge.
 - Introduce LangGraph/DeerFlow-style explicit workflow graphs once the service boundaries stabilize.
 
+## Handoff And Operations
+
+- `AGENTS.md` records remote-first agent rules, safety boundaries, and verification expectations.
+- `TODO.md` summarizes the active remote-first priority queue.
+- `codex_handoff/03_TODO.md` keeps the detailed historical handoff queue.
+- `docs/progress_log.md` keeps the chronological implementation and verification log.
+
 ## Design Documents
 
 - `docs/research_assistant_requirements.md`

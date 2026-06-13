@@ -629,3 +629,17 @@ Verification completed:
 - `.venv/bin/ruff check tests/test_app.py` passed.
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - Focused pytest passed: `1 passed in 25.41s`.
+
+## 2026-06-13 - Remote Agent Handoff Index
+
+Implemented in progress:
+
+- Added root `AGENTS.md` with remote source-of-truth rules, safety constraints, secret handling, prohibited commands, and verification guidance.
+- Added root `TODO.md` as a stable index over the detailed handoff queue and current approval-gated work.
+- Linked AGENTS, TODO, `codex_handoff/03_TODO.md`, and `docs/progress_log.md` from README.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- Confirmed the known password literal is absent from `AGENTS.md`, `TODO.md`, `README.md`, and `docs/progress_log.md`.
+- `git --no-pager diff --cached --check` passed with no whitespace errors.
