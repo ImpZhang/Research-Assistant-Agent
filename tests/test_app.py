@@ -6385,6 +6385,82 @@ Future work should add scoped gap and idea filters for metric retrieval.
     assert filtered_body["graph_edges"] == []
 
 
+def test_context_search_graph_context_respects_paper_filter() -> None:
+    client = TestClient(create_app())
+    marker = f"graphpaperfilter{time.time_ns()}"
+    shared_term = f"{marker}metric"
+    paper_a_marker = f"{marker}alpha"
+    paper_b_marker = f"{marker}beta"
+
+    def upload_fixture(filename: str, title_marker: str) -> str:
+        upload = client.post(
+            "/research/papers/upload",
+            files={
+                "file": (
+                    filename,
+                    f"""Graph Paper Filter {title_marker}
+
+Abstract
+This paper studies {shared_term} while carrying private marker {title_marker}.
+
+Method
+The method repeats {shared_term} so scoped graph search has evidence to seed.
+
+Conclusion
+Graph context for {title_marker} should stay inside its selected paper scope.
+""".encode(),
+                    "text/plain",
+                )
+            },
+        )
+        assert upload.status_code == 200
+        return upload.json()["paper"]["id"]
+
+    paper_a_id = upload_fixture("graph_paper_filter_a.txt", paper_a_marker)
+    paper_b_id = upload_fixture("graph_paper_filter_b.txt", paper_b_marker)
+
+    evidence_a_response = client.get(f"/research/papers/{paper_a_id}/evidence")
+    assert evidence_a_response.status_code == 200
+    evidence_a_ids = {evidence["id"] for evidence in evidence_a_response.json()}
+    assert evidence_a_ids
+
+    evidence_b_response = client.get(f"/research/papers/{paper_b_id}/evidence")
+    assert evidence_b_response.status_code == 200
+    evidence_b_ids = {evidence["id"] for evidence in evidence_b_response.json()}
+    assert evidence_b_ids
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": shared_term,
+            "paper_ids": [paper_b_id],
+            "limit": 5,
+            "include_graph": True,
+            "graph_edge_types": ["paper_has_evidence"],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["evidences"]
+    assert {item["evidence"]["paper_id"] for item in body["evidences"]} == {paper_b_id}
+    assert _evidence_paper_filter_leak_rate(body["evidences"], {paper_b_id}) == 0.0
+    assert body["graph_nodes"]
+    assert body["graph_edges"]
+
+    graph_node_keys = {node["canonical_key"] for node in body["graph_nodes"]}
+    assert paper_b_id in graph_node_keys
+    assert graph_node_keys.intersection(evidence_b_ids)
+    assert paper_a_id not in graph_node_keys
+    assert graph_node_keys.isdisjoint(evidence_a_ids)
+
+    assert {edge["edge_type"] for edge in body["graph_edges"]} == {"paper_has_evidence"}
+    assert all(set(edge["evidence_ids"]).isdisjoint(evidence_a_ids) for edge in body["graph_edges"])
+    assert any(
+        set(edge["evidence_ids"]).intersection(evidence_b_ids) for edge in body["graph_edges"]
+    )
+
+
 def test_job_cancel_and_retry_controls() -> None:
     client = TestClient(create_app())
     content = b"""Job Controls Test Paper

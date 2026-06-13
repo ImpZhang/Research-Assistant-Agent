@@ -1393,3 +1393,23 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_graph_rag_lite.sh` passed: `4 passed in 4.03s`.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 62.89s`, deployment contracts `1 passed in 1.66s`, research workflow primitives `11 passed in 79.49s`, research planning contracts `3 passed in 78.37s`, write audit `7 passed in 4.06s`, workflow job controls `3 passed in 100.26s`, tool bridge contracts `10 passed in 1.76s`, GraphRAG-lite `4 passed in 4.17s`, and context search `13 passed in 109.32s`.
+
+## 2026-06-13 - Context Search Graph Paper Filter Fixture
+
+Implemented in progress:
+
+- Added a deterministic context-search evaluation that uploads two synthetic papers sharing the same query term, scopes search to one paper with `include_graph=true`, and verifies GraphRAG-lite nodes and `paper_has_evidence` edges do not leak the excluded paper or its evidence ids.
+- Added the new test to `scripts/check_context_search_evaluations.sh` so graph paper-filter behavior stays covered before changing graph expansion or retrieval scoring.
+- Updated `docs/context_search_evaluation_plan.md` and `codex_handoff/03_TODO.md` to keep committed context-search evaluation coverage synchronized.
+- Did not change retrieval, graph, or embedding implementation, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_context_search_graph_context_respects_paper_filter` passed: `1 passed in 5.43s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_context_search_evaluations.sh` passed: `14 passed in 96.04s`.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 68.15s`, deployment contracts `1 passed in 1.79s`, research workflow primitives `11 passed in 81.73s`, research planning contracts `3 passed in 78.56s`, write audit `7 passed in 4.10s`, workflow job controls `3 passed in 99.58s`, tool bridge contracts `10 passed in 2.26s`, GraphRAG-lite `4 passed in 4.31s`, and context search `14 passed in 92.31s`.
