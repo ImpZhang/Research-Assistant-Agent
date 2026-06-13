@@ -1215,3 +1215,21 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_context_search_evaluations.sh` passed: `7 passed in 78.88s`.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 66.54s`, deployment contracts `1 passed in 1.67s`, research workflow primitives `11 passed in 73.35s`, research planning contracts `3 passed in 72.78s`, write audit `7 passed in 3.74s`, workflow job controls `3 passed in 95.53s`, tool bridge contracts `10 passed in 2.18s`, GraphRAG-lite `2 passed in 2.90s`, and context search `7 passed in 79.46s`.
+
+## 2026-06-13 - Context Search Graph Filter Normalization Fixture
+
+Implemented in progress:
+
+- Extended the deterministic graph-context search fixture to pass duplicate and blank `graph_edge_types` values and verify filtered graph expansion still returns only `paper_has_evidence` edges with zero graph noise.
+- Updated `codex_handoff/03_TODO.md` to describe filter-normalization coverage in the focused context-search check.
+- Did not change retrieval implementation, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_context_search_returns_evidence_and_graph_context` passed: `1 passed in 53.19s`.
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_context_search_evaluations.sh` passed: `7 passed in 81.24s`.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 66.95s`, deployment contracts `1 passed in 1.81s`, research workflow primitives `11 passed in 74.41s`, research planning contracts `3 passed in 72.65s`, write audit `7 passed in 4.39s`, workflow job controls `3 passed in 95.37s`, tool bridge contracts `10 passed in 2.39s`, GraphRAG-lite `2 passed in 2.72s`, and context search `7 passed in 80.36s`.

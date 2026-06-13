@@ -6099,6 +6099,25 @@ Future work should make GraphRAG context retrieval stronger.
     assert {edge["edge_type"] for edge in filtered_body["graph_edges"]} == {"paper_has_evidence"}
     assert _graph_noise_rate(filtered_body["graph_edges"], {"paper_has_evidence"}) == 0.0
 
+    normalized_filter_response = client.post(
+        "/research/search/context",
+        json={
+            "query": "diagnostic metric graph retrieval",
+            "paper_ids": [paper_id],
+            "limit": 5,
+            "include_graph": True,
+            "graph_edge_types": ["", "paper_has_evidence", "paper_has_evidence"],
+        },
+    )
+    assert normalized_filter_response.status_code == 200
+    normalized_filter_body = normalized_filter_response.json()
+    assert normalized_filter_body["evidences"]
+    assert normalized_filter_body["graph_edges"]
+    assert {edge["edge_type"] for edge in normalized_filter_body["graph_edges"]} == {
+        "paper_has_evidence"
+    }
+    assert _graph_noise_rate(normalized_filter_body["graph_edges"], {"paper_has_evidence"}) == 0.0
+
     unknown_filter_response = client.post(
         "/research/search/context",
         json={
