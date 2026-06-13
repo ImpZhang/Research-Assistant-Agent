@@ -5731,6 +5731,51 @@ Repeated query terms should be counted once for deterministic ranking fixtures.
     assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
 
 
+def test_context_search_clamps_non_positive_limit() -> None:
+    client = TestClient(create_app())
+    marker = f"limitclamp{time.time_ns()}"
+    content = f"""Context Search Limit Clamp Paper {marker}
+
+Abstract
+This paper repeats {marker} in one evidence-bearing section for context search limits.
+
+Method
+The method repeats {marker} so a non-positive request limit still returns one bounded result.
+
+Results
+The result keeps {marker} available while the response stays within the minimum limit.
+""".encode()
+
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("context_limit_clamp.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": marker,
+            "paper_ids": [paper_id],
+            "limit": 0,
+            "include_graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["evidences"]) == 1
+    assert len(body["gaps"]) <= 1
+    assert len(body["ideas"]) <= 1
+    assert body["graph_nodes"] == []
+    assert body["graph_edges"] == []
+    top_evidence = body["evidences"][0]
+    assert top_evidence["evidence"]["paper_id"] == paper_id
+    assert marker in top_evidence["matched_terms"]
+    assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
+
+
 def test_context_search_paper_filter_evaluation_fixture() -> None:
     client = TestClient(create_app())
     marker = f"paperfilter{time.time_ns()}"
