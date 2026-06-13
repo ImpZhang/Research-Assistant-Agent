@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.research.db import SessionLocal
-from backend.research.models import Evidence, Paper, ResearchEdge
+from backend.research.models import Evidence, Paper, ResearchEdge, ResearchGap
 from backend.research.services.graph_service import GraphService
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
@@ -5741,6 +5741,67 @@ def test_context_search_no_match_fixture() -> None:
     assert body["graph_nodes"] == []
     assert body["graph_edges"] == []
     assert body["answer_brief"] == f"No context matched the query: {marker}"
+
+
+def test_context_search_gap_feasibility_bonus_breakdown() -> None:
+    client = TestClient(create_app())
+    first_term = f"gapbonusalpha{time.time_ns()}"
+    second_term = f"gapbonusbeta{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            title=f"Context Search Gap Bonus Paper {first_term}",
+            filename="context_gap_bonus.txt",
+            source_type="pytest",
+            status="indexed",
+        )
+        session.add(paper)
+        session.flush()
+        gap = ResearchGap(
+            title=f"{first_term} feasibility gap",
+            description=f"The gap fixture studies {first_term} retrieval scoring.",
+            gap_type="evaluation",
+            source_paper_ids_json=[paper.id],
+            evidence_ids_json=[],
+            why_important=f"{first_term} makes gap bonus scoring visible.",
+            why_unsolved=f"The fixture mentions {second_term} after unrelated words.",
+            possible_approaches_json=["controlled pytest fixture"],
+            feasibility_score=8.4,
+            novelty_score=0.0,
+            risk_level="low",
+            status="generated",
+        )
+        session.add(gap)
+        session.commit()
+        paper_id = paper.id
+        gap_id = gap.id
+    finally:
+        session.close()
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": f"{first_term} {second_term}",
+            "paper_ids": [paper_id],
+            "limit": 3,
+            "include_graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["gaps"]
+    assert body["graph_nodes"] == []
+    assert body["graph_edges"] == []
+    top_gap = body["gaps"][0]
+    assert top_gap["gap"]["id"] == gap_id
+    assert top_gap["matched_terms"][:2] == [first_term, second_term]
+    assert top_gap["score_breakdown"]["lexical"] == 2.0
+    assert top_gap["score_breakdown"]["bonus"] == 0.84
+    assert top_gap["score_breakdown"]["phrase"] == 0.0
+    assert top_gap["score_breakdown"]["vector"] > 0.0
+    assert _score_breakdown_total_match_rate(body["gaps"]) == 1.0
 
 
 def test_context_search_evidence_confidence_bonus_breakdown() -> None:
