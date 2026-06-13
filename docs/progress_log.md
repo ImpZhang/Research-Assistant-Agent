@@ -580,3 +580,19 @@ Verification completed:
 - `.venv/bin/ruff check tests/test_app.py` passed.
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - Focused pytest passed: `1 passed in 1.93s`.
+
+## 2026-06-13 - Context Search Score Breakdown Consistency Fixture
+
+Implemented in progress:
+
+- Added a `score_breakdown_total_match_rate` helper for deterministic context-search evaluation.
+- Extended the context-search graph fixture so every evidence/gap/idea result must have score breakdown totals matching the visible score within rounding tolerance.
+- Updated README, context-search evaluation plan, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` left the file unchanged.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- Focused pytest passed: `1 passed in 46.22s`.

@@ -55,6 +55,7 @@ Start with deterministic ranking metrics:
 - `graph_edge_hit_rate` for expected edge types;
 - `graph_noise_rate` for unrelated edge types returned with filters;
 - `score_breakdown_coverage` to ensure each result exposes lexical/bonus/phrase/vector keys;
+- `score_breakdown_total_match_rate` to ensure per-result score breakdown totals match visible scores within rounding tolerance;
 - `empty_query_guard_rate` for invalid or too-short queries.
 
 Later, if model-backed judging is introduced, it must be optional and secret-safe.
@@ -82,7 +83,7 @@ A first implementation should be a local test or script that:
 5. Compares returned ids, edge types, and score breakdowns against expected fixtures.
 6. Prints aggregate metrics and fails on regressions.
 
-Prefer pytest fixtures for small deterministic checks. Add a script only if metric output becomes too large for unit tests. The first committed fixture extends `test_context_search_returns_evidence_and_graph_context` with evidence hit@k, MRR, graph edge hit/noise checks, and score breakdown coverage. The second fixture covers `empty_query_guard_rate` with empty, too-short, and punctuation-only queries.
+Prefer pytest fixtures for small deterministic checks. Add a script only if metric output becomes too large for unit tests. The first committed fixture extends `test_context_search_returns_evidence_and_graph_context` with evidence hit@k, MRR, graph edge hit/noise checks, and score breakdown coverage and score breakdown total consistency. The second fixture covers `empty_query_guard_rate` with empty, too-short, and punctuation-only queries.
 
 ## Operational Guardrails
 

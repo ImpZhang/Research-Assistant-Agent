@@ -5471,6 +5471,19 @@ def _score_breakdown_coverage(items: list[dict]) -> float:
     return round(len(covered) / len(items), 4)
 
 
+def _score_breakdown_total_match_rate(items: list[dict]) -> float:
+    if not items:
+        return 1.0
+
+    matched = []
+    for item in items:
+        breakdown = item.get("score_breakdown", {})
+        breakdown_total = round(sum(float(value) for value in breakdown.values()), 4)
+        visible_score = round(float(item["score"]), 4)
+        matched.append(abs(breakdown_total - visible_score) <= 0.0001)
+    return round(sum(matched) / len(items), 4)
+
+
 def _graph_edge_hit_rate(edges: list[dict], expected_edge_types: set[str]) -> float:
     if not expected_edge_types:
         return 1.0
@@ -5659,6 +5672,7 @@ Future work should make GraphRAG context retrieval stronger.
     }
     context_items = [*body["evidences"], *body["gaps"], *body["ideas"]]
     assert _score_breakdown_coverage(context_items) == 1.0
+    assert _score_breakdown_total_match_rate(context_items) == 1.0
     assert _graph_edge_hit_rate(body["graph_edges"], {"paper_has_evidence"}) == 1.0
 
     filtered_response = client.post(
