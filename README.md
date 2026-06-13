@@ -172,6 +172,7 @@ scripts/
   check_deployment_contracts.sh
   check_focused_test_coverage.sh
   check_graph_rag_lite.sh
+  check_handoff_docs.sh
   check_pilot_readiness.sh
   check_remote_long_suite.sh
   check_remote_safe_suite.sh
@@ -258,6 +259,12 @@ Run the secret-file guard to catch sensitive-looking tracked filenames and requi
 
 ```bash
 bash scripts/check_secret_file_guard.sh
+```
+
+Run the handoff document consistency check so AGENTS, TODO, README, and the handoff queue keep the remote-first operating rules aligned:
+
+```bash
+bash scripts/check_handoff_docs.sh
 ```
 
 Run the focused-test coverage map check so new pytest tests stay assigned to a focused remote check:

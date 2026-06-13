@@ -9,7 +9,10 @@ import re
 import subprocess
 import sys
 
-allowed_tracked = {".env.example"}
+allowed_tracked = {
+    ".env.example",
+    "scripts/check_secret_file_guard.sh",
+}
 tracked = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
 violations = []
 for path in tracked:
