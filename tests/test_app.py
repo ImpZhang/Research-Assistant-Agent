@@ -5688,6 +5688,45 @@ def test_context_search_empty_query_guard_fixture() -> None:
     assert _empty_query_guard_rate(client, ["", "to be", "??"]) == 1.0
 
 
+def test_context_search_no_match_fixture() -> None:
+    client = TestClient(create_app())
+    marker = f"nomatch{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            title=f"Context Search No Match Paper {marker}",
+            filename="context_no_match.txt",
+            source_type="pytest",
+            status="indexed",
+        )
+        session.add(paper)
+        session.commit()
+        paper_id = paper.id
+    finally:
+        session.close()
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": marker,
+            "paper_ids": [paper_id],
+            "limit": 5,
+            "include_graph": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["retrieval_method"] == "lexical_vector_graph_rag_lite_v0"
+    assert body["evidences"] == []
+    assert body["gaps"] == []
+    assert body["ideas"] == []
+    assert body["graph_nodes"] == []
+    assert body["graph_edges"] == []
+    assert body["answer_brief"] == f"No context matched the query: {marker}"
+
+
 def test_context_search_deduplicates_repeated_query_terms() -> None:
     client = TestClient(create_app())
     marker = f"dedupterm{time.time_ns()}"
