@@ -48,7 +48,7 @@ class RetrievalService:
         limit = max(1, min(limit, 25))
         embedding = EmbeddingService(self.session)
         embedding.ensure_indexed(paper_ids or [], 800)
-        vector_hits = embedding.search(query, limit=limit * 6)
+        vector_hits = embedding.search(query, limit=limit * 6, paper_ids=paper_ids or [])
 
         evidences = self._score_evidences(terms, paper_ids or [], limit)
         gaps = self._score_gaps(terms, paper_ids or [], limit)

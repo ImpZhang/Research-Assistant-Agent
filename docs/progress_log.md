@@ -867,3 +867,20 @@ Verification completed:
 
 - `bash scripts/check_research_planning_contracts.sh` passed: `3 passed in 68.06s`.
 - `bash scripts/check_remote_safe_suite.sh` passed all nine focused suites: pilot readiness `18 passed in 57.17s`, deployment contracts `1 passed in 1.39s`, research workflow primitives `10 passed in 67.82s`, research planning contracts `3 passed in 68.48s`, write audit `7 passed in 3.96s`, workflow job controls `3 passed in 85.59s`, tool bridge contracts `10 passed in 2.20s`, GraphRAG-lite `2 passed in 2.93s`, and context search `4 passed in 68.69s`.
+
+## 2026-06-13 - Proposal Contract Check And Scoped Vector Search
+
+Implemented in progress:
+
+- Added `scripts/check_research_proposal_contracts.sh` as a focused remote check for proposal drafts, readiness reviews, proposal revisions, revision follow-up tasks, and proposal Markdown exports.
+- Kept the proposal check separate from `scripts/check_remote_safe_suite.sh` because the current deep proposal chain is long-running.
+- Fixed scoped context search so vector hits are filtered by `paper_ids` before scoring instead of taking a small global vector top-k and filtering afterward.
+- Expanded `scripts/check_context_search_evaluations.sh` ruff coverage to include `backend/research/services/retrieval_service.py` and `backend/research/services/embedding_service.py`.
+- Updated README, top-level TODO, and handoff TODO with the proposal check entry.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_research_proposal_contracts.sh` passed: `1 passed in 486.71s`.
+- `bash scripts/check_context_search_evaluations.sh` passed after the scoped vector-search fix: `4 passed in 73.68s`.
+- `bash scripts/check_remote_safe_suite.sh` passed all nine default focused suites without the long proposal check: pilot readiness `18 passed in 58.56s`, deployment contracts `1 passed in 1.76s`, research workflow primitives `10 passed in 67.91s`, research planning contracts `3 passed in 66.68s`, write audit `7 passed in 3.29s`, workflow job controls `3 passed in 86.69s`, tool bridge contracts `10 passed in 2.20s`, GraphRAG-lite `2 passed in 2.91s`, and context search `4 passed in 70.95s`.

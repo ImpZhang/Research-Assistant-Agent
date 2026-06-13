@@ -75,9 +75,11 @@ class EmbeddingService:
         query: str,
         owner_types: list[str] | None = None,
         limit: int = 12,
+        paper_ids: list[str] | None = None,
     ) -> list[VectorHit]:
         query_vector = self.embed_text(query)
         owner_types = owner_types or ["evidence", "gap", "idea"]
+        paper_ids = paper_ids or []
         rows = (
             self.session.query(ResearchEmbedding)
             .filter(ResearchEmbedding.owner_type.in_(owner_types))
@@ -87,6 +89,8 @@ class EmbeddingService:
         )
         hits = []
         for row in rows:
+            if paper_ids and not self._matches_paper_filter(row, paper_ids):
+                continue
             score = self.cosine_similarity(query_vector, row.vector_json or [])
             if score <= 0:
                 continue
@@ -96,6 +100,16 @@ class EmbeddingService:
 
         hits.sort(key=lambda hit: hit.score, reverse=True)
         return hits[: max(1, min(limit, 100))]
+
+    def _matches_paper_filter(self, row: ResearchEmbedding, paper_ids: list[str]) -> bool:
+        payload = row.payload_json or {}
+        if row.owner_type == "evidence":
+            return payload.get("paper_id") in paper_ids
+        if row.owner_type == "gap":
+            return bool(set(payload.get("source_paper_ids") or []).intersection(paper_ids))
+        if row.owner_type == "idea":
+            return bool(set(payload.get("related_paper_ids") or []).intersection(paper_ids))
+        return True
 
     def embed_text(self, text: str) -> list[float]:
         vector = [0.0 for _ in range(LOCAL_EMBEDDING_DIMENSION)]

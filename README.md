@@ -174,6 +174,7 @@ scripts/
   check_pilot_readiness.sh
   check_remote_safe_suite.sh
   check_research_planning_contracts.sh
+  check_research_proposal_contracts.sh
   check_research_workflow_primitives.sh
   check_tool_bridge_contracts.sh
   check_workflow_job_controls.sh
@@ -264,6 +265,12 @@ Run focused research planning checks for profiles, advisor briefs, plans, idea r
 
 ```bash
 bash scripts/check_research_planning_contracts.sh
+```
+
+Run the long focused research proposal check for proposal drafts, readiness reviews, revisions, revision tasks, and Markdown exports before proposal changes:
+
+```bash
+bash scripts/check_research_proposal_contracts.sh
 ```
 
 Run focused pilot-readiness, first-run onboarding, and pilot-report guardrail checks without starting a service:
