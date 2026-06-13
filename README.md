@@ -169,6 +169,7 @@ backend/
 docs/
 scripts/
   check_context_search_evaluations.sh
+  check_graph_rag_lite.sh
   smoke_api.py
 tests/
 ```
@@ -231,6 +232,12 @@ Run focused context-search evaluation checks on the remote `.venv`:
 
 ```bash
 bash scripts/check_context_search_evaluations.sh
+```
+
+Run focused GraphRAG-lite duplicate-edge and graph stats checks:
+
+```bash
+bash scripts/check_graph_rag_lite.sh
 ```
 
 Run the full in-process API smoke workflow:

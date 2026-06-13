@@ -710,3 +710,16 @@ Verification completed:
 - First script run exposed an under-specified fixture: paper B lacked limitation/future-work evidence for gap mining.
 - Added explicit `Limitations` and `Future Work` sections to the fixture paper.
 - Rerun `bash scripts/check_context_search_evaluations.sh` passed: `4 passed in 68.22s`.
+
+## 2026-06-13 - GraphRAG-Lite Check Script
+
+Implemented in progress:
+
+- Added `scripts/check_graph_rag_lite.sh` as a focused remote check for GraphRAG-lite duplicate-edge reuse and graph link/stat fixtures.
+- Linked the script from README verification instructions and handoff TODO.
+- Kept the script scoped to existing `.venv` tools and focused pytest targets; it does not install dependencies or start services.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_graph_rag_lite.sh` passed: `2 passed in 2.87s`.

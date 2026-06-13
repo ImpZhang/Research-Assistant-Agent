@@ -312,10 +312,12 @@ Completed so far:
 - Added an unknown graph-edge-type filter regression so context search cannot fall back to unrelated graph edges.
 - Added a paper-filter leak evaluation fixture so scoped context-search evidence, gaps, and ideas cannot include excluded papers.
 - Added `scripts/check_context_search_evaluations.sh` as the focused remote check for context-search ranking, guard, filter, score-breakdown, and graph-context fixtures.
+- Added `scripts/check_graph_rag_lite.sh` as the focused remote check for duplicate-edge reuse and graph link/stat fixtures.
 
 Likely work:
 
 - Run `bash scripts/check_context_search_evaluations.sh` before changing context-search scoring or graph-expansion behavior.
+- Run `bash scripts/check_graph_rag_lite.sh` before changing GraphRAG-lite node/edge/stat behavior.
 - Add more deterministic context-search evaluation fixtures only for uncovered relevance, filtering, or graph-noise scenarios.
 - Consider historical duplicate-edge cleanup only after backup/migration policy is explicit.
 - Use LangGraph only for a new isolated workflow once resumable DAG state, checkpointing, or human-in-the-loop control is required.
