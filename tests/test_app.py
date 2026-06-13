@@ -2096,6 +2096,32 @@ def test_upload_respects_allowed_extensions_override_before_writing(tmp_path, mo
     assert not (tmp_path / "blocked_markdown.md").exists()
 
 
+def test_upload_accepts_uppercase_allowed_extension(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+    content = b"""Uppercase Extension Upload Paper
+
+Abstract
+This paper validates case-insensitive upload extension handling.
+
+Conclusion
+Uppercase text file extensions should be accepted and indexed.
+"""
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("UPPERCASE_PAPER.TXT", content, "text/plain")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["paper"]["filename"] == "UPPERCASE_PAPER.TXT"
+    assert body["paper"]["status"] == "indexed"
+    assert body["section_count"] >= 2
+    assert body["evidence_count"] >= 2
+    assert (tmp_path / "UPPERCASE_PAPER.TXT").exists()
+
+
 def test_upload_rejects_empty_file_before_writing(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
     client = TestClient(create_app())

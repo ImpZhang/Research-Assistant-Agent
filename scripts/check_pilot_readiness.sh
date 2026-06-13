@@ -15,6 +15,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_write_audit_admin_summary_requires_separate_admin_key \
   tests/test_app.py::test_upload_rejects_unsupported_file_type \
   tests/test_app.py::test_upload_respects_allowed_extensions_override_before_writing \
+  tests/test_app.py::test_upload_accepts_uppercase_allowed_extension \
   tests/test_app.py::test_upload_rejects_empty_file_before_writing \
   tests/test_app.py::test_upload_rejects_file_larger_than_limit \
   tests/test_app.py::test_upload_rejects_binary_text_file_before_writing \
