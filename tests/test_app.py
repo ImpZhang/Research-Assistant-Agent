@@ -5743,6 +5743,62 @@ def test_context_search_no_match_fixture() -> None:
     assert body["answer_brief"] == f"No context matched the query: {marker}"
 
 
+def test_context_search_evidence_confidence_bonus_breakdown() -> None:
+    client = TestClient(create_app())
+    first_term = f"bonusalpha{time.time_ns()}"
+    second_term = f"bonusbeta{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            title=f"Context Search Evidence Bonus Paper {first_term}",
+            filename="context_evidence_bonus.txt",
+            source_type="pytest",
+            status="indexed",
+        )
+        session.add(paper)
+        session.flush()
+        evidence = Evidence(
+            paper_id=paper.id,
+            evidence_type="confidence_bonus",
+            text=f"{first_term} appears before a separator while {second_term} appears later.",
+            summary=f"The summary keeps {first_term} away from the other bonus marker.",
+            supports=f"The support sentence mentions {second_term} after unrelated words.",
+            confidence=0.73,
+            metadata_json={"fixture": "context_search_evidence_confidence_bonus"},
+        )
+        session.add(evidence)
+        session.commit()
+        paper_id = paper.id
+        evidence_id = evidence.id
+    finally:
+        session.close()
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": f"{first_term} {second_term}",
+            "paper_ids": [paper_id],
+            "limit": 3,
+            "include_graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["evidences"]
+    assert body["graph_nodes"] == []
+    assert body["graph_edges"] == []
+    top_evidence = body["evidences"][0]
+    assert top_evidence["evidence"]["id"] == evidence_id
+    assert top_evidence["matched_terms"][:2] == [first_term, second_term]
+    assert top_evidence["score_breakdown"]["lexical"] == 2.0
+    assert top_evidence["score_breakdown"]["bonus"] == 0.73
+    assert top_evidence["score_breakdown"]["phrase"] == 0.0
+    assert top_evidence["score_breakdown"]["vector"] > 0.0
+    assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
+
+
 def test_context_search_exact_phrase_bonus_breakdown() -> None:
     client = TestClient(create_app())
     first_term = f"phrasealpha{time.time_ns()}"
