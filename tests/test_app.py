@@ -2080,6 +2080,20 @@ def test_upload_rejects_unsupported_file_type(tmp_path, monkeypatch) -> None:
     assert not (tmp_path / "malware.exe").exists()
 
 
+def test_upload_rejects_empty_file_before_writing(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("empty.txt", b"", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert "Uploaded file is empty" in response.json()["detail"]
+    assert not (tmp_path / "empty.txt").exists()
+
+
 def test_upload_rejects_file_larger_than_limit(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
     monkeypatch.setenv("PAPER_UPLOAD_MAX_BYTES", "8")
