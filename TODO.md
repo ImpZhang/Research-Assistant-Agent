@@ -18,6 +18,7 @@ This top-level TODO is a stable index for the current remote-first handoff. The 
 - Run `bash scripts/check_research_workflow_primitives.sh` before changing local literature search, paper card extraction, structured extraction fallback, gap/idea generation, novelty screening, related-work matrices, or Markdown dossier exports.
 - Run `bash scripts/check_research_planning_contracts.sh` before changing research profiles, advisor briefs, research plans, idea refinement, ranking, portfolios, agenda exports, or lineage/bundle planning metadata.
 - Run `bash scripts/check_research_proposal_contracts.sh` before changing proposal drafts, proposal readiness reviews, proposal revisions, revision follow-up tasks, or proposal Markdown exports.
+- Run `bash scripts/check_remote_long_suite.sh` for intentionally long focused checks before release-style verification, but keep it separate from the default no-service suite.
 - Keep adding narrow, deterministic tests for user-facing research workflows.
 - Keep README, `codex_handoff/03_TODO.md`, and `docs/progress_log.md` synchronized with completed slices.
 - Prefer docs/tests/API guardrails that do not require dependency installs, migrations, service restarts, or deployment changes.

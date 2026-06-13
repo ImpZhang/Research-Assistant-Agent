@@ -173,6 +173,7 @@ scripts/
   check_focused_test_coverage.sh
   check_graph_rag_lite.sh
   check_pilot_readiness.sh
+  check_remote_long_suite.sh
   check_remote_safe_suite.sh
   check_research_planning_contracts.sh
   check_research_proposal_contracts.sh
@@ -278,6 +279,12 @@ Run the long focused research proposal check for proposal drafts, readiness revi
 
 ```bash
 bash scripts/check_research_proposal_contracts.sh
+```
+
+Run the long focused suite for checks that are intentionally kept out of the default remote-safe suite:
+
+```bash
+bash scripts/check_remote_long_suite.sh
 ```
 
 Run focused pilot-readiness, status capability, first-run onboarding, and pilot-report guardrail checks without starting a service:

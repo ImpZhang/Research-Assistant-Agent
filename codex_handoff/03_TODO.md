@@ -193,6 +193,7 @@ Completed slices:
 - Added `scripts/check_research_workflow_primitives.sh` as a focused remote check for local literature search, provider parsers, paper cards, structured extraction fallback, gap/idea generation, novelty screening, related-work matrices, and Markdown dossier exports.
 - Added `scripts/check_research_planning_contracts.sh` as a focused remote check for research profiles, advisor briefs, research plans, idea refinement, ranking, portfolios, agenda exports, and lineage/bundle planning metadata.
 - Added `scripts/check_research_proposal_contracts.sh` as a long focused remote check for proposal drafts, readiness reviews, revisions, revision follow-up tasks, and proposal Markdown exports; keep it separate from the default remote-safe suite unless runtime is reduced.
+- Added `scripts/check_remote_long_suite.sh` as the explicit long-check aggregate for focused checks that should not slow down the default remote-safe suite.
 
 Next likely work:
 
@@ -202,6 +203,7 @@ Next likely work:
 - Run `bash scripts/check_research_workflow_primitives.sh` before changing local literature search, paper card extraction, structured extraction fallback, gap/idea generation, novelty screening, related-work matrices, or Markdown dossier exports.
 - Run `bash scripts/check_research_planning_contracts.sh` before changing research profiles, advisor briefs, research plans, idea refinement, ranking, portfolios, agenda exports, or lineage/bundle planning metadata.
 - Run `bash scripts/check_research_proposal_contracts.sh` before changing proposal drafts, proposal readiness reviews, proposal revisions, revision follow-up tasks, or proposal Markdown exports.
+- Run `bash scripts/check_remote_long_suite.sh` for intentionally long focused checks before release-style verification.
 - Decide whether backup/restore should become a checked script after deployment target details are fixed.
 - Decide whether write-operation audit should graduate from JSONL to database persistence after migration strategy is settled.
 - Decide whether write-operation audit rotation/cleanup should be implemented after backup/retention decisions are settled.
