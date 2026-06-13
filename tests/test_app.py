@@ -2524,6 +2524,27 @@ Future work should connect OpenAlex and arXiv providers.
     assert any(item["source_id"] == paper_id for item in body["items"])
 
 
+def test_external_literature_provider_config_normalization() -> None:
+    from backend.research.services import literature_search_service
+
+    default_providers = literature_search_service.settings.external_literature_providers
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_providers",
+        " OpenAlex, arxiv, semantic-scholar, semanticscholar, unknown, openalex ",
+    )
+    try:
+        providers = LiteratureSearchService(None)._external_providers()
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_providers",
+            default_providers,
+        )
+
+    assert providers == ["openalex", "arxiv", "semantic_scholar"]
+
+
 def test_openalex_literature_item_parser() -> None:
     payload = {
         "id": "https://openalex.org/W2601012345",
