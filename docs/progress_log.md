@@ -1492,3 +1492,23 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_pilot_readiness.sh` passed: `26 passed in 67.89s`.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `26 passed in 67.89s`, deployment contracts `1 passed in 1.79s`, research workflow primitives `11 passed in 80.79s`, research planning contracts `3 passed in 78.75s`, write audit `7 passed in 3.87s`, workflow job controls `3 passed in 104.85s`, tool bridge contracts `10 passed in 2.27s`, GraphRAG-lite `4 passed in 4.38s`, and context search `15 passed in 97.23s`.
+
+## 2026-06-14 - Upload Max Bytes Fallback Fixture
+
+Implemented in progress:
+
+- Added a deterministic pilot-readiness upload guardrail test for invalid `PAPER_UPLOAD_MAX_BYTES` values, verifying small Markdown uploads fall back to the default limit and still index successfully.
+- Added the new test to `scripts/check_pilot_readiness.sh` so upload limit configuration fallback stays covered before changing first-run upload behavior.
+- Updated `codex_handoff/03_TODO.md` to keep upload guardrail coverage synchronized.
+- Did not change upload implementation, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/app.py backend/research/config.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/app.py backend/research/config.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_upload_invalid_max_bytes_falls_back_to_default_limit` passed: `1 passed in 3.63s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_pilot_readiness.sh` passed: `27 passed in 66.28s`.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `27 passed in 70.28s`, deployment contracts `1 passed in 1.60s`, research workflow primitives `11 passed in 80.67s`, research planning contracts `3 passed in 80.00s`, write audit `7 passed in 3.99s`, workflow job controls `3 passed in 100.43s`, tool bridge contracts `10 passed in 2.14s`, GraphRAG-lite `4 passed in 3.83s`, and context search `15 passed in 97.97s`.

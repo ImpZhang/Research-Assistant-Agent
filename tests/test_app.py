@@ -2292,6 +2292,32 @@ def test_upload_rejects_file_larger_than_limit(tmp_path, monkeypatch) -> None:
     assert not (tmp_path / "too_large.txt").exists()
 
 
+def test_upload_invalid_max_bytes_falls_back_to_default_limit(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setenv("PAPER_UPLOAD_MAX_BYTES", "not-an-integer")
+    client = TestClient(create_app())
+    content = b"""Invalid Upload Limit Fallback Paper
+
+Abstract
+This markdown upload validates that an invalid max-byte setting falls back safely.
+
+Conclusion
+Pilot uploads should not fail just because an operator mistyped the byte limit.
+"""
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("invalid_limit_fallback.md", content, "text/markdown")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["paper"]["filename"] == "invalid_limit_fallback.md"
+    assert body["paper"]["status"] == "indexed"
+    assert body["evidence_count"] >= 2
+    assert (tmp_path / "invalid_limit_fallback.md").exists()
+
+
 def test_upload_rejects_binary_text_file_before_writing(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
     client = TestClient(create_app())
