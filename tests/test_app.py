@@ -5688,6 +5688,49 @@ def test_context_search_empty_query_guard_fixture() -> None:
     assert _empty_query_guard_rate(client, ["", "to be", "??"]) == 1.0
 
 
+def test_context_search_deduplicates_repeated_query_terms() -> None:
+    client = TestClient(create_app())
+    marker = f"dedupterm{time.time_ns()}"
+    content = f"""Repeated Query Term Test Paper {marker}
+
+Abstract
+This paper repeats {marker} so context search can verify query term deduplication.
+
+Method
+The retrieval query should not inflate matched terms when {marker} appears repeatedly.
+
+Conclusion
+Repeated query terms should be counted once for deterministic ranking fixtures.
+""".encode()
+
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("context_dedup_query.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": f"{marker} {marker} {marker}",
+            "paper_ids": [paper_id],
+            "limit": 3,
+            "include_graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["evidences"]
+    assert body["graph_nodes"] == []
+    assert body["graph_edges"] == []
+    top_evidence = body["evidences"][0]
+    assert top_evidence["matched_terms"].count(marker) == 1
+    assert top_evidence["score_breakdown"]["lexical"] == 1.0
+    assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
+
+
 def test_context_search_paper_filter_evaluation_fixture() -> None:
     client = TestClient(create_app())
     marker = f"paperfilter{time.time_ns()}"

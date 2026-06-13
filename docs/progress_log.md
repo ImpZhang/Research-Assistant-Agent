@@ -1155,3 +1155,24 @@ Verification completed:
 - `bash scripts/check_pilot_readiness.sh` passed: `25 passed in 67.85s`.
 - `git --no-pager diff --check` passed with no whitespace errors.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 61.33s`, deployment contracts `1 passed in 1.71s`, research workflow primitives `11 passed in 73.96s`, research planning contracts `3 passed in 72.19s`, write audit `7 passed in 3.35s`, workflow job controls `3 passed in 91.99s`, tool bridge contracts `10 passed in 2.19s`, GraphRAG-lite `2 passed in 3.03s`, and context search `4 passed in 73.17s`.
+
+## 2026-06-13 - Context Search Query Dedup Fixture
+
+Implemented in progress:
+
+- Added a deterministic context-search evaluation that repeats the same query marker three times and verifies retrieval reports the matched term once with a single lexical contribution.
+- Added the new test to `scripts/check_context_search_evaluations.sh` so query-term deduplication stays covered before changing scoring weights.
+- Updated `codex_handoff/03_TODO.md` to keep context-search evaluation coverage synchronized.
+- Did not change retrieval implementation, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_context_search_deduplicates_repeated_query_terms` passed: `1 passed in 4.77s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_context_search_evaluations.sh` passed: `5 passed in 74.38s`.
+- `git --no-pager diff --check` passed with no whitespace errors.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 63.58s`, deployment contracts `1 passed in 1.65s`, research workflow primitives `11 passed in 74.20s`, research planning contracts `3 passed in 73.82s`, write audit `7 passed in 3.94s`, workflow job controls `3 passed in 94.36s`, tool bridge contracts `10 passed in 2.20s`, GraphRAG-lite `2 passed in 2.94s`, and context search `5 passed in 76.33s`.
