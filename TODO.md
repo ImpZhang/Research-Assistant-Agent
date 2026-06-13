@@ -29,6 +29,7 @@ This top-level TODO is a stable index for the current remote-first handoff. The 
 
 ## P3 - Current GraphRAG And Context Search Direction
 
+- Run `bash scripts/check_tool_bridge_contracts.sh` before changing `/research/tools/manifest`, `/research/tools/mcp-spec`, or `scripts/mcp_http_bridge.py`.
 - Run `bash scripts/check_context_search_evaluations.sh` before changing context-search scoring or graph-expansion behavior.
 - Continue deterministic context-search evaluation before changing scoring weights.
 - Keep GraphRAG-lite and service-layer workflows as the default until scale, durability, or tool-sandbox triggers are explicit.

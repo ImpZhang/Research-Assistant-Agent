@@ -319,6 +319,7 @@ Completed so far:
 - Added a paper-filter leak evaluation fixture so scoped context-search evidence, gaps, and ideas cannot include excluded papers.
 - Added `scripts/check_context_search_evaluations.sh` as the focused remote check for context-search ranking, guard, filter, score-breakdown, and graph-context fixtures.
 - Added `scripts/check_graph_rag_lite.sh` as the focused remote check for duplicate-edge reuse and graph link/stat fixtures.
+- Added `scripts/check_tool_bridge_contracts.sh` as the focused remote check for tool manifest, MCP spec, and MCP HTTP bridge contracts.
 
 Likely work:
 
@@ -327,6 +328,7 @@ Likely work:
 - Add more deterministic context-search evaluation fixtures only for uncovered relevance, filtering, or graph-noise scenarios.
 - Consider historical duplicate-edge cleanup only after backup/migration policy is explicit.
 - Use LangGraph only for a new isolated workflow once resumable DAG state, checkpointing, or human-in-the-loop control is required.
+- Run `bash scripts/check_tool_bridge_contracts.sh` before changing the tool manifest, MCP spec, or MCP HTTP bridge.
 - Treat DeerFlow as a future external planner/tool consumer through the stable tool manifest and MCP bridge, not as the core runtime.
 
 Files:

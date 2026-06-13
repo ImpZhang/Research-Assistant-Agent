@@ -792,3 +792,18 @@ Verification completed:
 
 - `bash scripts/check_pilot_readiness.sh` passed: `14 passed in 22.13s`.
 - `bash scripts/check_remote_safe_suite.sh` passed all five focused suites: pilot readiness `14 passed in 21.76s`, write audit `7 passed in 3.81s`, workflow job controls `3 passed in 87.02s`, GraphRAG-lite `2 passed in 2.87s`, and context search `4 passed in 68.41s`.
+
+## 2026-06-13 - Tool Bridge Contract Check Script
+
+Implemented in progress:
+
+- Added `scripts/check_tool_bridge_contracts.sh` as a focused remote check for `/research/tools/manifest`, `/research/tools/mcp-spec`, and the dependency-light MCP HTTP bridge helpers.
+- Added the tool bridge contract script to `scripts/check_remote_safe_suite.sh`.
+- Linked the script from README verification instructions, top-level TODO, and handoff TODO.
+- Kept the script scoped to existing `.venv` tools and in-process/unit pytest targets; it does not install dependencies or start services.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `10 passed in 2.21s`.
+- `bash scripts/check_remote_safe_suite.sh` passed all six focused suites: pilot readiness `14 passed in 24.31s`, write audit `7 passed in 3.91s`, workflow job controls `3 passed in 85.40s`, tool bridge contracts `10 passed in 2.04s`, GraphRAG-lite `2 passed in 2.85s`, and context search `4 passed in 67.07s`.

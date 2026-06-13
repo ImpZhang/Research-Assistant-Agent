@@ -172,6 +172,7 @@ scripts/
   check_graph_rag_lite.sh
   check_pilot_readiness.sh
   check_remote_safe_suite.sh
+  check_tool_bridge_contracts.sh
   check_workflow_job_controls.sh
   check_write_audit_guardrails.sh
   smoke_api.py
@@ -260,6 +261,12 @@ Run focused workflow job, artifact, async, cancel, and retry checks:
 
 ```bash
 bash scripts/check_workflow_job_controls.sh
+```
+
+Run focused tool manifest and MCP bridge contract checks:
+
+```bash
+bash scripts/check_tool_bridge_contracts.sh
 ```
 
 Run the current remote-safe focused suite without starting services:
