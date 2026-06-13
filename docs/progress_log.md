@@ -912,3 +912,18 @@ Verification completed:
 
 - `bash scripts/check_pilot_readiness.sh` passed: `19 passed in 59.05s`.
 - `bash scripts/check_remote_safe_suite.sh` passed all nine default focused suites: pilot readiness `19 passed in 57.65s`, deployment contracts `1 passed in 1.70s`, research workflow primitives `11 passed in 69.16s`, research planning contracts `3 passed in 69.01s`, write audit `7 passed in 3.82s`, workflow job controls `3 passed in 87.72s`, tool bridge contracts `10 passed in 2.16s`, GraphRAG-lite `2 passed in 2.88s`, and context search `4 passed in 70.42s`.
+
+## 2026-06-13 - Focused Test Coverage Guard
+
+Implemented in progress:
+
+- Added `scripts/check_focused_test_coverage.sh` as a fast guard that parses pytest tests and focused check scripts to ensure every pytest test target is assigned to a focused check.
+- Added the coverage guard to the start of `scripts/check_remote_safe_suite.sh` so missing focused-check assignment fails before slower suites run.
+- Linked the guard from README verification instructions, top-level TODO, and handoff TODO.
+- Kept the script read-only over `tests/` and `scripts/check_*.sh`; it does not install dependencies, start services, or inspect secrets.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_remote_safe_suite.sh` passed the focused coverage guard plus all nine default focused suites: pilot readiness `19 passed in 58.79s`, deployment contracts `1 passed in 1.74s`, research workflow primitives `11 passed in 71.29s`, research planning contracts `3 passed in 67.87s`, write audit `7 passed in 3.59s`, workflow job controls `3 passed in 88.50s`, tool bridge contracts `10 passed in 2.19s`, GraphRAG-lite `2 passed in 2.81s`, and context search `4 passed in 77.04s`.

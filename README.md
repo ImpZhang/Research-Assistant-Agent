@@ -170,6 +170,7 @@ docs/
 scripts/
   check_context_search_evaluations.sh
   check_deployment_contracts.sh
+  check_focused_test_coverage.sh
   check_graph_rag_lite.sh
   check_pilot_readiness.sh
   check_remote_safe_suite.sh
@@ -235,6 +236,12 @@ Run unit tests:
 
 ```bash
 uv run pytest -q
+```
+
+Run the focused-test coverage map check so new pytest tests stay assigned to a focused remote check:
+
+```bash
+bash scripts/check_focused_test_coverage.sh
 ```
 
 Run focused deployment artifact and customer runtime contract checks without starting a service:
