@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.research.db import SessionLocal
-from backend.research.models import Evidence, Idea, Paper, ResearchEdge, ResearchGap
+from backend.research.models import Evidence, Idea, Paper, ResearchEdge, ResearchGap, ResearchNode
 from backend.research.services.graph_service import GraphService
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
@@ -91,6 +91,62 @@ def test_graph_service_reuses_duplicate_edges() -> None:
         assert duplicate_count == 1
     finally:
         session.close()
+
+
+def test_graph_stats_reports_duplicate_edge_groups() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-graph-duplicate-stats-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        source = ResearchNode(
+            node_type="pytest_duplicate_stats_source",
+            label=f"Pytest duplicate stats source {marker}",
+            canonical_key=f"{marker}-source",
+            payload_json={"fixture": "duplicate_stats"},
+        )
+        target = ResearchNode(
+            node_type="pytest_duplicate_stats_target",
+            label=f"Pytest duplicate stats target {marker}",
+            canonical_key=f"{marker}-target",
+            payload_json={"fixture": "duplicate_stats"},
+        )
+        session.add_all([source, target])
+        session.flush()
+        edge_type = f"pytest_duplicate_stats_{time.time_ns()}"
+        session.add_all(
+            [
+                ResearchEdge(
+                    source_node_id=source.id,
+                    target_node_id=target.id,
+                    edge_type=edge_type,
+                    weight=0.4,
+                    evidence_ids_json=["evidence-a"],
+                    payload_json={"fixture": "duplicate_stats", "index": 1},
+                ),
+                ResearchEdge(
+                    source_node_id=source.id,
+                    target_node_id=target.id,
+                    edge_type=edge_type,
+                    weight=0.6,
+                    evidence_ids_json=["evidence-b"],
+                    payload_json={"fixture": "duplicate_stats", "index": 2},
+                ),
+            ]
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    stats = client.get("/research/graph/stats")
+    assert stats.status_code == 200
+    body = stats.json()
+    assert body["node_type_counts"]["pytest_duplicate_stats_source"] >= 1
+    assert body["node_type_counts"]["pytest_duplicate_stats_target"] >= 1
+    assert body["edge_type_counts"][edge_type] == 2
+    assert body["duplicate_edge_group_count"] >= 1
+    assert body["orphan_edge_count"] == 0
 
 
 def test_context_search_ranking_tie_breaks_by_matched_terms_and_recency() -> None:
