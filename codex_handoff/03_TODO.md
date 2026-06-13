@@ -268,10 +268,12 @@ Candidate options:
 Completed so far:
 
 - Documented the durable workflow queue design in `docs/workflow_queue_design.md` before adding dependencies, services, migrations, or changing runtime behavior.
+- Added `scripts/check_workflow_job_controls.sh` as a focused remote check for synchronous workflow artifacts, async job traces, and cancel/retry controls.
 
 Likely work:
 
 - Confirm the deployment queue backend and worker process policy before adding Redis, RQ, Celery, Dramatiq, or Temporal.
+- Run `bash scripts/check_workflow_job_controls.sh` before changing workflow job, artifact, async, cancel, or retry behavior.
 - Keep `/research/workflows/literature-to-ideas/async`, `/research/jobs/{job_id}`, retry, cancel, and artifact routes backward compatible during any migration.
 - Add queue/worker readiness checks only after the operator confirms the deployment topology.
 - Add job leasing, heartbeat, retry, and idempotency fields only after the database migration path is approved.

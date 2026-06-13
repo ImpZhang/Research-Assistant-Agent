@@ -764,3 +764,18 @@ Verification completed:
 
 - `bash scripts/check_write_audit_guardrails.sh` passed: `7 passed in 3.81s`.
 - `bash scripts/check_remote_safe_suite.sh` passed all four focused suites: pilot readiness `13 passed in 23.30s`, write audit `7 passed in 3.88s`, GraphRAG-lite `2 passed in 2.84s`, and context search `4 passed in 68.06s`.
+
+## 2026-06-13 - Workflow Job Controls Check Script
+
+Implemented in progress:
+
+- Added `scripts/check_workflow_job_controls.sh` as a focused remote check for synchronous literature-to-ideas workflow artifacts, async job traces, and cancel/retry controls.
+- Added the workflow job controls script to `scripts/check_remote_safe_suite.sh`.
+- Linked the script from README verification instructions, top-level TODO, and handoff TODO.
+- Kept the script scoped to existing `.venv` tools and in-process pytest targets; it does not install dependencies or start services.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_workflow_job_controls.sh` passed: `3 passed in 85.05s`.
+- `bash scripts/check_remote_safe_suite.sh` passed all five focused suites: pilot readiness `13 passed in 22.05s`, write audit `7 passed in 3.68s`, workflow job controls `3 passed in 86.43s`, GraphRAG-lite `2 passed in 2.86s`, and context search `4 passed in 66.83s`.

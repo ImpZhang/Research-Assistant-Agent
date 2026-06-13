@@ -172,6 +172,7 @@ scripts/
   check_graph_rag_lite.sh
   check_pilot_readiness.sh
   check_remote_safe_suite.sh
+  check_workflow_job_controls.sh
   check_write_audit_guardrails.sh
   smoke_api.py
 tests/
@@ -253,6 +254,12 @@ Run focused write-audit guardrail checks without reading production audit logs:
 
 ```bash
 bash scripts/check_write_audit_guardrails.sh
+```
+
+Run focused workflow job, artifact, async, cancel, and retry checks:
+
+```bash
+bash scripts/check_workflow_job_controls.sh
 ```
 
 Run the current remote-safe focused suite without starting services:

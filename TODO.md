@@ -24,6 +24,7 @@ This top-level TODO is a stable index for the current remote-first handoff. The 
 - Write-audit rotation or cleanup only after backup and retention policy are confirmed.
 - Database migration tooling only after dependency sync and migration approach are approved.
 - User/project scoping only after migration tooling and auth identity are explicit.
+- Run `bash scripts/check_workflow_job_controls.sh` before changing workflow job, artifact, async, cancel, or retry behavior.
 - Queue/worker readiness only after deployment topology and backend choice are confirmed.
 
 ## P3 - Current GraphRAG And Context Search Direction
