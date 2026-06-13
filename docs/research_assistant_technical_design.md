@@ -1873,6 +1873,8 @@ FastAPI BackgroundTasks
 - MRR。
 - nDCG。
 
+Context-search retrieval calibration is documented in `docs/context_search_evaluation_plan.md`. Before changing lexical/vector/graph scoring weights, add or update deterministic fixtures and compare hit@k, MRR, graph edge hit rate, graph noise rate, and score breakdown coverage.
+
 ## 19.2 新增科研助手评测
 
 ### Paper Card

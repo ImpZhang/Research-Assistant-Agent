@@ -528,3 +528,20 @@ Verification completed:
 - `.venv/bin/ruff check backend/research/services/retrieval_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
 - `.venv/bin/ruff format --check backend/research/services/retrieval_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
 - Focused pytest passed: `2 passed in 43.69s`.
+
+## 2026-06-13 - Context Search Evaluation Plan
+
+Documentation maintenance completed:
+
+- Added `docs/context_search_evaluation_plan.md` to define retrieval calibration questions, fixture shape, metrics, scoring-change rules, and guardrails.
+- Documented hit@k, MRR, graph edge hit rate, graph noise rate, score breakdown coverage, and empty-query guard checks as initial metrics.
+- Clarified that future scoring changes should be evidence-led and should not use private customer data or secrets in committed fixtures.
+- Updated README, technical design, and handoff TODO references.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- Reviewed `docs/context_search_evaluation_plan.md` for design-only scope and secret-safe evaluation guidance.
+- `grep -R "context_search_evaluation_plan" -n README.md docs codex_handoff/03_TODO.md` confirmed cross-document references.
+- `git --no-pager diff --check` passed.
+- Documentation-only change; no dependency install, service start, migration, evaluation job, or business-code test was required.
