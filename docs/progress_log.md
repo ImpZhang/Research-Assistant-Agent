@@ -1373,3 +1373,23 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_graph_rag_lite.sh` passed: `3 passed in 3.65s`.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 69.27s`, deployment contracts `1 passed in 1.66s`, research workflow primitives `11 passed in 80.00s`, research planning contracts `3 passed in 75.46s`, write audit `7 passed in 3.92s`, workflow job controls `3 passed in 84.04s`, tool bridge contracts `10 passed in 2.33s`, GraphRAG-lite `3 passed in 3.70s`, and context search `13 passed in 92.82s`.
+
+## 2026-06-13 - GraphRAG Orphan Stats Fixture
+
+Implemented in progress:
+
+- Added a deterministic GraphRAG-lite stats test that creates one temporary orphan edge pointing at a missing target node, verifies `/research/graph/stats` reports at least one orphan edge, and cleans up the edge and source node before later graph stats fixtures run.
+- Added the new test to `scripts/check_graph_rag_lite.sh` so orphan-edge stat reporting stays covered with duplicate-edge reuse, duplicate-edge stats, and graph link/stat fixtures.
+- Updated `codex_handoff/03_TODO.md` to keep GraphRAG-lite focused coverage synchronized.
+- Did not change graph implementation, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/graph_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/graph_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_graph_stats_reports_orphan_edges_without_persisting_fixture` passed: `1 passed in 4.49s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_graph_rag_lite.sh` passed: `4 passed in 4.03s`.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 62.89s`, deployment contracts `1 passed in 1.66s`, research workflow primitives `11 passed in 79.49s`, research planning contracts `3 passed in 78.37s`, write audit `7 passed in 4.06s`, workflow job controls `3 passed in 100.26s`, tool bridge contracts `10 passed in 1.76s`, GraphRAG-lite `4 passed in 4.17s`, and context search `13 passed in 109.32s`.

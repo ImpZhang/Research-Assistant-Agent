@@ -8,4 +8,5 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 .venv/bin/pytest -q \
   tests/test_app.py::test_graph_service_reuses_duplicate_edges \
   tests/test_app.py::test_graph_stats_reports_duplicate_edge_groups \
+  tests/test_app.py::test_graph_stats_reports_orphan_edges_without_persisting_fixture \
   tests/test_app.py::test_graph_rag_lite_records_workflow_links

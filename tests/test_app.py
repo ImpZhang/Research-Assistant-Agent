@@ -149,6 +149,57 @@ def test_graph_stats_reports_duplicate_edge_groups() -> None:
     assert body["orphan_edge_count"] == 0
 
 
+def test_graph_stats_reports_orphan_edges_without_persisting_fixture() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-graph-orphan-stats-{time.time_ns()}"
+    source_id: str | None = None
+    edge_id: str | None = None
+
+    session = SessionLocal()
+    try:
+        source = ResearchNode(
+            node_type="pytest_orphan_stats_source",
+            label=f"Pytest orphan stats source {marker}",
+            canonical_key=f"{marker}-source",
+            payload_json={"fixture": "orphan_stats"},
+        )
+        session.add(source)
+        session.flush()
+        source_id = source.id
+        missing_target_id = f"{marker}-missing-target"
+        edge = ResearchEdge(
+            source_node_id=source_id,
+            target_node_id=missing_target_id,
+            edge_type=f"pytest_orphan_stats_{time.time_ns()}",
+            weight=0.5,
+            evidence_ids_json=[],
+            payload_json={"fixture": "orphan_stats"},
+        )
+        session.add(edge)
+        session.commit()
+        edge_id = edge.id
+    finally:
+        session.close()
+
+    try:
+        stats = client.get("/research/graph/stats")
+        assert stats.status_code == 200
+        body = stats.json()
+    finally:
+        cleanup = SessionLocal()
+        try:
+            if edge_id is not None:
+                cleanup.query(ResearchEdge).filter(ResearchEdge.id == edge_id).delete()
+            if source_id is not None:
+                cleanup.query(ResearchNode).filter(ResearchNode.id == source_id).delete()
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+    assert body["orphan_edge_count"] >= 1
+
+
 def test_context_search_ranking_tie_breaks_by_matched_terms_and_recency() -> None:
     old_item = SimpleNamespace(
         id="old-item",
