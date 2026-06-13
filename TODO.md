@@ -10,6 +10,7 @@ This top-level TODO is a stable index for the current remote-first handoff. The 
 - Do not read or commit secrets, `.env` values, credentials, cookies, private keys, or production/private data.
 - Run `bash scripts/check_secret_file_guard.sh` before changing ignore rules or adding config/auth-related files.
 - Run `bash scripts/check_handoff_docs.sh` before changing AGENTS, README, TODO, handoff docs, or progress-log structure.
+- Run `bash scripts/check_generated_file_guard.sh` before changing ignore rules or adding generated-artifact-producing tooling.
 
 ## P1 - Pilot Readiness Without Service Changes
 

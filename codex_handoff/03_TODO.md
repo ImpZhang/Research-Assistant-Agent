@@ -194,6 +194,7 @@ Completed slices:
 - Added `scripts/check_script_catalog.sh` as a fast default-suite guard for README check-script listing and check-script structure.
 - Added `scripts/check_secret_file_guard.sh` as a fast default-suite guard for sensitive-looking tracked filenames and required ignore patterns.
 - Added `scripts/check_handoff_docs.sh` as a fast default-suite guard for remote-first handoff document consistency.
+- Added `scripts/check_generated_file_guard.sh` as a fast default-suite guard for generated/cache/build artifacts and required ignore patterns.
 - Added `scripts/check_research_workflow_primitives.sh` as a focused remote check for local literature search, provider parsers, paper cards, structured extraction fallback, gap/idea generation, novelty screening, related-work matrices, and Markdown dossier exports.
 - Added `scripts/check_research_planning_contracts.sh` as a focused remote check for research profiles, advisor briefs, research plans, idea refinement, ranking, portfolios, agenda exports, and lineage/bundle planning metadata.
 - Added `scripts/check_research_proposal_contracts.sh` as a long focused remote check for proposal drafts, readiness reviews, revisions, revision follow-up tasks, and proposal Markdown exports; keep it separate from the default remote-safe suite unless runtime is reduced.
@@ -205,6 +206,7 @@ Next likely work:
 - Run `bash scripts/check_script_catalog.sh` before adding, renaming, or restructuring check scripts.
 - Run `bash scripts/check_secret_file_guard.sh` before changing ignore rules or adding config/auth-related files.
 - Run `bash scripts/check_handoff_docs.sh` before changing AGENTS, README, TODO, handoff docs, or progress-log structure.
+- Run `bash scripts/check_generated_file_guard.sh` before changing ignore rules or adding generated-artifact-producing tooling.
 - Run `bash scripts/check_focused_test_coverage.sh` before adding or renaming pytest tests.
 - Run `bash scripts/check_deployment_contracts.sh` before changing Dockerfile, docker-compose, deployment docs, migration/admin policy docs, or `.env.example` runtime placeholders.
 - Run `bash scripts/check_pilot_readiness.sh` before changing pilot readiness, `/research/status` capabilities, setup wizard, onboarding tasks/progress, pilot reports, API-key guard, upload guardrail, or Workbench first-run behavior.

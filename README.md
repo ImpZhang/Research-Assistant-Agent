@@ -171,6 +171,7 @@ scripts/
   check_context_search_evaluations.sh
   check_deployment_contracts.sh
   check_focused_test_coverage.sh
+  check_generated_file_guard.sh
   check_graph_rag_lite.sh
   check_handoff_docs.sh
   check_pilot_readiness.sh
@@ -265,6 +266,12 @@ Run the handoff document consistency check so AGENTS, TODO, README, and the hand
 
 ```bash
 bash scripts/check_handoff_docs.sh
+```
+
+Run the generated-file guard to catch tracked caches, virtualenvs, dependency folders, and build/coverage outputs:
+
+```bash
+bash scripts/check_generated_file_guard.sh
 ```
 
 Run the focused-test coverage map check so new pytest tests stay assigned to a focused remote check:

@@ -1010,3 +1010,24 @@ Verification completed:
 - `bash scripts/check_script_catalog.sh` passed: `Check script catalog is synchronized.`
 - `git --no-pager diff --check` passed with no whitespace errors.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, and coverage guards plus all nine default focused suites: pilot readiness `19 passed in 60.71s`, deployment contracts `1 passed in 1.63s`, research workflow primitives `11 passed in 70.63s`, research planning contracts `3 passed in 70.48s`, write audit `7 passed in 3.90s`, workflow job controls `3 passed in 88.35s`, tool bridge contracts `10 passed in 1.73s`, GraphRAG-lite `2 passed in 2.51s`, and context search `4 passed in 71.22s`.
+
+## 2026-06-13 - Generated File Guard
+
+Implemented in progress:
+
+- Added `scripts/check_generated_file_guard.sh` as a fast guard against tracked generated artifacts, caches, virtualenvs, dependency folders, and build/coverage outputs.
+- Added `node_modules/`, `.coverage`, `coverage.xml`, and `htmlcov/` to `.gitignore` alongside existing Python cache/build patterns.
+- Added the generated-file guard to `scripts/check_remote_safe_suite.sh` and updated `scripts/check_suite_contracts.sh` so the default suite requires it.
+- Linked the guard from README verification instructions, top-level TODO, and handoff TODO.
+- Did not remove generated files from the working tree, read secrets, install dependencies, start services, or modify business code.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `bash scripts/check_generated_file_guard.sh` passed: `Generated file guard passed.`
+- `bash scripts/check_suite_contracts.sh` passed: `Focused suite contracts are valid.`
+- `bash scripts/check_script_catalog.sh` passed: `Check script catalog is synchronized.`
+- `bash scripts/check_secret_file_guard.sh` passed: `Secret file guard passed.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `git --no-pager diff --check` passed with no whitespace errors.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `19 passed in 57.17s`, deployment contracts `1 passed in 1.65s`, research workflow primitives `11 passed in 69.78s`, research planning contracts `3 passed in 71.05s`, write audit `7 passed in 4.10s`, workflow job controls `3 passed in 90.21s`, tool bridge contracts `10 passed in 2.20s`, GraphRAG-lite `2 passed in 2.90s`, and context search `4 passed in 72.55s`.
