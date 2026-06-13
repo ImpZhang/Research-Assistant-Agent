@@ -340,7 +340,7 @@ Completed so far:
 - Tightened graph noise evaluation so filtered context-search graph edges must have zero unrelated edge types.
 - Added an unknown graph-edge-type filter regression so context search cannot fall back to unrelated graph edges.
 - Added a paper-filter leak evaluation fixture so scoped context-search evidence, gaps, and ideas cannot include excluded papers.
-- Added `scripts/check_context_search_evaluations.sh` as the focused remote check for context-search ranking, no-match, gap-bonus, evidence-bonus, phrase-bonus, vector-rescue, query-term deduplication, lower/upper limit-clamping, guard, filter normalization, score-breakdown, and graph-context fixtures.
+- Added `scripts/check_context_search_evaluations.sh` as the focused remote check for context-search ranking, no-match, idea-bonus, gap-bonus, evidence-bonus, phrase-bonus, vector-rescue, query-term deduplication, lower/upper limit-clamping, guard, filter normalization, score-breakdown, and graph-context fixtures.
 - Added `scripts/check_graph_rag_lite.sh` as the focused remote check for duplicate-edge reuse and graph link/stat fixtures.
 - Added `scripts/check_tool_bridge_contracts.sh` as the focused remote check for tool manifest, MCP spec, and MCP HTTP bridge contracts.
 

@@ -9,6 +9,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_context_search_ranking_tie_breaks_by_matched_terms_and_recency \
   tests/test_app.py::test_context_search_empty_query_guard_fixture \
   tests/test_app.py::test_context_search_no_match_fixture \
+  tests/test_app.py::test_context_search_idea_overall_score_bonus_breakdown \
   tests/test_app.py::test_context_search_gap_feasibility_bonus_breakdown \
   tests/test_app.py::test_context_search_evidence_confidence_bonus_breakdown \
   tests/test_app.py::test_context_search_exact_phrase_bonus_breakdown \

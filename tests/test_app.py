@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.research.db import SessionLocal
-from backend.research.models import Evidence, Paper, ResearchEdge, ResearchGap
+from backend.research.models import Evidence, Idea, Paper, ResearchEdge, ResearchGap
 from backend.research.services.graph_service import GraphService
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
@@ -5741,6 +5741,73 @@ def test_context_search_no_match_fixture() -> None:
     assert body["graph_nodes"] == []
     assert body["graph_edges"] == []
     assert body["answer_brief"] == f"No context matched the query: {marker}"
+
+
+def test_context_search_idea_overall_score_bonus_breakdown() -> None:
+    client = TestClient(create_app())
+    first_term = f"ideabonusalpha{time.time_ns()}"
+    second_term = f"ideabonusbeta{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            title=f"Context Search Idea Bonus Paper {first_term}",
+            filename="context_idea_bonus.txt",
+            source_type="pytest",
+            status="indexed",
+        )
+        session.add(paper)
+        session.flush()
+        idea = Idea(
+            title=f"{first_term} idea bonus fixture",
+            research_question=f"How should {first_term} support explainable retrieval?",
+            core_hypothesis=f"The fixture mentions {second_term} after unrelated words.",
+            motivation=f"{first_term} makes idea bonus scoring visible.",
+            related_gap_ids_json=[],
+            related_paper_ids_json=[paper.id],
+            evidence_ids_json=[],
+            method_sketch="Use a controlled pytest fixture.",
+            expected_contribution="Stable idea score breakdown coverage.",
+            novelty_argument="The fixture is synthetic and deterministic.",
+            datasets_json=[],
+            baselines_json=[],
+            metrics_json=[],
+            risks_json=[],
+            resource_requirements="none",
+            target_venues_json=[],
+            score_json={"overall_score": 7.6},
+            status="draft",
+        )
+        session.add(idea)
+        session.commit()
+        paper_id = paper.id
+        idea_id = idea.id
+    finally:
+        session.close()
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": f"{first_term} {second_term}",
+            "paper_ids": [paper_id],
+            "limit": 3,
+            "include_graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ideas"]
+    assert body["graph_nodes"] == []
+    assert body["graph_edges"] == []
+    top_idea = body["ideas"][0]
+    assert top_idea["idea"]["id"] == idea_id
+    assert top_idea["matched_terms"][:2] == [first_term, second_term]
+    assert top_idea["score_breakdown"]["lexical"] == 2.0
+    assert top_idea["score_breakdown"]["bonus"] == 0.76
+    assert top_idea["score_breakdown"]["phrase"] == 0.0
+    assert top_idea["score_breakdown"]["vector"] > 0.0
+    assert _score_breakdown_total_match_rate(body["ideas"]) == 1.0
 
 
 def test_context_search_gap_feasibility_bonus_breakdown() -> None:
