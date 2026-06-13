@@ -837,3 +837,18 @@ Verification completed:
 
 - `bash scripts/check_pilot_readiness.sh` passed: `18 passed in 56.48s`.
 - `bash scripts/check_remote_safe_suite.sh` passed all seven focused suites: pilot readiness `18 passed in 55.80s`, deployment contracts `1 passed in 1.65s`, write audit `7 passed in 3.97s`, workflow job controls `3 passed in 85.72s`, tool bridge contracts `10 passed in 2.17s`, GraphRAG-lite `2 passed in 2.93s`, and context search `4 passed in 68.14s`.
+
+## 2026-06-13 - Research Workflow Primitive Check Script
+
+Implemented in progress:
+
+- Added `scripts/check_research_workflow_primitives.sh` as a focused remote check for deterministic local literature search, provider parsers, paper-card extraction, gap mining, idea generation, review/experiment planning, novelty screening, related-work matrices, and Markdown dossier exports.
+- Added the research workflow primitive script to `scripts/check_remote_safe_suite.sh`.
+- Linked the script from README verification instructions, top-level TODO, and handoff TODO.
+- Kept the script scoped to existing `.venv` tools and in-process pytest targets; it does not install dependencies, start services, or require external API access.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_research_workflow_primitives.sh` passed: `10 passed in 65.83s`.
+- `bash scripts/check_remote_safe_suite.sh` passed all eight focused suites: pilot readiness `18 passed in 57.19s`, deployment contracts `1 passed in 1.71s`, research workflow primitives `10 passed in 67.80s`, write audit `7 passed in 4.18s`, workflow job controls `3 passed in 86.09s`, tool bridge contracts `10 passed in 2.19s`, GraphRAG-lite `2 passed in 2.91s`, and context search `4 passed in 63.99s`.

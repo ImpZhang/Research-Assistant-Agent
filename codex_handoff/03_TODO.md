@@ -189,11 +189,13 @@ Completed slices:
 - Added admin-gated write-operation audit summary and bounded raw JSONL export endpoints after documenting admin authorization and retention/export policy.
 - Added `scripts/check_pilot_readiness.sh` as a focused remote check for health/readiness, API-key guard, upload guardrails including the text-upload happy path, Workbench static assets, onboarding readiness, setup wizard, onboarding task/progress, pilot report, and pilot report snapshot behavior.
 - Added `scripts/check_deployment_contracts.sh` as a focused remote check for Dockerfile, compose, deployment docs, migration/admin policy docs, and `.env.example` customer-runtime placeholders.
+- Added `scripts/check_research_workflow_primitives.sh` as a focused remote check for local literature search, provider parsers, paper cards, gap/idea generation, novelty screening, related-work matrices, and Markdown dossier exports.
 
 Next likely work:
 
 - Run `bash scripts/check_deployment_contracts.sh` before changing Dockerfile, docker-compose, deployment docs, migration/admin policy docs, or `.env.example` runtime placeholders.
 - Run `bash scripts/check_pilot_readiness.sh` before changing pilot readiness, setup wizard, onboarding tasks/progress, pilot reports, API-key guard, upload guardrail, or Workbench first-run behavior.
+- Run `bash scripts/check_research_workflow_primitives.sh` before changing local literature search, paper card extraction, gap/idea generation, novelty screening, related-work matrices, or Markdown dossier exports.
 - Decide whether backup/restore should become a checked script after deployment target details are fixed.
 - Decide whether write-operation audit should graduate from JSONL to database persistence after migration strategy is settled.
 - Decide whether write-operation audit rotation/cleanup should be implemented after backup/retention decisions are settled.

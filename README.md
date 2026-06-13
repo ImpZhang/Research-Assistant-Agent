@@ -173,6 +173,7 @@ scripts/
   check_graph_rag_lite.sh
   check_pilot_readiness.sh
   check_remote_safe_suite.sh
+  check_research_workflow_primitives.sh
   check_tool_bridge_contracts.sh
   check_workflow_job_controls.sh
   check_write_audit_guardrails.sh
@@ -250,6 +251,12 @@ Run focused GraphRAG-lite duplicate-edge and graph stats checks:
 
 ```bash
 bash scripts/check_graph_rag_lite.sh
+```
+
+Run focused research workflow primitive checks for local literature search, paper cards, gaps, ideas, novelty, related work, and Markdown dossier exports:
+
+```bash
+bash scripts/check_research_workflow_primitives.sh
 ```
 
 Run focused pilot-readiness, first-run onboarding, and pilot-report guardrail checks without starting a service:
