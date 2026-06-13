@@ -305,10 +305,11 @@ Completed so far:
 - Added stable context-search ranking tie-breaks so same-score results prefer more matched terms, newer artifacts, and stable ids.
 - Added per-result context-search `score_breakdown` values for lexical, bonus, phrase, and vector score contributions.
 - Documented context-search retrieval calibration and evaluation in `docs/context_search_evaluation_plan.md` before changing scoring weights further.
+- Added the first deterministic context-search evaluation fixture covering evidence hit@k, MRR, graph edge hit/noise, and score breakdown coverage.
 
 Likely work:
 
-- Implement deterministic context-search evaluation fixtures before changing scoring weights further.
+- Add more deterministic context-search evaluation fixtures before changing scoring weights further.
 - Consider historical duplicate-edge cleanup only after backup/migration policy is explicit.
 - Use LangGraph only for a new isolated workflow once resumable DAG state, checkpointing, or human-in-the-loop control is required.
 - Treat DeerFlow as a future external planner/tool consumer through the stable tool manifest and MCP bridge, not as the core runtime.

@@ -5452,6 +5452,40 @@ Future work should connect async jobs to a frontend progress view and MCP tools.
     assert len(job_body["output"]["idea_ids"]) >= 1
 
 
+def _hit_at_k(ordered_ids: list[str], expected_ids: set[str], k: int) -> float:
+    return 1.0 if any(item_id in expected_ids for item_id in ordered_ids[:k]) else 0.0
+
+
+def _mean_reciprocal_rank(ordered_ids: list[str], expected_ids: set[str]) -> float:
+    for index, item_id in enumerate(ordered_ids, start=1):
+        if item_id in expected_ids:
+            return round(1.0 / index, 4)
+    return 0.0
+
+
+def _score_breakdown_coverage(items: list[dict]) -> float:
+    if not items:
+        return 1.0
+    required_keys = {"lexical", "bonus", "phrase", "vector"}
+    covered = [item for item in items if required_keys.issubset(item.get("score_breakdown", {}))]
+    return round(len(covered) / len(items), 4)
+
+
+def _graph_edge_hit_rate(edges: list[dict], expected_edge_types: set[str]) -> float:
+    if not expected_edge_types:
+        return 1.0
+    returned_edge_types = {edge["edge_type"] for edge in edges}
+    hits = expected_edge_types.intersection(returned_edge_types)
+    return round(len(hits) / len(expected_edge_types), 4)
+
+
+def _graph_noise_rate(edges: list[dict], allowed_edge_types: set[str]) -> float:
+    if not edges:
+        return 0.0
+    noisy = [edge for edge in edges if edge["edge_type"] not in allowed_edge_types]
+    return round(len(noisy) / len(edges), 4)
+
+
 def test_job_cancel_and_retry_controls() -> None:
     client = TestClient(create_app())
     content = b"""Job Controls Test Paper
@@ -5552,6 +5586,14 @@ Future work should make GraphRAG context retrieval stronger.
     )
     assert embeddings.status_code == 200
     embedding_body = embeddings.json()
+    evidence_response = client.get(f"/research/papers/{paper_id}/evidence")
+    assert evidence_response.status_code == 200
+    expected_evidence_ids = {
+        evidence["id"]
+        for evidence in evidence_response.json()
+        if {"diagnostic", "metric", "retrieval"}.intersection(set(evidence["text"].lower().split()))
+    }
+    assert expected_evidence_ids
     assert embedding_body["model"] == "local_hash_embedding_v0"
     assert embedding_body["dimension"] == 128
     assert embedding_body["evidence_count"] >= 1
@@ -5583,6 +5625,23 @@ Future work should make GraphRAG context retrieval stronger.
     assert body["graph_nodes"]
     assert body["graph_edges"]
     assert "Matched" in body["answer_brief"]
+
+    evidence_result_ids = [item["evidence"]["id"] for item in body["evidences"]]
+    evidence_metrics = {
+        "hit_at_1": _hit_at_k(evidence_result_ids, expected_evidence_ids, 1),
+        "hit_at_3": _hit_at_k(evidence_result_ids, expected_evidence_ids, 3),
+        "hit_at_5": _hit_at_k(evidence_result_ids, expected_evidence_ids, 5),
+        "mrr": _mean_reciprocal_rank(evidence_result_ids, expected_evidence_ids),
+    }
+    assert evidence_metrics == {
+        "hit_at_1": 1.0,
+        "hit_at_3": 1.0,
+        "hit_at_5": 1.0,
+        "mrr": 1.0,
+    }
+    context_items = [*body["evidences"], *body["gaps"], *body["ideas"]]
+    assert _score_breakdown_coverage(context_items) == 1.0
+    assert _graph_edge_hit_rate(body["graph_edges"], {"paper_has_evidence"}) == 1.0
 
     filtered_response = client.post(
         "/research/search/context",

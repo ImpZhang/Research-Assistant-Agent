@@ -545,3 +545,21 @@ Verification completed:
 - `grep -R "context_search_evaluation_plan" -n README.md docs codex_handoff/03_TODO.md` confirmed cross-document references.
 - `git --no-pager diff --check` passed.
 - Documentation-only change; no dependency install, service start, migration, evaluation job, or business-code test was required.
+
+## 2026-06-13 - Context Search Evaluation Fixture
+
+Implemented in progress:
+
+- Extended the deterministic context-search pytest fixture with retrieval evaluation metrics.
+- Added helper checks for evidence hit@k, mean reciprocal rank, score breakdown coverage, graph edge hit rate, and graph noise rate.
+- Verified the synthetic context-search fixture keeps expected evidence at hit@1/hit@3/hit@5 with MRR 1.0.
+- Verified `paper_has_evidence` graph edge hits and zero graph noise under an edge-type filter.
+- Updated README, context-search evaluation plan, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` reformatted one file.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- Focused pytest passed: `1 passed in 56.37s`.
