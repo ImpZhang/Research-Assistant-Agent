@@ -1578,7 +1578,7 @@ ARK_API_KEY=
 - 完整 indexing/community summary 成本高。
 - 一上来接完整框架会挤压核心产品工作流。
 
-P6 revisit 结论记录在 `docs/graphrag_langgraph_deerflow_evaluation.md`：当前继续保留 GraphRAG-lite，只有在语料规模、全局社区摘要、跨项目关系推理或离线索引需求明确后，才引入完整 GraphRAG pipeline。`GET /research/graph/stats` 是当前 graph observability 的第一步，会返回节点/边总量、类型分布、孤儿边数量和重复边组数量，便于在完整 GraphRAG 前先发现轻量图谱质量问题。`GraphService.create_edge` 会复用相同 source/target/edge_type 的已有边并合并 evidence ids、payload 和更高权重，避免新写入继续制造重复边。`POST /research/search/context` 支持可选 `graph_edge_types`，让 Workbench、MCP bridge 或外部 planner 在保留默认行为的同时收窄图谱邻居扩展范围。Context search 排序在同分时优先更多 matched terms，再按较新的 artifact 时间和稳定 id 排序，避免同分结果受数据库返回顺序影响。
+P6 revisit 结论记录在 `docs/graphrag_langgraph_deerflow_evaluation.md`：当前继续保留 GraphRAG-lite，只有在语料规模、全局社区摘要、跨项目关系推理或离线索引需求明确后，才引入完整 GraphRAG pipeline。`GET /research/graph/stats` 是当前 graph observability 的第一步，会返回节点/边总量、类型分布、孤儿边数量和重复边组数量，便于在完整 GraphRAG 前先发现轻量图谱质量问题。`GraphService.create_edge` 会复用相同 source/target/edge_type 的已有边并合并 evidence ids、payload 和更高权重，避免新写入继续制造重复边。`POST /research/search/context` 支持可选 `graph_edge_types`，让 Workbench、MCP bridge 或外部 planner 在保留默认行为的同时收窄图谱邻居扩展范围。Context search 排序在同分时优先更多 matched terms，再按较新的 artifact 时间和稳定 id 排序，避免同分结果受数据库返回顺序影响。每个 scored evidence/gap/idea 会返回 `score_breakdown`，拆分 lexical、bonus、phrase 和 vector 分数，便于 Workbench、MCP bridge 或外部 planner 解释排序原因。
 
 ## 13.3 GraphRAG-lite 节点与边
 

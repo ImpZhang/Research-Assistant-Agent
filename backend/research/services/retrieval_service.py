@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 from typing import Any
 
@@ -16,6 +16,7 @@ class ScoredItem:
     item: Any
     score: float
     matched_terms: list[str]
+    score_breakdown: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -262,6 +263,10 @@ class RetrievalService:
             if item.id in by_id:
                 current = by_id[item.id]
                 current.score = round(current.score + vector_boost, 4)
+                current.score_breakdown = self._with_vector_boost(
+                    current.score_breakdown,
+                    vector_boost,
+                )
                 if "vector" not in current.matched_terms:
                     current.matched_terms.append("vector")
             else:
@@ -269,9 +274,35 @@ class RetrievalService:
                     item=item,
                     score=vector_boost,
                     matched_terms=["vector"],
+                    score_breakdown={
+                        "lexical": 0.0,
+                        "bonus": 0.0,
+                        "phrase": 0.0,
+                        "vector": vector_boost,
+                    },
                 )
 
         return self._ranked(list(by_id.values()), limit)
+
+    def _with_vector_boost(
+        self,
+        score_breakdown: dict[str, float],
+        vector_boost: float,
+    ) -> dict[str, float]:
+        updated = self._normalized_score_breakdown(score_breakdown)
+        updated["vector"] = round(updated["vector"] + vector_boost, 4)
+        return updated
+
+    def _normalized_score_breakdown(
+        self,
+        score_breakdown: dict[str, float],
+    ) -> dict[str, float]:
+        return {
+            "lexical": round(float(score_breakdown.get("lexical", 0.0)), 4),
+            "bonus": round(float(score_breakdown.get("bonus", 0.0)), 4),
+            "phrase": round(float(score_breakdown.get("phrase", 0.0)), 4),
+            "vector": round(float(score_breakdown.get("vector", 0.0)), 4),
+        }
 
     def _matches_paper_filter(self, owner_type: str, item: Any, paper_ids: list[str]) -> bool:
         if not paper_ids:
@@ -293,10 +324,21 @@ class RetrievalService:
     ) -> ScoredItem:
         normalized = text.lower()
         matched_terms = [term for term in terms if term in normalized]
-        score = float(len(matched_terms)) + bonus
-        if " ".join(terms) in normalized:
-            score += 2.0
-        return ScoredItem(item=item, score=round(score, 4), matched_terms=matched_terms)
+        lexical_score = float(len(matched_terms))
+        phrase_bonus = 2.0 if " ".join(terms) in normalized else 0.0
+        score_breakdown = {
+            "lexical": round(lexical_score, 4),
+            "bonus": round(float(bonus), 4),
+            "phrase": phrase_bonus,
+            "vector": 0.0,
+        }
+        score = sum(score_breakdown.values())
+        return ScoredItem(
+            item=item,
+            score=round(score, 4),
+            matched_terms=matched_terms,
+            score_breakdown=score_breakdown,
+        )
 
     def _top(self, scored: list[ScoredItem], limit: int) -> list[ScoredItem]:
         return self._ranked([item for item in scored if item.score > 0], limit)
@@ -307,10 +349,11 @@ class RetrievalService:
 
     def _rank_key(self, scored: ScoredItem) -> tuple:
         created_at = getattr(scored.item, "created_at", None)
+        created_rank = created_at.timestamp() if hasattr(created_at, "timestamp") else 0.0
         return (
             scored.score,
             len(set(scored.matched_terms)),
-            created_at or "",
+            created_rank,
             str(getattr(scored.item, "id", "")),
         )
 

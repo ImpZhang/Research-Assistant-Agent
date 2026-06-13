@@ -5572,7 +5572,14 @@ Future work should make GraphRAG context retrieval stronger.
     assert body["retrieval_method"] == "lexical_vector_graph_rag_lite_v0"
     assert body["evidences"]
     assert body["gaps"] or body["ideas"]
-    assert any("vector" in item["matched_terms"] for item in body["evidences"])
+    vector_evidence = next(item for item in body["evidences"] if "vector" in item["matched_terms"])
+    assert set(vector_evidence["score_breakdown"]) == {
+        "lexical",
+        "bonus",
+        "phrase",
+        "vector",
+    }
+    assert vector_evidence["score_breakdown"]["vector"] > 0
     assert body["graph_nodes"]
     assert body["graph_edges"]
     assert "Matched" in body["answer_brief"]

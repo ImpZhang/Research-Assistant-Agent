@@ -2686,6 +2686,7 @@ def _advisor_chat_context_response(
                 evidence=_serialize_evidence(scored.item),
                 score=scored.score,
                 matched_terms=scored.matched_terms,
+                score_breakdown=scored.score_breakdown,
             )
             for scored in result.evidences
         ],
@@ -2694,6 +2695,7 @@ def _advisor_chat_context_response(
                 gap=_serialize_gap(scored.item),
                 score=scored.score,
                 matched_terms=scored.matched_terms,
+                score_breakdown=scored.score_breakdown,
             )
             for scored in result.gaps
         ],
@@ -2702,6 +2704,7 @@ def _advisor_chat_context_response(
                 idea=_serialize_idea(scored.item),
                 score=scored.score,
                 matched_terms=scored.matched_terms,
+                score_breakdown=scored.score_breakdown,
             )
             for scored in result.ideas
         ],
@@ -14570,6 +14573,7 @@ def search_research_context(
                 evidence=_serialize_evidence(scored.item),
                 score=scored.score,
                 matched_terms=scored.matched_terms,
+                score_breakdown=scored.score_breakdown,
             )
             for scored in result.evidences
         ],
@@ -14578,6 +14582,7 @@ def search_research_context(
                 gap=_serialize_gap(scored.item),
                 score=scored.score,
                 matched_terms=scored.matched_terms,
+                score_breakdown=scored.score_breakdown,
             )
             for scored in result.gaps
         ],
@@ -14586,6 +14591,7 @@ def search_research_context(
                 idea=_serialize_idea(scored.item),
                 score=scored.score,
                 matched_terms=scored.matched_terms,
+                score_breakdown=scored.score_breakdown,
             )
             for scored in result.ideas
         ],

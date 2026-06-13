@@ -510,3 +510,21 @@ Verification completed:
 - `.venv/bin/ruff check backend/research/services/retrieval_service.py tests/test_app.py` passed.
 - `.venv/bin/ruff format --check backend/research/services/retrieval_service.py tests/test_app.py` passed.
 - Focused pytest passed: `2 passed in 47.13s`.
+
+## 2026-06-13 - Context Search Score Breakdowns
+
+Implemented in progress:
+
+- Added `score_breakdown` to scored evidence, gap, and idea context-search results.
+- Split scores into lexical, bonus, phrase, and vector contributions.
+- Reused score breakdowns for lexical-only hits and vector-merged hits.
+- Added focused test coverage proving vector-backed evidence includes a positive vector contribution.
+- Updated README, technical design, P6 evaluation notes, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/research/services/retrieval_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` left files unchanged.
+- `.venv/bin/ruff check backend/research/services/retrieval_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/research/services/retrieval_service.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
+- Focused pytest passed: `2 passed in 43.69s`.

@@ -1681,18 +1681,21 @@ class ScoredEvidenceRead(BaseModel):
     evidence: EvidenceRead
     score: float
     matched_terms: list[str] = Field(default_factory=list)
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
 
 
 class ScoredResearchGapRead(BaseModel):
     gap: ResearchGapRead
     score: float
     matched_terms: list[str] = Field(default_factory=list)
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
 
 
 class ScoredIdeaRead(BaseModel):
     idea: IdeaRead
     score: float
     matched_terms: list[str] = Field(default_factory=list)
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
 
 
 class ContextSearchResponse(BaseModel):
