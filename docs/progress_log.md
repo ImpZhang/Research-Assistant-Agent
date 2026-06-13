@@ -1433,3 +1433,22 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_context_search_evaluations.sh` passed: `15 passed in 94.02s`.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 66.58s`, deployment contracts `1 passed in 1.78s`, research workflow primitives `11 passed in 78.75s`, research planning contracts `3 passed in 79.87s`, write audit `7 passed in 4.30s`, workflow job controls `3 passed in 103.93s`, tool bridge contracts `10 passed in 2.30s`, GraphRAG-lite `4 passed in 4.35s`, and context search `15 passed in 94.27s`.
+
+## 2026-06-13 - Context Search Multi Edge Filter Fixture
+
+Implemented in progress:
+
+- Extended the deterministic context-search graph-context fixture to request multiple GraphRAG-lite workflow edge types at once and verify the response includes the selected `paper_has_evidence` and `gap_supported_by_evidence` families without admitting unrelated edge types.
+- Updated `docs/context_search_evaluation_plan.md` and `codex_handoff/03_TODO.md` so committed context-search evaluation coverage reflects multi-edge-type filter checks.
+- Did not change retrieval implementation, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_context_search_returns_evidence_and_graph_context` passed: `1 passed in 57.63s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_context_search_evaluations.sh` passed: `15 passed in 97.85s`.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 68.99s`, deployment contracts `1 passed in 1.64s`, research workflow primitives `11 passed in 80.94s`, research planning contracts `3 passed in 80.38s`, write audit `7 passed in 3.84s`, workflow job controls `3 passed in 100.63s`, tool bridge contracts `10 passed in 2.21s`, GraphRAG-lite `4 passed in 4.29s`, and context search `15 passed in 97.59s`.
