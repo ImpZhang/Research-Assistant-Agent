@@ -12,7 +12,15 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.research.db import SessionLocal
-from backend.research.models import Evidence, Idea, Paper, ResearchEdge, ResearchGap, ResearchNode
+from backend.research.models import (
+    Evidence,
+    Idea,
+    Paper,
+    ResearchEdge,
+    ResearchEmbedding,
+    ResearchGap,
+    ResearchNode,
+)
 from backend.research.services.graph_service import GraphService
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
@@ -6459,6 +6467,151 @@ Graph context for {title_marker} should stay inside its selected paper scope.
     assert any(
         set(edge["evidence_ids"]).intersection(evidence_b_ids) for edge in body["graph_edges"]
     )
+
+
+def test_context_search_graph_expansion_keeps_relevant_edge_after_recent_noise() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"graphrecall{time.time_ns()}"
+    old_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    new_time = datetime(2026, 1, 2, tzinfo=timezone.utc)
+    paper_id: str | None = None
+    evidence_id: str | None = None
+    node_ids: list[str] = []
+    edge_ids: list[str] = []
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            title=f"Graph Recall Paper {marker}",
+            filename="graph_recall_window.txt",
+            source_type="pytest",
+            status="indexed",
+            created_at=old_time,
+            updated_at=old_time,
+        )
+        session.add(paper)
+        session.flush()
+        paper_id = paper.id
+        evidence = Evidence(
+            paper_id=paper_id,
+            evidence_type="graph_recall",
+            text=f"{marker} should keep graph expansion connected to scoped evidence.",
+            summary=f"{marker} graph expansion recall fixture.",
+            supports="Graph expansion should filter by seed nodes before the recent-edge window.",
+            confidence=0.9,
+            metadata_json={"fixture": "context_search_graph_recall_window"},
+            created_at=old_time,
+            updated_at=old_time,
+        )
+        session.add(evidence)
+        session.flush()
+        evidence_id = evidence.id
+
+        paper_node = ResearchNode(
+            node_type="paper",
+            label=paper.title,
+            canonical_key=paper_id,
+            payload_json={"fixture": "graph_recall_window"},
+            created_at=old_time,
+            updated_at=old_time,
+        )
+        evidence_node = ResearchNode(
+            node_type="evidence",
+            label=f"Graph recall evidence {marker}",
+            canonical_key=evidence_id,
+            payload_json={"paper_id": paper_id, "fixture": "graph_recall_window"},
+            created_at=old_time,
+            updated_at=old_time,
+        )
+        noise_source = ResearchNode(
+            node_type="pytest_graph_noise_source",
+            label=f"Graph recall noise source {marker}",
+            canonical_key=f"{marker}-noise-source",
+            payload_json={"fixture": "graph_recall_window"},
+            created_at=new_time,
+            updated_at=new_time,
+        )
+        noise_target = ResearchNode(
+            node_type="pytest_graph_noise_target",
+            label=f"Graph recall noise target {marker}",
+            canonical_key=f"{marker}-noise-target",
+            payload_json={"fixture": "graph_recall_window"},
+            created_at=new_time,
+            updated_at=new_time,
+        )
+        session.add_all([paper_node, evidence_node, noise_source, noise_target])
+        session.flush()
+        node_ids = [paper_node.id, evidence_node.id, noise_source.id, noise_target.id]
+
+        relevant_edge = ResearchEdge(
+            source_node_id=paper_node.id,
+            target_node_id=evidence_node.id,
+            edge_type="paper_has_evidence",
+            evidence_ids_json=[evidence_id],
+            payload_json={"fixture": "graph_recall_window"},
+            created_at=old_time,
+            updated_at=old_time,
+        )
+        noise_edges = [
+            ResearchEdge(
+                source_node_id=noise_source.id,
+                target_node_id=noise_target.id,
+                edge_type="paper_has_evidence",
+                evidence_ids_json=[f"{marker}-noise-{index}"],
+                payload_json={"fixture": "graph_recall_window", "index": index},
+                created_at=new_time,
+                updated_at=new_time,
+            )
+            for index in range(805)
+        ]
+        session.add(relevant_edge)
+        session.add_all(noise_edges)
+        session.flush()
+        edge_ids = [relevant_edge.id, *[edge.id for edge in noise_edges]]
+        session.commit()
+    finally:
+        session.close()
+
+    try:
+        response = client.post(
+            "/research/search/context",
+            json={
+                "query": marker,
+                "paper_ids": [paper_id],
+                "limit": 1,
+                "include_graph": True,
+                "graph_edge_types": ["paper_has_evidence"],
+            },
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["evidences"][0]["evidence"]["id"] == evidence_id
+        assert any(evidence_id in edge["evidence_ids"] for edge in body["graph_edges"])
+        assert any(node["canonical_key"] == paper_id for node in body["graph_nodes"])
+    finally:
+        cleanup = SessionLocal()
+        try:
+            if edge_ids:
+                cleanup.query(ResearchEdge).filter(ResearchEdge.id.in_(edge_ids)).delete(
+                    synchronize_session=False
+                )
+            if node_ids:
+                cleanup.query(ResearchNode).filter(ResearchNode.id.in_(node_ids)).delete(
+                    synchronize_session=False
+                )
+            owner_ids = [item_id for item_id in [paper_id, evidence_id] if item_id is not None]
+            if owner_ids:
+                cleanup.query(ResearchEmbedding).filter(
+                    ResearchEmbedding.owner_id.in_(owner_ids)
+                ).delete(synchronize_session=False)
+            if evidence_id is not None:
+                cleanup.query(Evidence).filter(Evidence.id == evidence_id).delete()
+            if paper_id is not None:
+                cleanup.query(Paper).filter(Paper.id == paper_id).delete()
+            cleanup.commit()
+        finally:
+            cleanup.close()
 
 
 def test_job_cancel_and_retry_controls() -> None:

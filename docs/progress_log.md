@@ -1413,3 +1413,23 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_context_search_evaluations.sh` passed: `14 passed in 96.04s`.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 68.15s`, deployment contracts `1 passed in 1.79s`, research workflow primitives `11 passed in 81.73s`, research planning contracts `3 passed in 78.56s`, write audit `7 passed in 4.10s`, workflow job controls `3 passed in 99.58s`, tool bridge contracts `10 passed in 2.26s`, GraphRAG-lite `4 passed in 4.31s`, and context search `14 passed in 92.31s`.
+
+## 2026-06-13 - Context Search Graph Expansion Recall
+
+Implemented in progress:
+
+- Updated GraphRAG-lite context expansion to query seed-node-connected edges before falling back to the recent-edge evidence-id scan, so relevant older graph edges are not hidden by many newer unrelated edges.
+- Added a deterministic context-search regression with one relevant older `paper_has_evidence` edge and 805 newer unrelated edges, then verified scoped graph search still returns the relevant edge and paper node.
+- Added the new test to `scripts/check_context_search_evaluations.sh` and updated `docs/context_search_evaluation_plan.md` plus `codex_handoff/03_TODO.md` to keep graph expansion recall coverage synchronized.
+- Did not install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/retrieval_service.py backend/research/services/embedding_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_context_search_graph_expansion_keeps_relevant_edge_after_recent_noise` passed: `1 passed in 5.31s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_context_search_evaluations.sh` passed: `15 passed in 94.02s`.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `25 passed in 66.58s`, deployment contracts `1 passed in 1.78s`, research workflow primitives `11 passed in 78.75s`, research planning contracts `3 passed in 79.87s`, write audit `7 passed in 4.30s`, workflow job controls `3 passed in 103.93s`, tool bridge contracts `10 passed in 2.30s`, GraphRAG-lite `4 passed in 4.35s`, and context search `15 passed in 94.27s`.

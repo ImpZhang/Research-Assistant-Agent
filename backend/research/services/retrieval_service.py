@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 import re
 from typing import Any
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from backend.research.models import Evidence, Idea, ResearchEdge, ResearchGap, ResearchNode
@@ -210,19 +211,33 @@ class RetrievalService:
         )
         if allowed_edge_types:
             edge_query = edge_query.filter(ResearchEdge.edge_type.in_(allowed_edge_types))
-        candidate_edges = edge_query.limit(800).all()
-        edges = []
-        for edge in candidate_edges:
-            edge_evidence_ids = set(edge.evidence_ids_json or [])
-            if (
-                edge.source_node_id in seed_node_ids
-                or edge.target_node_id in seed_node_ids
-                or edge_evidence_ids.intersection(evidence_ids)
-            ):
-                edges.append(edge)
-            if len(edges) >= limit:
-                break
 
+        edges_by_id: dict[str, ResearchEdge] = {}
+        if seed_node_ids:
+            connected_edges = (
+                edge_query.filter(
+                    or_(
+                        ResearchEdge.source_node_id.in_(seed_node_ids),
+                        ResearchEdge.target_node_id.in_(seed_node_ids),
+                    )
+                )
+                .limit(limit)
+                .all()
+            )
+            edges_by_id.update({edge.id: edge for edge in connected_edges})
+
+        if len(edges_by_id) < limit and evidence_ids:
+            candidate_edges = edge_query.limit(800).all()
+            for edge in candidate_edges:
+                if edge.id in edges_by_id:
+                    continue
+                edge_evidence_ids = set(edge.evidence_ids_json or [])
+                if edge_evidence_ids.intersection(evidence_ids):
+                    edges_by_id[edge.id] = edge
+                if len(edges_by_id) >= limit:
+                    break
+
+        edges = list(edges_by_id.values())
         node_ids = set(seed_node_ids)
         for edge in edges:
             node_ids.add(edge.source_node_id)
