@@ -176,6 +176,7 @@ scripts/
   check_remote_long_suite.sh
   check_remote_safe_suite.sh
   check_research_planning_contracts.sh
+  check_script_catalog.sh
   check_suite_contracts.sh
   check_research_proposal_contracts.sh
   check_research_workflow_primitives.sh
@@ -244,6 +245,12 @@ Run the focused-suite contract check so default and long remote suites keep the 
 
 ```bash
 bash scripts/check_suite_contracts.sh
+```
+
+Run the check-script catalog sync check so README and check script structure stay aligned:
+
+```bash
+bash scripts/check_script_catalog.sh
 ```
 
 Run the focused-test coverage map check so new pytest tests stay assigned to a focused remote check:

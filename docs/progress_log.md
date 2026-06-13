@@ -956,3 +956,19 @@ Verification completed:
 
 - `bash scripts/check_suite_contracts.sh` passed: `Focused suite contracts are valid.`
 - `bash scripts/check_remote_safe_suite.sh` passed the suite contract guard, focused coverage guard, and all nine default focused suites: pilot readiness `19 passed in 57.30s`, deployment contracts `1 passed in 1.64s`, research workflow primitives `11 passed in 72.27s`, research planning contracts `3 passed in 70.45s`, write audit `7 passed in 3.99s`, workflow job controls `3 passed in 88.70s`, tool bridge contracts `10 passed in 2.19s`, GraphRAG-lite `2 passed in 2.90s`, and context search `4 passed in 70.72s`.
+
+## 2026-06-13 - Check Script Catalog Guard
+
+Implemented in progress:
+
+- Added `scripts/check_script_catalog.sh` as a fast guard that ensures every `scripts/check_*.sh` file is listed in README and follows the standard bash/root-directory preamble.
+- Added the catalog guard to `scripts/check_remote_safe_suite.sh` after the suite-boundary guard and before pytest coverage mapping.
+- Updated `scripts/check_suite_contracts.sh` so the default suite must include the catalog guard.
+- Linked the catalog guard from README verification instructions, top-level TODO, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_script_catalog.sh` passed: `Check script catalog is synchronized.`
+- `bash scripts/check_suite_contracts.sh` passed: `Focused suite contracts are valid.`
+- `bash scripts/check_remote_safe_suite.sh` passed the suite contract guard, script catalog guard, focused coverage guard, and all nine default focused suites: pilot readiness `19 passed in 58.91s`, deployment contracts `1 passed in 1.66s`, research workflow primitives `11 passed in 69.75s`, research planning contracts `3 passed in 71.07s`, write audit `7 passed in 4.12s`, workflow job controls `3 passed in 89.37s`, tool bridge contracts `10 passed in 2.22s`, GraphRAG-lite `2 passed in 2.92s`, and context search `4 passed in 70.65s`.
