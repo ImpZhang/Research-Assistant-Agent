@@ -2318,6 +2318,32 @@ Pilot uploads should not fail just because an operator mistyped the byte limit.
     assert (tmp_path / "invalid_limit_fallback.md").exists()
 
 
+def test_upload_non_positive_max_bytes_falls_back_to_default_limit(tmp_path, monkeypatch) -> None:
+    from backend.research.services import document_ingestion
+
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setenv("PAPER_UPLOAD_MAX_BYTES", "-1")
+    default_max_bytes = document_ingestion.settings.paper_upload_max_bytes
+    object.__setattr__(document_ingestion.settings, "paper_upload_max_bytes", 8)
+    try:
+        client = TestClient(create_app())
+        response = client.post(
+            "/research/papers/upload",
+            files={"file": ("negative_limit.txt", b"0123456789", "text/plain")},
+        )
+    finally:
+        object.__setattr__(
+            document_ingestion.settings,
+            "paper_upload_max_bytes",
+            default_max_bytes,
+        )
+
+    assert response.status_code == 400
+    assert "too large" in response.json()["detail"]
+    assert "Max allowed size is 8 bytes" in response.json()["detail"]
+    assert not (tmp_path / "negative_limit.txt").exists()
+
+
 def test_upload_rejects_binary_text_file_before_writing(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
     client = TestClient(create_app())

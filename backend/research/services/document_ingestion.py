@@ -196,9 +196,10 @@ class DocumentIngestionService:
     def _upload_max_bytes(self) -> int:
         raw = os.getenv("PAPER_UPLOAD_MAX_BYTES") or str(settings.paper_upload_max_bytes)
         try:
-            return max(0, int(raw))
+            value = int(raw)
         except ValueError:
             return settings.paper_upload_max_bytes
+        return value if value > 0 else settings.paper_upload_max_bytes
 
     def _validate_upload_content(self, filename: str, suffix: str, content: bytes) -> None:
         if suffix == ".pdf" and not content.startswith(b"%PDF-"):

@@ -20,6 +20,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_upload_rejects_empty_file_before_writing \
   tests/test_app.py::test_upload_rejects_file_larger_than_limit \
   tests/test_app.py::test_upload_invalid_max_bytes_falls_back_to_default_limit \
+  tests/test_app.py::test_upload_non_positive_max_bytes_falls_back_to_default_limit \
   tests/test_app.py::test_upload_rejects_binary_text_file_before_writing \
   tests/test_app.py::test_upload_rejects_non_utf8_text_before_writing \
   tests/test_app.py::test_upload_rejects_pdf_without_pdf_header_before_writing \
