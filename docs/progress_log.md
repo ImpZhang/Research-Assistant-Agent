@@ -941,3 +941,18 @@ Implemented in progress:
 Verification completed:
 
 - `bash scripts/check_remote_long_suite.sh` passed: focused coverage guard reported `All pytest tests are covered by focused check scripts`, and proposal contracts passed `1 passed in 489.28s`.
+
+## 2026-06-13 - Focused Suite Contract Guard
+
+Implemented in progress:
+
+- Added `scripts/check_suite_contracts.sh` as a fast guard for the intended default remote-safe versus long focused suite boundary.
+- Added the suite contract guard to the start of `scripts/check_remote_safe_suite.sh` so long checks cannot drift into the default suite unnoticed.
+- The guard requires default remote-safe checks to include the fast coverage guard and default focused scripts, forbids proposal/long-suite commands in the default suite, and requires the long suite to include coverage and proposal contracts.
+- Linked the guard from README verification instructions, top-level TODO, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_suite_contracts.sh` passed: `Focused suite contracts are valid.`
+- `bash scripts/check_remote_safe_suite.sh` passed the suite contract guard, focused coverage guard, and all nine default focused suites: pilot readiness `19 passed in 57.30s`, deployment contracts `1 passed in 1.64s`, research workflow primitives `11 passed in 72.27s`, research planning contracts `3 passed in 70.45s`, write audit `7 passed in 3.99s`, workflow job controls `3 passed in 88.70s`, tool bridge contracts `10 passed in 2.19s`, GraphRAG-lite `2 passed in 2.90s`, and context search `4 passed in 70.72s`.
