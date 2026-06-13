@@ -252,7 +252,7 @@ Run focused GraphRAG-lite duplicate-edge and graph stats checks:
 bash scripts/check_graph_rag_lite.sh
 ```
 
-Run focused pilot-readiness guardrail checks without starting a service:
+Run focused pilot-readiness, first-run onboarding, and pilot-report guardrail checks without starting a service:
 
 ```bash
 bash scripts/check_pilot_readiness.sh

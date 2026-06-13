@@ -822,3 +822,18 @@ Verification completed:
 
 - `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 1.64s`.
 - `bash scripts/check_remote_safe_suite.sh` passed all seven focused suites: pilot readiness `14 passed in 25.04s`, deployment contracts `1 passed in 1.69s`, write audit `7 passed in 3.87s`, workflow job controls `3 passed in 86.54s`, tool bridge contracts `10 passed in 2.31s`, GraphRAG-lite `2 passed in 2.83s`, and context search `4 passed in 67.54s`.
+
+## 2026-06-13 - Pilot First-Run Readiness Coverage
+
+Implemented in progress:
+
+- Expanded `scripts/check_pilot_readiness.sh` from 14 to 18 pytest targets.
+- Added existing first-run setup wizard, onboarding task creation, onboarding progress, and pilot report snapshot/export/comparison coverage to the focused pilot-readiness check.
+- Updated README, top-level TODO, and handoff TODO so the script is the default check before changing setup wizard, onboarding, pilot report, upload, API-key, or Workbench first-run behavior.
+- Kept the work scoped to existing `.venv` tools and in-process pytest targets; it does not install dependencies or start services.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_pilot_readiness.sh` passed: `18 passed in 56.48s`.
+- `bash scripts/check_remote_safe_suite.sh` passed all seven focused suites: pilot readiness `18 passed in 55.80s`, deployment contracts `1 passed in 1.65s`, write audit `7 passed in 3.97s`, workflow job controls `3 passed in 85.72s`, tool bridge contracts `10 passed in 2.17s`, GraphRAG-lite `2 passed in 2.93s`, and context search `4 passed in 68.14s`.
