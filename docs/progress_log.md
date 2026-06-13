@@ -563,3 +563,20 @@ Verification completed:
 - `.venv/bin/ruff check tests/test_app.py` passed.
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - Focused pytest passed: `1 passed in 56.37s`.
+
+## 2026-06-13 - Context Search Empty Query Guard Fixture
+
+Implemented in progress:
+
+- Added an `empty_query_guard_rate` helper for deterministic context-search evaluation.
+- Added a fast fixture covering empty, too-short, and punctuation-only queries.
+- Verified each invalid query returns HTTP 400 with the stable searchable-term error message.
+- Updated README, context-search evaluation plan, and handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` reformatted one file.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- Focused pytest passed: `1 passed in 1.93s`.

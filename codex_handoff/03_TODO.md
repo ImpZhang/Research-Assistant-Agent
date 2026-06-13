@@ -306,6 +306,7 @@ Completed so far:
 - Added per-result context-search `score_breakdown` values for lexical, bonus, phrase, and vector score contributions.
 - Documented context-search retrieval calibration and evaluation in `docs/context_search_evaluation_plan.md` before changing scoring weights further.
 - Added the first deterministic context-search evaluation fixture covering evidence hit@k, MRR, graph edge hit/noise, and score breakdown coverage.
+- Added an empty-query guard evaluation fixture covering empty, too-short, and punctuation-only context-search queries.
 
 Likely work:
 

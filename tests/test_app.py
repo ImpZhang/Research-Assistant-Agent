@@ -5486,6 +5486,24 @@ def _graph_noise_rate(edges: list[dict], allowed_edge_types: set[str]) -> float:
     return round(len(noisy) / len(edges), 4)
 
 
+def _empty_query_guard_rate(client: TestClient, queries: list[str]) -> float:
+    guarded = []
+    for query in queries:
+        response = client.post(
+            "/research/search/context",
+            json={"query": query, "limit": 5, "include_graph": True},
+        )
+        guarded.append(response.status_code == 400)
+        if response.status_code == 400:
+            assert response.json()["detail"] == ("Query must contain at least one searchable term")
+    return round(sum(guarded) / len(queries), 4)
+
+
+def test_context_search_empty_query_guard_fixture() -> None:
+    client = TestClient(create_app())
+    assert _empty_query_guard_rate(client, ["", "to be", "??"]) == 1.0
+
+
 def test_job_cancel_and_retry_controls() -> None:
     client = TestClient(create_app())
     content = b"""Job Controls Test Paper
