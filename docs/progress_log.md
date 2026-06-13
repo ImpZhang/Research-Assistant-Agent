@@ -596,3 +596,19 @@ Verification completed:
 - `.venv/bin/ruff check tests/test_app.py` passed.
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - Focused pytest passed: `1 passed in 46.22s`.
+
+## 2026-06-13 - Context Search Graph Noise Assertion
+
+Implemented in progress:
+
+- Reused the existing `graph_noise_rate` helper in the filtered graph context-search fixture.
+- Required filtered graph edges to report zero unrelated edge types when `graph_edge_types` is restricted to `paper_has_evidence`.
+- Updated handoff TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` left the file unchanged.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- Focused pytest passed: `1 passed in 47.86s`.

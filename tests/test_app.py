@@ -5690,6 +5690,7 @@ Future work should make GraphRAG context retrieval stronger.
     assert filtered_body["evidences"]
     assert filtered_body["graph_edges"]
     assert {edge["edge_type"] for edge in filtered_body["graph_edges"]} == {"paper_has_evidence"}
+    assert _graph_noise_rate(filtered_body["graph_edges"], {"paper_has_evidence"}) == 0.0
 
 
 def test_graph_rag_lite_records_workflow_links() -> None:

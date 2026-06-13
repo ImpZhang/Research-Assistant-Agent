@@ -308,6 +308,7 @@ Completed so far:
 - Added the first deterministic context-search evaluation fixture covering evidence hit@k, MRR, graph edge hit/noise, and score breakdown coverage.
 - Added an empty-query guard evaluation fixture covering empty, too-short, and punctuation-only context-search queries.
 - Added a score-breakdown consistency fixture so lexical/bonus/phrase/vector totals must match visible context-search scores within rounding tolerance.
+- Tightened graph noise evaluation so filtered context-search graph edges must have zero unrelated edge types.
 
 Likely work:
 
