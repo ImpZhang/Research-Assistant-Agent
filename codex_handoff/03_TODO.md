@@ -188,6 +188,7 @@ Completed slices:
 - Grouped Workbench dossier controls into idea loop, task board, project delivery, and project operations sections.
 - Added admin-gated write-operation audit summary and bounded raw JSONL export endpoints after documenting admin authorization and retention/export policy.
 - Added `scripts/check_pilot_readiness.sh` as a focused remote check for health/readiness, `/research/status` capabilities, API-key guard, upload guardrails including the text-upload happy path, Workbench static assets, onboarding readiness, setup wizard, onboarding task/progress, pilot report, and pilot report snapshot behavior.
+- Added focused upload guardrail coverage for path-traversal filename sanitization and non-UTF-8 text rejection before file writes.
 - Added `scripts/check_deployment_contracts.sh` as a focused remote check for Dockerfile, compose, deployment docs, migration/admin policy docs, and `.env.example` customer-runtime placeholders.
 - Added `scripts/check_focused_test_coverage.sh` as a fast default-suite guard that fails when pytest tests are not assigned to focused check scripts.
 - Added `scripts/check_suite_contracts.sh` as a fast default-suite guard for the intended remote-safe versus long-suite boundary.

@@ -2109,6 +2109,20 @@ def test_upload_rejects_binary_text_file_before_writing(tmp_path, monkeypatch) -
     assert not (tmp_path / "fake_text.txt").exists()
 
 
+def test_upload_rejects_non_utf8_text_before_writing(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("latin1_text.txt", b"Title: caf\xe9", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert "must be UTF-8 encoded text" in response.json()["detail"]
+    assert not (tmp_path / "latin1_text.txt").exists()
+
+
 def test_upload_rejects_pdf_without_pdf_header_before_writing(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
     client = TestClient(create_app())
