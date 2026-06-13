@@ -669,3 +669,16 @@ Implemented in progress:
 Verification completed:
 
 - `bash scripts/check_context_search_evaluations.sh` passed with the expanded target list: `4 passed in 66.02s`.
+
+## 2026-06-13 - Context Search Evaluation Handoff Sync
+
+Implemented in progress:
+
+- Updated handoff TODO to make `scripts/check_context_search_evaluations.sh` the default focused check before scoring or graph-expansion changes.
+- Updated the top-level TODO and context-search evaluation plan with the same script guidance.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- Reviewed the documentation diff for `TODO.md`, `codex_handoff/03_TODO.md`, and `docs/context_search_evaluation_plan.md`.
+- `git --no-pager diff --check` passed with no whitespace errors.
