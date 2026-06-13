@@ -657,3 +657,15 @@ Verification completed:
 
 - First script attempt was interrupted by an SSH connection timeout; reconnect confirmed no lingering `pytest`, `ruff`, or script process.
 - Rerun `bash scripts/check_context_search_evaluations.sh` passed: `3 passed in 66.85s`.
+
+## 2026-06-13 - Context Search Evaluation Script Coverage
+
+Implemented in progress:
+
+- Added the fast context-search ranking tie-break unit test to `scripts/check_context_search_evaluations.sh`.
+- Kept the script scoped to existing `.venv` tools and focused pytest targets; it still does not install dependencies or start services.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_context_search_evaluations.sh` passed with the expanded target list: `4 passed in 66.02s`.
