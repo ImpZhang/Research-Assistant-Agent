@@ -12,6 +12,7 @@ This top-level TODO is a stable index for the current remote-first handoff. The 
 ## P1 - Pilot Readiness Without Service Changes
 
 - Run `bash scripts/check_remote_safe_suite.sh` for the current no-service focused verification suite.
+- Run `bash scripts/check_deployment_contracts.sh` before changing Dockerfile, docker-compose, deployment docs, migration/admin policy docs, or `.env.example` runtime placeholders.
 - Run `bash scripts/check_pilot_readiness.sh` before changing pilot readiness, API-key guard, upload guardrail, or workbench first-run behavior.
 - Keep adding narrow, deterministic tests for user-facing research workflows.
 - Keep README, `codex_handoff/03_TODO.md`, and `docs/progress_log.md` synchronized with completed slices.

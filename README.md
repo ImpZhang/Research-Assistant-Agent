@@ -169,6 +169,7 @@ backend/
 docs/
 scripts/
   check_context_search_evaluations.sh
+  check_deployment_contracts.sh
   check_graph_rag_lite.sh
   check_pilot_readiness.sh
   check_remote_safe_suite.sh
@@ -231,6 +232,12 @@ Run unit tests:
 
 ```bash
 uv run pytest -q
+```
+
+Run focused deployment artifact and customer runtime contract checks without starting a service:
+
+```bash
+bash scripts/check_deployment_contracts.sh
 ```
 
 Run focused context-search evaluation checks on the remote `.venv`:

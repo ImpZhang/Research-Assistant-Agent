@@ -807,3 +807,18 @@ Verification completed:
 
 - `bash scripts/check_tool_bridge_contracts.sh` passed: `10 passed in 2.21s`.
 - `bash scripts/check_remote_safe_suite.sh` passed all six focused suites: pilot readiness `14 passed in 24.31s`, write audit `7 passed in 3.91s`, workflow job controls `3 passed in 85.40s`, tool bridge contracts `10 passed in 2.04s`, GraphRAG-lite `2 passed in 2.85s`, and context search `4 passed in 67.07s`.
+
+## 2026-06-13 - Deployment Contract Check Script
+
+Implemented in progress:
+
+- Added `scripts/check_deployment_contracts.sh` as a focused remote check for Dockerfile, docker-compose, deployment docs, migration/admin policy docs, and `.env.example` customer-runtime placeholders.
+- Added the deployment contract script to `scripts/check_remote_safe_suite.sh`.
+- Linked the script from README verification instructions, top-level TODO, and handoff TODO.
+- Kept the script scoped to existing `.venv` tools and in-process pytest targets; it does not install dependencies, read real `.env` values, or start services.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 1.64s`.
+- `bash scripts/check_remote_safe_suite.sh` passed all seven focused suites: pilot readiness `14 passed in 25.04s`, deployment contracts `1 passed in 1.69s`, write audit `7 passed in 3.87s`, workflow job controls `3 passed in 86.54s`, tool bridge contracts `10 passed in 2.31s`, GraphRAG-lite `2 passed in 2.83s`, and context search `4 passed in 67.54s`.
