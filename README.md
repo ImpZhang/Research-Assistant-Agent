@@ -171,6 +171,7 @@ scripts/
   check_context_search_evaluations.sh
   check_graph_rag_lite.sh
   check_pilot_readiness.sh
+  check_remote_safe_suite.sh
   smoke_api.py
 tests/
 ```
@@ -245,6 +246,12 @@ Run focused pilot-readiness guardrail checks without starting a service:
 
 ```bash
 bash scripts/check_pilot_readiness.sh
+```
+
+Run the current remote-safe focused suite without starting services:
+
+```bash
+bash scripts/check_remote_safe_suite.sh
 ```
 
 Run the full in-process API smoke workflow:

@@ -736,3 +736,16 @@ Implemented in progress:
 Verification completed:
 
 - `bash scripts/check_pilot_readiness.sh` passed: `13 passed in 21.89s`.
+
+## 2026-06-13 - Remote Safe Suite Check Script
+
+Implemented in progress:
+
+- Added `scripts/check_remote_safe_suite.sh` as an aggregate no-service verification entrypoint.
+- The suite runs pilot-readiness, GraphRAG-lite, and context-search focused checks in sequence.
+- Linked the aggregate script from README verification instructions and top-level TODO.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_remote_safe_suite.sh` passed all three focused suites: pilot readiness `13 passed in 22.48s`, GraphRAG-lite `2 passed in 2.39s`, and context search `4 passed in 67.51s`.
