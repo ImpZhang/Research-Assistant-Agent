@@ -6814,7 +6814,7 @@ Future work should make GraphRAG context retrieval stronger.
             "paper_ids": [paper_id],
             "limit": 5,
             "include_graph": True,
-            "graph_edge_types": ["", "paper_has_evidence", "paper_has_evidence"],
+            "graph_edge_types": ["", " paper_has_evidence ", "\tpaper_has_evidence\t"],
         },
     )
     assert normalized_filter_response.status_code == 200

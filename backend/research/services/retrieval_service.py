@@ -207,7 +207,11 @@ class RetrievalService:
 
         edge_query = self.session.query(ResearchEdge).order_by(ResearchEdge.created_at.desc())
         allowed_edge_types = sorted(
-            {edge_type for edge_type in graph_edge_types or [] if edge_type}
+            {
+                edge_type.strip()
+                for edge_type in graph_edge_types or []
+                if edge_type and edge_type.strip()
+            }
         )
         if allowed_edge_types:
             edge_query = edge_query.filter(ResearchEdge.edge_type.in_(allowed_edge_types))

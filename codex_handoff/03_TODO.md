@@ -342,6 +342,7 @@ Completed so far:
 - Added paper-filter leak evaluation fixtures so scoped context-search evidence, gaps, ideas, and GraphRAG-lite context cannot include excluded papers.
 - Added a graph expansion recall fixture so relevant seed-node edges cannot be hidden by many newer unrelated graph edges.
 - Added multi-edge-type filter coverage so GraphRAG-lite context search can include selected workflow edge families without admitting unrelated edge types.
+- Normalized blank, duplicate, and whitespace-padded GraphRAG-lite edge-type filters so context search does not drop valid selected edge families.
 - Added `scripts/check_context_search_evaluations.sh` as the focused remote check for context-search ranking, no-match, idea-bonus, gap-bonus, evidence-bonus, phrase-bonus, vector-rescue, query-term deduplication, lower/upper limit-clamping, guard, filter normalization, score-breakdown, and graph-context fixtures.
 - Added `scripts/check_graph_rag_lite.sh` as the focused remote check for duplicate-edge reuse, duplicate/orphan-edge stats, and graph link/stat fixtures.
 - Added `scripts/check_tool_bridge_contracts.sh` as the focused remote check for tool manifest, MCP spec, and MCP HTTP bridge contracts.
