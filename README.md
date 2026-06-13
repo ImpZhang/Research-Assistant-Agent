@@ -255,7 +255,7 @@ Run focused GraphRAG-lite duplicate-edge and graph stats checks:
 bash scripts/check_graph_rag_lite.sh
 ```
 
-Run focused research workflow primitive checks for local literature search, paper cards, gaps, ideas, novelty, related work, and Markdown dossier exports:
+Run focused research workflow primitive checks for local literature search, paper cards, structured extraction fallback, gaps, ideas, novelty, related work, and Markdown dossier exports:
 
 ```bash
 bash scripts/check_research_workflow_primitives.sh

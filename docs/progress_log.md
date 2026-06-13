@@ -884,3 +884,17 @@ Verification completed:
 - `bash scripts/check_research_proposal_contracts.sh` passed: `1 passed in 486.71s`.
 - `bash scripts/check_context_search_evaluations.sh` passed after the scoped vector-search fix: `4 passed in 73.68s`.
 - `bash scripts/check_remote_safe_suite.sh` passed all nine default focused suites without the long proposal check: pilot readiness `18 passed in 58.56s`, deployment contracts `1 passed in 1.76s`, research workflow primitives `10 passed in 67.91s`, research planning contracts `3 passed in 66.68s`, write audit `7 passed in 3.29s`, workflow job controls `3 passed in 86.69s`, tool bridge contracts `10 passed in 2.20s`, GraphRAG-lite `2 passed in 2.91s`, and context search `4 passed in 70.95s`.
+
+## 2026-06-13 - Structured Extraction Fallback Coverage
+
+Implemented in progress:
+
+- Added `test_structured_card_extraction_falls_back_without_model_config` to `scripts/check_research_workflow_primitives.sh` so the default remote-safe suite covers deterministic structured paper-card fallback when model credentials are absent.
+- Updated README, top-level TODO, and handoff TODO so workflow primitive changes call out structured extraction fallback alongside local literature search, paper cards, gap/idea generation, novelty, related work, and dossier exports.
+- Kept the change scoped to existing `.venv` tools and in-process pytest targets; it does not install dependencies, start services, or require external API access.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_research_workflow_primitives.sh` passed: `11 passed in 68.16s`.
+- `bash scripts/check_remote_safe_suite.sh` passed all nine default focused suites: pilot readiness `18 passed in 56.23s`, deployment contracts `1 passed in 1.64s`, research workflow primitives `11 passed in 67.50s`, research planning contracts `3 passed in 68.42s`, write audit `7 passed in 3.98s`, workflow job controls `3 passed in 85.95s`, tool bridge contracts `10 passed in 2.17s`, GraphRAG-lite `2 passed in 2.83s`, and context search `4 passed in 66.84s`.

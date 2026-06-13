@@ -15,4 +15,5 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_review_and_experiment_plan_for_idea \
   tests/test_app.py::test_novelty_check_records_local_collision_screening \
   tests/test_app.py::test_related_work_matrix_persists_overlap_rows_and_markdown \
-  tests/test_app.py::test_markdown_exports_for_card_and_idea_dossier
+  tests/test_app.py::test_markdown_exports_for_card_and_idea_dossier \
+  tests/test_app.py::test_structured_card_extraction_falls_back_without_model_config
