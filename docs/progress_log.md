@@ -723,3 +723,16 @@ Implemented in progress:
 Verification completed:
 
 - `bash scripts/check_graph_rag_lite.sh` passed: `2 passed in 2.87s`.
+
+## 2026-06-13 - Pilot Readiness Check Script
+
+Implemented in progress:
+
+- Added `scripts/check_pilot_readiness.sh` as a focused remote check for health/readiness, optional API-key guard behavior, upload guardrails, Workbench static assets, onboarding readiness, and pilot status report behavior.
+- Linked the script from README verification instructions, top-level TODO, and handoff TODO.
+- Kept the script scoped to existing `.venv` tools and in-process pytest targets; it does not install dependencies or start services.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_pilot_readiness.sh` passed: `13 passed in 21.89s`.

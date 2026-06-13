@@ -11,6 +11,7 @@ This top-level TODO is a stable index for the current remote-first handoff. The 
 
 ## P1 - Pilot Readiness Without Service Changes
 
+- Run `bash scripts/check_pilot_readiness.sh` before changing pilot readiness, API-key guard, upload guardrail, or workbench first-run behavior.
 - Keep adding narrow, deterministic tests for user-facing research workflows.
 - Keep README, `codex_handoff/03_TODO.md`, and `docs/progress_log.md` synchronized with completed slices.
 - Prefer docs/tests/API guardrails that do not require dependency installs, migrations, service restarts, or deployment changes.

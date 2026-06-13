@@ -187,9 +187,11 @@ Completed slices:
 - Added a disabled-by-default JSONL write-operation audit helper and middleware prototype.
 - Grouped Workbench dossier controls into idea loop, task board, project delivery, and project operations sections.
 - Added admin-gated write-operation audit summary and bounded raw JSONL export endpoints after documenting admin authorization and retention/export policy.
+- Added `scripts/check_pilot_readiness.sh` as a focused remote check for health/readiness, API-key guard, upload guardrails, Workbench static assets, onboarding readiness, and pilot status report behavior.
 
 Next likely work:
 
+- Run `bash scripts/check_pilot_readiness.sh` before changing pilot readiness, API-key guard, upload guardrail, or Workbench first-run behavior.
 - Decide whether backup/restore should become a checked script after deployment target details are fixed.
 - Decide whether write-operation audit should graduate from JSONL to database persistence after migration strategy is settled.
 - Decide whether write-operation audit rotation/cleanup should be implemented after backup/retention decisions are settled.

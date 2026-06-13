@@ -170,6 +170,7 @@ docs/
 scripts/
   check_context_search_evaluations.sh
   check_graph_rag_lite.sh
+  check_pilot_readiness.sh
   smoke_api.py
 tests/
 ```
@@ -238,6 +239,12 @@ Run focused GraphRAG-lite duplicate-edge and graph stats checks:
 
 ```bash
 bash scripts/check_graph_rag_lite.sh
+```
+
+Run focused pilot-readiness guardrail checks without starting a service:
+
+```bash
+bash scripts/check_pilot_readiness.sh
 ```
 
 Run the full in-process API smoke workflow:
