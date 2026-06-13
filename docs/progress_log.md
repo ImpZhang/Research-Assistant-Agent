@@ -1113,3 +1113,24 @@ Verification completed:
 - `bash scripts/check_pilot_readiness.sh` passed: `23 passed in 61.51s`.
 - `git --no-pager diff --check` passed with no whitespace errors.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `23 passed in 62.67s`, deployment contracts `1 passed in 1.32s`, research workflow primitives `11 passed in 72.46s`, research planning contracts `3 passed in 72.41s`, write audit `7 passed in 3.95s`, workflow job controls `3 passed in 92.71s`, tool bridge contracts `10 passed in 2.28s`, GraphRAG-lite `2 passed in 2.90s`, and context search `4 passed in 73.22s`.
+
+## 2026-06-13 - Upload Allowed Extension Override Test
+
+Implemented in progress:
+
+- Added a focused upload guardrail test that sets `PAPER_UPLOAD_ALLOWED_EXTENSIONS=txt`, posts a Markdown file, and verifies the API rejects it before writing the file.
+- Added the new test to `scripts/check_pilot_readiness.sh` so extension override validation stays in the no-service pilot-readiness suite.
+- Updated `codex_handoff/03_TODO.md` to keep completed pilot-readiness upload coverage synchronized.
+- Did not change upload implementation, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_upload_respects_allowed_extensions_override_before_writing` passed: `1 passed in 3.33s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_pilot_readiness.sh` passed: `24 passed in 60.07s`.
+- `git --no-pager diff --check` passed with no whitespace errors.
+- `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `24 passed in 60.59s`, deployment contracts `1 passed in 1.67s`, research workflow primitives `11 passed in 73.84s`, research planning contracts `3 passed in 72.05s`, write audit `7 passed in 3.96s`, workflow job controls `3 passed in 91.74s`, tool bridge contracts `10 passed in 2.18s`, GraphRAG-lite `2 passed in 2.88s`, and context search `4 passed in 73.36s`.

@@ -2080,6 +2080,22 @@ def test_upload_rejects_unsupported_file_type(tmp_path, monkeypatch) -> None:
     assert not (tmp_path / "malware.exe").exists()
 
 
+def test_upload_respects_allowed_extensions_override_before_writing(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setenv("PAPER_UPLOAD_ALLOWED_EXTENSIONS", "txt")
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("blocked_markdown.md", b"# Blocked", "text/markdown")},
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported file type" in response.json()["detail"]
+    assert ".txt" in response.json()["detail"]
+    assert not (tmp_path / "blocked_markdown.md").exists()
+
+
 def test_upload_rejects_empty_file_before_writing(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
     client = TestClient(create_app())
