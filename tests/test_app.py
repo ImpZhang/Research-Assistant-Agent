@@ -24,6 +24,7 @@ from backend.research.models import (
 from backend.research.services.graph_service import GraphService
 from backend.research.schemas import LiteratureSearchItem, LiteratureSearchResponse
 from backend.research.services.literature_search_service import LiteratureSearchService
+from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
 from backend.research.services.workflow_service import WorkflowService
@@ -3272,6 +3273,115 @@ Future work should compare generated ideas against recent preprints.
     progress_body = progress.json()
     assert progress_body["artifact_counts"]["novelty_follow_up_tasks"] >= 1
     assert progress_body["task_summary"]["by_owner_type"]["novelty_check"] >= 1
+
+
+def test_novelty_service_scores_overlap_with_caps_and_weights() -> None:
+    service = NoveltyService(None)
+
+    assert service._score_overlap([]) == 0.0
+    assert (
+        service._score_overlap(
+            [
+                {"source_type": "evidence", "score": 99.0},
+                {"source_type": "idea", "score": 9.0},
+                {"source_type": "literature", "score": 4.0},
+                {"source_type": "gap", "score": 2.0},
+            ]
+        )
+        == 0.7314
+    )
+    assert (
+        service._score_overlap([{"source_type": "literature", "score": 99.0} for _ in range(5)])
+        == 1.0
+    )
+
+
+def test_novelty_service_external_overlap_score_respects_statuses() -> None:
+    service = NoveltyService(None)
+
+    def response(status: str, items: list[LiteratureSearchItem]) -> LiteratureSearchResponse:
+        return LiteratureSearchResponse(
+            query="agent novelty",
+            local_status="completed",
+            external_status=status,
+            items=items,
+            message="fixture",
+        )
+
+    assert service._external_overlap_score(response("not_requested", [])) is None
+    assert service._external_overlap_score(response("disabled", [])) is None
+    assert (
+        service._external_overlap_score(
+            response(
+                "completed",
+                [
+                    LiteratureSearchItem(
+                        provider="local", source_id="local", title="Local result", score=99.0
+                    ),
+                ],
+            )
+        )
+        == 0.0
+    )
+    assert (
+        service._external_overlap_score(
+            response(
+                "completed",
+                [
+                    LiteratureSearchItem(
+                        provider="local", source_id="local", title="Local result", score=99.0
+                    ),
+                    LiteratureSearchItem(
+                        provider="openalex",
+                        source_id="openalex",
+                        title="OpenAlex result",
+                        score=12.0,
+                    ),
+                    LiteratureSearchItem(
+                        provider="semantic_scholar",
+                        source_id="s2",
+                        title="Semantic Scholar result",
+                        score=8.0,
+                    ),
+                ],
+            )
+        )
+        == 0.45
+    )
+
+
+def test_novelty_service_missing_searches_risk_and_actions() -> None:
+    service = NoveltyService(None)
+
+    def response(status: str) -> LiteratureSearchResponse:
+        return LiteratureSearchResponse(
+            query="agent novelty",
+            local_status="completed",
+            external_status=status,
+            items=[],
+            message="fixture",
+        )
+
+    assert service._missing_searches(response("not_requested"), False)[0] == (
+        "external_literature_search_not_requested"
+    )
+    assert service._missing_searches(response("disabled"), True)[0] == (
+        "external_literature_search_disabled"
+    )
+    assert service._missing_searches(response("failed_timeout"), True)[0] == (
+        "external_literature_search_failed_timeout"
+    )
+    assert service._missing_searches(response("completed"), True)[-1] == (
+        "external_literature_search_needs_manual_review"
+    )
+
+    nearby_ideas = [ScoredItem(item=Idea(id="nearby-idea"), score=0.9, matched_terms=["agent"])]
+    assert service._risk_level(0.0, []) == "unknown"
+    assert service._risk_level(0.1, []) == "low"
+    assert service._risk_level(0.36, []) == "medium"
+    assert service._risk_level(0.46, nearby_ideas) == "high"
+    assert service._recommended_actions("high")[0].startswith("Narrow the method")
+    assert service._recommended_actions("unknown")[-1].startswith("Add more source papers")
 
 
 def test_related_work_matrix_persists_overlap_rows_and_markdown() -> None:

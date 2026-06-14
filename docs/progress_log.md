@@ -1788,3 +1788,21 @@ Verification completed:
 - `bash scripts/check_research_workflow_primitives.sh` passed: `27 passed in 85.49s`.
 - Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
 - The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 76.87s`, deployment contracts `1 passed in 1.79s`, research planning contracts `3 passed in 85.29s`, write audit `7 passed in 4.00s`, workflow job controls `3 passed in 111.31s`, tool bridge contracts `10 passed in 2.43s`, GraphRAG-lite `4 passed in 4.31s`, and context search `15 passed in 102.34s`.
+
+## 2026-06-14 - Novelty Service Contract Coverage
+
+Implemented in progress:
+
+- Added no-network service-level contract tests for novelty overlap scoring, external overlap status handling, missing-search actions, risk levels, and recommended actions.
+- Added the new tests and `backend/research/services/novelty_service.py` lint coverage to `scripts/check_research_workflow_primitives.sh`.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` passed after formatting the new tests.
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py` passed.
+- Focused novelty service pytest passed after fixture correction: `3 passed in 3.62s`.
+- `bash scripts/check_research_workflow_primitives.sh` passed: `30 passed in 89.98s`.
+- Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
+- The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 70.82s`, deployment contracts `1 passed in 1.65s`, research planning contracts `3 passed in 86.70s`, write audit `7 passed in 3.65s`, workflow job controls `3 passed in 109.64s`, tool bridge contracts `10 passed in 2.35s`, GraphRAG-lite `4 passed in 4.17s`, and context search `15 passed in 106.07s`.
