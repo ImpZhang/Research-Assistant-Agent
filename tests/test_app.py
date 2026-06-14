@@ -2898,6 +2898,35 @@ def test_openalex_literature_item_parser() -> None:
     }
 
 
+def test_openalex_literature_item_parser_fallbacks() -> None:
+    payload = {
+        "id": "https://openalex.org/W9999999999",
+        "display_name": "Fallback OpenAlex Work",
+        "primary_location": {},
+        "authorships": [
+            {"author": {"display_name": ""}},
+            {"author": {"display_name": "Ada Lovelace"}},
+        ],
+        "cited_by_count": None,
+    }
+
+    item = LiteratureSearchService(None)._openalex_item(payload, 15)
+
+    assert item.provider == "openalex"
+    assert item.source_id == "https://openalex.org/W9999999999"
+    assert item.title == "Fallback OpenAlex Work"
+    assert item.authors == ["Ada Lovelace"]
+    assert item.year is None
+    assert item.venue == ""
+    assert item.url == "https://openalex.org/W9999999999"
+    assert item.abstract == ""
+    assert item.score == 1.0
+    assert item.metadata == {
+        "cited_by_count": None,
+        "openalex_id": "https://openalex.org/W9999999999",
+    }
+
+
 def test_arxiv_literature_item_parser() -> None:
     namespace = {"atom": "http://www.w3.org/2005/Atom"}
     entry = ElementTree.fromstring(
