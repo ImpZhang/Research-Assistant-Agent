@@ -1751,3 +1751,22 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_research_workflow_primitives.sh` passed: `23 passed in 90.12s`.
 - The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, generated file guard passed, pilot readiness `28 passed in 72.47s`, deployment contracts `1 passed in 1.63s`, research planning contracts `3 passed in 85.05s`, write audit `7 passed in 3.88s`, workflow job controls `3 passed in 105.60s`, tool bridge contracts `10 passed in 2.21s`, GraphRAG-lite `4 passed in 4.23s`, and context search `15 passed in 104.00s`.
+
+## 2026-06-14 - OpenAlex Inverted Index Abstract Fixture
+
+Implemented in progress:
+
+- Added a deterministic no-network OpenAlex inverted-index abstract reconstruction fixture covering position ordering, duplicate-position overwrite behavior, and 1200-character truncation.
+- Added the new test to `scripts/check_research_workflow_primitives.sh` so OpenAlex abstract reconstruction stays covered before changing external literature parsing.
+- Did not call external APIs, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_openalex_inverted_index_abstract_reconstruction_edges` passed: `1 passed in 3.61s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_research_workflow_primitives.sh` passed: `24 passed in 85.33s`.
+- The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, generated file guard passed, pilot readiness `28 passed in 69.38s`, deployment contracts `1 passed in 1.72s`, research planning contracts `3 passed in 83.73s`, write audit `7 passed in 4.03s`, workflow job controls `3 passed in 108.64s`, tool bridge contracts `10 passed in 2.20s`, GraphRAG-lite `4 passed in 4.24s`, and context search `15 passed in 103.31s`.

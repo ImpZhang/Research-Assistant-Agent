@@ -2927,6 +2927,22 @@ def test_openalex_literature_item_parser_fallbacks() -> None:
     }
 
 
+def test_openalex_inverted_index_abstract_reconstruction_edges() -> None:
+    inverted_index = {
+        "zeta": [2],
+        "alpha": [0],
+        "override": [1],
+        "beta": [1],
+        "x" * 1300: [2000],
+    }
+
+    abstract = LiteratureSearchService(None)._abstract_from_inverted_index(inverted_index)
+
+    assert abstract.startswith("alpha beta zeta")
+    assert "override" not in abstract
+    assert len(abstract) == 1200
+
+
 def test_arxiv_literature_item_parser() -> None:
     namespace = {"atom": "http://www.w3.org/2005/Atom"}
     entry = ElementTree.fromstring(

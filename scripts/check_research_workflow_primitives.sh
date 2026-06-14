@@ -17,6 +17,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_external_literature_search_reports_failed_status \
   tests/test_app.py::test_openalex_literature_item_parser \
   tests/test_app.py::test_openalex_literature_item_parser_fallbacks \
+  tests/test_app.py::test_openalex_inverted_index_abstract_reconstruction_edges \
   tests/test_app.py::test_arxiv_literature_item_parser \
   tests/test_app.py::test_arxiv_literature_item_parser_fallbacks \
   tests/test_app.py::test_semantic_scholar_literature_item_parser \
