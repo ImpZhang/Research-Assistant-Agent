@@ -2536,6 +2536,82 @@ def test_literature_search_rejects_empty_query() -> None:
     assert response.json()["detail"] == "Query must contain at least one searchable term"
 
 
+def test_literature_search_clamps_limit_and_sorts_combined_results(monkeypatch) -> None:
+    from backend.research.schemas import LiteratureSearchItem
+    from backend.research.services import literature_search_service
+
+    default_enabled = literature_search_service.settings.external_literature_search_enabled
+    captured = {}
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_search_enabled",
+        True,
+    )
+
+    def search_item(provider, source_id, score):
+        return LiteratureSearchItem(
+            provider=provider,
+            source_id=source_id,
+            title=source_id,
+            authors=[],
+            year=None,
+            venue="",
+            url="",
+            abstract="",
+            score=score,
+            metadata={},
+        )
+
+    def local_items(self, terms, limit):
+        captured["terms"] = terms
+        captured["local_limit"] = limit
+        return [
+            search_item("local", "local-low", 1.0),
+            search_item("local", "local-high", 8.0),
+        ]
+
+    def external_items(self, query, limit):
+        captured["query"] = query
+        captured["external_limit"] = limit
+        return (
+            [
+                search_item("openalex", "external-top", 9.0),
+                search_item("arxiv", "external-mid", 5.0),
+            ],
+            "completed",
+        )
+
+    monkeypatch.setattr(LiteratureSearchService, "_search_local", local_items)
+    monkeypatch.setattr(LiteratureSearchService, "_search_external", external_items)
+
+    try:
+        response = LiteratureSearchService(None).search(
+            "Agent Evidence agent",
+            limit=100,
+            include_external=True,
+        )
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_search_enabled",
+            default_enabled,
+        )
+
+    assert captured == {
+        "terms": ["agent", "evidence"],
+        "local_limit": 25,
+        "query": "Agent Evidence agent",
+        "external_limit": 25,
+    }
+    assert response.external_status == "completed"
+    assert [item.source_id for item in response.items] == [
+        "external-top",
+        "local-high",
+        "external-mid",
+        "local-low",
+    ]
+
+
 def test_external_literature_provider_config_normalization() -> None:
     from backend.research.services import literature_search_service
 
