@@ -2545,6 +2545,87 @@ def test_external_literature_provider_config_normalization() -> None:
     assert providers == ["openalex", "arxiv", "semantic_scholar"]
 
 
+def test_external_literature_search_reports_not_configured_status() -> None:
+    from backend.research.services import literature_search_service
+
+    default_providers = literature_search_service.settings.external_literature_providers
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_providers",
+        " unknown, , unsupported ",
+    )
+    try:
+        items, status = LiteratureSearchService(None)._search_external("agent", 5)
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_providers",
+            default_providers,
+        )
+
+    assert items == []
+    assert status == "not_configured"
+
+
+def test_external_literature_search_reports_completed_status(monkeypatch) -> None:
+    from backend.research.schemas import LiteratureSearchItem
+    from backend.research.services import literature_search_service
+
+    default_providers = literature_search_service.settings.external_literature_providers
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_providers",
+        "openalex,arxiv,semantic_scholar",
+    )
+
+    def provider_item(provider, score):
+        return LiteratureSearchItem(
+            provider=provider,
+            source_id=f"{provider}-result",
+            title=f"{provider} Result",
+            authors=[],
+            year=None,
+            venue="",
+            url="",
+            abstract="",
+            score=score,
+            metadata={},
+        )
+
+    def openalex_items(self, query, limit):
+        return [provider_item("openalex", 10.0)]
+
+    def arxiv_items(self, query, limit):
+        return [provider_item("arxiv", 9.5)]
+
+    def semantic_scholar_items(self, query, limit):
+        return [provider_item("semantic_scholar", 9.0)]
+
+    monkeypatch.setattr(LiteratureSearchService, "_search_openalex", openalex_items)
+    monkeypatch.setattr(LiteratureSearchService, "_search_arxiv", arxiv_items)
+    monkeypatch.setattr(
+        LiteratureSearchService,
+        "_search_semantic_scholar",
+        semantic_scholar_items,
+    )
+
+    try:
+        items, status = LiteratureSearchService(None)._search_external("agent", 5)
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_providers",
+            default_providers,
+        )
+
+    assert [item.provider for item in items] == [
+        "openalex",
+        "arxiv",
+        "semantic_scholar",
+    ]
+    assert status == "completed"
+
+
 def test_external_literature_search_returns_partial_status(monkeypatch) -> None:
     import requests
 
