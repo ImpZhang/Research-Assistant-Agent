@@ -1694,3 +1694,22 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_research_workflow_primitives.sh` passed: `20 passed in 83.47s`.
 - The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, generated file guard passed, pilot readiness `28 passed in 72.47s`, deployment contracts `1 passed in 1.72s`, research planning contracts `3 passed in 84.26s`, write audit `7 passed in 4.11s`, workflow job controls `3 passed in 108.24s`, tool bridge contracts `10 passed in 2.31s`, GraphRAG-lite `4 passed in 4.32s`, and context search `15 passed in 101.26s`.
+
+## 2026-06-14 - Semantic Scholar Parser Fallback Fixture
+
+Implemented in progress:
+
+- Added a deterministic no-network Semantic Scholar parser fixture covering missing `paperId`, DOI fallback source ids, untitled paper fallback, empty-author filtering, missing venue/url defaults, abstract truncation, score offset, and metadata preservation.
+- Added the new test to `scripts/check_research_workflow_primitives.sh` so Semantic Scholar parser fallback behavior stays covered before changing external literature parsing.
+- Did not call external APIs, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_semantic_scholar_literature_item_parser_fallbacks` passed: `1 passed in 3.71s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_research_workflow_primitives.sh` passed: `21 passed in 83.90s`.
+- The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, generated file guard passed, pilot readiness `28 passed in 68.46s`, deployment contracts `1 passed in 1.76s`, research planning contracts `3 passed in 85.30s`, write audit `7 passed in 4.13s`, workflow job controls `3 passed in 106.83s`, tool bridge contracts `10 passed in 2.20s`, GraphRAG-lite `4 passed in 4.42s`, and context search `15 passed in 101.68s`.

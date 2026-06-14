@@ -2941,6 +2941,32 @@ def test_semantic_scholar_literature_item_parser() -> None:
     assert item.metadata["citation_count"] == 42
 
 
+def test_semantic_scholar_literature_item_parser_fallbacks() -> None:
+    payload = {
+        "title": "",
+        "authors": [{"name": ""}, {"name": "Ada Lovelace"}],
+        "abstract": "A" * 1300,
+        "citationCount": None,
+        "externalIds": {"DOI": "10.0000/fallback"},
+    }
+
+    item = LiteratureSearchService(None)._semantic_scholar_item(payload, 2)
+
+    assert item.provider == "semantic_scholar"
+    assert item.source_id == "10.0000/fallback"
+    assert item.title == "Untitled Semantic Scholar paper"
+    assert item.authors == ["Ada Lovelace"]
+    assert item.year is None
+    assert item.venue == ""
+    assert item.url == ""
+    assert len(item.abstract) == 1200
+    assert item.score == 7.0
+    assert item.metadata == {
+        "citation_count": None,
+        "external_ids": {"DOI": "10.0000/fallback"},
+    }
+
+
 def test_extract_paper_card_from_evidence() -> None:
     client = TestClient(create_app())
     content = b"""Paper Card Extraction Test
