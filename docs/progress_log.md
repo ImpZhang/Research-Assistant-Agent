@@ -1675,3 +1675,22 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_research_workflow_primitives.sh` passed: `19 passed in 81.95s`.
 - The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, handoff docs passed, generated file guard passed, focused coverage passed, pilot readiness `28 passed in 69.70s`, deployment contracts `1 passed in 1.65s`, research planning contracts `3 passed in 85.58s`, write audit `7 passed in 3.53s`, workflow job controls `3 passed in 113.36s`, tool bridge contracts `10 passed in 2.15s`, GraphRAG-lite `4 passed in 4.26s`, and context search `15 passed in 102.36s`.
+
+## 2026-06-14 - Literature Search Low Limit Truncation Fixture
+
+Implemented in progress:
+
+- Added a deterministic no-network literature search service fixture covering non-positive limit clamping to one result, final result truncation, score ordering, and the `not_requested` external status when external search is not requested.
+- Added the new test to `scripts/check_research_workflow_primitives.sh` so literature search lower-bound limit behavior stays covered before changing search behavior.
+- Did not call external APIs, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_literature_search_clamps_low_limit_and_truncates_results` passed: `1 passed in 3.72s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_research_workflow_primitives.sh` passed: `20 passed in 83.47s`.
+- The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, generated file guard passed, pilot readiness `28 passed in 72.47s`, deployment contracts `1 passed in 1.72s`, research planning contracts `3 passed in 84.26s`, write audit `7 passed in 4.11s`, workflow job controls `3 passed in 108.24s`, tool bridge contracts `10 passed in 2.31s`, GraphRAG-lite `4 passed in 4.32s`, and context search `15 passed in 101.26s`.

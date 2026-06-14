@@ -2612,6 +2612,50 @@ def test_literature_search_clamps_limit_and_sorts_combined_results(monkeypatch) 
     ]
 
 
+def test_literature_search_clamps_low_limit_and_truncates_results(monkeypatch) -> None:
+    from backend.research.schemas import LiteratureSearchItem
+
+    captured = {}
+
+    def search_item(source_id, score):
+        return LiteratureSearchItem(
+            provider="local",
+            source_id=source_id,
+            title=source_id,
+            authors=[],
+            year=None,
+            venue="",
+            url="",
+            abstract="",
+            score=score,
+            metadata={},
+        )
+
+    def local_items(self, terms, limit):
+        captured["terms"] = terms
+        captured["local_limit"] = limit
+        return [
+            search_item("local-low", 2.0),
+            search_item("local-high", 7.0),
+        ]
+
+    def external_items(self, query, limit):
+        raise AssertionError("external search should not run")
+
+    monkeypatch.setattr(LiteratureSearchService, "_search_local", local_items)
+    monkeypatch.setattr(LiteratureSearchService, "_search_external", external_items)
+
+    response = LiteratureSearchService(None).search(
+        "Agent Evidence",
+        limit=0,
+        include_external=False,
+    )
+
+    assert captured == {"terms": ["agent", "evidence"], "local_limit": 1}
+    assert response.external_status == "not_requested"
+    assert [item.source_id for item in response.items] == ["local-high"]
+
+
 def test_external_literature_provider_config_normalization() -> None:
     from backend.research.services import literature_search_service
 
