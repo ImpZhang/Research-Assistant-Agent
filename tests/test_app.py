@@ -2949,6 +2949,37 @@ def test_arxiv_literature_item_parser() -> None:
     assert item.metadata["categories"] == ["cs.AI"]
 
 
+def test_arxiv_literature_item_parser_fallbacks() -> None:
+    namespace = {"atom": "http://www.w3.org/2005/Atom"}
+    long_summary = " ".join(["evidence"] * 300)
+    entry = ElementTree.fromstring(
+        f"""<entry xmlns="http://www.w3.org/2005/Atom">
+          <id>http://arxiv.org/abs/2601.09999v2</id>
+          <published>not-a-date</published>
+          <title>    </title>
+          <summary>{long_summary}</summary>
+          <author><name>   </name></author>
+          <category />
+        </entry>"""
+    )
+
+    item = LiteratureSearchService(None)._arxiv_item(entry, 20, namespace)
+
+    assert item.provider == "arxiv"
+    assert item.source_id.endswith("2601.09999v2")
+    assert item.title == "Untitled arXiv preprint"
+    assert item.authors == []
+    assert item.year is None
+    assert item.venue == "arXiv"
+    assert item.url == "http://arxiv.org/abs/2601.09999v2"
+    assert len(item.abstract) == 1200
+    assert item.score == 1.0
+    assert item.metadata == {
+        "published": "not-a-date",
+        "categories": [],
+    }
+
+
 def test_semantic_scholar_literature_item_parser() -> None:
     payload = {
         "paperId": "s2-paper-id",

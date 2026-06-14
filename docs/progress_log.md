@@ -1732,3 +1732,22 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_research_workflow_primitives.sh` passed: `22 passed in 85.58s`.
 - The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, generated file guard passed, pilot readiness `28 passed in 70.65s`, deployment contracts `1 passed in 1.77s`, research planning contracts `3 passed in 83.58s`, write audit `7 passed in 4.19s`, workflow job controls `3 passed in 107.55s`, tool bridge contracts `10 passed in 2.43s`, GraphRAG-lite `4 passed in 4.56s`, and context search `15 passed in 104.92s`.
+
+## 2026-06-14 - arXiv Parser Fallback Fixture
+
+Implemented in progress:
+
+- Added a deterministic no-network arXiv parser fixture covering untitled preprint fallback, invalid published-date year handling, empty-author filtering, empty category handling, abstract normalization/truncation, score floor behavior, and metadata preservation.
+- Added the new test to `scripts/check_research_workflow_primitives.sh` so arXiv parser fallback behavior stays covered before changing external literature parsing.
+- Did not call external APIs, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_arxiv_literature_item_parser_fallbacks` passed: `1 passed in 4.00s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_research_workflow_primitives.sh` passed: `23 passed in 90.12s`.
+- The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, generated file guard passed, pilot readiness `28 passed in 72.47s`, deployment contracts `1 passed in 1.63s`, research planning contracts `3 passed in 85.05s`, write audit `7 passed in 3.88s`, workflow job controls `3 passed in 105.60s`, tool bridge contracts `10 passed in 2.21s`, GraphRAG-lite `4 passed in 4.23s`, and context search `15 passed in 104.00s`.
