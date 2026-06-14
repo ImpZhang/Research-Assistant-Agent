@@ -1770,3 +1770,21 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_research_workflow_primitives.sh` passed: `24 passed in 85.33s`.
 - The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, generated file guard passed, pilot readiness `28 passed in 69.38s`, deployment contracts `1 passed in 1.72s`, research planning contracts `3 passed in 83.73s`, write audit `7 passed in 4.03s`, workflow job controls `3 passed in 108.64s`, tool bridge contracts `10 passed in 2.20s`, GraphRAG-lite `4 passed in 4.24s`, and context search `15 passed in 103.31s`.
+
+## 2026-06-14 - Related Work Service Contract Coverage
+
+Implemented in progress:
+
+- Added no-network service-level contract tests for related-work query cleaning, default query fallback, query length clamping, missing external-search actions, row sorting/truncation, and literature metadata preservation.
+- Added the new tests and `backend/research/services/related_work_service.py` lint coverage to `scripts/check_research_workflow_primitives.sh`.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` passed after formatting the new tests.
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py` passed.
+- Focused related-work service pytest passed: `3 passed in 3.25s`.
+- `bash scripts/check_research_workflow_primitives.sh` passed: `27 passed in 85.49s`.
+- Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
+- The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 76.87s`, deployment contracts `1 passed in 1.79s`, research planning contracts `3 passed in 85.29s`, write audit `7 passed in 4.00s`, workflow job controls `3 passed in 111.31s`, tool bridge contracts `10 passed in 2.43s`, GraphRAG-lite `4 passed in 4.31s`, and context search `15 passed in 102.34s`.

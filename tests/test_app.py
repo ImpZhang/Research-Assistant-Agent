@@ -22,7 +22,9 @@ from backend.research.models import (
     ResearchNode,
 )
 from backend.research.services.graph_service import GraphService
+from backend.research.schemas import LiteratureSearchItem, LiteratureSearchResponse
 from backend.research.services.literature_search_service import LiteratureSearchService
+from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
 from backend.research.services.workflow_service import WorkflowService
 
@@ -3331,6 +3333,163 @@ Future research should export a traceable related work table for proposal writin
     assert export.status_code == 200
     assert f"- Idea ID: `{idea_id}`" in export.text
     assert "## Missing Searches" in export.text
+
+
+def test_related_work_service_build_query_cleans_defaults_and_clamps() -> None:
+    service = RelatedWorkService(None)
+    blank_idea = Idea(
+        title="  ",
+        research_question="\n\t",
+        core_hypothesis="",
+        method_sketch="",
+        expected_contribution="",
+        novelty_argument="",
+        datasets_json=[],
+        baselines_json=[],
+        metrics_json=[],
+    )
+
+    assert service._build_query(blank_idea) == "research idea novelty evidence experiment"
+
+    long_idea = Idea(
+        title="  Evidence\nGrounded\tAgent  ",
+        research_question="How can agents cite evidence?",
+        core_hypothesis="traceable claim " * 200,
+        method_sketch="retrieve then draft",
+        expected_contribution="auditable related work",
+        novelty_argument="evidence-first planning",
+        datasets_json=["ScholarBench"],
+        baselines_json=["vanilla agents"],
+        metrics_json=["citation precision"],
+    )
+
+    query = service._build_query(long_idea)
+
+    assert query.startswith("Evidence Grounded Agent How can agents cite evidence?")
+    assert "\n" not in query
+    assert "\t" not in query
+    assert len(query) == 1600
+
+
+def test_related_work_service_missing_searches_cover_external_statuses() -> None:
+    service = RelatedWorkService(None)
+
+    def response(status: str) -> LiteratureSearchResponse:
+        return LiteratureSearchResponse(
+            query="agent related work",
+            local_status="completed",
+            external_status=status,
+            items=[],
+            message="fixture",
+        )
+
+    assert service._missing_searches(response("not_requested"), include_external=False)[0] == (
+        "external_literature_search_not_requested"
+    )
+    assert service._missing_searches(response("disabled"), include_external=True)[0] == (
+        "external_literature_search_disabled"
+    )
+    assert service._missing_searches(response("failed_timeout"), include_external=True)[0] == (
+        "external_literature_search_failed_timeout"
+    )
+    completed = service._missing_searches(response("completed"), include_external=True)
+    assert completed[-1] == "external_literature_search_manual_review"
+
+
+def test_related_work_service_rows_sort_truncate_and_preserve_metadata() -> None:
+    service = RelatedWorkService(None)
+    idea = Idea(
+        id="idea-main",
+        title="Evidence Grounded Agent",
+        research_question="How can agents cite evidence?",
+        core_hypothesis="Evidence grounded agents improve proposal trust.",
+        method_sketch="Retrieve evidence before drafting claims.",
+        expected_contribution="Traceable related work screening.",
+        novelty_argument="citation faithful planning",
+        datasets_json=["ScholarBench"],
+        baselines_json=["vanilla agents"],
+        metrics_json=["citation precision"],
+    )
+    evidences = [
+        ScoredItem(
+            item=Evidence(
+                id=f"evidence-{index}",
+                paper_id="paper-a",
+                evidence_type="finding",
+                text=f"Evidence text {index}",
+                summary=f"Evidence summary {index}",
+                confidence=0.8,
+            ),
+            score=score,
+            matched_terms=["evidence", "agent"],
+        )
+        for index, score in enumerate([2.5, 9.5, 5.0, 10.0])
+    ]
+    gaps = [
+        ScoredItem(
+            item=ResearchGap(
+                id=f"gap-{index}",
+                title=f"Gap title {index}",
+                gap_type="method_gap",
+                risk_level="medium",
+                source_paper_ids_json=["paper-a"],
+            ),
+            score=score,
+            matched_terms=["gap", "agent"],
+        )
+        for index, score in enumerate([3.5, 6.5, 1.0, 8.5])
+    ]
+    ideas = [
+        ScoredItem(
+            item=Idea(
+                id=f"other-idea-{index}",
+                title=f"Other idea {index}",
+                status="draft",
+                version=index + 1,
+                parent_idea_id="seed" if index else None,
+            ),
+            score=score,
+            matched_terms=["idea", "agent"],
+        )
+        for index, score in enumerate([4.0, 7.0, 0.5, 9.0])
+    ]
+    literature_items = [
+        LiteratureSearchItem(
+            provider="openalex",
+            source_id=f"paper-{index}",
+            title=f"Evidence grounded agent paper {index}",
+            authors=["Ada Lovelace"],
+            year=2020 + index,
+            venue="ACL",
+            url=f"https://example.test/paper-{index}",
+            abstract="Agents cite evidence before drafting related work.",
+            score=score,
+            metadata={"citation_count": index},
+        )
+        for index, score in enumerate([8.0, 12.0, 2.0, 11.0])
+    ]
+
+    rows = service._build_rows(
+        idea=idea,
+        evidences=evidences,
+        gaps=gaps,
+        ideas=ideas,
+        literature_items=literature_items,
+        limit=3,
+    )
+
+    assert len(rows) == 8
+    assert [row["overlap_score"] for row in rows] == sorted(row["overlap_score"] for row in rows)[
+        ::-1
+    ]
+    assert {row["source_id"] for row in rows}.isdisjoint(
+        {"evidence-3", "gap-3", "other-idea-3", "paper-3"}
+    )
+    literature_row = next(row for row in rows if row["source_id"] == "paper-1")
+    assert literature_row["source_type"] == "literature"
+    assert literature_row["metadata"]["provider"] == "openalex"
+    assert literature_row["metadata"]["citation_count"] == 1
+    assert "evidence" in literature_row["shared_terms"]
 
 
 def test_proposal_draft_bundles_idea_related_work_and_experiment_plan() -> None:
