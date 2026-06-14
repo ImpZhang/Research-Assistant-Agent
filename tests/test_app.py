@@ -2614,6 +2614,40 @@ def test_external_literature_search_returns_partial_status(monkeypatch) -> None:
     assert status == ("partial:openalex:completed,arxiv:failed:Timeout,semantic_scholar:completed")
 
 
+def test_external_literature_search_reports_failed_status(monkeypatch) -> None:
+    import requests
+
+    from backend.research.services import literature_search_service
+
+    default_providers = literature_search_service.settings.external_literature_providers
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_providers",
+        "openalex,arxiv",
+    )
+
+    def openalex_failure(self, query, limit):
+        raise requests.ConnectionError("openalex unavailable")
+
+    def arxiv_parse_failure(self, query, limit):
+        raise ElementTree.ParseError("invalid arxiv feed")
+
+    monkeypatch.setattr(LiteratureSearchService, "_search_openalex", openalex_failure)
+    monkeypatch.setattr(LiteratureSearchService, "_search_arxiv", arxiv_parse_failure)
+
+    try:
+        items, status = LiteratureSearchService(None)._search_external("agent", 5)
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_providers",
+            default_providers,
+        )
+
+    assert items == []
+    assert status == "failed:openalex:failed:ConnectionError,arxiv:failed:ParseError"
+
+
 def test_openalex_literature_item_parser() -> None:
     payload = {
         "id": "https://openalex.org/W2601012345",

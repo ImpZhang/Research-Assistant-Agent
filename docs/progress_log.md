@@ -1594,3 +1594,23 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_research_workflow_primitives.sh` passed: `14 passed in 81.99s`.
 - `bash scripts/check_remote_safe_suite.sh` passed the suite, catalog, secret, handoff-doc, generated-file, and coverage guards plus all nine default focused suites: pilot readiness `28 passed in 70.97s`, deployment contracts `1 passed in 1.77s`, research workflow primitives `14 passed in 82.62s`, research planning contracts `3 passed in 81.75s`, write audit `7 passed in 3.89s`, workflow job controls `3 passed in 104.39s`, tool bridge contracts `10 passed in 2.35s`, GraphRAG-lite `4 passed in 4.25s`, and context search `15 passed in 97.27s`.
+
+## 2026-06-14 - Literature Provider Failed Status Fixture
+
+Implemented in progress:
+
+- Added a deterministic no-network external literature search fixture covering the all-provider-failed path: OpenAlex raises a connection error and arXiv raises an XML parse error.
+- Verified failed external search returns no items and reports each provider failure in the status string.
+- Added the new test to `scripts/check_research_workflow_primitives.sh` so external provider failure status aggregation stays covered before changing literature search behavior.
+- Did not call external APIs, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_external_literature_search_reports_failed_status` passed: `1 passed in 4.02s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_research_workflow_primitives.sh` passed: `15 passed in 83.22s`.
+- The remote safe suite was completed as its documented component scripts after the first aggregate run lost the SSH connection during a long no-output window: suite contracts passed, script catalog passed, secret file guard passed, handoff docs passed, generated file guard passed, focused coverage passed, pilot readiness `28 passed in 69.40s`, deployment contracts `1 passed in 1.67s`, research workflow primitives `15 passed in 83.22s`, research planning contracts `3 passed in 82.15s`, write audit `7 passed in 3.88s`, workflow job controls `3 passed in 104.83s`, tool bridge contracts `10 passed in 2.16s`, GraphRAG-lite `4 passed in 4.31s`, and context search `15 passed in 99.31s`.
