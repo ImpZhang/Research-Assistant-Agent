@@ -2524,6 +2524,18 @@ Future work should connect OpenAlex and arXiv providers.
     assert any(item["source_id"] == paper_id for item in body["items"])
 
 
+def test_literature_search_rejects_empty_query() -> None:
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/research/literature/search",
+        json={"query": " !! ", "limit": 5, "include_external": False},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Query must contain at least one searchable term"
+
+
 def test_external_literature_provider_config_normalization() -> None:
     from backend.research.services import literature_search_service
 

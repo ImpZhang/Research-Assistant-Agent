@@ -7,6 +7,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 .venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py
 .venv/bin/pytest -q \
   tests/test_app.py::test_literature_search_returns_local_results_with_external_disabled \
+  tests/test_app.py::test_literature_search_rejects_empty_query \
   tests/test_app.py::test_external_literature_provider_config_normalization \
   tests/test_app.py::test_external_literature_search_reports_not_configured_status \
   tests/test_app.py::test_external_literature_search_reports_completed_status \

@@ -1635,3 +1635,23 @@ Verification completed:
 - `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
 - `bash scripts/check_research_workflow_primitives.sh` passed: `17 passed in 82.29s`.
 - The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, handoff docs passed, generated file guard passed, focused coverage passed, pilot readiness `28 passed in 69.93s`, deployment contracts `1 passed in 1.63s`, research workflow primitives `17 passed in 82.29s`, research planning contracts `3 passed in 80.49s`, write audit `7 passed in 3.95s`, workflow job controls `3 passed in 107.41s`, tool bridge contracts `10 passed in 2.21s`, GraphRAG-lite `4 passed in 3.98s`, and context search `15 passed in 101.39s`.
+
+## 2026-06-14 - Literature Search Empty Query Guard Fixture
+
+Implemented in progress:
+
+- Added a deterministic API-level literature search guard fixture for empty/punctuation-only queries.
+- Verified `/research/literature/search` returns HTTP 400 with `Query must contain at least one searchable term` instead of running local or external search.
+- Added the new test to `scripts/check_research_workflow_primitives.sh` so literature search input validation stays covered before changing search behavior.
+- Did not call external APIs, install dependencies, start services, read secrets, or modify production data.
+- Preserved the two pre-existing untracked root documents.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/routes.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/routes.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_literature_search_rejects_empty_query` passed: `1 passed in 4.15s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: `All pytest tests are covered by focused check scripts.`
+- `bash scripts/check_handoff_docs.sh` passed: `Handoff documents are synchronized.`
+- `bash scripts/check_research_workflow_primitives.sh` passed: `18 passed in 83.32s`.
+- The remote safe suite was completed as its documented component scripts: suite contracts passed, script catalog passed, secret file guard passed, handoff docs passed, generated file guard passed, focused coverage passed, pilot readiness `28 passed in 74.67s`, deployment contracts `1 passed in 1.77s`, research planning contracts `3 passed in 82.51s`, write audit `7 passed in 4.13s`, workflow job controls `3 passed in 106.66s`, tool bridge contracts `10 passed in 2.30s`, GraphRAG-lite `4 passed in 4.26s`, and context search `15 passed in 101.18s`.
