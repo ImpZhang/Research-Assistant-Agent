@@ -1842,3 +1842,21 @@ Verification completed:
 - `bash scripts/check_research_workflow_primitives.sh` passed: `33 passed in 87.57s`.
 - Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
 - The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 76.30s`, deployment contracts `1 passed in 1.63s`, research planning contracts `3 passed in 86.28s`, write audit `7 passed in 3.92s`, workflow job controls `3 passed in 116.21s`, tool bridge contracts `10 passed in 2.42s`, GraphRAG-lite `4 passed in 4.50s`, and context search `15 passed in 107.65s`.
+
+## 2026-06-15 - Paper Card Heuristic Contract Coverage
+
+Implemented in progress:
+
+- Added service-level contract tests for paper-card heuristic evidence-field mapping, problem fallback behavior, keyword collection, and missing input errors.
+- Added the new tests and `backend/research/services/paper_card_service.py` lint coverage to `scripts/check_research_workflow_primitives.sh`.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` passed after formatting the new tests.
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py` passed.
+- Focused paper-card service pytest passed: `2 passed in 4.91s`.
+- `bash scripts/check_research_workflow_primitives.sh` passed: `35 passed in 87.53s`.
+- Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
+- The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 66.84s`, deployment contracts `1 passed in 1.68s`, research planning contracts `3 passed in 84.31s`, write audit `7 passed in 3.79s`, workflow job controls `3 passed in 110.86s`, tool bridge contracts `10 passed in 2.52s`, GraphRAG-lite `4 passed in 4.30s`, and context search `15 passed in 114.28s`.

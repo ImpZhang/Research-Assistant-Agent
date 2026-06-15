@@ -27,6 +27,7 @@ from backend.research.services.idea_service import IdeaService
 from backend.research.schemas import LiteratureSearchItem, LiteratureSearchResponse
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.novelty_service import NoveltyService
+from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
 from backend.research.services.structured_extraction_service import StructuredExtractionService
@@ -3047,6 +3048,111 @@ def test_semantic_scholar_literature_item_parser_fallbacks() -> None:
         "citation_count": None,
         "external_ids": {"DOI": "10.0000/fallback"},
     }
+
+
+def test_paper_card_service_maps_evidence_and_fills_problem_fallback() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-paper-card-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            id=marker,
+            title="Paper Card Heuristic Contract",
+            filename=f"{marker}.txt",
+            status="processed",
+        )
+        session.add(paper)
+        session.add_all(
+            [
+                Evidence(
+                    id=f"{marker}-method",
+                    paper_id=paper.id,
+                    evidence_type="method",
+                    text="M" * 520,
+                    summary="",
+                    confidence=0.3,
+                ),
+                Evidence(
+                    id=f"{marker}-claim",
+                    paper_id=paper.id,
+                    evidence_type="claim",
+                    text="claim text",
+                    summary="Main contribution summary",
+                    confidence=0.9,
+                ),
+                Evidence(
+                    id=f"{marker}-future",
+                    paper_id=paper.id,
+                    evidence_type="future_work",
+                    text="future work text",
+                    summary="Future work summary",
+                    confidence=0.7,
+                ),
+                Evidence(
+                    id=f"{marker}-unknown",
+                    paper_id=paper.id,
+                    evidence_type="custom_signal",
+                    text="custom text",
+                    summary="Custom signal summary",
+                    confidence=0.5,
+                ),
+            ]
+        )
+        session.commit()
+
+        card = PaperCardService(session).extract_heuristic_card(paper.id)
+
+        assert card.extraction_model == "heuristic_v0"
+        assert card.extraction_status == "completed"
+        assert card.problem_json["items"] == [
+            {
+                "text": "M" * 500,
+                "evidence_ids": [f"{marker}-method"],
+                "confidence": 0.19999999999999998,
+            }
+        ]
+        assert card.method_json["items"][0]["evidence_ids"] == [f"{marker}-method"]
+        assert card.contributions_json["items"] == [
+            {
+                "text": "Main contribution summary",
+                "evidence_ids": [f"{marker}-claim"],
+                "confidence": 0.9,
+            }
+        ]
+        assert card.future_work_json["items"][0]["text"] == "Future work summary"
+        assert card.motivation_json == {"items": []}
+        assert card.keywords_json == {"items": ["claim", "custom_signal", "future_work", "method"]}
+    finally:
+        session.close()
+
+
+def test_paper_card_service_reports_missing_inputs() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-paper-card-empty-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        service = PaperCardService(session)
+        try:
+            service.extract_heuristic_card(f"{marker}-missing")
+        except ValueError as exc:
+            assert str(exc) == "Paper not found"
+        else:
+            raise AssertionError("missing paper should raise")
+
+        session.add(Paper(id=marker, title="No Evidence Paper", status="processed"))
+        session.commit()
+        try:
+            service.extract_heuristic_card(marker)
+        except ValueError as exc:
+            assert str(exc) == "Paper has no evidence records. Ingest or reprocess it first."
+        else:
+            raise AssertionError("paper without evidence should raise")
+    finally:
+        session.close()
 
 
 def test_extract_paper_card_from_evidence() -> None:
