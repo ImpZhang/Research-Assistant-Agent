@@ -166,8 +166,8 @@ def _average(scores: list[float]) -> float:
     return sum(scores) / len(scores)
 
 
-def _score_band(score: float) -> str:
-    if score >= 0.9:
+def _score_band(score: float, *, quality_signal: float = 1.0) -> str:
+    if score >= 0.9 and quality_signal >= 0.7:
         return "demo_ready"
     if score >= 0.8:
         return "pilot_effective"
@@ -215,7 +215,7 @@ def build_product_effect_scorecard(summary: dict[str, Any]) -> dict[str, Any]:
                 _metric_score(summary, "evidence_ledger_coverage_score"),
                 _metric_score(summary, "readiness_claim_validation_score"),
                 _metric_score(summary, "quality_gate_claim_validation_score"),
-                _bool_score(summary.get("claim_validation_result_status") == "needs_more_evidence"),
+                _metric_score(summary, "progress_claim_validation_result_count", 2),
             ]
         ),
         "delivery_loop": _average(
@@ -252,7 +252,7 @@ def build_product_effect_scorecard(summary: dict[str, Any]) -> dict[str, Any]:
     }
     return {
         "overall_score": round(overall_score, 4),
-        "band": _score_band(overall_score),
+        "band": _score_band(overall_score, quality_signal=dimension_scores["quality_signal"]),
         "dimension_scores": {name: round(score, 4) for name, score in dimension_scores.items()},
         "weights": weights,
         "checks": checks,
@@ -1440,6 +1440,8 @@ def run_smoke(
         raise RuntimeError("claim validation queue tasks used the wrong owner type")
     if claim_queue_tasks["tasks"][0]["due_phase"] != "claim_validation_follow_up":
         raise RuntimeError("claim validation queue tasks used the wrong due phase")
+    if len(claim_queue_tasks["tasks"]) < 2:
+        raise RuntimeError("claim validation queue did not return enough tasks for mixed outcomes")
     proposal_graph_edges = require_ok(
         client.get("/research/graph/edges?edge_type=proposal_revision_creates_task"),
         "proposal task graph edges",
@@ -1564,12 +1566,33 @@ def run_smoke(
         event["event_type"] for event in claim_validation_task_events
     }:
         raise RuntimeError("claim validation task events did not include result event")
+    supported_claim_validation_result = require_ok(
+        client.post(
+            f"/research/tasks/{claim_queue_tasks['tasks'][1]['id']}/claim-validation-result",
+            json_body={
+                "validation_status": "supported",
+                "evidence_ids": [claim_packet["supporting_evidence"][0]["id"]],
+                "notes": "Smoke result: this claim has direct supporting evidence for pilot review.",
+                "next_action": "Keep this support linked in advisor-facing materials.",
+                "created_by": "smoke_api",
+            },
+        ),
+        "supported claim validation result",
+    )
+    if supported_claim_validation_result["metadata"]["validation_status"] != "supported":
+        raise RuntimeError("supported claim validation result did not persist status")
+    supported_claim_validation_task_after_result = require_ok(
+        client.get(f"/research/tasks/{claim_queue_tasks['tasks'][1]['id']}"),
+        "supported claim validation task after result",
+    )
+    if supported_claim_validation_task_after_result["status"] != "done":
+        raise RuntimeError("supported claim validation result did not mark the task done")
     progress_after_claim_result = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/progress"),
         "idea progress after claim validation result",
     )
-    if progress_after_claim_result["artifact_counts"].get("claim_validation_result_events", 0) < 1:
-        raise RuntimeError("idea progress did not count claim validation result events")
+    if progress_after_claim_result["artifact_counts"].get("claim_validation_result_events", 0) < 2:
+        raise RuntimeError("idea progress did not count mixed claim validation result events")
     timeline = require_ok(
         client.get(f"/research/ideas/{refined_idea['id']}/timeline"),
         "idea timeline",
@@ -1591,11 +1614,11 @@ def run_smoke(
         raise RuntimeError("idea readiness did not return a positive score")
     if "claim_validation" not in readiness["score_breakdown"]:
         raise RuntimeError("idea readiness did not include claim validation signals")
-    if (
-        readiness["score_breakdown"]["claim_validation"]["by_status"].get("needs_more_evidence", 0)
-        < 1
-    ):
-        raise RuntimeError("idea readiness did not summarize claim validation result statuses")
+    readiness_claim_statuses = readiness["score_breakdown"]["claim_validation"]["by_status"]
+    if readiness_claim_statuses.get("needs_more_evidence", 0) < 1:
+        raise RuntimeError("idea readiness did not summarize needs-more-evidence statuses")
+    if readiness_claim_statuses.get("supported", 0) < 1:
+        raise RuntimeError("idea readiness did not summarize supported claim validation statuses")
     if not any("Claim validation found evidence gaps" in item for item in readiness["blockers"]):
         raise RuntimeError("idea readiness did not expose claim validation blockers")
     if "## Score Breakdown" not in readiness["markdown_export"]:
@@ -1608,13 +1631,11 @@ def run_smoke(
         raise RuntimeError("idea quality gate returned an invalid score")
     if "claim_validation" not in quality_gate["score_breakdown"]:
         raise RuntimeError("idea quality gate did not include claim validation signals")
-    if (
-        quality_gate["score_breakdown"]["claim_validation"]["by_status"].get(
-            "needs_more_evidence", 0
-        )
-        < 1
-    ):
-        raise RuntimeError("idea quality gate did not summarize validation statuses")
+    quality_gate_claim_statuses = quality_gate["score_breakdown"]["claim_validation"]["by_status"]
+    if quality_gate_claim_statuses.get("needs_more_evidence", 0) < 1:
+        raise RuntimeError("idea quality gate did not summarize needs-more-evidence statuses")
+    if quality_gate_claim_statuses.get("supported", 0) < 1:
+        raise RuntimeError("idea quality gate did not summarize supported validation statuses")
     if not any(
         item["name"] == "claim_validation_result" and item["satisfied"]
         for item in quality_gate["required_evidence"]
@@ -3916,6 +3937,14 @@ def run_smoke(
         "claim_validation_queue_task_count": len(claim_queue_tasks["tasks"]),
         "claim_validation_result_event_id": claim_validation_result["id"],
         "claim_validation_result_status": claim_validation_result["metadata"]["validation_status"],
+        "supported_claim_validation_result_event_id": supported_claim_validation_result["id"],
+        "supported_claim_validation_result_status": supported_claim_validation_result["metadata"][
+            "validation_status"
+        ],
+        "claim_validation_supported_count": readiness_claim_statuses.get("supported", 0),
+        "claim_validation_needs_more_evidence_count": readiness_claim_statuses.get(
+            "needs_more_evidence", 0
+        ),
         "claim_validation_task_status_after_result": claim_validation_task_after_result["status"],
         "proposal_task_graph_edge_count": len(proposal_graph_edges),
         "evidence_ledger_task_graph_edge_count": len(ledger_task_edges),

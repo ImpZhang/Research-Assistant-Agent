@@ -20,7 +20,7 @@ The intended product is a research assistant agent that turns literature and pro
 
 Status on 2026-06-15: backend workflow engine and verification harness are strong enough for MVP demonstration, while product polish still needs frontend, real-user workflow, deployment, and operator-hardening passes.
 
-The current product behaves as a backend-first research workflow engine. It can produce a complete research handoff package from a smoke paper in both in-process and real HTTP service modes. The latest isolated smoke adds a product-effect scorecard: overall `0.8754`, band `pilot_effective`, with strong foundation/research/delivery dimensions and a weaker quality-signal dimension.
+The current product behaves as a backend-first research workflow engine. It can produce a complete research handoff package from a smoke paper in both in-process and real HTTP service modes. The latest isolated smoke adds a product-effect scorecard: overall `0.9056`, band `pilot_effective`, with strong foundation/research/delivery dimensions and a weaker quality-signal dimension.
 
 ## Verified Smoke Metrics
 
@@ -43,7 +43,7 @@ The smoke runs used isolated test data directories under `data/test-runs/` and d
 - Research plan: `3` plan items, `9` generated tasks.
 - Portfolio ranking: `5` ranked ideas, top score `3.585`.
 - Graph context: `100` nodes, `100` edges in the final smoke summary.
-- Product-effect scorecard: overall `0.8754`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.5018`, delivery loop `1.0`, failed checks `[]`.
+- Product-effect scorecard: overall `0.9056`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.6225`, delivery loop `1.0`, failed checks `[]`.
 
 ### Real HTTP Smoke
 
@@ -76,7 +76,7 @@ The product-effect smoke was also run with a representative Markdown fixture thr
 - Evidence ledger coverage: `0.24`.
 - Project bundle: `71` files, readiness level `delivery_ready`, score `1.0`.
 - Graph context: `100` nodes, `100` edges.
-- Product-effect scorecard: overall `0.8854`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.5418`, delivery loop `1.0`, failed checks `[]`.
+- Product-effect scorecard: overall `0.9156`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.6625`, delivery loop `1.0`, failed checks `[]`.
 
 ## What Works Well
 
@@ -90,7 +90,7 @@ The product-effect smoke was also run with a representative Markdown fixture thr
 ## Product Gaps
 
 - The smoke paper is synthetic. A real paper or real project brief still needs qualitative evaluation.
-- The generated readiness and quality scores show useful caution; the scorecard makes this visible through a quality-signal dimension of `0.5018`, driven by evidence coverage and claim-validation scores.
+- The generated readiness and quality scores show useful caution; the scorecard makes this visible through a quality-signal dimension of `0.6225`, driven by evidence coverage and claim-validation scores.
 - The actual scientific quality of gaps, ideas, novelty claims, and experiment plans still needs human review.
 - Workbench availability is verified, but visual/interaction quality has not been systematically inspected in a browser session.
 - Deployment posture is still pilot-oriented: backup, restore, migrations, monitoring, and production data boundaries remain hardening work.

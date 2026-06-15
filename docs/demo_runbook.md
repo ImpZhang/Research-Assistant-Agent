@@ -75,7 +75,7 @@ The 2026-06-15 product-effect smoke baseline produced these representative metri
 - Quality gate: score `0.6574`, decision `de_risk_novelty`.
 - Project bundle: `71` files, readiness `delivery_ready`, score `1.0`.
 - Graph summary: `100` nodes and `100` edges in the smoke output.
-- Product-effect scorecard: overall score `0.8754`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.5018`, delivery loop `1.0`, failed checks `[]`.
+- Product-effect scorecard: overall score `0.9056`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.6225`, delivery loop `1.0`, failed checks `[]`.
 
 ## Demo Decision
 

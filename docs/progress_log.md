@@ -2049,3 +2049,24 @@ Verification completed:
 - Representative Markdown product-effect smoke passed with `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/tmp/raa_gap_rich_paper.md`: overall `0.8854`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.5418`, delivery loop `1.0`, `3` gaps, `6` ideas, proposal review score `0.92`, evidence ledger coverage `0.24`, project bundle readiness score `1.0`, and `100` graph nodes / `100` graph edges.
 - `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 74.55s`, deployment contracts `1 passed in 1.30s`, research workflow primitives `38 passed in 90.11s`, research planning contracts `3 passed in 89.22s`, write audit `7 passed in 3.90s`, workflow job controls `3 passed in 114.61s`, tool bridge contracts `10 passed in 2.19s`, GraphRAG-lite `4 passed in 4.43s`, and context search `15 passed in 111.19s`.
 - Product-effect interpretation for this slice: the product is now measurably pilot-effective at backend workflow completion, while the quality-signal dimension remains the main gap to improve next.
+
+
+## 2026-06-15 - Mixed Claim Validation Smoke
+
+Implemented in progress:
+
+- Updated `scripts/smoke_api.py` so the product-effect smoke records mixed claim-validation outcomes: one `needs_more_evidence` result and one `supported` result.
+- Adjusted the product-effect scorecard so claim-validation quality is driven by recorded result count plus readiness/quality-gate claim-validation scores, not by rewarding a single needs-more-evidence status.
+- Added a quality-dimension guard to score bands: `demo_ready` now requires overall score `>= 0.9` and quality signal `>= 0.70`; otherwise high-completion runs remain `pilot_effective`.
+- Updated the scorecard regression test to preserve that quality gate semantics.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env`, token, cookie, password, private key, or credential values.
+
+Verification completed:
+
+- Targeted scorecard and Markdown gap tests passed with isolated SQLite/upload directories: `2 passed in 3.85s`.
+- Default product-effect smoke passed with mixed claim validation: `2` claim-validation result events, `1` supported claim, `1` needs-more-evidence claim, readiness claim-validation score `0.675`, quality-gate claim-validation score `0.675`, readiness score `0.6859`, quality-gate score `0.699`, top ranked idea score `3.665`, product-effect score `0.9056`, band `pilot_effective`, quality signal `0.6225`, and failed checks `[]`.
+- Representative Markdown product-effect smoke passed with mixed claim validation: evidence ledger coverage `0.24`, readiness claim-validation score `0.675`, quality-gate score `0.699`, product-effect score `0.9156`, band `pilot_effective`, quality signal `0.6625`, `3` gaps, `6` ideas, project-bundle readiness score `1.0`, and `100` graph nodes / `100` graph edges.
+- `bash scripts/check_research_workflow_primitives.sh` passed after the mixed-validation update: `38 passed in 92.65s`.
+- `bash scripts/check_script_catalog.sh`, `bash scripts/check_handoff_docs.sh`, and `git diff --check` passed.
+- `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 75.28s`, deployment contracts `1 passed in 1.36s`, research workflow primitives `38 passed in 94.75s`, research planning contracts `3 passed in 88.33s`, write audit `7 passed in 3.93s`, workflow job controls `3 passed in 111.01s`, tool bridge contracts `10 passed in 2.17s`, GraphRAG-lite `4 passed in 4.39s`, and context search `15 passed in 111.45s`.
+- Product-effect interpretation for this slice: mixed claim validation improved the quality-signal dimension while keeping the overall band honest; the remaining path to `demo_ready` is improving evidence coverage and claim support quality above the `0.70` quality-signal gate.

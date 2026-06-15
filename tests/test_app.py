@@ -81,9 +81,9 @@ def test_product_effect_scorecard_separates_quality_from_completion() -> None:
         "readiness_score": 0.6534,
         "quality_gate_score": 0.6574,
         "evidence_ledger_coverage_score": 0.24,
-        "readiness_claim_validation_score": 0.35,
-        "quality_gate_claim_validation_score": 0.35,
-        "claim_validation_result_status": "needs_more_evidence",
+        "readiness_claim_validation_score": 0.675,
+        "quality_gate_claim_validation_score": 0.675,
+        "progress_claim_validation_result_count": 2,
         "project_bundle_file_count": 71,
         "project_bundle_readiness_level": "delivery_ready",
         "project_bundle_readiness_score": 1.0,
@@ -95,11 +95,11 @@ def test_product_effect_scorecard_separates_quality_from_completion() -> None:
 
     scorecard = build_product_effect_scorecard(summary)
 
-    assert 0.85 <= scorecard["overall_score"] < 0.9
+    assert 0.9 <= scorecard["overall_score"] < 0.93
     assert scorecard["band"] == "pilot_effective"
     assert scorecard["dimension_scores"]["foundation"] == 1.0
     assert scorecard["dimension_scores"]["delivery_loop"] == 1.0
-    assert scorecard["dimension_scores"]["quality_signal"] < 0.6
+    assert 0.64 <= scorecard["dimension_scores"]["quality_signal"] < 0.7
     assert scorecard["failed_checks"] == []
 
     weak_summary = dict(summary)
