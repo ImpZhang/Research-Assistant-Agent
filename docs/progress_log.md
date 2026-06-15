@@ -1957,3 +1957,20 @@ Verification completed:
 - `bash scripts/check_remote_long_suite.sh` passed with focused coverage, proposal contracts `3 passed in 1.67s`, and delivery loop `1 passed in 8.36s`.
 - `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 14.51s`, deployment contracts `1 passed in 1.72s`, research workflow primitives `36 passed in 7.75s`, research planning contracts `3 passed in 4.90s`, write audit `7 passed in 4.02s`, workflow job controls `3 passed in 4.77s`, tool bridge contracts `10 passed in 2.22s`, GraphRAG-lite `4 passed in 3.01s`, and context search `15 passed in 9.01s`.
 - Test-effect metrics for this slice: one more user-visible readiness transition is covered in the isolated delivery-loop check, and default remote-safe pytest coverage remained green across 107 selected tests.
+
+
+## 2026-06-15 - Product Effect Smoke Evaluation
+
+Implemented in progress:
+
+- Ran the existing end-to-end smoke workflow in an isolated in-process mode to evaluate product-level behavior rather than only unit-test coverage.
+- Ran the same smoke workflow against a temporary real HTTP `uvicorn` service on `127.0.0.1:18081`, using isolated SQLite and upload directories under `data/test-runs/`.
+- Added `docs/product_effect_report.md` to summarize current product target, smoke metrics, strengths, gaps, readiness estimate, and recommended next steps.
+- Did not read or print `.env`, token, cookie, password, private key, or credential files; the temporary HTTP service was closed by `timeout` and no service process was left running.
+
+Verification completed:
+
+- In-process smoke passed with service readiness `ready`, Workbench available, `119` tool-manifest entries, `119` MCP bridge tools, `3` gaps, `6` ideas, proposal review `ready_for_advisor_review` at score `0.92`, experiment analysis `supports_hypothesis`, project bundle `71` files, project-bundle readiness `delivery_ready` at score `1.0`, and `100` graph nodes / `100` graph edges in the final summary.
+- Real HTTP smoke passed against temporary `uvicorn` with the same key metrics: service readiness `ready`, Workbench available, `3` gaps, `6` ideas, proposal review `ready_for_advisor_review`, readiness decision `needs_targeted_work`, quality-gate decision `de_risk_novelty`, advisor chat intent `risk_review`, project bundle `71` files, project-bundle readiness `delivery_ready` at score `1.0`, and `100` graph nodes / `100` graph edges.
+- The temporary HTTP server shut down cleanly after `timeout`; `pgrep` found no remaining `uvicorn`, `smoke_api`, pytest, or check-suite processes.
+- Test-effect metrics for this slice: the product is now verified in both TestClient and real HTTP modes with isolated data, moving the project from pure engineering validation toward demo-readiness validation.
