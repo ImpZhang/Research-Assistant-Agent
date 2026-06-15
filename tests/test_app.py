@@ -21,6 +21,7 @@ from backend.research.models import (
     ResearchGap,
     ResearchNode,
 )
+from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.gap_service import GapService
 from backend.research.services.graph_service import GraphService
 from backend.research.services.idea_service import IdeaService
@@ -30,6 +31,7 @@ from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.paper_card_service import PaperCardService
 from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
+from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
 from backend.research.services.workflow_service import WorkflowService
 
@@ -3333,6 +3335,64 @@ Future work should connect idea generation to reviewer criticism.
     fetched = client.get(f"/research/ideas/{idea_id}")
     assert fetched.status_code == 200
     assert fetched.json()["id"] == idea_id
+
+
+def test_review_and_experiment_services_create_traceable_outputs() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-review-experiment-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        idea = Idea(
+            id=marker,
+            title="Traceable Review Idea",
+            research_question="Can evidence-grounded agents improve proposal trust?",
+            core_hypothesis="Evidence-grounded planning improves trust.",
+            method_sketch="Retrieve evidence before drafting each claim.",
+            datasets_json=["ScholarBench"],
+            baselines_json=["Source paper baseline"],
+            metrics_json=["citation precision"],
+            resource_requirements="Small benchmark slice",
+            status="draft",
+        )
+        session.add(idea)
+        session.commit()
+
+        review_service = ReviewService(session)
+        experiment_service = ExperimentService(session)
+        for service in [review_service, experiment_service]:
+            try:
+                (
+                    service.create_review(f"{marker}-missing")
+                    if isinstance(service, ReviewService)
+                    else service.create_plan(f"{marker}-missing")
+                )
+            except ValueError as exc:
+                assert str(exc) == "Idea not found"
+            else:
+                raise AssertionError("missing idea should raise")
+
+        review = review_service.create_review(idea.id)
+        plan = experiment_service.create_plan(idea.id)
+
+        refreshed_idea = session.get(Idea, idea.id)
+        assert refreshed_idea is not None
+        assert refreshed_idea.status == "experiment_planned"
+        assert review.reviewer_type == "skeptical_area_chair_v0"
+        assert review.decision == "revise"
+        assert review.major_concerns_json
+        assert review.action_items_json[0] == "Add a related-work collision check."
+        assert plan.objective.endswith(idea.research_question)
+        assert plan.hypothesis == idea.core_hypothesis
+        assert plan.datasets_json == ["ScholarBench"]
+        assert plan.main_experiment_json["name"] == "MVP gap-targeted experiment"
+        assert plan.ablation_studies_json[0]["name"] == "Remove gap-targeted component"
+        assert plan.timeline_json["week_1"] == "Build dataset slice and baseline harness."
+        assert review_service.list_reviews_for_idea(idea.id)[0].id == review.id
+        assert experiment_service.list_plans_for_idea(idea.id)[0].id == plan.id
+    finally:
+        session.close()
 
 
 def test_review_and_experiment_plan_for_idea() -> None:

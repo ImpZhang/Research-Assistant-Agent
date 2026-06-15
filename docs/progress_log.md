@@ -1860,3 +1860,21 @@ Verification completed:
 - `bash scripts/check_research_workflow_primitives.sh` passed: `35 passed in 87.53s`.
 - Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
 - The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 66.84s`, deployment contracts `1 passed in 1.68s`, research planning contracts `3 passed in 84.31s`, write audit `7 passed in 3.79s`, workflow job controls `3 passed in 110.86s`, tool bridge contracts `10 passed in 2.52s`, GraphRAG-lite `4 passed in 4.30s`, and context search `15 passed in 114.28s`.
+
+## 2026-06-15 - Review And Experiment Service Contract Coverage
+
+Implemented in progress:
+
+- Added a service-level contract test for review and experiment-plan creation, missing idea errors, idea status progression, copied experiment fields, and list retrieval.
+- Added the new test and `backend/research/services/review_service.py` plus `backend/research/services/experiment_service.py` lint coverage to `scripts/check_research_workflow_primitives.sh`.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` passed.
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py` passed.
+- Focused review/experiment service pytest passed: `1 passed in 3.96s`.
+- `bash scripts/check_research_workflow_primitives.sh` passed: `36 passed in 88.61s`.
+- Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
+- The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 74.61s`, deployment contracts `1 passed in 1.79s`, research planning contracts `3 passed in 90.20s`, write audit `7 passed in 4.09s`, workflow job controls `3 passed in 114.38s`, tool bridge contracts `10 passed in 2.17s`, GraphRAG-lite `4 passed in 4.01s`, and context search `15 passed in 107.17s`.

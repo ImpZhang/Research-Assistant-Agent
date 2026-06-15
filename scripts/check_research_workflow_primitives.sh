@@ -3,8 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py
-.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py
+.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py
+.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py
 .venv/bin/pytest -q \
   tests/test_app.py::test_literature_search_returns_local_results_with_external_disabled \
   tests/test_app.py::test_literature_search_rejects_empty_query \
@@ -29,6 +29,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_idea_service_builds_variants_and_preserves_lineage \
   tests/test_app.py::test_mine_research_gaps_from_evidence \
   tests/test_app.py::test_generate_ideas_from_gap \
+  tests/test_app.py::test_review_and_experiment_services_create_traceable_outputs \
   tests/test_app.py::test_review_and_experiment_plan_for_idea \
   tests/test_app.py::test_novelty_check_records_local_collision_screening \
   tests/test_app.py::test_novelty_service_scores_overlap_with_caps_and_weights \
