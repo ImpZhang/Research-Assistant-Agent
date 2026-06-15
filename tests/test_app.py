@@ -21,7 +21,9 @@ from backend.research.models import (
     ResearchGap,
     ResearchNode,
 )
+from backend.research.services.gap_service import GapService
 from backend.research.services.graph_service import GraphService
+from backend.research.services.idea_service import IdeaService
 from backend.research.schemas import LiteratureSearchItem, LiteratureSearchResponse
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.novelty_service import NoveltyService
@@ -3082,6 +3084,74 @@ Future work should replace heuristic extraction with LLM structured extraction.
     fetched = client.get(f"/research/papers/{paper_id}/card")
     assert fetched.status_code == 200
     assert fetched.json()["id"] == card["id"]
+
+
+def test_gap_service_builds_titles_reasons_and_approaches() -> None:
+    service = GapService(None)
+    paper = Paper(title="Evidence Grounded Agents")
+    long_summary = " ".join(["limitation"] * 20)
+    limitation = Evidence(
+        id="evidence-limitation",
+        evidence_type="limitation",
+        text="raw limitation text",
+        summary=long_summary,
+    )
+    future_work = Evidence(
+        id="evidence-future",
+        evidence_type="future_work",
+        text="future work text",
+        summary="extend the agent to citations",
+    )
+    problem = Evidence(
+        id="evidence-problem",
+        evidence_type="problem",
+        text="problem framing text",
+        summary="agents miss grounding",
+    )
+
+    title = service._build_title(limitation)
+
+    assert title.startswith("Address limitation: limitation limitation")
+    assert title.endswith("...")
+    assert len(title) <= len("Address limitation: ") + 80
+    assert "Evidence Grounded Agents" in service._why_important(limitation, paper)
+    assert service._why_unsolved(future_work).startswith("The source frames this as future work")
+    assert service._why_unsolved(problem).startswith("The source motivates the problem")
+    assert service._possible_approaches(limitation) == [
+        "Design a method variant that targets the stated limitation.",
+        "Build an evaluation slice that isolates the limitation.",
+    ]
+    assert service._possible_approaches(future_work)[0].startswith("Turn the future-work direction")
+    assert service._possible_approaches(problem)[0].startswith("Formalize the problem")
+
+
+def test_idea_service_builds_variants_and_preserves_lineage() -> None:
+    service = IdeaService(None)
+    gap = ResearchGap(
+        id="gap-lineage",
+        title="Address limitation: " + "retrieval grounding " * 10,
+        description="Current agents do not preserve evidence-grounded claims.",
+        why_important="This gap matters for trustworthy research drafting.",
+        source_paper_ids_json=["paper-a"],
+        evidence_ids_json=["evidence-a", "evidence-b"],
+    )
+
+    method_idea = service._build_idea(gap, 0)
+    evaluation_idea = service._build_idea(gap, 1)
+
+    assert service._shorten("  one\n two\t three  ", 20) == "one two three"
+    assert service._shorten("x" * 80, 10) == "xxxxxxx..."
+    assert method_idea.title.startswith("Evidence-Guided Study for Address limitation")
+    assert evaluation_idea.title.startswith("Evaluation-Centered Study for Address limitation")
+    assert len(method_idea.title) <= len("Evidence-Guided Study for ") + 72
+    assert method_idea.related_gap_ids_json == ["gap-lineage"]
+    assert method_idea.related_paper_ids_json == ["paper-a"]
+    assert method_idea.evidence_ids_json == ["evidence-a", "evidence-b"]
+    assert "targeted method improvement" in method_idea.research_question
+    assert "evaluation protocol" in evaluation_idea.research_question
+    assert method_idea.score_json["overall_score"] == 3.4
+    assert method_idea.status == "draft"
+    assert method_idea.version == 1
 
 
 def test_mine_research_gaps_from_evidence() -> None:

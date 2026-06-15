@@ -1824,3 +1824,21 @@ Verification completed:
 - `bash scripts/check_research_workflow_primitives.sh` passed: `31 passed in 88.24s`.
 - Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
 - The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 77.03s`, deployment contracts `1 passed in 1.72s`, research planning contracts `3 passed in 87.89s`, write audit `7 passed in 4.07s`, workflow job controls `3 passed in 131.51s`, tool bridge contracts `10 passed in 2.17s`, GraphRAG-lite `4 passed in 4.53s`, and context search `15 passed in 100.64s`.
+
+## 2026-06-15 - Gap And Idea Service Contract Coverage
+
+Implemented in progress:
+
+- Added no-network service-level contract tests for gap title building, importance/unsolved explanations, possible approaches, idea variant generation, text shortening, and gap/evidence lineage preservation.
+- Added the new tests and `backend/research/services/gap_service.py` plus `backend/research/services/idea_service.py` lint coverage to `scripts/check_research_workflow_primitives.sh`.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` passed.
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/gap_service.py backend/research/services/idea_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/gap_service.py backend/research/services/idea_service.py` passed.
+- Focused gap/idea service pytest passed: `2 passed in 4.29s`.
+- `bash scripts/check_research_workflow_primitives.sh` passed: `33 passed in 87.57s`.
+- Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
+- The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 76.30s`, deployment contracts `1 passed in 1.63s`, research planning contracts `3 passed in 86.28s`, write audit `7 passed in 3.92s`, workflow job controls `3 passed in 116.21s`, tool bridge contracts `10 passed in 2.42s`, GraphRAG-lite `4 passed in 4.50s`, and context search `15 passed in 107.65s`.
