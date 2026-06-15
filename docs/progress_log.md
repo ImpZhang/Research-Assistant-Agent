@@ -2027,3 +2027,25 @@ Verification completed:
 - `bash scripts/check_research_workflow_primitives.sh` passed after registering the new test: `37 passed in 99.98s`.
 - `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 99.28s`, deployment contracts `1 passed in 1.35s`, research workflow primitives `37 passed in 90.24s`, research planning contracts `3 passed in 95.83s`, write audit `7 passed in 4.72s`, workflow job controls `3 passed in 153.72s`, tool bridge contracts `10 passed in 2.25s`, GraphRAG-lite `4 passed in 4.44s`, and context search `15 passed in 110.32s`.
 - Test-effect metrics for this slice: representative Markdown papers with explicit Limitations/Future Work sections now produce mined gaps in both a focused regression test and the full product smoke, raising the selected remote-safe pytest coverage from 107 to 108 tests.
+
+
+## 2026-06-15 - Product Effect Scorecard
+
+Implemented in progress:
+
+- Added `build_product_effect_scorecard` to `scripts/smoke_api.py` so every product smoke reports an overall product-effect score, band, weighted dimension scores, pass/fail checks, and failed-check names.
+- Added `product_effect_score`, `product_effect_band`, and `product_effect_scorecard` to the smoke JSON summary.
+- Added `test_product_effect_scorecard_separates_quality_from_completion` so the scorecard distinguishes completed workflow/delivery paths from weaker evidence and claim-validation quality signals.
+- Registered the new scorecard test in `scripts/check_research_workflow_primitives.sh` and added `scripts/smoke_api.py` to that script's ruff checks.
+- Updated README, `docs/demo_runbook.md`, and `docs/product_effect_report.md` with scorecard interpretation and current baseline metrics.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env`, token, cookie, password, private key, or credential values.
+
+Verification completed:
+
+- Targeted scorecard and Markdown gap tests passed with isolated SQLite/upload directories: `2 passed in 4.35s`.
+- `bash scripts/check_focused_test_coverage.sh` passed: all pytest tests are covered by focused check scripts.
+- `timeout 240 bash scripts/check_research_workflow_primitives.sh` passed: `38 passed in 91.67s`.
+- Default product-effect smoke passed with scorecard metrics: overall `0.8754`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.5018`, delivery loop `1.0`, failed checks `[]`.
+- Representative Markdown product-effect smoke passed with `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/tmp/raa_gap_rich_paper.md`: overall `0.8854`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.5418`, delivery loop `1.0`, `3` gaps, `6` ideas, proposal review score `0.92`, evidence ledger coverage `0.24`, project bundle readiness score `1.0`, and `100` graph nodes / `100` graph edges.
+- `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 74.55s`, deployment contracts `1 passed in 1.30s`, research workflow primitives `38 passed in 90.11s`, research planning contracts `3 passed in 89.22s`, write audit `7 passed in 3.90s`, workflow job controls `3 passed in 114.61s`, tool bridge contracts `10 passed in 2.19s`, GraphRAG-lite `4 passed in 4.43s`, and context search `15 passed in 111.19s`.
+- Product-effect interpretation for this slice: the product is now measurably pilot-effective at backend workflow completion, while the quality-signal dimension remains the main gap to improve next.

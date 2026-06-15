@@ -62,6 +62,59 @@ def test_health_ready_checks_database_and_storage() -> None:
     assert body["checks"]["write_audit_dir"]["enabled"] is False
 
 
+def test_product_effect_scorecard_separates_quality_from_completion() -> None:
+    from scripts.smoke_api import build_product_effect_scorecard
+
+    summary = {
+        "health": {"status": "ok"},
+        "service_readiness": {"status": "ready"},
+        "workbench_available": True,
+        "tool_manifest_count": 119,
+        "tool_bridge_count": 119,
+        "gap_count": 3,
+        "idea_count": 6,
+        "novelty_check_count": 6,
+        "proposal_review_decision": "ready_for_advisor_review",
+        "proposal_review_score": 0.92,
+        "experiment_analysis_decision": "supports_hypothesis",
+        "experiment_plan_count": 6,
+        "readiness_score": 0.6534,
+        "quality_gate_score": 0.6574,
+        "evidence_ledger_coverage_score": 0.24,
+        "readiness_claim_validation_score": 0.35,
+        "quality_gate_claim_validation_score": 0.35,
+        "claim_validation_result_status": "needs_more_evidence",
+        "project_bundle_file_count": 71,
+        "project_bundle_readiness_level": "delivery_ready",
+        "project_bundle_readiness_score": 1.0,
+        "research_plan_item_count": 3,
+        "research_plan_task_count": 9,
+        "graph_node_count": 100,
+        "graph_edge_count": 100,
+    }
+
+    scorecard = build_product_effect_scorecard(summary)
+
+    assert 0.85 <= scorecard["overall_score"] < 0.9
+    assert scorecard["band"] == "pilot_effective"
+    assert scorecard["dimension_scores"]["foundation"] == 1.0
+    assert scorecard["dimension_scores"]["delivery_loop"] == 1.0
+    assert scorecard["dimension_scores"]["quality_signal"] < 0.6
+    assert scorecard["failed_checks"] == []
+
+    weak_summary = dict(summary)
+    weak_summary["service_readiness"] = {"status": "not_ready"}
+    weak_summary["workbench_available"] = False
+    weak_summary["gap_count"] = 1
+
+    weak_scorecard = build_product_effect_scorecard(weak_summary)
+
+    assert weak_scorecard["overall_score"] < scorecard["overall_score"]
+    assert "service_ready" in weak_scorecard["failed_checks"]
+    assert "workbench_available" in weak_scorecard["failed_checks"]
+    assert "minimum_gaps_met" in weak_scorecard["failed_checks"]
+
+
 def test_graph_service_reuses_duplicate_edges() -> None:
     client = TestClient(create_app())
     assert client.get("/health").status_code == 200

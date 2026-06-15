@@ -20,7 +20,7 @@ The intended product is a research assistant agent that turns literature and pro
 
 Status on 2026-06-15: backend workflow engine and verification harness are strong enough for MVP demonstration, while product polish still needs frontend, real-user workflow, deployment, and operator-hardening passes.
 
-The current product behaves as a backend-first research workflow engine. It can produce a complete research handoff package from a smoke paper in both in-process and real HTTP service modes.
+The current product behaves as a backend-first research workflow engine. It can produce a complete research handoff package from a smoke paper in both in-process and real HTTP service modes. The latest isolated smoke adds a product-effect scorecard: overall `0.8754`, band `pilot_effective`, with strong foundation/research/delivery dimensions and a weaker quality-signal dimension.
 
 ## Verified Smoke Metrics
 
@@ -43,6 +43,7 @@ The smoke runs used isolated test data directories under `data/test-runs/` and d
 - Research plan: `3` plan items, `9` generated tasks.
 - Portfolio ranking: `5` ranked ideas, top score `3.585`.
 - Graph context: `100` nodes, `100` edges in the final smoke summary.
+- Product-effect scorecard: overall `0.8754`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.5018`, delivery loop `1.0`, failed checks `[]`.
 
 ### Real HTTP Smoke
 
@@ -65,6 +66,18 @@ The same smoke path was run against a temporary `uvicorn` service bound to `127.
 - Ranked ideas: `5`, top score `3.585`.
 - Graph context: `100` nodes, `100` edges.
 
+
+### Representative Markdown Smoke
+
+The product-effect smoke was also run with a representative Markdown fixture through `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/tmp/raa_gap_rich_paper.md`.
+
+- Literature workflow output: `3` gaps, `6` ideas.
+- Proposal review: `ready_for_advisor_review`, score `0.92`.
+- Evidence ledger coverage: `0.24`.
+- Project bundle: `71` files, readiness level `delivery_ready`, score `1.0`.
+- Graph context: `100` nodes, `100` edges.
+- Product-effect scorecard: overall `0.8854`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.5418`, delivery loop `1.0`, failed checks `[]`.
+
 ## What Works Well
 
 - The full backend research workflow is coherent and traceable from paper ingestion to delivery bundle.
@@ -77,7 +90,8 @@ The same smoke path was run against a temporary `uvicorn` service bound to `127.
 ## Product Gaps
 
 - The smoke paper is synthetic. A real paper or real project brief still needs qualitative evaluation.
-- The generated readiness and quality scores show useful caution, but the actual scientific quality of gaps, ideas, novelty claims, and experiment plans still needs human review.
+- The generated readiness and quality scores show useful caution; the scorecard makes this visible through a quality-signal dimension of `0.5018`, driven by evidence coverage and claim-validation scores.
+- The actual scientific quality of gaps, ideas, novelty claims, and experiment plans still needs human review.
 - Workbench availability is verified, but visual/interaction quality has not been systematically inspected in a browser session.
 - Deployment posture is still pilot-oriented: backup, restore, migrations, monitoring, and production data boundaries remain hardening work.
 - Multi-user/project scoping is designed but not production-enforced as a complete product boundary.
@@ -93,7 +107,6 @@ The same smoke path was run against a temporary `uvicorn` service bound to `127.
 ## Recommended Next Steps
 
 1. Run a browser-level Workbench inspection against a temporary isolated HTTP service and capture the main user path: upload, workflow launch, cockpit, advisor, bundle.
-2. Add a small scripted product-quality evaluation using a real or representative paper fixture, with saved metrics for gap quality, idea quality, proposal completeness, and plan executability.
+2. Improve the quality-signal dimension by strengthening evidence-ledger coverage and claim-validation scoring on representative papers.
 3. Decide whether the next demo target is API-first, Workbench-first, or MCP/tool-consumer-first.
-4. Add a concise `docs/demo_runbook.md` that explains how to run the isolated product smoke and interpret the metrics.
-5. Continue hardening docs and tests before touching production deployment, migrations, backups, or user-scoping enforcement.
+4. Continue hardening docs and tests before touching production deployment, migrations, backups, or user-scoping enforcement.

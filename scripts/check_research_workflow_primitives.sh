@@ -3,9 +3,10 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/document_ingestion.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py
-.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/document_ingestion.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py
+.venv/bin/ruff check tests/test_app.py scripts/smoke_api.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/document_ingestion.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py
+.venv/bin/ruff format --check tests/test_app.py scripts/smoke_api.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/document_ingestion.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py
 .venv/bin/pytest -q \
+  tests/test_app.py::test_product_effect_scorecard_separates_quality_from_completion \
   tests/test_app.py::test_literature_search_returns_local_results_with_external_disabled \
   tests/test_app.py::test_literature_search_rejects_empty_query \
   tests/test_app.py::test_literature_search_clamps_limit_and_sorts_combined_results \

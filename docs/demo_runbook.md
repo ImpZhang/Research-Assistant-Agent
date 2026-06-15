@@ -35,6 +35,7 @@ Expected high-level indicators:
 - Experiment analysis returns `supports_hypothesis`.
 - Project bundle readiness reaches `delivery_ready` after required artifacts are created.
 - The final JSON includes graph node and edge counts.
+- The final JSON includes `product_effect_score`, `product_effect_band`, and `product_effect_scorecard.dimension_scores`.
 
 ## Temporary Real HTTP Smoke
 
@@ -74,7 +75,8 @@ The 2026-06-15 product-effect smoke baseline produced these representative metri
 - Quality gate: score `0.6574`, decision `de_risk_novelty`.
 - Project bundle: `71` files, readiness `delivery_ready`, score `1.0`.
 - Graph summary: `100` nodes and `100` edges in the smoke output.
+- Product-effect scorecard: overall score `0.8754`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.5018`, delivery loop `1.0`, failed checks `[]`.
 
 ## Demo Decision
 
-Use this runbook to prove the backend workflow is demo-ready. Before a user-facing demo, still inspect the Workbench visually and run a real or representative paper through the workflow for qualitative review.
+Use this runbook to prove the backend workflow is pilot-effective at the backend workflow level. Before a user-facing demo, still inspect the Workbench visually and review real or representative paper outputs qualitatively, especially the quality-signal dimension.

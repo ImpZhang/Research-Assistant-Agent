@@ -138,6 +138,128 @@ def require_ok(response: ResponseAdapter, label: str) -> Any:
     return response.json()
 
 
+def _clamp_score(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def _ratio_score(value: Any, target: float) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if target <= 0:
+        return 0.0
+    return _clamp_score(numeric / target)
+
+
+def _metric_score(summary: dict[str, Any], key: str, target: float = 1.0) -> float:
+    return _ratio_score(summary.get(key, 0.0), target)
+
+
+def _bool_score(value: Any) -> float:
+    return 1.0 if bool(value) else 0.0
+
+
+def _average(scores: list[float]) -> float:
+    if not scores:
+        return 0.0
+    return sum(scores) / len(scores)
+
+
+def _score_band(score: float) -> str:
+    if score >= 0.9:
+        return "demo_ready"
+    if score >= 0.8:
+        return "pilot_effective"
+    if score >= 0.65:
+        return "needs_targeted_work"
+    return "not_ready"
+
+
+def build_product_effect_scorecard(summary: dict[str, Any]) -> dict[str, Any]:
+    service_ready = summary.get("service_readiness", {}).get("status") == "ready"
+    tool_manifest_count = summary.get("tool_manifest_count", 0)
+    tool_bridge_count = summary.get("tool_bridge_count", 0)
+    tool_parity = tool_manifest_count == tool_bridge_count and tool_manifest_count > 0
+
+    dimension_scores = {
+        "foundation": _average(
+            [
+                _bool_score(summary.get("health", {}).get("status") == "ok"),
+                _bool_score(service_ready),
+                _bool_score(summary.get("workbench_available")),
+                _average(
+                    [
+                        _metric_score(summary, "tool_manifest_count", 100),
+                        _metric_score(summary, "tool_bridge_count", 100),
+                        _bool_score(tool_parity),
+                    ]
+                ),
+            ]
+        ),
+        "research_workflow": _average(
+            [
+                _metric_score(summary, "gap_count", 3),
+                _metric_score(summary, "idea_count", 6),
+                _metric_score(summary, "novelty_check_count", 6),
+                _bool_score(summary.get("proposal_review_decision") == "ready_for_advisor_review"),
+                _metric_score(summary, "proposal_review_score", 0.85),
+                _bool_score(summary.get("experiment_analysis_decision") == "supports_hypothesis"),
+                _metric_score(summary, "experiment_plan_count", 6),
+            ]
+        ),
+        "quality_signal": _average(
+            [
+                _metric_score(summary, "readiness_score"),
+                _metric_score(summary, "quality_gate_score"),
+                _metric_score(summary, "evidence_ledger_coverage_score"),
+                _metric_score(summary, "readiness_claim_validation_score"),
+                _metric_score(summary, "quality_gate_claim_validation_score"),
+                _bool_score(summary.get("claim_validation_result_status") == "needs_more_evidence"),
+            ]
+        ),
+        "delivery_loop": _average(
+            [
+                _metric_score(summary, "project_bundle_file_count", 70),
+                _bool_score(summary.get("project_bundle_readiness_level") == "delivery_ready"),
+                _metric_score(summary, "project_bundle_readiness_score"),
+                _metric_score(summary, "research_plan_item_count", 3),
+                _metric_score(summary, "research_plan_task_count", 9),
+                _metric_score(summary, "graph_node_count", 100),
+                _metric_score(summary, "graph_edge_count", 100),
+            ]
+        ),
+    }
+    weights = {
+        "foundation": 0.2,
+        "research_workflow": 0.3,
+        "quality_signal": 0.25,
+        "delivery_loop": 0.25,
+    }
+    overall_score = sum(dimension_scores[name] * weight for name, weight in weights.items())
+    checks = {
+        "service_ready": service_ready,
+        "workbench_available": bool(summary.get("workbench_available")),
+        "tool_bridge_matches_manifest": tool_parity,
+        "minimum_gaps_met": summary.get("gap_count", 0) >= 3,
+        "minimum_ideas_met": summary.get("idea_count", 0) >= 6,
+        "proposal_review_ready": summary.get("proposal_review_decision")
+        == "ready_for_advisor_review",
+        "project_bundle_delivery_ready": summary.get("project_bundle_readiness_level")
+        == "delivery_ready",
+        "graph_context_available": summary.get("graph_node_count", 0) >= 100
+        and summary.get("graph_edge_count", 0) >= 100,
+    }
+    return {
+        "overall_score": round(overall_score, 4),
+        "band": _score_band(overall_score),
+        "dimension_scores": {name: round(score, 4) for name, score in dimension_scores.items()},
+        "weights": weights,
+        "checks": checks,
+        "failed_checks": [name for name, passed in checks.items() if not passed],
+    }
+
+
 def run_smoke(
     client: InProcessClient | HttpClient,
     *,
@@ -3706,7 +3828,7 @@ def run_smoke(
     edges = require_ok(client.get("/research/graph/edges"), "graph edges")
     graph_stats = require_ok(client.get("/research/graph/stats"), "graph stats")
 
-    return {
+    summary = {
         "health": health,
         "service_readiness": service_readiness,
         "phase": status["phase"],
@@ -4048,6 +4170,11 @@ def run_smoke(
         "graph_node_count": len(nodes),
         "graph_edge_count": len(edges),
     }
+    scorecard = build_product_effect_scorecard(summary)
+    summary["product_effect_score"] = scorecard["overall_score"]
+    summary["product_effect_band"] = scorecard["band"]
+    summary["product_effect_scorecard"] = scorecard
+    return summary
 
 
 def main() -> None:
