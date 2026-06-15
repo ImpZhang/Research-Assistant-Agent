@@ -20,6 +20,10 @@ SECTION_PATTERNS = [
     ("experiment", r"^\s*(\d+\.?\s*)?(experiment|experiments|evaluation|实验|评估)\s*$"),
     ("result", r"^\s*(\d+\.?\s*)?(results|result|analysis|结果|分析)\s*$"),
     ("limitation", r"^\s*(\d+\.?\s*)?(limitations|limitation|局限|不足)\s*$"),
+    (
+        "future_work",
+        r"^\s*(\d+\.?\s*)?(future work|future directions|next steps|未来工作|后续工作)\s*$",
+    ),
     ("conclusion", r"^\s*(\d+\.?\s*)?(conclusion|conclusions|discussion|结论|讨论)\s*$"),
     ("reference", r"^\s*(references|bibliography|参考文献)\s*$"),
 ]
@@ -32,6 +36,7 @@ SECTION_TO_EVIDENCE = {
     "experiment": "dataset",
     "result": "result",
     "limitation": "limitation",
+    "future_work": "future_work",
     "conclusion": "future_work",
     "reference": "citation",
     "full_text": "claim",
@@ -231,11 +236,17 @@ class DocumentIngestionService:
                 return candidate
         return Path(filename).stem
 
+    def _normalize_section_heading(self, line: str) -> str:
+        normalized = line.strip()
+        normalized = re.sub(r"^#{1,6}\s*", "", normalized)
+        normalized = re.sub(r"\s*#{1,6}$", "", normalized)
+        return normalized.strip(" *_`")
+
     def _detect_sections(self, text: str) -> list[dict]:
         lines = text.splitlines()
         matches: list[tuple[int, str, str]] = []
         for idx, line in enumerate(lines):
-            normalized = line.strip()
+            normalized = self._normalize_section_heading(line)
             if len(normalized) > 80:
                 continue
             for section_type, pattern in SECTION_PATTERNS:

@@ -138,7 +138,12 @@ def require_ok(response: ResponseAdapter, label: str) -> Any:
     return response.json()
 
 
-def run_smoke(client: InProcessClient | HttpClient) -> dict:
+def run_smoke(
+    client: InProcessClient | HttpClient,
+    *,
+    smoke_paper: bytes = SMOKE_PAPER,
+    smoke_filename: str = "smoke_paper.txt",
+) -> dict:
     health = require_ok(client.get("/health"), "health")
     service_readiness = require_ok(client.get("/health/ready"), "readiness")
     if service_readiness["status"] != "ready":
@@ -864,7 +869,7 @@ def run_smoke(client: InProcessClient | HttpClient) -> dict:
     upload = require_ok(
         client.post(
             "/research/papers/upload",
-            files={"file": ("smoke_paper.txt", SMOKE_PAPER, "text/plain")},
+            files={"file": (smoke_filename, smoke_paper, "text/plain")},
         ),
         "paper upload",
     )
@@ -4052,10 +4057,22 @@ def main() -> None:
         default="",
         help="Optional running service URL, e.g. http://127.0.0.1:8000. Omit for in-process mode.",
     )
+    parser.add_argument(
+        "--paper-file",
+        default="",
+        help="Optional UTF-8 text or Markdown paper fixture to upload instead of the built-in smoke paper.",
+    )
     args = parser.parse_args()
 
+    smoke_paper = SMOKE_PAPER
+    smoke_filename = "smoke_paper.txt"
+    if args.paper_file:
+        paper_path = Path(args.paper_file)
+        smoke_paper = paper_path.read_bytes()
+        smoke_filename = paper_path.name
+
     client = HttpClient(args.base_url) if args.base_url else InProcessClient()
-    summary = run_smoke(client)
+    summary = run_smoke(client, smoke_paper=smoke_paper, smoke_filename=smoke_filename)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 

@@ -2526,6 +2526,46 @@ Markdown papers should be indexed without requiring service startup.
     assert len(evidence_response.json()) == body["evidence_count"]
 
 
+def test_markdown_gap_sections_are_mined_from_headings(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+    content = b"""# Markdown Gap Mining Paper
+
+## Abstract
+This fixture validates Markdown heading ingestion for research gap mining.
+
+## Introduction
+Research assistants need robust parsing of representative paper fixtures.
+
+## Limitations
+The current workflow cannot reliably evaluate scarce evidence slices across specialized domains.
+
+## Future Work
+Future work should add cross-domain ablation studies and stronger reviewer simulation.
+"""
+
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("markdown_gap_paper.md", content, "text/markdown")},
+    )
+
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    evidence_response = client.get(f"/research/papers/{paper_id}/evidence")
+    assert evidence_response.status_code == 200
+    evidence_types = {item["evidence_type"] for item in evidence_response.json()}
+    assert "limitation" in evidence_types
+    assert "future_work" in evidence_types
+
+    mined = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 5})
+
+    assert mined.status_code == 200
+    gap_types = {item["gap_type"] for item in mined.json()["gaps"]}
+    assert "method_gap" in gap_types
+    assert "application_gap" in gap_types
+
+
 def test_literature_search_returns_local_results_with_external_disabled() -> None:
     client = TestClient(create_app())
     marker = f"literaturesearchmarker{time.time_ns()}"

@@ -336,6 +336,8 @@ Run the isolated product-effect smoke to validate the complete research-assistan
 bash scripts/check_product_effect_smoke.sh
 ```
 
+Use `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/path/to/paper.md` with `check_product_effect_smoke.sh` to run the same product-effect smoke against a representative paper fixture.
+
 Run focused write-audit guardrail checks without reading production audit logs:
 
 ```bash

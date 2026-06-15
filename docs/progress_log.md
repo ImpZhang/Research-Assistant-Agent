@@ -2005,3 +2005,25 @@ Verification completed:
 - `bash scripts/check_pilot_readiness.sh` passed: `28 passed in 79.36s`.
 - `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 78.48s`, deployment contracts `1 passed in 1.68s`, research workflow primitives `36 passed in 100.98s`, research planning contracts `3 passed in 100.35s`, write audit `7 passed in 3.59s`, workflow job controls `3 passed in 122.56s`, tool bridge contracts `10 passed in 2.22s`, GraphRAG-lite `4 passed in 4.45s`, and context search `15 passed in 111.76s`.
 - Test-effect metrics for this slice: the user-visible Workbench shell now has a focused product-surface contract, and default remote-safe pytest coverage remained green across 107 selected tests.
+
+
+## 2026-06-15 - Representative Markdown Product Smoke
+
+Implemented in progress:
+
+- Added representative paper fixture support to `scripts/smoke_api.py` through `--paper-file` and exposed it in `scripts/check_product_effect_smoke.sh` as `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/path/to/paper.md`.
+- Updated README and `docs/demo_runbook.md` so the product-effect smoke can be run against a realistic local paper fixture, not only the built-in deterministic smoke paper.
+- Improved Markdown ingestion so ATX headings such as `## Limitations` are normalized before section detection.
+- Added `Future Work` / `Future Directions` / `Next Steps` as explicit section patterns that map to `future_work` evidence and application-gap mining.
+- Added `test_markdown_gap_sections_are_mined_from_headings` and registered it in `scripts/check_research_workflow_primitives.sh`, including ruff coverage for `document_ingestion.py`.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env`, token, cookie, password, private key, or credential values.
+
+Verification completed:
+
+- Targeted regression test passed with isolated SQLite/upload directories: `tests/test_app.py::test_markdown_gap_sections_are_mined_from_headings` -> `1 passed in 4.29s`.
+- Representative Markdown product-effect smoke passed with `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/tmp/raa_gap_rich_paper.md`: service readiness `ready`, Workbench available, `119` tool-manifest entries, `119` bridge tools, `3` gaps, `6` ideas, proposal review `ready_for_advisor_review` at score `0.92`, experiment analysis `supports_hypothesis`, evidence ledger coverage `0.24`, project bundle `71` files, project-bundle readiness `delivery_ready` at score `1.0`, and `100` graph nodes / `100` graph edges.
+- Default product-effect smoke still passed after the ingestion change: service readiness `ready`, Workbench available, `3` gaps, `6` ideas, proposal review score `0.92`, project bundle `71` files, project-bundle readiness score `1.0`, and `100` graph nodes / `100` graph edges.
+- `bash scripts/check_script_catalog.sh` passed: check script catalog is synchronized.
+- `bash scripts/check_research_workflow_primitives.sh` passed after registering the new test: `37 passed in 99.98s`.
+- `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 99.28s`, deployment contracts `1 passed in 1.35s`, research workflow primitives `37 passed in 90.24s`, research planning contracts `3 passed in 95.83s`, write audit `7 passed in 4.72s`, workflow job controls `3 passed in 153.72s`, tool bridge contracts `10 passed in 2.25s`, GraphRAG-lite `4 passed in 4.44s`, and context search `15 passed in 110.32s`.
+- Test-effect metrics for this slice: representative Markdown papers with explicit Limitations/Future Work sections now produce mined gaps in both a focused regression test and the full product smoke, raising the selected remote-safe pytest coverage from 107 to 108 tests.

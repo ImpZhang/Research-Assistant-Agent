@@ -18,6 +18,12 @@ Use this when you want a complete backend workflow evaluation without starting a
 bash scripts/check_product_effect_smoke.sh
 ```
 
+To run the same product smoke with a representative local paper fixture:
+
+```bash
+PRODUCT_EFFECT_SMOKE_PAPER_FILE=/path/to/paper.md bash scripts/check_product_effect_smoke.sh
+```
+
 Expected high-level indicators:
 
 - `/health` returns `ok`.
