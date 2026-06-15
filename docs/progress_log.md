@@ -1974,3 +1974,19 @@ Verification completed:
 - Real HTTP smoke passed against temporary `uvicorn` with the same key metrics: service readiness `ready`, Workbench available, `3` gaps, `6` ideas, proposal review `ready_for_advisor_review`, readiness decision `needs_targeted_work`, quality-gate decision `de_risk_novelty`, advisor chat intent `risk_review`, project bundle `71` files, project-bundle readiness `delivery_ready` at score `1.0`, and `100` graph nodes / `100` graph edges.
 - The temporary HTTP server shut down cleanly after `timeout`; `pgrep` found no remaining `uvicorn`, `smoke_api`, pytest, or check-suite processes.
 - Test-effect metrics for this slice: the product is now verified in both TestClient and real HTTP modes with isolated data, moving the project from pure engineering validation toward demo-readiness validation.
+
+
+## 2026-06-15 - Product Smoke Runbook
+
+Implemented in progress:
+
+- Added `scripts/check_product_effect_smoke.sh`, an isolated product-effect smoke entrypoint that defaults to a per-run SQLite database and upload directory under `data/test-runs/`.
+- Added `docs/demo_runbook.md` with safe in-process and temporary HTTP smoke workflows, expected indicators, baseline metrics, and demo-readiness interpretation.
+- Updated the README check-script catalog and verification section so the product-effect smoke is discoverable.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env` or secret values.
+
+Verification completed:
+
+- `PRODUCT_EFFECT_SMOKE_TIMEOUT_SECONDS=300 bash scripts/check_product_effect_smoke.sh` passed with isolated test data and external literature search disabled by default.
+- Key metrics from the new script: service readiness `ready`, Workbench available, `119` tool-manifest entries, `119` MCP bridge tools, `3` gaps, `6` ideas, proposal review `ready_for_advisor_review` at score `0.92`, experiment analysis `supports_hypothesis`, project bundle `71` files, project-bundle readiness `delivery_ready` at score `1.0`, and `100` graph nodes / `100` graph edges.
+- Test-effect metrics for this slice: product-effect smoke is now a repeatable check script and demo runbook entry instead of an ad hoc command sequence.

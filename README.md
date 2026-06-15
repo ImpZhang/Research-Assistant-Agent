@@ -175,6 +175,7 @@ scripts/
   check_graph_rag_lite.sh
   check_handoff_docs.sh
   check_pilot_readiness.sh
+  check_product_effect_smoke.sh
   check_project_delivery_loop.sh
   check_remote_long_suite.sh
   check_remote_safe_suite.sh
@@ -327,6 +328,12 @@ Run focused pilot-readiness, status capability, first-run onboarding, and pilot-
 
 ```bash
 bash scripts/check_pilot_readiness.sh
+```
+
+Run the isolated product-effect smoke to validate the complete research-assistant workflow without touching the default remote database:
+
+```bash
+bash scripts/check_product_effect_smoke.sh
 ```
 
 Run focused write-audit guardrail checks without reading production audit logs:
