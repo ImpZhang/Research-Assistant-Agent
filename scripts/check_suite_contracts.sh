@@ -37,6 +37,7 @@ for command in required_safe:
 for forbidden in [
     "bash scripts/check_remote_long_suite.sh",
     "bash scripts/check_research_proposal_contracts.sh",
+    "bash scripts/check_project_delivery_loop.sh",
 ]:
     if forbidden in safe:
         errors.append(f"{safe_path} must not run long check `{forbidden}`")
@@ -44,6 +45,7 @@ for forbidden in [
 required_long = [
     "bash scripts/check_focused_test_coverage.sh",
     "bash scripts/check_research_proposal_contracts.sh",
+    "bash scripts/check_project_delivery_loop.sh",
 ]
 for command in required_long:
     if command not in long:

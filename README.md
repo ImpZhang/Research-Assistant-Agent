@@ -175,6 +175,7 @@ scripts/
   check_graph_rag_lite.sh
   check_handoff_docs.sh
   check_pilot_readiness.sh
+  check_project_delivery_loop.sh
   check_remote_long_suite.sh
   check_remote_safe_suite.sh
   check_research_planning_contracts.sh

@@ -3999,7 +3999,7 @@ def test_proposal_revision_service_applies_review_actions_and_fallbacks() -> Non
     assert "without an attached review" in service._summary(draft, None, applied, missing_actions)
 
 
-def test_proposal_draft_bundles_idea_related_work_and_experiment_plan() -> None:
+def test_project_delivery_loop_bundles_proposal_to_pilot_handoff() -> None:
     client = TestClient(create_app())
     content = b"""Proposal Draft Test Paper
 
