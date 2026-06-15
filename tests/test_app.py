@@ -14,6 +14,10 @@ from backend.app import create_app
 from backend.research.db import SessionLocal
 from backend.research.models import (
     Evidence,
+    RelatedWorkMatrix,
+    ProposalReview,
+    ProposalDraft,
+    ExperimentPlan,
     Idea,
     Paper,
     ResearchEdge,
@@ -29,6 +33,9 @@ from backend.research.schemas import LiteratureSearchItem, LiteratureSearchRespo
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.paper_card_service import PaperCardService
+from backend.research.services.proposal_service import ProposalDraftService
+from backend.research.services.proposal_review_service import ProposalReviewService
+from backend.research.services.proposal_revision_service import ProposalRevisionService
 from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
 from backend.research.services.review_service import ReviewService
@@ -3837,6 +3844,159 @@ def test_related_work_service_rows_sort_truncate_and_preserve_metadata() -> None
     assert literature_row["metadata"]["provider"] == "openalex"
     assert literature_row["metadata"]["citation_count"] == 1
     assert "evidence" in literature_row["shared_terms"]
+
+
+def test_proposal_draft_service_summarizes_attached_artifacts() -> None:
+    service = ProposalDraftService(None)
+    idea = Idea(
+        id="idea-proposal",
+        title=" Evidence Grounded Proposal ",
+        research_question="Can evidence-grounded agents improve proposal trust?",
+        core_hypothesis="Evidence-grounded planning improves trust.",
+        motivation="Researchers need auditable proposal drafts.",
+        method_sketch="Retrieve evidence before drafting each claim.",
+        expected_contribution="Traceable proposal generation.",
+        novelty_argument="Evidence-first drafting changes the review assumption.",
+        datasets_json=["ScholarBench"],
+        baselines_json=["Source paper baseline"],
+        metrics_json=["citation precision"],
+        risks_json=["Nearest-work collision risk"],
+        evidence_ids_json=["evidence-a", "evidence-b"],
+    )
+    matrix = RelatedWorkMatrix(
+        id="matrix-proposal",
+        idea_id=idea.id,
+        items_json=[
+            {"source_type": "literature", "title": "Nearest Paper", "overlap_score": 8.5},
+            {"source_type": "gap", "title": "Nearby Gap", "overlap_score": 6.0},
+        ],
+        differentiators_json=["Change the assumption", "Measure citation precision"],
+        missing_searches_json=["semantic_scholar_citation_chaining"],
+        summary="Two nearest works were found.",
+    )
+    plan = ExperimentPlan(
+        id="plan-proposal",
+        idea_id=idea.id,
+        objective="Test evidence-grounded planning.",
+        hypothesis="Evidence grounding improves trust.",
+        main_experiment_json={
+            "name": "Trust MVP",
+            "success_criterion": "citation precision improves without lowering task score",
+        },
+        failure_modes_json=["Baseline already solves the task"],
+        timeline_json={"week_1": "Build trust harness", "week_2": "Run trust MVP"},
+    )
+
+    assert service._title(idea) == "Proposal Draft: Evidence Grounded Proposal"
+    assert "2 overlap rows" in service._abstract(idea, matrix, plan)
+    assert "citation precision improves" in service._experiment_summary(idea, plan)
+    assert "Nearest rows: literature:Nearest Paper" in service._related_work_summary(matrix)
+    assert "Differentiation checkpoints" in service._novelty_statement(idea, matrix)
+    risk_mitigation = service._risk_mitigation(idea, matrix, plan)
+    assert "semantic_scholar_citation_chaining" in risk_mitigation
+    assert "Baseline already solves the task" in risk_mitigation
+    milestones = service._milestone_plan(idea, matrix, plan)
+    assert milestones[0]["deliverable"].startswith("Resolve missing related-work searches")
+    assert milestones[1]["deliverable"] == "Build trust harness"
+
+
+def test_proposal_review_service_scores_decisions_and_missing_evidence() -> None:
+    service = ProposalReviewService(None)
+    incomplete = ProposalDraft(
+        id="draft-incomplete",
+        idea_id="idea-proposal",
+        title="Proposal Draft",
+        abstract="Abstract",
+        problem_statement="Problem",
+        novelty_statement="Novelty",
+        method_summary="Not specified.",
+        experiment_summary="Not specified.",
+        milestone_plan_json=[],
+        evidence_ids_json=[],
+        risk_mitigation="",
+    )
+    matrix = RelatedWorkMatrix(
+        id="matrix-review",
+        idea_id="idea-proposal",
+        items_json=[{"title": "Nearest Paper"}],
+        missing_searches_json=["arxiv_recent_preprints"],
+    )
+    complete = ProposalDraft(
+        id="draft-complete",
+        idea_id="idea-proposal",
+        title="Proposal Draft",
+        abstract="Abstract",
+        problem_statement="Problem",
+        novelty_statement="Novelty",
+        related_work_matrix_id=matrix.id,
+        experiment_plan_id="plan-proposal",
+        method_summary="Method",
+        experiment_summary="Experiment",
+        milestone_plan_json=[{"window": "0-30 days"}],
+        evidence_ids_json=["evidence-a"],
+        risk_mitigation="- Risk is tracked",
+    )
+
+    assert service._readiness_score(incomplete, None) == 0.2
+    assert service._decision(0.2, service._concerns(incomplete, None)) == "not_ready"
+    assert service._missing_evidence(incomplete, None) == [
+        "supporting_evidence_ids",
+        "related_work_matrix",
+        "experiment_plan",
+    ]
+    assert service._readiness_score(complete, matrix) == 0.92
+    concerns = service._concerns(complete, matrix)
+    assert concerns == ["Related-work screening still has missing searches: arxiv_recent_preprints"]
+    assert service._decision(0.92, concerns) == "ready_for_advisor_review"
+    required = service._required_revisions(complete, matrix)
+    assert required[0] == "Resolve missing related-work searches before claiming novelty."
+    assert service._missing_evidence(complete, matrix) == ["arxiv_recent_preprints"]
+
+
+def test_proposal_revision_service_applies_review_actions_and_fallbacks() -> None:
+    service = ProposalRevisionService(None)
+    draft = ProposalDraft(
+        id="draft-revision",
+        idea_id="idea-proposal",
+        title="Proposal Draft",
+        abstract="Draft abstract",
+        novelty_statement="Draft novelty",
+        related_work_summary="Draft related work",
+        experiment_summary="Draft experiment",
+        risk_mitigation="- Draft risk",
+        milestone_plan_json=[{"window": "0-30 days", "goal": "Validate", "deliverable": "Run"}],
+    )
+    review = ProposalReview(
+        id="review-revision",
+        proposal_draft_id=draft.id,
+        idea_id=draft.idea_id,
+        decision="revise",
+        readiness_score=0.6,
+        required_revisions_json=["Name the nearest paper", "Define a failure threshold"],
+        missing_evidence_json=["related_work_matrix", "experiment_plan"],
+    )
+
+    assert service._applied_revisions(None)[0] == "Sharpened the proposal into falsifiable claims."
+    assert service._missing_evidence_actions(None) == [
+        "No missing evidence was flagged by the selected review."
+    ]
+    applied = service._applied_revisions(review)
+    assert applied == [
+        "Addressed review action: Name the nearest paper",
+        "Addressed review action: Define a failure threshold",
+    ]
+    missing_actions = service._missing_evidence_actions(review)
+    assert missing_actions == [
+        "Resolve missing evidence item `related_work_matrix` before the next readiness review.",
+        "Resolve missing evidence item `experiment_plan` before the next readiness review.",
+    ]
+    sections = service._revised_sections(draft, review, applied)
+    assert "Reviewer decision `revise` with readiness score 0.6." in sections["abstract"]
+    assert sections["milestone_plan"] == draft.milestone_plan_json
+    assert service._summary(draft, review, applied, missing_actions).startswith(
+        "Created a revised proposal artifact for draft draft-revision using review review-revision."
+    )
+    assert "without an attached review" in service._summary(draft, None, applied, missing_actions)
 
 
 def test_proposal_draft_bundles_idea_related_work_and_experiment_plan() -> None:

@@ -1878,3 +1878,22 @@ Verification completed:
 - `bash scripts/check_research_workflow_primitives.sh` passed: `36 passed in 88.61s`.
 - Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
 - The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 74.61s`, deployment contracts `1 passed in 1.79s`, research planning contracts `3 passed in 90.20s`, write audit `7 passed in 4.09s`, workflow job controls `3 passed in 114.38s`, tool bridge contracts `10 passed in 2.17s`, GraphRAG-lite `4 passed in 4.01s`, and context search `15 passed in 107.17s`.
+
+## 2026-06-15 - Proposal Service Contract Coverage
+
+Implemented in progress:
+
+- Added no-network service-level contract tests for proposal draft section synthesis, proposal readiness scoring/missing-evidence decisions, and proposal revision action generation.
+- Added the new tests and proposal service lint coverage to `scripts/check_research_proposal_contracts.sh`.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` passed after formatting the new tests.
+- `.venv/bin/ruff check tests/test_app.py backend/research/routes.py backend/research/services/proposal_service.py backend/research/services/proposal_review_service.py backend/research/services/proposal_revision_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/routes.py backend/research/services/proposal_service.py backend/research/services/proposal_review_service.py backend/research/services/proposal_revision_service.py` passed.
+- Focused proposal service pytest passed: `3 passed in 3.68s`.
+- `bash scripts/check_research_proposal_contracts.sh` passed: `4 passed in 623.39s`; the original proposal end-to-end test is the dominant long-suite bottleneck.
+- `bash scripts/check_remote_long_suite.sh` passed: focused coverage plus proposal contracts, `4 passed in 592.72s`.
+- `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 73.73s`, deployment contracts `1 passed in 1.66s`, research workflow primitives `36 passed in 87.63s`, research planning contracts `3 passed in 87.88s`, write audit `7 passed in 3.12s`, workflow job controls `3 passed in 110.76s`, tool bridge contracts `10 passed in 2.20s`, GraphRAG-lite `4 passed in 4.34s`, and context search `15 passed in 104.03s`.
+- Test-effect metrics for this slice: 3 new no-network proposal service contract tests, proposal focused suite increased from 1 to 4 tests, and default remote-safe pytest coverage remained green across 107 selected tests.
