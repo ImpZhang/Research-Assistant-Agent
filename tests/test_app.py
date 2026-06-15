@@ -5150,6 +5150,30 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "Claim Validation Tasks" in brief_export.text
     assert "## Triage Snapshot Changes" in brief_export.text
 
+    baseline_pilot_snapshot = client.post(
+        "/research/pilot/report/snapshots",
+        json={"title": "Pytest Pilot Report Baseline", "created_by": "pytest"},
+    )
+    assert baseline_pilot_snapshot.status_code == 200
+    baseline_pilot_snapshot_body = baseline_pilot_snapshot.json()
+
+    pilot_snapshot = client.post(
+        "/research/pilot/report/snapshots",
+        json={"title": "Pytest Pilot Report Candidate", "created_by": "pytest"},
+    )
+    assert pilot_snapshot.status_code == 200
+    pilot_snapshot_body = pilot_snapshot.json()
+
+    readiness_before_plan = client.get("/research/export/project-bundle/readiness")
+    assert readiness_before_plan.status_code == 200
+    readiness_before_plan_body = readiness_before_plan.json()
+    assert readiness_before_plan_body["readiness_level"] == "nearly_ready"
+    assert readiness_before_plan_body["readiness_score"] < 1.0
+    assert "Research execution plan" in readiness_before_plan_body["missing_required"]
+    assert "research_plan" in {
+        action["id"] for action in readiness_before_plan_body["quick_actions"]
+    }
+
     research_plan = client.post(
         "/research/plans",
         json={
@@ -5170,20 +5194,6 @@ Future work should preserve proposal drafts as reviewable artifacts.
     )
     assert research_plan_tasks.status_code == 200
     assert research_plan_tasks.json()["tasks"]
-
-    baseline_pilot_snapshot = client.post(
-        "/research/pilot/report/snapshots",
-        json={"title": "Pytest Pilot Report Baseline", "created_by": "pytest"},
-    )
-    assert baseline_pilot_snapshot.status_code == 200
-    baseline_pilot_snapshot_body = baseline_pilot_snapshot.json()
-
-    pilot_snapshot = client.post(
-        "/research/pilot/report/snapshots",
-        json={"title": "Pytest Pilot Report Candidate", "created_by": "pytest"},
-    )
-    assert pilot_snapshot.status_code == 200
-    pilot_snapshot_body = pilot_snapshot.json()
 
     project_bundle_readiness = client.get("/research/export/project-bundle/readiness")
     assert project_bundle_readiness.status_code == 200

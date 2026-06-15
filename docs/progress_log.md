@@ -1940,3 +1940,20 @@ Verification completed:
 - `bash scripts/check_remote_long_suite.sh` passed with focused coverage, proposal contracts `3 passed in 1.81s`, and delivery loop `1 passed in 8.43s`.
 - `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 11.99s`, deployment contracts `1 passed in 1.78s`, research workflow primitives `36 passed in 7.25s`, research planning contracts `3 passed in 4.25s`, write audit `7 passed in 3.91s`, workflow job controls `3 passed in 3.81s`, tool bridge contracts `10 passed in 2.27s`, GraphRAG-lite `4 passed in 3.22s`, and context search `15 passed in 8.42s`.
 - Test-effect metrics for this slice: delivery-loop check dropped from about 10.7 minutes to under 10 seconds, long-suite delivery-loop coverage is now isolated and repeatable, and default remote-safe pytest coverage remained green across 107 selected tests.
+
+
+## 2026-06-15 - Bundle Readiness Transition Contract
+
+Implemented in progress:
+
+- Added an explicit project-bundle readiness transition assertion inside `test_project_delivery_loop_bundles_proposal_to_pilot_handoff`.
+- The delivery loop now verifies that a fully prepared handoff without a research execution plan reports `nearly_ready`, a readiness score below 1.0, `Research execution plan` in `missing_required`, and a `research_plan` quick action before the plan is created.
+- The same test then creates the research plan and verifies the final `delivery_ready` state, keeping the hidden historical-data dependency closed.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env` or secret values.
+
+Verification completed:
+
+- `PROJECT_DELIVERY_LOOP_TIMEOUT_SECONDS=60 bash scripts/check_project_delivery_loop.sh` passed: `1 passed in 10.16s`.
+- `bash scripts/check_remote_long_suite.sh` passed with focused coverage, proposal contracts `3 passed in 1.67s`, and delivery loop `1 passed in 8.36s`.
+- `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 14.51s`, deployment contracts `1 passed in 1.72s`, research workflow primitives `36 passed in 7.75s`, research planning contracts `3 passed in 4.90s`, write audit `7 passed in 4.02s`, workflow job controls `3 passed in 4.77s`, tool bridge contracts `10 passed in 2.22s`, GraphRAG-lite `4 passed in 3.01s`, and context search `15 passed in 9.01s`.
+- Test-effect metrics for this slice: one more user-visible readiness transition is covered in the isolated delivery-loop check, and default remote-safe pytest coverage remained green across 107 selected tests.
