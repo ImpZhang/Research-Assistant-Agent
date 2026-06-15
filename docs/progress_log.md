@@ -1917,3 +1917,26 @@ Verification completed:
 - `bash scripts/check_remote_long_suite.sh` passed with focused coverage, proposal contracts `3 passed in 1.69s`, and delivery loop `1 passed in 627.79s`.
 - `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 76.37s`, deployment contracts `1 passed in 1.70s`, research workflow primitives `36 passed in 91.14s`, research planning contracts `3 passed in 84.67s`, write audit `7 passed in 4.02s`, workflow job controls `3 passed in 113.52s`, tool bridge contracts `10 passed in 2.15s`, GraphRAG-lite `4 passed in 4.28s`, and context search `15 passed in 107.51s`.
 - Test-effect metrics for this slice: proposal-focused feedback now runs in seconds, full delivery-loop coverage remains available in the long suite, and default remote-safe pytest coverage remained green across 107 selected tests.
+
+
+## 2026-06-15 - Isolated Project Delivery Loop Test Data
+
+Implemented in progress:
+
+- Made `scripts/check_project_delivery_loop.sh` use a per-run ignored test data directory for `RESEARCH_DB_URL` and `PAPER_UPLOAD_DIR` instead of the accumulated remote development database.
+- Forced `EXTERNAL_LITERATURE_SEARCH_ENABLED=false` for the delivery-loop check so `.env` or remote runtime settings cannot turn the test into a network-dependent run.
+- Added a research execution plan setup step inside `test_project_delivery_loop_bundles_proposal_to_pilot_handoff`, removing its hidden dependency on historical database state.
+- Changed the delivery-loop and long-suite tail calls to `exec` so nested shell wrappers do not leave pytest hanging after the test process completes.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env` or secret values.
+
+Verification completed:
+
+- Historical default database scale that explained the old project-level scan cost: 5123 papers, 18898 evidences, 5999 gaps, 6888 ideas, 3555 experiment plans, 17975 research tasks, and 60007 graph edges.
+- Before isolation, `bash scripts/check_project_delivery_loop.sh` passed in `1 passed in 639.78s`; the long suite delivery-loop segment passed in `1 passed in 627.79s`.
+- During isolation, the test failed fast on a clean database with `readiness_level=nearly_ready` and missing `Research execution plan`, proving the old pass depended on historical remote data.
+- After adding the research plan setup, the isolated direct pytest run passed: `1 passed in 10.03s`.
+- `PROJECT_DELIVERY_LOOP_TIMEOUT_SECONDS=60 bash scripts/check_project_delivery_loop.sh` passed: `1 passed in 7.99s`.
+- `bash scripts/check_research_proposal_contracts.sh` passed: `3 passed in 1.71s`.
+- `bash scripts/check_remote_long_suite.sh` passed with focused coverage, proposal contracts `3 passed in 1.81s`, and delivery loop `1 passed in 8.43s`.
+- `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 11.99s`, deployment contracts `1 passed in 1.78s`, research workflow primitives `36 passed in 7.25s`, research planning contracts `3 passed in 4.25s`, write audit `7 passed in 3.91s`, workflow job controls `3 passed in 3.81s`, tool bridge contracts `10 passed in 2.27s`, GraphRAG-lite `4 passed in 3.22s`, and context search `15 passed in 8.42s`.
+- Test-effect metrics for this slice: delivery-loop check dropped from about 10.7 minutes to under 10 seconds, long-suite delivery-loop coverage is now isolated and repeatable, and default remote-safe pytest coverage remained green across 107 selected tests.

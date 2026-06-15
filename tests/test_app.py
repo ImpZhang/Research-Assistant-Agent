@@ -5150,6 +5150,27 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert "Claim Validation Tasks" in brief_export.text
     assert "## Triage Snapshot Changes" in brief_export.text
 
+    research_plan = client.post(
+        "/research/plans",
+        json={
+            "title": "Pytest Research Execution Plan",
+            "horizon_days": 14,
+            "idea_ids": [idea_id],
+            "created_by": "pytest",
+        },
+    )
+    assert research_plan.status_code == 200
+    research_plan_body = research_plan.json()
+    assert research_plan_body["idea_ids"] == [idea_id]
+    assert research_plan_body["plan_items"]
+
+    research_plan_tasks = client.post(
+        f"/research/plans/{research_plan_body['id']}/tasks",
+        json={"created_by": "pytest"},
+    )
+    assert research_plan_tasks.status_code == 200
+    assert research_plan_tasks.json()["tasks"]
+
     baseline_pilot_snapshot = client.post(
         "/research/pilot/report/snapshots",
         json={"title": "Pytest Pilot Report Baseline", "created_by": "pytest"},
