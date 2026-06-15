@@ -1727,6 +1727,29 @@ def test_workbench_static_assets_are_served() -> None:
     assert "Task Board" in response.text
     assert "Project Delivery" in response.text
     assert "Project Operations" in response.text
+    expected_sections = {
+        "pilot-launch": "Pilot Launch",
+        "onboarding": "Onboarding",
+        "ingest": "Ingest",
+        "workflow": "Workflow",
+        "profile": "Profile",
+        "search": "Search",
+        "advisor": "Advisor",
+        "jobs": "Jobs",
+        "dossier": "Dossier",
+    }
+    for section_id, label in expected_sections.items():
+        assert f'href="#{section_id}"' in response.text
+        assert f'id="{section_id}"' in response.text
+        assert label in response.text
+
+    styles = client.get("/workbench-assets/styles.css")
+    assert styles.status_code == 200
+    assert ".app-shell" in styles.text
+    assert "grid-template-columns" in styles.text
+    assert ".controls-grid" in styles.text
+    assert "@media" in styles.text
+    assert "max-width: 920px" in styles.text
 
     script = client.get("/workbench-assets/app.js")
     assert script.status_code == 200

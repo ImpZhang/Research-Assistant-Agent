@@ -1990,3 +1990,18 @@ Verification completed:
 - `PRODUCT_EFFECT_SMOKE_TIMEOUT_SECONDS=300 bash scripts/check_product_effect_smoke.sh` passed with isolated test data and external literature search disabled by default.
 - Key metrics from the new script: service readiness `ready`, Workbench available, `119` tool-manifest entries, `119` MCP bridge tools, `3` gaps, `6` ideas, proposal review `ready_for_advisor_review` at score `0.92`, experiment analysis `supports_hypothesis`, project bundle `71` files, project-bundle readiness `delivery_ready` at score `1.0`, and `100` graph nodes / `100` graph edges.
 - Test-effect metrics for this slice: product-effect smoke is now a repeatable check script and demo runbook entry instead of an ad hoc command sequence.
+
+
+## 2026-06-15 - Workbench Product Surface Contract
+
+Implemented in progress:
+
+- Extended `test_workbench_static_assets_are_served` to verify the Workbench main product path exposes stable navigation sections from Pilot Launch through Dossier.
+- Added CSS surface assertions for the Workbench shell, grid layout, controls grid, and responsive breakpoint so the static product entrypoint keeps a desktop/mobile layout contract.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env` or secret values.
+
+Verification completed:
+
+- `bash scripts/check_pilot_readiness.sh` passed: `28 passed in 79.36s`.
+- `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 78.48s`, deployment contracts `1 passed in 1.68s`, research workflow primitives `36 passed in 100.98s`, research planning contracts `3 passed in 100.35s`, write audit `7 passed in 3.59s`, workflow job controls `3 passed in 122.56s`, tool bridge contracts `10 passed in 2.22s`, GraphRAG-lite `4 passed in 4.45s`, and context search `15 passed in 111.76s`.
+- Test-effect metrics for this slice: the user-visible Workbench shell now has a focused product-surface contract, and default remote-safe pytest coverage remained green across 107 selected tests.
