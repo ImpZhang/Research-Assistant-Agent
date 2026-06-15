@@ -27,6 +27,7 @@ from backend.research.services.literature_search_service import LiteratureSearch
 from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
+from backend.research.services.structured_extraction_service import StructuredExtractionService
 from backend.research.services.workflow_service import WorkflowService
 
 
@@ -7715,6 +7716,43 @@ Future work should expose graph nodes and edges through the API.
     assert stats_body["edge_type_counts"]["paper_has_evidence"] >= 1
     assert stats_body["orphan_edge_count"] == 0
     assert stats_body["duplicate_edge_group_count"] >= 0
+
+
+def test_structured_extraction_prompt_limits_evidence_payload() -> None:
+    service = StructuredExtractionService.__new__(StructuredExtractionService)
+    paper = Paper(id="paper-prompt", title="Prompt Safety Paper")
+    evidences = [
+        Evidence(
+            id=f"evidence-{index}",
+            evidence_type="method",
+            supports=f"claim-{index}",
+            text=f"Evidence {index} " + ("A" * 1300),
+        )
+        for index in range(30)
+    ]
+
+    prompt = service._build_prompt(paper, evidences)
+    evidence_json = prompt.split("Evidence JSON:\n", 1)[1].split(
+        "\n\nReturn JSON matching this shape:",
+        1,
+    )[0]
+    evidence_payload = json.loads(evidence_json)
+    schema_json = prompt.split("Return JSON matching this shape:\n", 1)[1]
+    schema_hint = json.loads(schema_json)
+
+    assert prompt.startswith("Paper title: Prompt Safety Paper")
+    assert len(evidence_payload) == 24
+    assert evidence_payload[0] == {
+        "evidence_id": "evidence-0",
+        "type": "method",
+        "supports": "claim-0",
+        "text": "Evidence 0 " + ("A" * 1189),
+    }
+    assert evidence_payload[-1]["evidence_id"] == "evidence-23"
+    assert "evidence-24" not in {item["evidence_id"] for item in evidence_payload}
+    assert len(evidence_payload[0]["text"]) == 1200
+    assert schema_hint["problem"][0]["evidence_ids"] == ["..."]
+    assert schema_hint["keywords"] == []
 
 
 def test_structured_card_extraction_falls_back_without_model_config() -> None:

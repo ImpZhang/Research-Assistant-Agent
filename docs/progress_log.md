@@ -1806,3 +1806,21 @@ Verification completed:
 - `bash scripts/check_research_workflow_primitives.sh` passed: `30 passed in 89.98s`.
 - Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
 - The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 70.82s`, deployment contracts `1 passed in 1.65s`, research planning contracts `3 passed in 86.70s`, write audit `7 passed in 3.65s`, workflow job controls `3 passed in 109.64s`, tool bridge contracts `10 passed in 2.35s`, GraphRAG-lite `4 passed in 4.17s`, and context search `15 passed in 106.07s`.
+
+## 2026-06-15 - Structured Extraction Prompt Contract Coverage
+
+Implemented in progress:
+
+- Added a no-network prompt-construction contract test for structured paper-card extraction evidence limits, per-evidence text truncation, and schema hint presence.
+- Added the new test and `backend/research/services/structured_extraction_service.py` lint coverage to `scripts/check_research_workflow_primitives.sh`.
+- Preserved the two pre-existing untracked root documents and did not touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff format tests/test_app.py` passed.
+- `.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py` passed.
+- Focused structured-extraction prompt pytest passed: `1 passed in 4.27s`.
+- `bash scripts/check_research_workflow_primitives.sh` passed: `31 passed in 88.24s`.
+- Fast guards passed: focused test coverage, suite contracts, script catalog, handoff docs, secret file guard, generated file guard, and `git --no-pager diff --check`.
+- The remote safe suite was completed as its documented component scripts: pilot readiness `28 passed in 77.03s`, deployment contracts `1 passed in 1.72s`, research planning contracts `3 passed in 87.89s`, write audit `7 passed in 4.07s`, workflow job controls `3 passed in 131.51s`, tool bridge contracts `10 passed in 2.17s`, GraphRAG-lite `4 passed in 4.53s`, and context search `15 passed in 100.64s`.

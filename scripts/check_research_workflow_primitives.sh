@@ -3,8 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py
-.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py
+.venv/bin/ruff check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py
+.venv/bin/ruff format --check tests/test_app.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py
 .venv/bin/pytest -q \
   tests/test_app.py::test_literature_search_returns_local_results_with_external_disabled \
   tests/test_app.py::test_literature_search_rejects_empty_query \
@@ -35,4 +35,5 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_related_work_service_missing_searches_cover_external_statuses \
   tests/test_app.py::test_related_work_service_rows_sort_truncate_and_preserve_metadata \
   tests/test_app.py::test_markdown_exports_for_card_and_idea_dossier \
+  tests/test_app.py::test_structured_extraction_prompt_limits_evidence_payload \
   tests/test_app.py::test_structured_card_extraction_falls_back_without_model_config
