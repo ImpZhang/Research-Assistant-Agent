@@ -2070,3 +2070,24 @@ Verification completed:
 - `bash scripts/check_script_catalog.sh`, `bash scripts/check_handoff_docs.sh`, and `git diff --check` passed.
 - `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 75.28s`, deployment contracts `1 passed in 1.36s`, research workflow primitives `38 passed in 94.75s`, research planning contracts `3 passed in 88.33s`, write audit `7 passed in 3.93s`, workflow job controls `3 passed in 111.01s`, tool bridge contracts `10 passed in 2.17s`, GraphRAG-lite `4 passed in 4.39s`, and context search `15 passed in 111.45s`.
 - Product-effect interpretation for this slice: mixed claim validation improved the quality-signal dimension while keeping the overall band honest; the remaining path to `demo_ready` is improving evidence coverage and claim support quality above the `0.70` quality-signal gate.
+
+
+## 2026-06-15 - Source Paper Evidence Context
+
+Implemented in progress:
+
+- Updated `IdeaService` so generated ideas carry a bounded set of evidence IDs from the source paper, preserving the gap-triggering evidence first and then adding prioritized context evidence such as limitations, future work, problems, results, and methods.
+- Added `test_idea_service_carries_source_paper_evidence_context` to ensure source-paper evidence is carried into ideas without leaking evidence from unrelated papers.
+- Registered the new test in `scripts/check_research_workflow_primitives.sh`.
+- Updated context-search score-breakdown tests so random local-vector collisions may yield `0.0` vector contribution while still requiring lexical/bonus/phrase totals to match the visible score.
+- Updated `docs/demo_runbook.md` and `docs/product_effect_report.md` with the new backend demo-ready product-effect metrics.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env`, token, cookie, password, private key, or credential values.
+
+Verification completed:
+
+- Targeted idea-service evidence context tests passed with isolated SQLite/upload directories: `2 passed in 4.11s`.
+- Default product-effect smoke passed with broader source-paper evidence context: evidence ledger coverage `0.44`, readiness score `0.7791`, quality-gate score `0.725`, readiness claim-validation score `0.675`, top ranked idea score `3.785`, product-effect score `0.9289`, band `demo_ready`, quality signal `0.7157`, `3` gaps, `6` ideas, project-bundle readiness score `1.0`, and `100` graph nodes / `100` graph edges.
+- Representative Markdown product-effect smoke passed with broader source-paper evidence context: evidence ledger coverage `0.49`, claim-validation support count `3`, readiness score `0.7791`, quality-gate score `0.725`, product-effect score `0.931`, band `demo_ready`, quality signal `0.724`, `3` gaps, `6` ideas, project-bundle readiness score `1.0`, and `100` graph nodes / `100` graph edges.
+- `bash scripts/check_context_search_evaluations.sh` passed after the score-breakdown stability adjustment: `15 passed in 111.41s`.
+- `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 76.78s`, deployment contracts `1 passed in 1.39s`, research workflow primitives `39 passed in 96.59s`, research planning contracts `3 passed in 94.20s`, write audit `7 passed in 4.19s`, workflow job controls `3 passed in 115.60s`, tool bridge contracts `10 passed in 2.14s`, GraphRAG-lite `4 passed in 4.56s`, and context search `15 passed in 108.51s`.
+- Product-effect interpretation for this slice: the backend workflow is now demo-ready by the product-effect scorecard, while Workbench browser inspection, human scientific review, external literature quality, and production hardening remain outside this backend-only score.

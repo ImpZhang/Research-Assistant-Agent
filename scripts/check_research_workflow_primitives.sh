@@ -29,6 +29,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_extract_paper_card_from_evidence \
   tests/test_app.py::test_gap_service_builds_titles_reasons_and_approaches \
   tests/test_app.py::test_idea_service_builds_variants_and_preserves_lineage \
+  tests/test_app.py::test_idea_service_carries_source_paper_evidence_context \
   tests/test_app.py::test_mine_research_gaps_from_evidence \
   tests/test_app.py::test_generate_ideas_from_gap \
   tests/test_app.py::test_review_and_experiment_services_create_traceable_outputs \

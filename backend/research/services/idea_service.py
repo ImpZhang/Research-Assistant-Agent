@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from backend.research.models import Idea, ResearchGap
+from backend.research.models import Evidence, Idea, ResearchGap
 from backend.research.services.graph_service import GraphService
 
 
@@ -94,7 +94,7 @@ class IdeaService:
             motivation=gap.why_important,
             related_gap_ids_json=[gap.id],
             related_paper_ids_json=gap.source_paper_ids_json or [],
-            evidence_ids_json=gap.evidence_ids_json or [],
+            evidence_ids_json=self._evidence_ids_for_gap(gap),
             method_sketch=method_sketch,
             expected_contribution=(
                 "A research contribution that is explicitly grounded in prior-paper evidence and "
@@ -139,6 +139,52 @@ class IdeaService:
             status="draft",
             version=1,
         )
+
+    def _evidence_ids_for_gap(self, gap: ResearchGap, max_context: int = 6) -> list[str]:
+        evidence_ids = self._dedupe_ids(gap.evidence_ids_json or [])
+        if self.session is None or not (gap.source_paper_ids_json or []):
+            return evidence_ids
+
+        context_evidences = (
+            self.session.query(Evidence)
+            .filter(Evidence.paper_id.in_(gap.source_paper_ids_json or []))
+            .order_by(Evidence.created_at.asc())
+            .limit(24)
+            .all()
+        )
+        priority = {
+            "limitation": 0,
+            "future_work": 1,
+            "problem": 2,
+            "result": 3,
+            "method": 4,
+            "dataset": 5,
+            "claim": 6,
+            "comparison": 7,
+        }
+        context_evidences.sort(
+            key=lambda evidence: (
+                priority.get(evidence.evidence_type, 99),
+                evidence.created_at,
+                evidence.id,
+            )
+        )
+        for evidence in context_evidences:
+            if evidence.id not in evidence_ids:
+                evidence_ids.append(evidence.id)
+            if len(evidence_ids) >= max_context:
+                break
+        return evidence_ids
+
+    def _dedupe_ids(self, values: list[str]) -> list[str]:
+        deduped = []
+        seen = set()
+        for value in values:
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            deduped.append(value)
+        return deduped
 
     def _shorten(self, text: str, max_len: int) -> str:
         compact = " ".join((text or "research gap").split())

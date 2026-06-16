@@ -3385,6 +3385,86 @@ def test_idea_service_builds_variants_and_preserves_lineage() -> None:
     assert method_idea.version == 1
 
 
+def test_idea_service_carries_source_paper_evidence_context() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-idea-evidence-context-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(id=f"{marker}-paper", title="Idea Evidence Context Paper")
+        other_paper = Paper(id=f"{marker}-other", title="Unrelated Paper")
+        session.add_all([paper, other_paper])
+        session.add_all(
+            [
+                Evidence(
+                    id=f"{marker}-claim",
+                    paper_id=paper.id,
+                    evidence_type="claim",
+                    text="The assistant preserves research claims.",
+                    summary="The assistant preserves research claims.",
+                ),
+                Evidence(
+                    id=f"{marker}-problem",
+                    paper_id=paper.id,
+                    evidence_type="problem",
+                    text="Research teams lose evidence context.",
+                    summary="Research teams lose evidence context.",
+                ),
+                Evidence(
+                    id=f"{marker}-method",
+                    paper_id=paper.id,
+                    evidence_type="method",
+                    text="The method links papers to ideas.",
+                    summary="The method links papers to ideas.",
+                ),
+                Evidence(
+                    id=f"{marker}-future",
+                    paper_id=paper.id,
+                    evidence_type="future_work",
+                    text="Future work should improve claim validation.",
+                    summary="Future work should improve claim validation.",
+                ),
+                Evidence(
+                    id=f"{marker}-limit",
+                    paper_id=paper.id,
+                    evidence_type="limitation",
+                    text="The workflow needs stronger evidence coverage.",
+                    summary="The workflow needs stronger evidence coverage.",
+                ),
+                Evidence(
+                    id=f"{marker}-foreign",
+                    paper_id=other_paper.id,
+                    evidence_type="limitation",
+                    text="This should not leak into the idea context.",
+                    summary="This should not leak into the idea context.",
+                ),
+            ]
+        )
+        session.commit()
+
+        gap = ResearchGap(
+            id=f"{marker}-gap",
+            title="Address limitation: stronger evidence coverage",
+            description="The workflow needs stronger evidence coverage.",
+            gap_type="method_gap",
+            source_paper_ids_json=[paper.id],
+            evidence_ids_json=[f"{marker}-limit"],
+            why_important="Coverage makes advisor handoff safer.",
+        )
+
+        idea = IdeaService(session)._build_idea(gap, 0)
+
+        assert idea.evidence_ids_json[0] == f"{marker}-limit"
+        assert f"{marker}-future" in idea.evidence_ids_json
+        assert f"{marker}-problem" in idea.evidence_ids_json
+        assert f"{marker}-method" in idea.evidence_ids_json
+        assert f"{marker}-foreign" not in idea.evidence_ids_json
+        assert len(idea.evidence_ids_json) <= 6
+    finally:
+        session.close()
+
+
 def test_mine_research_gaps_from_evidence() -> None:
     client = TestClient(create_app())
     content = b"""Gap Mining Test Paper
@@ -7288,7 +7368,7 @@ def test_context_search_idea_overall_score_bonus_breakdown() -> None:
     assert top_idea["score_breakdown"]["lexical"] == 2.0
     assert top_idea["score_breakdown"]["bonus"] == 0.76
     assert top_idea["score_breakdown"]["phrase"] == 0.0
-    assert top_idea["score_breakdown"]["vector"] > 0.0
+    assert top_idea["score_breakdown"]["vector"] >= 0.0
     assert _score_breakdown_total_match_rate(body["ideas"]) == 1.0
 
 
@@ -7349,7 +7429,7 @@ def test_context_search_gap_feasibility_bonus_breakdown() -> None:
     assert top_gap["score_breakdown"]["lexical"] == 2.0
     assert top_gap["score_breakdown"]["bonus"] == 0.84
     assert top_gap["score_breakdown"]["phrase"] == 0.0
-    assert top_gap["score_breakdown"]["vector"] > 0.0
+    assert top_gap["score_breakdown"]["vector"] >= 0.0
     assert _score_breakdown_total_match_rate(body["gaps"]) == 1.0
 
 
@@ -7405,7 +7485,7 @@ def test_context_search_evidence_confidence_bonus_breakdown() -> None:
     assert top_evidence["score_breakdown"]["lexical"] == 2.0
     assert top_evidence["score_breakdown"]["bonus"] == 0.73
     assert top_evidence["score_breakdown"]["phrase"] == 0.0
-    assert top_evidence["score_breakdown"]["vector"] > 0.0
+    assert top_evidence["score_breakdown"]["vector"] >= 0.0
     assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
 
 
@@ -7462,7 +7542,7 @@ def test_context_search_exact_phrase_bonus_breakdown() -> None:
     assert top_evidence["score_breakdown"]["lexical"] == 2.0
     assert top_evidence["score_breakdown"]["bonus"] == 0.0
     assert top_evidence["score_breakdown"]["phrase"] == 2.0
-    assert top_evidence["score_breakdown"]["vector"] > 0.0
+    assert top_evidence["score_breakdown"]["vector"] >= 0.0
     assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
 
 

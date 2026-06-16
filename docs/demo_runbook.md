@@ -75,8 +75,8 @@ The 2026-06-15 product-effect smoke baseline produced these representative metri
 - Quality gate: score `0.6574`, decision `de_risk_novelty`.
 - Project bundle: `71` files, readiness `delivery_ready`, score `1.0`.
 - Graph summary: `100` nodes and `100` edges in the smoke output.
-- Product-effect scorecard: overall score `0.9056`, band `pilot_effective`, foundation `1.0`, research workflow `1.0`, quality signal `0.6225`, delivery loop `1.0`, failed checks `[]`.
+- Product-effect scorecard: overall score `0.9289`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7157`, delivery loop `1.0`, failed checks `[]`.
 
 ## Demo Decision
 
-Use this runbook to prove the backend workflow is pilot-effective at the backend workflow level. Before a user-facing demo, still inspect the Workbench visually and review real or representative paper outputs qualitatively, especially the quality-signal dimension.
+Use this runbook to prove the backend workflow is backend-demo-ready at the workflow level. Before a user-facing demo, still inspect the Workbench visually and review real or representative paper outputs qualitatively, especially the quality-signal dimension.
