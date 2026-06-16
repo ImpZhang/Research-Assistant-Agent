@@ -1991,6 +1991,84 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/ideas/portfolios" in script.text
 
 
+def test_workbench_user_path_contract_supports_pilot_demo_loop() -> None:
+    client = TestClient(create_app())
+    response = client.get("/workbench")
+    assert response.status_code == 200
+    html = response.text
+
+    demo_sections = [
+        ("pilot-launch", "Pilot Launch"),
+        ("onboarding", "Onboarding"),
+        ("ingest", "Paper Ingest"),
+        ("workflow", "Async Workflow"),
+        ("profile", "Research Profile"),
+        ("search", "Context Search"),
+        ("advisor", "Advisor Chat"),
+        ("jobs", "Recent Jobs"),
+        ("dossier", "Dossier Preview"),
+    ]
+    section_positions = []
+    for section_id, heading in demo_sections:
+        nav_marker = f'href="#{section_id}"'
+        section_marker = f'id="{section_id}"'
+        heading_marker = f"<h3>{heading}</h3>"
+        assert nav_marker in html
+        assert section_marker in html
+        assert heading_marker in html
+        nav_position = html.index(nav_marker)
+        section_position = html.index(section_marker)
+        section_positions.append(section_position)
+        assert nav_position < section_position
+
+    assert section_positions == sorted(section_positions)
+    assert 'aria-label="Workbench sections"' in html
+    assert 'aria-live="polite"' in html
+
+    demo_loop_controls = {
+        "paper intake": ["uploadForm", "paperFile", "uploadResult"],
+        "workflow launch": [
+            "runWorkflowButton",
+            "jobProgressBar",
+            "workflowResult",
+            "refreshJobsButton",
+        ],
+        "project context": [
+            "setupWizardForm",
+            "profileForm",
+            "contextSearchForm",
+            "literatureSearchForm",
+        ],
+        "advisor support": [
+            "advisorChatForm",
+            "advisorChatTasksButton",
+            "advisorActionSessionButton",
+            "cockpitButton",
+            "qualityGateButton",
+            "readinessButton",
+        ],
+        "execution tracking": [
+            "jobsTable",
+            "taskBoardButton",
+            "taskSelect",
+            "claimResultButton",
+        ],
+        "delivery closeout": [
+            "projectBundleButton",
+            "projectBundleReleaseButton",
+            "projectBundleReleaseFeedbackButton",
+            "projectBundleReleaseCloseoutButton",
+            "projectBundleReleaseAcceptancePacketButton",
+            "projectBundleReleaseReviewSessionButton",
+            "projectBundleReleaseReviewOutcomeSignoffButton",
+            "dossierPreview",
+        ],
+    }
+    for group_name, control_ids in demo_loop_controls.items():
+        missing = [control_id for control_id in control_ids if f'id="{control_id}"' not in html]
+        assert missing == [], f"{group_name} missing controls: {missing}"
+
+
 def test_project_onboarding_readiness_tracks_first_run_and_upload() -> None:
     client = TestClient(create_app())
     initial = client.get("/research/onboarding/readiness")

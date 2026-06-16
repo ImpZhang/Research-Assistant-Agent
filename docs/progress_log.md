@@ -2091,3 +2091,23 @@ Verification completed:
 - `bash scripts/check_context_search_evaluations.sh` passed after the score-breakdown stability adjustment: `15 passed in 111.41s`.
 - `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `28 passed in 76.78s`, deployment contracts `1 passed in 1.39s`, research workflow primitives `39 passed in 96.59s`, research planning contracts `3 passed in 94.20s`, write audit `7 passed in 4.19s`, workflow job controls `3 passed in 115.60s`, tool bridge contracts `10 passed in 2.14s`, GraphRAG-lite `4 passed in 4.56s`, and context search `15 passed in 108.51s`.
 - Product-effect interpretation for this slice: the backend workflow is now demo-ready by the product-effect scorecard, while Workbench browser inspection, human scientific review, external literature quality, and production hardening remain outside this backend-only score.
+
+## 2026-06-16 - Workbench Demo Path Contract
+
+Implemented in progress:
+
+- Attempted a browser-level Workbench inspection through a temporary isolated `uvicorn` service and SSH tunnel, then stopped both temporary processes after the in-app browser policy rejected direct access to the forwarded `127.0.0.1:18082` target.
+- Added `test_workbench_user_path_contract_supports_pilot_demo_loop` to verify the Workbench page has an ordered pilot demo path from Pilot Launch through Onboarding, Ingest, Workflow, Profile, Search, Advisor, Jobs, and Dossier.
+- The new contract also verifies the controls needed for paper intake, async workflow launch, project context, advisor support, execution tracking, and delivery closeout are present as a coherent product path.
+- Registered the new Workbench path contract in `scripts/check_pilot_readiness.sh`, increasing the pilot readiness focused check from `28` selected tests to `29`.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env`, token, cookie, password, private key, or credential values.
+
+Verification completed:
+
+- Targeted Workbench user-path contract passed: `tests/test_app.py::test_workbench_user_path_contract_supports_pilot_demo_loop` -> `1 passed in 4.28s`.
+- Workbench static asset and user-path tests passed together: `2 passed in 4.39s`.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check tests/test_app.py` passed.
+- `bash -n scripts/check_pilot_readiness.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed: all pytest tests are covered by focused check scripts.
+- `bash scripts/check_pilot_readiness.sh` passed: `29 passed in 86.63s`.
+- Product-effect interpretation for this slice: Workbench is still pending true human/browser visual inspection, but its static product path now has a focused regression guard that protects the demo flow from paper ingest to delivery closeout.
