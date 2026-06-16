@@ -65,17 +65,18 @@ pgrep -af 'uvicorn|smoke_api|pytest|check_remote' || true
 
 ## Interpreting The Current Baseline
 
-The 2026-06-15 product-effect smoke baseline produced these representative metrics:
+The 2026-06-16 product-effect smoke baseline produced these representative metrics:
 
 - Tool manifest: `119` tools.
 - MCP bridge: `119` tools.
 - Literature workflow: `3` gaps and `6` ideas.
 - Proposal review: `ready_for_advisor_review`, score `0.92`.
-- Readiness: score `0.6534`, decision `needs_targeted_work` before final delivery packaging.
-- Quality gate: score `0.6574`, decision `de_risk_novelty`.
+- Readiness: score `0.7791`, decision `needs_targeted_work` before final delivery packaging.
+- Quality gate: score `0.725`, decision `de_risk_novelty`.
+- Evidence ledger: coverage score `0.54` on the default smoke paper.
 - Project bundle: `71` files, readiness `delivery_ready`, score `1.0`.
 - Graph summary: `100` nodes and `100` edges in the smoke output.
-- Product-effect scorecard: overall score `0.9289`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7157`, delivery loop `1.0`, failed checks `[]`.
+- Product-effect scorecard: overall score `0.9331`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7323`, delivery loop `1.0`, failed checks `[]`.
 
 ## Demo Decision
 

@@ -3,8 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-.venv/bin/ruff check tests/test_app.py scripts/smoke_api.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/document_ingestion.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py
-.venv/bin/ruff format --check tests/test_app.py scripts/smoke_api.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/document_ingestion.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py
+.venv/bin/ruff check tests/test_app.py scripts/smoke_api.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/document_ingestion.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/evidence_ledger_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py
+.venv/bin/ruff format --check tests/test_app.py scripts/smoke_api.py backend/research/services/literature_search_service.py backend/research/services/related_work_service.py backend/research/services/novelty_service.py backend/research/services/structured_extraction_service.py backend/research/services/document_ingestion.py backend/research/services/gap_service.py backend/research/services/idea_service.py backend/research/services/evidence_ledger_service.py backend/research/services/paper_card_service.py backend/research/services/review_service.py backend/research/services/experiment_service.py
 .venv/bin/pytest -q \
   tests/test_app.py::test_product_effect_scorecard_separates_quality_from_completion \
   tests/test_app.py::test_literature_search_returns_local_results_with_external_disabled \
@@ -30,6 +30,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_gap_service_builds_titles_reasons_and_approaches \
   tests/test_app.py::test_idea_service_builds_variants_and_preserves_lineage \
   tests/test_app.py::test_idea_service_carries_source_paper_evidence_context \
+  tests/test_app.py::test_evidence_ledger_routes_typed_source_evidence_to_claims \
+  tests/test_app.py::test_research_packet_pins_latest_evidence_tasks_when_task_list_is_crowded \
   tests/test_app.py::test_mine_research_gaps_from_evidence \
   tests/test_app.py::test_generate_ideas_from_gap \
   tests/test_app.py::test_review_and_experiment_services_create_traceable_outputs \

@@ -6557,10 +6557,12 @@ def get_idea_research_packet(
     evidence_ledgers = _latest_for_idea(session, IdeaEvidenceLedger, idea_id, 20)
     research_plans = _latest_research_plans_for_idea(session, idea_id, 20)
     tasks = _latest_for_idea(session, ResearchTask, idea_id, 200)
-    open_tasks = sorted(
-        [task for task in tasks if task.status in {"todo", "doing", "blocked"}],
-        key=_progress_task_order,
-    )[:20]
+    open_tasks = _research_packet_open_tasks(
+        tasks,
+        latest_experiment_analysis_id=experiment_analyses[0].id if experiment_analyses else "",
+        latest_decision_memo_id=decision_memos[0].id if decision_memos else "",
+        latest_evidence_ledger_id=evidence_ledgers[0].id if evidence_ledgers else "",
+    )
     graph_edge_summary = _graph_edge_summary(
         session,
         [
@@ -6608,6 +6610,51 @@ def get_idea_research_packet(
         markdown_export=markdown_export,
         message=f"Loaded research packet for idea {idea.id}.",
     )
+
+
+def _research_packet_open_tasks(
+    tasks: list[ResearchTask],
+    *,
+    latest_experiment_analysis_id: str = "",
+    latest_decision_memo_id: str = "",
+    latest_evidence_ledger_id: str = "",
+    limit: int = 20,
+) -> list[ResearchTask]:
+    open_tasks = sorted(
+        [task for task in tasks if task.status in {"todo", "doing", "blocked"}],
+        key=_progress_task_order,
+    )
+    pinned_refs = [
+        ("experiment_analysis", latest_experiment_analysis_id),
+        ("idea_decision_memo", latest_decision_memo_id),
+        ("idea_evidence_ledger", latest_evidence_ledger_id),
+        ("claim_validation_queue", latest_evidence_ledger_id),
+    ]
+    selected: list[ResearchTask] = []
+    selected_ids: set[str] = set()
+
+    def add_task(task: ResearchTask) -> None:
+        if task.id in selected_ids:
+            return
+        selected.append(task)
+        selected_ids.add(task.id)
+
+    for owner_type, owner_id in pinned_refs:
+        if not owner_id:
+            continue
+        pinned_candidates = [
+            task
+            for task in open_tasks
+            if task.owner_type == owner_type and task.owner_id == owner_id
+        ]
+        if pinned_candidates:
+            add_task(pinned_candidates[0])
+
+    for task in open_tasks:
+        if len(selected) >= limit:
+            break
+        add_task(task)
+    return selected[:limit]
 
 
 def _research_packet_latest_artifacts(

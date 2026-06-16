@@ -24,7 +24,9 @@ from backend.research.models import (
     ResearchEmbedding,
     ResearchGap,
     ResearchNode,
+    ResearchTask,
 )
+from backend.research.services.evidence_ledger_service import IdeaEvidenceLedgerService
 from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.gap_service import GapService
 from backend.research.services.graph_service import GraphService
@@ -3539,6 +3541,184 @@ def test_idea_service_carries_source_paper_evidence_context() -> None:
         assert f"{marker}-method" in idea.evidence_ids_json
         assert f"{marker}-foreign" not in idea.evidence_ids_json
         assert len(idea.evidence_ids_json) <= 6
+    finally:
+        session.close()
+
+
+def test_evidence_ledger_routes_typed_source_evidence_to_claims() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-ledger-typed-support-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(id=f"{marker}-paper", title="Typed Evidence Routing Paper")
+        other_paper = Paper(id=f"{marker}-other", title="Unrelated Evidence Paper")
+        session.add_all([paper, other_paper])
+        session.add_all(
+            [
+                Evidence(
+                    id=f"{marker}-limit",
+                    paper_id=paper.id,
+                    evidence_type="limitation",
+                    text="The workflow needs stronger evidence coverage.",
+                    summary="The workflow needs stronger evidence coverage.",
+                    confidence=0.8,
+                ),
+                Evidence(
+                    id=f"{marker}-future",
+                    paper_id=paper.id,
+                    evidence_type="future_work",
+                    text="Future work should improve claim validation.",
+                    summary="Future work should improve claim validation.",
+                    confidence=0.8,
+                ),
+                Evidence(
+                    id=f"{marker}-method",
+                    paper_id=paper.id,
+                    evidence_type="method",
+                    text="The method links paper evidence to generated ideas.",
+                    summary="The method links paper evidence to generated ideas.",
+                    confidence=0.8,
+                ),
+                Evidence(
+                    id=f"{marker}-problem",
+                    paper_id=paper.id,
+                    evidence_type="problem",
+                    text="Research teams lose evidence context during ideation.",
+                    summary="Research teams lose evidence context during ideation.",
+                    confidence=0.8,
+                ),
+                Evidence(
+                    id=f"{marker}-foreign",
+                    paper_id=other_paper.id,
+                    evidence_type="method",
+                    text="This unrelated evidence must not support the idea.",
+                    summary="This unrelated evidence must not support the idea.",
+                    confidence=0.8,
+                ),
+            ]
+        )
+        session.commit()
+
+        gap = ResearchGap(
+            id=f"{marker}-gap",
+            title="Address limitation: stronger evidence coverage",
+            description="The workflow needs stronger evidence coverage.",
+            gap_type="method_gap",
+            source_paper_ids_json=[paper.id],
+            evidence_ids_json=[f"{marker}-limit"],
+            why_important="Coverage makes advisor handoff safer.",
+        )
+        idea = IdeaService(session)._build_idea(gap, 0)
+        session.add(idea)
+        session.commit()
+
+        ledger = IdeaEvidenceLedgerService(session).create_ledger(idea.id)
+
+        supported_claims = [
+            claim for claim in ledger.claims_json if claim.get("supporting_evidence_ids")
+        ]
+        linked_support_ids = {
+            evidence_id
+            for claim in ledger.claims_json
+            for evidence_id in claim.get("supporting_evidence_ids", [])
+        }
+        assert len(supported_claims) >= 3
+        assert f"{marker}-method" in linked_support_ids
+        assert f"{marker}-foreign" not in linked_support_ids
+        assert ledger.summary_json["supported_claim_count"] == len(supported_claims)
+        assert ledger.coverage_score >= 0.5
+    finally:
+        session.close()
+
+
+def test_research_packet_pins_latest_evidence_tasks_when_task_list_is_crowded() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-packet-pinned-evidence-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(id=f"{marker}-paper", title="Crowded Packet Paper")
+        session.add(paper)
+        session.add_all(
+            [
+                Evidence(
+                    id=f"{marker}-limit",
+                    paper_id=paper.id,
+                    evidence_type="limitation",
+                    text="Evidence coverage needs a visible follow-up task.",
+                    summary="Evidence coverage needs a visible follow-up task.",
+                    confidence=0.8,
+                ),
+                Evidence(
+                    id=f"{marker}-method",
+                    paper_id=paper.id,
+                    evidence_type="method",
+                    text="The method routes source evidence to research claims.",
+                    summary="The method routes source evidence to research claims.",
+                    confidence=0.8,
+                ),
+            ]
+        )
+        session.commit()
+
+        gap = ResearchGap(
+            id=f"{marker}-gap",
+            title="Address limitation: visible evidence task",
+            description="Evidence coverage needs a visible follow-up task.",
+            gap_type="method_gap",
+            source_paper_ids_json=[paper.id],
+            evidence_ids_json=[f"{marker}-limit"],
+            why_important="Crowded research packets must still surface evidence work.",
+        )
+        idea = IdeaService(session)._build_idea(gap, 0)
+        session.add(idea)
+        session.commit()
+
+        ledger = IdeaEvidenceLedgerService(session).create_ledger(idea.id)
+        evidence_task = ResearchTask(
+            id=f"{marker}-evidence-task",
+            idea_id=idea.id,
+            owner_type="idea_evidence_ledger",
+            owner_id=ledger.id,
+            source_type="evidence_review",
+            source_id="ledger_review",
+            title="Review evidence ledger with advisor",
+            description="Keep evidence quality visible in the research packet.",
+            priority="medium",
+            status="todo",
+            due_phase="evidence_follow_up",
+            created_by="pytest",
+        )
+        crowded_tasks = [
+            ResearchTask(
+                id=f"{marker}-crowded-{idx}",
+                idea_id=idea.id,
+                owner_type="proposal_revision",
+                owner_id=f"{marker}-revision",
+                source_type="crowded_task",
+                source_id=f"crowded_{idx}",
+                title=f"Crowded critical task {idx}",
+                description="A higher priority task that should not hide evidence work.",
+                priority="critical",
+                status="todo",
+                due_phase="next_revision",
+                created_by="pytest",
+            )
+            for idx in range(25)
+        ]
+        session.add_all([evidence_task, *crowded_tasks])
+        session.commit()
+
+        packet = client.get(f"/research/ideas/{idea.id}/research-packet")
+        assert packet.status_code == 200
+        packet_body = packet.json()
+        open_task_ids = [task["id"] for task in packet_body["open_tasks"]]
+        assert len(open_task_ids) == 20
+        assert evidence_task.id in open_task_ids
+        assert evidence_task.id in packet_body["markdown_export"]
     finally:
         session.close()
 

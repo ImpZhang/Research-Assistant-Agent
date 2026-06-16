@@ -167,11 +167,14 @@ class IdeaEvidenceLedgerService:
         ledger_claims = []
         for idx, text in enumerate(claim_texts[:8], start=1):
             claim_id = f"C{idx}"
+            claim_type = self._claim_type(idx, text)
             support_ids = [
                 evidence.id
                 for evidence in evidences
                 if self._overlaps(text, evidence.summary, evidence.supports, evidence.text)
             ]
+            if not support_ids:
+                support_ids = self._typed_support_evidence_ids(claim_type, evidences)
             if evidences and not support_ids and idx == 1:
                 support_ids = [evidence.id for evidence in evidences[:3]]
             challenge_signals = self._claim_challenges(
@@ -191,7 +194,7 @@ class IdeaEvidenceLedgerService:
                 {
                     "claim_id": claim_id,
                     "claim": text,
-                    "claim_type": self._claim_type(idx, text),
+                    "claim_type": claim_type,
                     "support_level": support_level,
                     "supporting_evidence_ids": support_ids,
                     "challenge_signals": challenge_signals[:6],
@@ -218,6 +221,26 @@ class IdeaEvidenceLedgerService:
         return self._clean_list(texts) or [
             "The idea has a falsifiable research claim worth testing.",
         ]
+
+    def _typed_support_evidence_ids(
+        self, claim_type: str, evidences: list[Evidence], limit: int = 3
+    ) -> list[str]:
+        preferred_types = {
+            "hypothesis": ["limitation", "future_work", "problem", "result"],
+            "novelty": ["limitation", "future_work", "comparison", "problem"],
+            "method": ["method", "dataset", "problem", "limitation"],
+            "evaluation": ["result", "dataset", "comparison", "method"],
+            "contribution": ["result", "future_work", "limitation", "problem", "claim"],
+        }.get(claim_type, [])
+        support_ids: list[str] = []
+        for evidence_type in preferred_types:
+            for evidence in evidences:
+                if evidence.evidence_type != evidence_type or evidence.id in support_ids:
+                    continue
+                support_ids.append(evidence.id)
+                if len(support_ids) >= limit:
+                    return support_ids
+        return support_ids
 
     def _build_evidence_links(
         self,

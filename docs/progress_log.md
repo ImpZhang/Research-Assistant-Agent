@@ -2130,3 +2130,28 @@ Verification completed:
 - Delivery metrics: project bundle `71` files, readiness level `delivery_ready`, bundle readiness score `1.0`, research plan items `3`, plan tasks `9`, graph context `100` nodes / `100` edges.
 - Product-effect scorecard: overall `0.9289`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7157`, delivery loop `1.0`, failed checks `[]`.
 - Product-effect interpretation for this slice: the backend is now demo-ready not only in TestClient/in-process mode, but also through a temporary real HTTP FastAPI service.
+
+## 2026-06-16 - Typed Evidence Routing And Packet Task Pinning
+
+Implemented in progress:
+
+- Added typed evidence-to-claim routing in `IdeaEvidenceLedgerService` so claims can use conservative evidence-type matches when word overlap is too weak, for example method claims using method/dataset/problem evidence and novelty claims using limitation/future-work/comparison evidence.
+- Added a focused regression test proving source-paper evidence supports multiple ledger claims without leaking evidence from unrelated papers.
+- Updated research-packet open-task selection so latest experiment-analysis, decision-memo, evidence-ledger, and claim-validation queue tasks are pinned into the packet before filling the remaining task list by priority.
+- Added a crowded-task regression test proving the latest evidence-ledger task remains visible in the research packet even when more than 20 higher-priority tasks exist.
+- Registered the new tests and `evidence_ledger_service.py` in `scripts/check_research_workflow_primitives.sh`.
+- Updated `docs/demo_runbook.md` and `docs/product_effect_report.md` with the new default, representative Markdown, and real HTTP product-effect baselines.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env`, token, cookie, password, private key, or credential values.
+
+Verification completed:
+
+- Targeted typed-evidence and research-packet tests passed together: `2 passed in 5.08s`.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check tests/test_app.py backend/research/services/evidence_ledger_service.py backend/research/routes.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check tests/test_app.py backend/research/services/evidence_ledger_service.py backend/research/routes.py` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed: all pytest tests are covered by focused check scripts.
+- `bash scripts/check_research_workflow_primitives.sh` passed: `41 passed in 99.14s`.
+- Default product-effect smoke passed after the research-packet regression was fixed: evidence ledger coverage `0.54`, readiness score `0.7791`, quality-gate score `0.725`, product-effect score `0.9331`, band `demo_ready`, quality signal `0.7323`, `3` gaps, `6` ideas, project-bundle readiness score `1.0`, and `100` graph nodes / `100` graph edges.
+- Representative Markdown product-effect smoke passed: evidence ledger coverage `0.59`, claim-validation support count `3`, product-effect score `0.9352`, band `demo_ready`, quality signal `0.7407`, `3` gaps, `6` ideas, project-bundle readiness score `1.0`, and `100` graph nodes / `100` graph edges.
+- Real HTTP product-effect smoke passed against a temporary `uvicorn` service on `127.0.0.1:18084` with exit code `0`: evidence ledger coverage `0.54`, product-effect score `0.9331`, band `demo_ready`, quality signal `0.7323`, project bundle `71` files, and graph context `100` nodes / `100` edges.
+- `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `29 passed in 88.51s`, deployment contracts `1 passed in 1.40s`, research workflow primitives `41 passed in 95.44s`, research planning contracts `3 passed in 92.65s`, write audit `7 passed in 3.87s`, workflow job controls `3 passed in 114.38s`, tool bridge contracts `10 passed in 2.60s`, GraphRAG-lite `4 passed in 4.61s`, and context search `15 passed in 111.08s`.
+- Product-effect interpretation for this slice: quality-signal moved from `0.7157` to `0.7323` on the default smoke and from `0.724` to `0.7407` on the representative Markdown smoke, while the research packet now keeps evidence follow-up work visible under heavy task load.

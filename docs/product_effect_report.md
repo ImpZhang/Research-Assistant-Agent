@@ -18,9 +18,9 @@ The intended product is a research assistant agent that turns literature and pro
 
 ## Current Evaluation Summary
 
-Status on 2026-06-15: backend workflow engine and verification harness are strong enough for MVP demonstration, while product polish still needs frontend, real-user workflow, deployment, and operator-hardening passes.
+Status on 2026-06-16: backend workflow engine and verification harness are strong enough for MVP demonstration, while product polish still needs frontend, real-user workflow, deployment, and operator-hardening passes.
 
-The current product behaves as a backend-first research workflow engine. It can produce a complete research handoff package from a smoke paper in both in-process and real HTTP service modes. The latest isolated smoke adds a product-effect scorecard: overall `0.9289`, band `demo_ready`, with strong foundation/research/delivery dimensions and a quality-signal dimension above the backend demo threshold.
+The current product behaves as a backend-first research workflow engine. It can produce a complete research handoff package from a smoke paper in both in-process and real HTTP service modes. The latest isolated smoke adds a product-effect scorecard: overall `0.9331`, band `demo_ready`, with strong foundation/research/delivery dimensions and a quality-signal dimension above the backend demo threshold.
 
 ## Verified Smoke Metrics
 
@@ -36,14 +36,15 @@ The smoke runs used isolated test data directories under `data/test-runs/` and d
 - Literature workflow output: `3` gaps, `6` ideas, `6` novelty checks, `6` reviews, `6` experiment plans.
 - Proposal review: `ready_for_advisor_review`, score `0.92`.
 - Experiment analysis: `supports_hypothesis`.
-- Readiness score: `0.6534`, decision `needs_targeted_work`.
-- Quality gate score: `0.6574`, decision `de_risk_novelty`.
+- Evidence ledger coverage: `0.54`.
+- Readiness score: `0.7791`, decision `needs_targeted_work`.
+- Quality gate score: `0.725`, decision `de_risk_novelty`.
 - Advisor chat: intent `risk_review`, `10` recommended actions, `13` citations, `5` tool suggestions.
 - Project bundle: `71` files, readiness level `delivery_ready`, score `1.0`, missing required count `0`.
 - Research plan: `3` plan items, `9` generated tasks.
-- Portfolio ranking: `5` ranked ideas, top score `3.585`.
+- Portfolio ranking: `5` ranked ideas, top score `3.785`.
 - Graph context: `100` nodes, `100` edges in the final smoke summary.
-- Product-effect scorecard: overall `0.9289`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7157`, delivery loop `1.0`, failed checks `[]`.
+- Product-effect scorecard: overall `0.9331`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7323`, delivery loop `1.0`, failed checks `[]`.
 
 ### Real HTTP Smoke
 
@@ -57,7 +58,7 @@ The same smoke path was run against a temporary `uvicorn` service bound to `127.
 - Literature workflow output: `3` gaps, `6` ideas.
 - Proposal review: `ready_for_advisor_review`, score `0.92`.
 - Experiment analysis: `supports_hypothesis`.
-- Evidence ledger coverage: `0.44`.
+- Evidence ledger coverage: `0.54`.
 - Readiness score: `0.7791`, decision `needs_targeted_work`.
 - Quality gate score: `0.725`, decision `de_risk_novelty`.
 - Advisor chat: intent `risk_review`, `10` recommended actions, `13` citations.
@@ -66,7 +67,7 @@ The same smoke path was run against a temporary `uvicorn` service bound to `127.
 - Research plan items: `3`.
 - Ranked ideas: `5`, top score `3.785`.
 - Graph context: `100` nodes, `100` edges.
-- Product-effect scorecard: overall `0.9289`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7157`, delivery loop `1.0`, failed checks `[]`.
+- Product-effect scorecard: overall `0.9331`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7323`, delivery loop `1.0`, failed checks `[]`.
 
 
 ### Representative Markdown Smoke
@@ -75,10 +76,11 @@ The product-effect smoke was also run with a representative Markdown fixture thr
 
 - Literature workflow output: `3` gaps, `6` ideas.
 - Proposal review: `ready_for_advisor_review`, score `0.92`.
-- Evidence ledger coverage: `0.49`.
+- Evidence ledger coverage: `0.59`.
 - Project bundle: `71` files, readiness level `delivery_ready`, score `1.0`.
 - Graph context: `100` nodes, `100` edges.
-- Product-effect scorecard: overall `0.931`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.724`, delivery loop `1.0`, failed checks `[]`.
+- Claim-validation support count: `3`.
+- Product-effect scorecard: overall `0.9352`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7407`, delivery loop `1.0`, failed checks `[]`.
 
 ## What Works Well
 
@@ -92,7 +94,7 @@ The product-effect smoke was also run with a representative Markdown fixture thr
 ## Product Gaps
 
 - The smoke paper is synthetic. A real paper or real project brief still needs qualitative evaluation.
-- The generated readiness and quality scores show useful caution; the scorecard makes this visible through a quality-signal dimension of `0.7157`, driven by broader source-paper evidence context and mixed claim-validation outcomes.
+- The generated readiness and quality scores show useful caution; the scorecard makes this visible through a quality-signal dimension of `0.7323` on the default smoke and `0.7407` on the representative Markdown smoke, driven by broader source-paper evidence context, typed evidence-to-claim routing, and mixed claim-validation outcomes.
 - The actual scientific quality of gaps, ideas, novelty claims, and experiment plans still needs human review.
 - Workbench availability is verified, and a static demo-path contract now protects the pilot flow from paper ingest through delivery closeout; true browser visual/interaction quality still needs a human/browser inspection pass.
 - Deployment posture is still pilot-oriented: backup, restore, migrations, monitoring, and production data boundaries remain hardening work.
