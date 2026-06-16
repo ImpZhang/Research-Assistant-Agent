@@ -47,7 +47,7 @@ The smoke runs used isolated test data directories under `data/test-runs/` and d
 
 ### Real HTTP Smoke
 
-The same smoke path was run against a temporary `uvicorn` service bound to `127.0.0.1:18081` with isolated SQLite and upload directories.
+The same smoke path was run against a temporary `uvicorn` service bound to `127.0.0.1:18083` with isolated SQLite and upload directories. The service was stopped after the smoke completed.
 
 - Service health: `ok`.
 - Service readiness: `ready`.
@@ -57,14 +57,16 @@ The same smoke path was run against a temporary `uvicorn` service bound to `127.
 - Literature workflow output: `3` gaps, `6` ideas.
 - Proposal review: `ready_for_advisor_review`, score `0.92`.
 - Experiment analysis: `supports_hypothesis`.
-- Readiness score: `0.6534`, decision `needs_targeted_work`.
-- Quality gate score: `0.6574`, decision `de_risk_novelty`.
+- Evidence ledger coverage: `0.44`.
+- Readiness score: `0.7791`, decision `needs_targeted_work`.
+- Quality gate score: `0.725`, decision `de_risk_novelty`.
 - Advisor chat: intent `risk_review`, `10` recommended actions, `13` citations.
 - Project bundle: `71` files, readiness level `delivery_ready`, score `1.0`, missing required count `0`.
 - Release closeout and acceptance status: `blocked`, as expected for a simulated handoff with requested changes and deferred signoff.
 - Research plan items: `3`.
-- Ranked ideas: `5`, top score `3.585`.
+- Ranked ideas: `5`, top score `3.785`.
 - Graph context: `100` nodes, `100` edges.
+- Product-effect scorecard: overall `0.9289`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7157`, delivery loop `1.0`, failed checks `[]`.
 
 
 ### Representative Markdown Smoke

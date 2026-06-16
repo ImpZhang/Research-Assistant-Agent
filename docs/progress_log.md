@@ -2111,3 +2111,22 @@ Verification completed:
 - `bash scripts/check_focused_test_coverage.sh` passed: all pytest tests are covered by focused check scripts.
 - `bash scripts/check_pilot_readiness.sh` passed: `29 passed in 86.63s`.
 - Product-effect interpretation for this slice: Workbench is still pending true human/browser visual inspection, but its static product path now has a focused regression guard that protects the demo flow from paper ingest to delivery closeout.
+
+## 2026-06-16 - Real HTTP Product-Effect Baseline
+
+Implemented in progress:
+
+- Ran the product-effect smoke against a temporary real `uvicorn` service on `127.0.0.1:18083` using an isolated SQLite database and isolated paper upload directory under `data/test-runs/`.
+- Confirmed the temporary service was stopped after the smoke and that no `uvicorn`, smoke, pytest, or focused-check process remained running.
+- Updated `docs/product_effect_report.md` so the Real HTTP Smoke section matches the latest source-paper evidence context baseline instead of the older pre-demo-ready metrics.
+- Preserved the two pre-existing untracked root documents and did not read or print any `.env`, token, cookie, password, private key, or credential values.
+
+Verification completed:
+
+- `PRODUCT_EFFECT_SMOKE_BASE_URL=http://127.0.0.1:18083 bash scripts/check_product_effect_smoke.sh` passed with exit code `0`.
+- Real HTTP service readiness was `ready`, Workbench available was `true`, tool manifest count was `119`, and MCP bridge tool count was `119`.
+- Workflow metrics: `3` gaps, `6` ideas, `6` novelty checks, `6` experiment plans, proposal review `ready_for_advisor_review` at score `0.92`, and experiment analysis `supports_hypothesis`.
+- Quality metrics: evidence ledger coverage `0.44`, readiness score `0.7791`, quality-gate score `0.725`, readiness claim-validation score `0.675`, and quality-gate claim-validation score `0.675`.
+- Delivery metrics: project bundle `71` files, readiness level `delivery_ready`, bundle readiness score `1.0`, research plan items `3`, plan tasks `9`, graph context `100` nodes / `100` edges.
+- Product-effect scorecard: overall `0.9289`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7157`, delivery loop `1.0`, failed checks `[]`.
+- Product-effect interpretation for this slice: the backend is now demo-ready not only in TestClient/in-process mode, but also through a temporary real HTTP FastAPI service.
