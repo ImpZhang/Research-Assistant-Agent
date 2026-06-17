@@ -53,6 +53,43 @@ function setProgress(value) {
   $("jobProgressBar").style.width = `${Math.max(0, Math.min(value, 1)) * 100}%`;
 }
 
+function restoreStateFromJob(job) {
+  if (!job) {
+    return false;
+  }
+  const output = job.output || {};
+  let restored = false;
+  if (!state.jobId && job.id) {
+    state.jobId = job.id;
+    restored = true;
+  }
+  if (!state.paperId && job.input && job.input.paper_id) {
+    setPaper(job.input.paper_id, `Active paper from latest job: ${job.input.paper_id}`);
+    restored = true;
+  }
+  if (!state.latestIdeaId && Array.isArray(output.idea_ids) && output.idea_ids.length) {
+    state.latestIdeaId = output.idea_ids[0];
+    restored = true;
+  }
+  if (
+    !state.latestExperimentPlanId &&
+    Array.isArray(output.experiment_plan_ids) &&
+    output.experiment_plan_ids.length
+  ) {
+    state.latestExperimentPlanId = output.experiment_plan_ids[0];
+    restored = true;
+  }
+  if (
+    !state.latestNoveltyCheckId &&
+    Array.isArray(output.novelty_check_ids) &&
+    output.novelty_check_ids.length
+  ) {
+    state.latestNoveltyCheckId = output.novelty_check_ids[0];
+    restored = true;
+  }
+  return restored;
+}
+
 function renderResult(targetId, html, kind = "ok") {
   const target = $(targetId);
   target.classList.remove("muted", "message-ok", "message-warn", "message-error");
@@ -912,6 +949,14 @@ async function refreshJobs() {
       $("jobsTable").innerHTML = $("emptyTemplate").innerHTML;
       return;
     }
+    const latestCompletedJob = jobs.find(
+      (job) =>
+        job.status === "completed" &&
+        job.output &&
+        Array.isArray(job.output.idea_ids) &&
+        job.output.idea_ids.length,
+    );
+    restoreStateFromJob(latestCompletedJob);
     const rows = jobs
       .map(
         (job) => `<tr>
@@ -974,12 +1019,33 @@ async function loadDossier() {
         return;
       }
     }
+    try {
+      const jobs = await api("/research/jobs?limit=10");
+      const latestCompletedJob = jobs.find(
+        (job) =>
+          job.status === "completed" &&
+          job.output &&
+          Array.isArray(job.output.idea_ids) &&
+          job.output.idea_ids.length,
+      );
+      if (restoreStateFromJob(latestCompletedJob) && state.jobId) {
+        await loadJobArtifacts(state.jobId);
+        return;
+      }
+    } catch (error) {
+      $("dossierPreview").textContent = error.message;
+      return;
+    }
     renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
   try {
     const markdown = await api(`/research/ideas/${state.latestIdeaId}/export/markdown`);
     $("dossierPreview").textContent = markdown;
+    renderResult(
+      "workflowResult",
+      `Loaded dossier for idea <code>${escapeHtml(state.latestIdeaId)}</code>.`,
+    );
   } catch (error) {
     $("dossierPreview").textContent = error.message;
   }

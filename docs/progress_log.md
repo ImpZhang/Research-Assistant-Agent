@@ -2155,3 +2155,31 @@ Verification completed:
 - Real HTTP product-effect smoke passed against a temporary `uvicorn` service on `127.0.0.1:18084` with exit code `0`: evidence ledger coverage `0.54`, product-effect score `0.9331`, band `demo_ready`, quality signal `0.7323`, project bundle `71` files, and graph context `100` nodes / `100` edges.
 - `bash scripts/check_remote_safe_suite.sh` passed. Pytest metrics inside the remote-safe suite: pilot readiness `29 passed in 88.51s`, deployment contracts `1 passed in 1.40s`, research workflow primitives `41 passed in 95.44s`, research planning contracts `3 passed in 92.65s`, write audit `7 passed in 3.87s`, workflow job controls `3 passed in 114.38s`, tool bridge contracts `10 passed in 2.60s`, GraphRAG-lite `4 passed in 4.61s`, and context search `15 passed in 111.08s`.
 - Product-effect interpretation for this slice: quality-signal moved from `0.7157` to `0.7323` on the default smoke and from `0.724` to `0.7407` on the representative Markdown smoke, while the research packet now keeps evidence follow-up work visible under heavy task load.
+
+## 2026-06-18 - Workbench Reload State Restoration
+
+Implemented in progress:
+
+- Cleaned the two accidental untracked pager log files from the previous remote inspection while preserving the two historical untracked root documents.
+- Started a temporary isolated FastAPI service on `127.0.0.1:18085` with its own SQLite database and paper upload directory under `data/test-runs/`.
+- Ran the product-effect smoke against the temporary real HTTP service and confirmed the backend workflow remained `demo_ready`.
+- Inspected Workbench through an SSH tunnel and browser session. The page loaded with Pilot Launch, Jobs, and Dossier controls, but a refreshed browser session could not load the latest dossier because Workbench did not restore `latestIdeaId` from completed jobs.
+- Added Workbench state restoration from the latest completed job so refreshed sessions recover active paper, job id, latest idea id, latest experiment plan id, and latest novelty check id from `/research/jobs`.
+- Added a `loadDossier` fallback that fetches recent jobs before showing the missing-idea empty state.
+- Added an explicit success message after loading a dossier by idea id.
+- Added Workbench asset version query strings so browsers pick up the updated static JavaScript and CSS after deployment.
+- Added static Workbench assertions covering job-state restoration and asset versioning.
+- Preserved `.env`, token, cookie, password, private key, and credential secrecy.
+
+Verification completed:
+
+- Temporary service health returned `ok` and readiness returned `ready`.
+- Real HTTP product-effect smoke passed against `127.0.0.1:18085` with `product_effect_score=0.9331`, band `demo_ready`, `tool_manifest_count=119`, `project_bundle_file_count=71`, and release review outcome signoff evidence present.
+- Browser inspection confirmed the cache-busted Workbench script restored the active paper from the latest completed job after page reload.
+- Dossier preview loading was verified in the browser against the smoke-generated idea dossier.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check tests/test_app.py` passed after formatting.
+- Focused Workbench pytest passed: `2 passed in 3.33s`.
+- `bash scripts/check_pilot_readiness.sh` passed: `29 passed in 68.05s`.
+
+Product-effect interpretation for this slice: the backend demo baseline still holds, and the Workbench is now more robust for a realistic pilot/demo session where the browser is refreshed after a workflow has already completed. Remaining customer-pilot work should focus on human UX polish, project scoping, durable queue/worker policy, backup/restore scripting, and deployment hardening rather than adding more delivery-chain endpoints.

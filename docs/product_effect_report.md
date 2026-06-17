@@ -96,7 +96,7 @@ The product-effect smoke was also run with a representative Markdown fixture thr
 - The smoke paper is synthetic. A real paper or real project brief still needs qualitative evaluation.
 - The generated readiness and quality scores show useful caution; the scorecard makes this visible through a quality-signal dimension of `0.7323` on the default smoke and `0.7407` on the representative Markdown smoke, driven by broader source-paper evidence context, typed evidence-to-claim routing, and mixed claim-validation outcomes.
 - The actual scientific quality of gaps, ideas, novelty claims, and experiment plans still needs human review.
-- Workbench availability is verified, and a static demo-path contract now protects the pilot flow from paper ingest through delivery closeout; true browser visual/interaction quality still needs a human/browser inspection pass.
+- Workbench availability is verified, a static demo-path contract protects the pilot flow from paper ingest through delivery closeout, and a browser inspection fixed refreshed-session restoration for latest completed jobs. Further human UX polish is still needed.
 - Deployment posture is still pilot-oriented: backup, restore, migrations, monitoring, and production data boundaries remain hardening work.
 - Multi-user/project scoping is designed but not production-enforced as a complete product boundary.
 - External literature search is disabled for deterministic verification; live external search quality and failure modes still need a separate approved evaluation.
@@ -110,7 +110,7 @@ The product-effect smoke was also run with a representative Markdown fixture thr
 
 ## Recommended Next Steps
 
-1. Run a browser-level or human-observed Workbench inspection against a temporary isolated HTTP service and capture the main user path: upload, workflow launch, cockpit, advisor, bundle.
+1. Continue Workbench-first pilot polish from the browser inspection: reduce long-control friction, make refreshed-session state recovery visible, and capture the main demo path from workflow through dossier, cockpit, advisor, bundle, release, and signoff.
 2. Keep the Workbench demo-path contract synchronized whenever sections or controls move, then improve the quality-signal dimension by strengthening evidence-ledger coverage and claim-validation scoring on representative papers.
 3. Decide whether the next demo target is API-first, Workbench-first, or MCP/tool-consumer-first.
 4. Continue hardening docs and tests before touching production deployment, migrations, backups, or user-scoping enforcement.

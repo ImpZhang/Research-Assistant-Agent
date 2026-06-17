@@ -1709,6 +1709,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert response.status_code == 200
     assert "Research Assistant Workbench" in response.text
     assert "/workbench-assets/app.js" in response.text
+    assert "20260618-workbench-state-restore2" in response.text
     assert "ideaBundleButton" in response.text
     assert "profileForm" in response.text
     assert "profileRisk" in response.text
@@ -1852,6 +1853,11 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/workflows/literature-to-ideas/async" in script.text
     assert "/research/jobs/${jobId}/artifacts" in script.text
     assert "/research/jobs/${jobId}/${action}" in script.text
+    assert "restoreStateFromJob" in script.text
+    assert "const latestCompletedJob = jobs.find" in script.text
+    assert "restoreStateFromJob(latestCompletedJob)" in script.text
+    assert "Active paper from latest job" in script.text
+    assert "Loaded dossier for idea" in script.text
     assert 'data-job-action="cancel"' in script.text
     assert 'data-job-action="retry"' in script.text
     assert "/research/ideas/${state.latestIdeaId}/refine" in script.text
