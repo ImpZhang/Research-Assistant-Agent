@@ -86,6 +86,12 @@ def test_health_ready_checks_database_and_storage() -> None:
         "configured": False,
         "header": "X-Research-Assistant-Key",
     }
+    assert body["checks"]["workbench_assets"] == {
+        "ok": True,
+        "path": str(Path(__file__).resolve().parents[1] / "backend" / "static" / "workbench"),
+        "required_files": ["index.html", "app.js", "styles.css"],
+        "missing_files": [],
+    }
     assert body["checks"]["paper_upload_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["enabled"] is False
@@ -829,6 +835,7 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "APP_COMMIT_SHA=local" in deployment
     assert "database_storage.ok=true" in deployment
     assert "api_key_auth.ok=true" in deployment
+    assert "workbench_assets.ok=true" in deployment
     assert "request-id header" in deployment
     assert "Do not read or print real `.env` values" in deployment
     assert "No automatic migration execution" in migration

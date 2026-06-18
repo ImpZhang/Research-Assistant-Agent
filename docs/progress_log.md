@@ -2415,3 +2415,20 @@ Verification completed:
 - `bash scripts/check_focused_test_coverage.sh` passed after registering the request-id test in `scripts/check_pilot_readiness.sh`.
 - `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 3.81s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests.
+
+## 2026-06-18 - Workbench Asset Readiness Signal
+
+Implemented in progress:
+
+- Added a `workbench_assets` check to `GET /health/ready` so deployments fail readiness when the browser Workbench entrypoint or core static assets are missing.
+- Kept the check file-system only: it verifies `index.html`, `app.js`, and `styles.css` exist without starting services or reading secrets.
+- Updated readiness and deployment contract tests plus deployment/architecture documentation.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_health_ready_checks_database_and_storage tests/test_app.py::test_workbench_static_assets_are_served tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `3 passed in 4.49s`.
+- `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 3.83s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests.

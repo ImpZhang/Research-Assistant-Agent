@@ -159,6 +159,7 @@ def create_app() -> FastAPI:
             "database": _database_ready(),
             "database_storage": _database_storage_ready(),
             "api_key_auth": _api_key_auth_ready(),
+            "workbench_assets": _workbench_assets_ready(),
             "paper_upload_dir": _paper_upload_dir_ready(),
             "write_audit_dir": _write_audit_dir_ready(),
             "external_literature_search": _external_literature_search_ready(),
@@ -436,6 +437,21 @@ def _database_ready() -> dict:
         return {"ok": True}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+def _workbench_assets_ready() -> dict:
+    required_files = [
+        WORKBENCH_INDEX,
+        WORKBENCH_DIR / "app.js",
+        WORKBENCH_DIR / "styles.css",
+    ]
+    missing_files = [path.name for path in required_files if not path.is_file()]
+    return {
+        "ok": not missing_files,
+        "path": str(WORKBENCH_DIR),
+        "required_files": [path.name for path in required_files],
+        "missing_files": missing_files,
+    }
 
 
 def _database_storage_ready() -> dict:
