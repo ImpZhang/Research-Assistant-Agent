@@ -168,6 +168,7 @@ backend/
     services/      Research workflow services
 docs/
 scripts/
+  check_backup_restore_contracts.sh
   check_context_search_evaluations.sh
   check_deployment_contracts.sh
   check_focused_test_coverage.sh
@@ -293,6 +294,12 @@ Run focused deployment artifact and customer runtime contract checks without sta
 
 ```bash
 bash scripts/check_deployment_contracts.sh
+```
+
+Run backup/restore contract checks to keep persistent data volume, cold-backup, restore, migration, and operator-approval guardrails aligned without touching Docker or live data:
+
+```bash
+bash scripts/check_backup_restore_contracts.sh
 ```
 
 Run focused context-search evaluation checks on the remote `.venv`:

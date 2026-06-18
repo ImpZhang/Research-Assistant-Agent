@@ -2293,3 +2293,18 @@ Verification completed:
 - `bash scripts/check_deployment_contracts.sh` passed: `1 passed`.
 - `bash scripts/check_pilot_readiness.sh` passed: `32 passed`.
 - `bash scripts/check_product_effect_smoke.sh` passed with health/readiness build metadata, `tool_manifest_count=120`, `tool_bridge_count=120`, `product_effect_score=0.9352`, and band `demo_ready`.
+
+## 2026-06-18 - Backup Restore Contract Check
+
+Implemented in progress:
+
+- Added `scripts/check_backup_restore_contracts.sh`, a read-only contract check for persistent `/app/data` volume wiring, backup/restore docs, migration backup requirements, and operator-approval guardrails.
+- Wired the check into `scripts/check_remote_safe_suite.sh`, `scripts/check_suite_contracts.sh`, and README verification docs.
+- Kept the script non-destructive: it does not run Docker, stop services, copy data, restore volumes, modify databases, or read secrets.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_backup_restore_contracts.sh` passed.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_suite_contracts.sh` passed.

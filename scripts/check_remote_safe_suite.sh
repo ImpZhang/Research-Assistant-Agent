@@ -12,6 +12,7 @@ bash scripts/check_focused_test_coverage.sh
 bash scripts/check_pilot_operational_preflight.sh
 bash scripts/check_pilot_readiness.sh
 bash scripts/check_deployment_contracts.sh
+bash scripts/check_backup_restore_contracts.sh
 bash scripts/check_research_workflow_primitives.sh
 bash scripts/check_research_planning_contracts.sh
 bash scripts/check_write_audit_guardrails.sh
