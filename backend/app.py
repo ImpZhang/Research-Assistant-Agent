@@ -160,6 +160,7 @@ def create_app() -> FastAPI:
             "database_storage": _database_storage_ready(),
             "api_key_auth": _api_key_auth_ready(),
             "workbench_assets": _workbench_assets_ready(),
+            "model_provider_configuration": _model_provider_configuration_ready(),
             "paper_upload_dir": _paper_upload_dir_ready(),
             "write_audit_dir": _write_audit_dir_ready(),
             "external_literature_search": _external_literature_search_ready(),
@@ -350,6 +351,45 @@ def _request_api_key(request: Request) -> str:
     if authorization.lower().startswith("bearer "):
         return authorization[7:].strip()
     return ""
+
+
+def _model_provider_configuration_ready() -> dict:
+    roles = {
+        "main": _model_provider_role_status(
+            settings.main_model,
+            settings.main_base_url,
+            settings.main_api_key,
+        ),
+        "extraction": _model_provider_role_status(
+            settings.extraction_model,
+            settings.extraction_base_url,
+            settings.extraction_api_key,
+        ),
+        "judge": _model_provider_role_status(
+            settings.judge_model,
+            settings.judge_base_url,
+            settings.judge_api_key,
+        ),
+    }
+    return {
+        "ok": True,
+        "fallback_supported": True,
+        "roles": roles,
+        "partial_roles": [name for name, status in roles.items() if status["partially_configured"]],
+    }
+
+
+def _model_provider_role_status(model: str, base_url: str, api_key: str) -> dict:
+    configured = bool(model and base_url and api_key)
+    partially_configured = bool(model or base_url or api_key) and not configured
+    return {
+        "configured": configured,
+        "mode": "external_model" if configured else "deterministic_fallback",
+        "model_configured": bool(model),
+        "base_url_configured": bool(base_url),
+        "api_key_configured": bool(api_key),
+        "partially_configured": partially_configured,
+    }
 
 
 def _external_literature_search_ready() -> dict:

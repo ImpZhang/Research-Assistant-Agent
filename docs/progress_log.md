@@ -2432,3 +2432,20 @@ Verification completed:
 - `.venv/bin/pytest -q tests/test_app.py::test_health_ready_checks_database_and_storage tests/test_app.py::test_workbench_static_assets_are_served tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `3 passed in 4.49s`.
 - `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 3.83s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests.
+
+## 2026-06-18 - Model Provider Configuration Readiness Signal
+
+Implemented in progress:
+
+- Added a non-blocking `model_provider_configuration` check to `GET /health/ready` so operators can see whether main, extraction, and judge roles are configured for external models or deterministic fallback.
+- Kept the payload credential-safe: it reports boolean model/base-url/API-key configuration state and never prints API key values or base URLs.
+- Updated readiness tests and deployment documentation so pilot checks include model-provider mode visibility without making outbound network requests.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_health_ready_checks_database_and_storage tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `2 passed in 4.34s`.
+- `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 3.91s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests.

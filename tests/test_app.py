@@ -92,6 +92,12 @@ def test_health_ready_checks_database_and_storage() -> None:
         "required_files": ["index.html", "app.js", "styles.css"],
         "missing_files": [],
     }
+    model_provider = body["checks"]["model_provider_configuration"]
+    assert model_provider["ok"] is True
+    assert model_provider["fallback_supported"] is True
+    assert sorted(model_provider["roles"]) == ["extraction", "judge", "main"]
+    assert "api_key_configured" in model_provider["roles"]["main"]
+    assert "pytest-secret" not in response.text
     assert body["checks"]["paper_upload_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["enabled"] is False
@@ -836,6 +842,7 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "database_storage.ok=true" in deployment
     assert "api_key_auth.ok=true" in deployment
     assert "workbench_assets.ok=true" in deployment
+    assert "model_provider_configuration.roles" in deployment
     assert "request-id header" in deployment
     assert "Do not read or print real `.env` values" in deployment
     assert "No automatic migration execution" in migration
