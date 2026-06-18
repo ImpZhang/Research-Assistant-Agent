@@ -32,12 +32,14 @@ const state = {
   researchProfile: null,
   onboardingReadiness: null,
   pollTimer: null,
+  requestId: "",
 };
 
 const API_KEY_STORAGE_KEY = "researchAssistantApiKey";
 const PROJECT_ID_STORAGE_KEY = "researchAssistantProjectId";
 const API_KEY_HEADER = "X-Research-Assistant-Key";
 const PROJECT_ID_HEADER = "X-Research-Assistant-Project";
+const REQUEST_ID_HEADER = "X-Request-ID";
 
 const $ = (id) => document.getElementById(id);
 
@@ -45,7 +47,24 @@ function setConnection(ok, text) {
   const dot = $("connectionState");
   dot.classList.remove("pending", "ok", "error");
   dot.classList.add(ok ? "ok" : "error");
-  $("connectionText").textContent = text;
+  $("connectionText").textContent = withRequestId(text);
+}
+
+function rememberRequestId(response) {
+  const requestId = response.headers.get(REQUEST_ID_HEADER);
+  if (requestId) {
+    state.requestId = requestId;
+  }
+  return requestId;
+}
+
+function requestIdLabel(requestId = state.requestId) {
+  return requestId ? `req ${requestId.slice(0, 12)}` : "";
+}
+
+function withRequestId(text, requestId = state.requestId) {
+  const label = requestIdLabel(requestId);
+  return label ? `${text} | ${label}` : text;
 }
 
 function setPaper(id, label) {
@@ -264,6 +283,7 @@ async function api(path, options = {}) {
     ...options,
     headers: withAuthHeaders(path, options.headers),
   });
+  const requestId = rememberRequestId(response);
   const text = await response.text();
   let body = text;
   try {
@@ -276,19 +296,20 @@ async function api(path, options = {}) {
     if (response.status === 401 && path.startsWith("/research")) {
       setConnection(false, "API key required");
     }
-    throw new Error(`${response.status} ${detail}`);
+    throw new Error(withRequestId(`${response.status} ${detail}`, requestId));
   }
   return body;
 }
 
 async function downloadWithAuth(path, filename) {
   const response = await fetch(path, { headers: withAuthHeaders(path) });
+  const requestId = rememberRequestId(response);
   if (!response.ok) {
     const text = await response.text();
     if (response.status === 401 && path.startsWith("/research")) {
       setConnection(false, "API key required");
     }
-    throw new Error(`${response.status} ${text}`);
+    throw new Error(withRequestId(`${response.status} ${text}`, requestId));
   }
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
@@ -316,6 +337,7 @@ async function checkHealth() {
 
 async function fetchReadiness() {
   const response = await fetch("/health/ready");
+  rememberRequestId(response);
   let body = {};
   try {
     body = await response.json();

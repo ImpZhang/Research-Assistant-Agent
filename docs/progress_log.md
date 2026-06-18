@@ -2465,3 +2465,19 @@ Verification completed:
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served tests/test_app.py::test_health_ready_checks_database_and_storage` passed: `2 passed in 4.45s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests.
+
+## 2026-06-18 - Workbench Request ID Signal
+
+Implemented in progress:
+
+- Updated Workbench API helpers to capture the `X-Request-ID` response header from health, readiness, research API, and authenticated download calls.
+- Appended a short request id to the Workbench connection and error text so browser users can report failures with an operator-correlatable id.
+- Cache-busted Workbench assets and added static assertions for the request-id helper path.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 4.23s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 131.27s`.
