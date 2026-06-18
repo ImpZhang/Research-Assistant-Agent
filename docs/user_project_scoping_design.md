@@ -85,6 +85,19 @@ No scoping migration should run implicitly at app startup.
 - MCP tools should accept or forward project id in a consistent way, and read-only mode must remain project-scoped.
 - Tool manifests should document whether each tool is project-scoped or admin-only.
 
+
+## Implemented Compatibility Scope Contract
+
+The current pilot exposes `GET /research/project/scope` as a read-only compatibility contract before schema migrations exist. It reports:
+
+- Active project id: `default`.
+- Project header name: `X-Research-Assistant-Project`.
+- Compatibility mode: `true`.
+- Isolation status: `default_project_only`.
+- Project ids are not secrets and do not grant authorization by themselves.
+
+If a client sends a non-default project id, the response records it as `requested_project_id` and warns that isolation is not available until project-id migrations and route filters are implemented. The endpoint does not create users or projects, does not migrate data, and does not imply cross-project isolation.
+
 ## Acceptance Criteria For Future Code
 
 - Existing data is readable through the default project after migration.

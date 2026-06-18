@@ -1825,6 +1825,19 @@ class JobArtifactsResponse(BaseModel):
     message: str
 
 
+class ProjectScopeResponse(BaseModel):
+    active_project_id: str = "default"
+    requested_project_id: str = ""
+    project_header_name: str = "X-Research-Assistant-Project"
+    compatibility_mode: bool = True
+    isolation_status: Literal["default_project_only"] = "default_project_only"
+    supported_project_ids: list[str] = Field(default_factory=lambda: ["default"])
+    project_ids_are_secrets: bool = False
+    project_ids_grant_access: bool = False
+    warnings: list[str] = Field(default_factory=list)
+    message: str = "Resolved request to the compatibility default project scope."
+
+
 class ProjectStatus(BaseModel):
     service: str
     phase: str

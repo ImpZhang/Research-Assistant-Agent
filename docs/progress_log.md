@@ -2255,3 +2255,23 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/app.py backend/research/routes.py tests/test_app.py` passed after formatting `backend/app.py` and `tests/test_app.py`.
 - Focused pytest passed: `tests/test_app.py::test_health_ready_checks_database_and_storage`, `tests/test_app.py::test_health_ready_checks_external_literature_configuration`, and `tests/test_app.py::test_research_status` (`3 passed`).
 - `bash scripts/check_pilot_readiness.sh` passed: `30 passed`.
+
+## 2026-06-18 - Default Project Scope Compatibility Contract
+
+Implemented in progress:
+
+- Added `GET /research/project/scope`, a read-only compatibility endpoint that reports the active `default` project id, the `X-Research-Assistant-Project` header contract, compatibility mode, supported project ids, and warnings when a non-default project id is requested before migrations exist.
+- Added `ProjectScopeResponse`, `default_project_scope_contract` status capability, and `get_project_scope` tool-manifest entry.
+- Updated smoke assertions, pilot readiness coverage, README, and `docs/user_project_scoping_design.md` so clients do not mistake project ids for secrets or authorization.
+- Re-ran the isolated product-effect smoke after the manifest change; tool manifest and MCP bridge now expose `120` tools, while the overall product-effect score remains `0.9352` / `demo_ready`.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/research/schemas.py backend/research/routes.py tests/test_app.py scripts/smoke_api.py` passed.
+- `.venv/bin/ruff format --check backend/research/schemas.py backend/research/routes.py tests/test_app.py scripts/smoke_api.py` passed after formatting schema and test files.
+- Focused pytest passed for research status, project scope, and tool manifest contract: `3 passed`.
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `10 passed`.
+- `bash scripts/check_pilot_readiness.sh` passed: `31 passed`.
+- `bash scripts/check_product_effect_smoke.sh` passed with `tool_manifest_count=120`, `tool_bridge_count=120`, `product_effect_score=0.9352`, and band `demo_ready`.
+- `bash scripts/check_remote_safe_suite.sh` passed after the scope contract and smoke documentation updates.

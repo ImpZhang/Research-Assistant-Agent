@@ -67,8 +67,8 @@ pgrep -af 'uvicorn|smoke_api|pytest|check_remote' || true
 
 The latest isolated in-process product-effect smoke baseline produced these representative metrics:
 
-- Tool manifest: `119` tools.
-- MCP bridge: `119` tools.
+- Tool manifest: `120` tools.
+- MCP bridge: `120` tools.
 - Literature workflow: `3` gaps and `6` ideas.
 - Proposal review: `ready_for_advisor_review`, score `0.92`.
 - Readiness: score `0.7791`, decision `needs_targeted_work` before final delivery packaging.

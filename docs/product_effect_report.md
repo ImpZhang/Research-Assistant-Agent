@@ -31,8 +31,8 @@ The smoke runs used isolated test data directories under `data/test-runs/` and d
 - Service health: `ok`.
 - Service readiness: `ready`.
 - Workbench available: `true`.
-- Tool manifest count: `119`.
-- MCP bridge tool count: `119`.
+- Tool manifest count: `120`.
+- MCP bridge tool count: `120`.
 - Literature workflow output: `3` gaps, `6` ideas, `6` novelty checks, `6` reviews, `6` experiment plans.
 - Proposal review: `ready_for_advisor_review`, score `0.92`.
 - Experiment analysis: `supports_hypothesis`.
@@ -87,7 +87,7 @@ The product-effect smoke was also run with a representative Markdown fixture thr
 - The full backend research workflow is coherent and traceable from paper ingestion to delivery bundle.
 - Proposal, experiment, evidence-ledger, claim-validation, readiness, quality-gate, advisor, and bundle-release stages all produce structured artifacts.
 - The system is not only a chatbot: it creates persistent research objects, task backlogs, graph links, Markdown exports, and delivery packages.
-- The tool manifest and MCP bridge are broad enough for an external tool consumer to drive the workflow.
+- The tool manifest and MCP bridge are broad enough for an external tool consumer to drive the workflow, including the default project-scope compatibility contract.
 - Isolated test data now makes the long delivery-loop validation repeatable and fast.
 - The real HTTP smoke confirms the app works through an actual temporary FastAPI server, not only through TestClient.
 
@@ -96,9 +96,9 @@ The product-effect smoke was also run with a representative Markdown fixture thr
 - The smoke paper is synthetic. A real paper or real project brief still needs qualitative evaluation.
 - The generated readiness and quality scores show useful caution; the scorecard makes this visible through a quality-signal dimension of `0.7407` on the latest default smoke and `0.7407` on the representative Markdown smoke, driven by broader source-paper evidence context, typed evidence-to-claim routing, and mixed claim-validation outcomes.
 - The actual scientific quality of gaps, ideas, novelty claims, and experiment plans still needs human review.
-- Workbench availability is verified, a static demo-path contract protects the pilot flow from paper ingest through delivery closeout, browser inspection fixed refreshed-session restoration, the first viewport exposes Latest Workflow continuation plus a cockpit-backed Pilot Path task sequence, and Dossier now has a primary action bar with the full control surface behind Advanced Actions. Evidence-ledger quality signals now include direct support, context evidence, evidence type coverage, and source-paper coverage. Further work should focus on product-effect rebaselining, demo-target selection, and deployment hardening.
+- Workbench availability is verified, a static demo-path contract protects the pilot flow from paper ingest through delivery closeout, browser inspection fixed refreshed-session restoration, the first viewport exposes Latest Workflow continuation plus a cockpit-backed Pilot Path task sequence, and Dossier now has a primary action bar with the full control surface behind Advanced Actions. Evidence-ledger quality signals now include direct support, context evidence, evidence type coverage, and source-paper coverage. The primary demo target is Workbench-first; further work should focus on real-paper qualitative review and deeper deployment hardening.
 - Deployment posture is still pilot-oriented: backup, restore, migrations, monitoring, and production data boundaries remain hardening work.
-- Multi-user/project scoping is designed but not production-enforced as a complete product boundary.
+- Multi-user/project scoping is designed and now has a default-project compatibility contract, but it is not production-enforced as a complete data boundary until migrations and route filters are implemented.
 - External literature search is disabled for deterministic verification; live external search quality and failure modes still need a separate approved evaluation.
 
 ## Current Product Readiness Estimate
@@ -112,5 +112,5 @@ The product-effect smoke was also run with a representative Markdown fixture thr
 
 1. Re-run the real HTTP smoke after the Workbench and evidence-ledger quality updates so the live-service baseline matches the latest in-process baseline.
 2. Evaluate at least one real representative paper or project brief with human review of generated gaps, ideas, evidence-ledger claims, and validation actions.
-3. Decide whether the next demo target is API-first, Workbench-first, or MCP/tool-consumer-first.
+3. Keep Workbench-first as the primary demo path, with API-first and MCP/tool-consumer paths as secondary technical demos.
 4. Continue hardening docs and tests before touching production deployment, migrations, backups, or user-scoping enforcement.

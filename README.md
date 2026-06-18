@@ -42,7 +42,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 ## Implemented Capabilities
 
 - FastAPI API layer with OpenAPI docs.
-- Production-readiness checks with `/health/ready`, external-literature configuration checks, optional API-key protection for `/research/*`, Dockerfile, and docker-compose pilot deployment.
+- Production-readiness checks with `/health/ready`, external-literature configuration checks, default-project scope contract, optional API-key protection for `/research/*`, Dockerfile, and docker-compose pilot deployment.
 - SQLite/SQLAlchemy research database.
 - Research profile for durable domains, goals, constraints, risk tolerance, target venues, and ranking weights.
 - Upload and ingest size-limited `.txt`, `.md`, and `.pdf` papers with lightweight content sniffing before files are written.

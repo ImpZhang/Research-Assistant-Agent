@@ -841,6 +841,7 @@ def test_research_status() -> None:
     assert "write_operation_audit_admin_export" in body["implemented_capabilities"]
     assert "write_operation_audit_readiness_check" in body["implemented_capabilities"]
     assert "external_literature_readiness_check" in body["implemented_capabilities"]
+    assert "default_project_scope_contract" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]
@@ -881,6 +882,26 @@ def test_research_status() -> None:
     assert "novelty_check_task_generation" in body["implemented_capabilities"]
 
 
+def test_project_scope_reports_default_compatibility_boundary() -> None:
+    client = TestClient(create_app())
+    response = client.get(
+        "/research/project/scope",
+        headers={"X-Research-Assistant-Project": "customer-alpha"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["active_project_id"] == "default"
+    assert body["requested_project_id"] == "customer-alpha"
+    assert body["project_header_name"] == "X-Research-Assistant-Project"
+    assert body["compatibility_mode"] is True
+    assert body["isolation_status"] == "default_project_only"
+    assert body["supported_project_ids"] == ["default"]
+    assert body["project_ids_are_secrets"] is False
+    assert body["project_ids_grant_access"] is False
+    assert any("cannot be isolated yet" in warning for warning in body["warnings"])
+
+
 def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     client = TestClient(create_app())
     response = client.get("/research/tools/manifest")
@@ -892,6 +913,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "upload_paper" in names
     assert "search_research_context" in names
     assert "get_graph_stats" in names
+    assert "get_project_scope" in names
     assert "get_research_profile" in names
     assert "update_research_profile" in names
     assert "create_research_plan" in names

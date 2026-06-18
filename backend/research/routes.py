@@ -5,7 +5,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy.orm import Session
@@ -152,6 +152,7 @@ from backend.research.schemas import (
     ProjectOnboardingChecklistItem,
     ProjectOnboardingProgressResponse,
     ProjectOnboardingReadinessResponse,
+    ProjectScopeResponse,
     ProjectOnboardingTaskGenerateRequest,
     ProjectPilotReportResponse,
     ProjectPilotReportSnapshotComparisonRequest,
@@ -259,6 +260,8 @@ from backend.research.services.workflow_service import (
 
 
 router = APIRouter(prefix="/research", tags=["research"])
+PROJECT_SCOPE_HEADER_NAME = "X-Research-Assistant-Project"
+DEFAULT_PROJECT_ID = "default"
 
 
 @router.get("/status", response_model=ProjectStatus)
@@ -371,6 +374,7 @@ def status() -> ProjectStatus:
             "write_operation_audit_admin_export",
             "write_operation_audit_readiness_check",
             "external_literature_readiness_check",
+            "default_project_scope_contract",
             "human_idea_feedback",
             "portfolio_markdown_export",
             "persisted_portfolio_snapshots",
@@ -417,6 +421,35 @@ def status() -> ProjectStatus:
     )
 
 
+@router.get("/project/scope", response_model=ProjectScopeResponse)
+def get_project_scope(request: Request) -> ProjectScopeResponse:
+    requested_project_id = request.headers.get(PROJECT_SCOPE_HEADER_NAME, "").strip()
+    warnings = [
+        "Project ids are not secrets and do not grant authorization by themselves.",
+        "Project isolation is in compatibility mode until project_id migrations and route filters are implemented.",
+    ]
+    if requested_project_id and requested_project_id != DEFAULT_PROJECT_ID:
+        warnings.insert(
+            0,
+            (
+                f"Requested project `{requested_project_id}` cannot be isolated yet; "
+                f"using `{DEFAULT_PROJECT_ID}` compatibility scope."
+            ),
+        )
+    return ProjectScopeResponse(
+        active_project_id=DEFAULT_PROJECT_ID,
+        requested_project_id=requested_project_id,
+        project_header_name=PROJECT_SCOPE_HEADER_NAME,
+        compatibility_mode=True,
+        isolation_status="default_project_only",
+        supported_project_ids=[DEFAULT_PROJECT_ID],
+        project_ids_are_secrets=False,
+        project_ids_grant_access=False,
+        warnings=warnings,
+        message="Resolved request to the compatibility default project scope.",
+    )
+
+
 @router.get("/tools/manifest", response_model=ToolManifestResponse)
 def tool_manifest() -> ToolManifestResponse:
     tools = [
@@ -428,6 +461,13 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="multipart/form-data",
             output_model="PaperUploadResponse",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="get_project_scope",
+            description="Read the current compatibility project scope and project header contract.",
+            method="GET",
+            path="/research/project/scope",
+            output_model="ProjectScopeResponse",
         ),
         ToolManifestItem(
             name="search_research_context",

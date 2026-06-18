@@ -498,11 +498,15 @@ def run_smoke(
         raise RuntimeError("research status did not include external novelty refresh")
     if "novelty_check_task_generation" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include novelty check task generation")
+    if "default_project_scope_contract" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include default project scope contract")
     manifest_names = {tool["name"] for tool in tool_manifest["tools"]}
     if "create_advisor_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include advisor brief tool")
     if "get_mcp_tool_spec" not in manifest_names:
         raise RuntimeError("tool manifest did not include MCP tool bridge spec")
+    if "get_project_scope" not in manifest_names:
+        raise RuntimeError("tool manifest did not include project scope reader")
     if "get_research_profile" not in manifest_names:
         raise RuntimeError("tool manifest did not include research profile reader")
     if "update_research_profile" not in manifest_names:
