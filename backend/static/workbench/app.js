@@ -303,11 +303,47 @@ async function downloadWithAuth(path, filename) {
 
 async function checkHealth() {
   try {
-    const body = await api("/health");
-    setConnection(true, `${body.service} ready`);
+    const health = await api("/health");
+    const readiness = await fetchReadiness();
+    renderOperationalReadiness(readiness.body);
+    const status = readiness.body.status || (readiness.ok ? "ready" : "not_ready");
+    setConnection(readiness.ok, `${health.service} ${status}`);
   } catch (error) {
     setConnection(false, error.message);
+    renderOperationalReadiness(null);
   }
+}
+
+async function fetchReadiness() {
+  const response = await fetch("/health/ready");
+  let body = {};
+  try {
+    body = await response.json();
+  } catch (_error) {
+    body = { status: "unknown", checks: {} };
+  }
+  return { ok: response.ok, body };
+}
+
+function renderOperationalReadiness(readiness) {
+  const checks = readiness?.checks || {};
+  const items = [
+    ["DB", checks.database],
+    ["Storage", checks.database_storage],
+    ["Auth", checks.api_key_auth],
+    ["Workbench", checks.workbench_assets],
+    ["Model", checks.model_provider_configuration],
+    ["Literature", checks.external_literature_search],
+  ];
+  $("readinessStrip").innerHTML = items
+    .map(([label, check]) => renderReadinessBadge(label, check))
+    .join("");
+}
+
+function renderReadinessBadge(label, check) {
+  const ok = Boolean(check?.ok);
+  const state = ok ? "ok" : "error";
+  return `<span class="${state}" title="${escapeHtml(label)} ${ok ? "ok" : "needs attention"}">${escapeHtml(label)}</span>`;
 }
 
 async function loadOnboardingReadiness(previewMarkdown = false) {

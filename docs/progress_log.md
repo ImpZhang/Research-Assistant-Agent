@@ -2449,3 +2449,19 @@ Verification completed:
 - `.venv/bin/pytest -q tests/test_app.py::test_health_ready_checks_database_and_storage tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `2 passed in 4.34s`.
 - `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 3.91s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests.
+
+## 2026-06-18 - Workbench Runtime Readiness Strip
+
+Implemented in progress:
+
+- Added a compact Workbench sidebar readiness strip sourced from `/health/ready` so browser users can see database, storage, auth, Workbench-asset, model-provider, and external-literature readiness at a glance.
+- Kept the UI status-only and cache-busted Workbench assets so deployments pick up the updated JavaScript and CSS.
+- Added static Workbench assertions for the new DOM hook, styles, JavaScript renderer, and health readiness fetch.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served tests/test_app.py::test_health_ready_checks_database_and_storage` passed: `2 passed in 4.45s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests.
