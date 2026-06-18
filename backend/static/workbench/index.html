@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Research Assistant Workbench</title>
-    <link rel="stylesheet" href="/workbench-assets/styles.css?v=20260618-workbench-continuation1" />
+    <link rel="stylesheet" href="/workbench-assets/styles.css?v=20260618-dossier-primary1" />
   </head>
   <body>
     <div class="app-shell">
@@ -332,8 +332,18 @@
             <h3>Dossier Preview</h3>
             <p>Fetch the Markdown export for the first generated idea in the latest completed job.</p>
           </div>
-          <div class="dossier-actions">
-            <div class="action-group action-group-wide">
+          <div class="dossier-command-bar" aria-label="Dossier primary actions">
+            <button id="quickLoadDossierButton" type="button">Load Dossier</button>
+            <button id="quickRelatedWorkButton" type="button">Related Work</button>
+            <button id="quickProposalDraftButton" type="button">Proposal Draft</button>
+            <button id="quickExperimentRunButton" type="button">Record Run</button>
+            <button id="quickResearchPacketButton" type="button">Research Packet</button>
+            <button id="quickProjectBundleButton" type="button">Project Bundle</button>
+          </div>
+          <details class="advanced-action-panel">
+            <summary>Advanced Actions</summary>
+            <div class="dossier-actions">
+              <div class="action-group action-group-wide">
               <span class="action-group-title">Idea Loop</span>
               <textarea id="refineFocus" rows="2">sharpen novelty and first executable experiment</textarea>
               <button id="refineIdeaButton" type="button">Refine Idea</button>
@@ -442,7 +452,8 @@
               <button id="researchPlanTasksButton" type="button">Plan Tasks</button>
               <button id="loadDossierButton" type="button">Load Latest Dossier</button>
             </div>
-          </div>
+            </div>
+          </details>
           <pre id="dossierPreview" class="markdown-preview">No dossier loaded.</pre>
         </section>
       </main>
@@ -452,6 +463,6 @@
       <div class="empty-state">No records yet.</div>
     </template>
 
-    <script src="/workbench-assets/app.js?v=20260618-workbench-continuation1" defer></script>
+    <script src="/workbench-assets/app.js?v=20260618-dossier-primary1" defer></script>
   </body>
 </html>

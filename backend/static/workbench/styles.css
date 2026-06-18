@@ -255,6 +255,39 @@ button:disabled {
   gap: 10px;
 }
 
+.dossier-command-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.dossier-command-bar button {
+  min-width: 128px;
+}
+
+.advanced-action-panel {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfdff;
+}
+
+.advanced-action-panel summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.advanced-action-panel[open] summary {
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.advanced-action-panel .dossier-actions {
+  padding: 12px;
+}
+
 .dossier-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -540,6 +573,7 @@ code {
 
   .topbar,
   .tool-row,
+  .dossier-command-bar,
   .dossier-actions,
   .controls-grid,
   .profile-grid,
@@ -559,6 +593,10 @@ code {
   .action-group,
   .action-group-delivery {
     grid-template-columns: 1fr;
+  }
+
+  .dossier-command-bar button {
+    width: 100%;
   }
 
   .topbar,

@@ -1767,7 +1767,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "latestWorkflowFacts" in response.text
     assert "latestWorkflowRefreshJobsButton" in response.text
     assert "latestWorkflowLoadDossierButton" in response.text
-    assert "20260618-workbench-continuation1" in response.text
+    assert "20260618-dossier-primary1" in response.text
     assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-launch"')
     assert "pilot-launch" in response.text
     assert "pilotLaunchRefreshButton" in response.text
@@ -1789,6 +1789,21 @@ def test_workbench_static_assets_are_served() -> None:
     assert "Task Board" in response.text
     assert "Project Delivery" in response.text
     assert "Project Operations" in response.text
+    assert "dossier-command-bar" in response.text
+    assert "advanced-action-panel" in response.text
+    assert "Advanced Actions" in response.text
+    assert "quickLoadDossierButton" in response.text
+    assert "quickRelatedWorkButton" in response.text
+    assert "quickProposalDraftButton" in response.text
+    assert "quickExperimentRunButton" in response.text
+    assert "quickResearchPacketButton" in response.text
+    assert "quickProjectBundleButton" in response.text
+    assert response.text.index('class="dossier-command-bar"') < response.text.index(
+        'class="advanced-action-panel"'
+    )
+    assert response.text.index('class="advanced-action-panel"') < response.text.index(
+        'id="dossierPreview"'
+    )
     expected_sections = {
         "pilot-launch": "Pilot Launch",
         "onboarding": "Onboarding",
@@ -1812,6 +1827,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert ".controls-grid" in styles.text
     assert ".latest-workflow-facts" in styles.text
     assert ".secondary-link" in styles.text
+    assert ".dossier-command-bar" in styles.text
+    assert ".advanced-action-panel" in styles.text
     assert "@media" in styles.text
     assert "max-width: 920px" in styles.text
 
@@ -1867,6 +1884,12 @@ def test_workbench_static_assets_are_served() -> None:
     assert "Latest workflow restored from completed jobs." in script.text
     assert "latestWorkflowRefreshJobsButton" in script.text
     assert "latestWorkflowLoadDossierButton" in script.text
+    assert "quickLoadDossierButton" in script.text
+    assert "quickRelatedWorkButton" in script.text
+    assert "quickProposalDraftButton" in script.text
+    assert "quickExperimentRunButton" in script.text
+    assert "quickResearchPacketButton" in script.text
+    assert "quickProjectBundleButton" in script.text
     assert "const latestCompletedJob = jobs.find" in script.text
     assert "restoreStateFromJob(latestCompletedJob)" in script.text
     assert "Active paper from latest job" in script.text
@@ -2032,6 +2055,8 @@ def test_workbench_user_path_contract_supports_pilot_demo_loop() -> None:
     latest_workflow_position = html.index('id="latest-workflow"')
     assert "Latest Workflow" in html
     assert "latestWorkflowLoadDossierButton" in html
+    assert "quickLoadDossierButton" in html
+    assert "Advanced Actions" in html
 
     section_positions = []
     for section_id, heading in demo_sections:

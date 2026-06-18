@@ -3370,6 +3370,12 @@ document.addEventListener("DOMContentLoaded", () => {
   $("refreshJobsButton").addEventListener("click", refreshJobs);
   $("latestWorkflowRefreshJobsButton").addEventListener("click", refreshJobs);
   $("latestWorkflowLoadDossierButton").addEventListener("click", loadDossier);
+  $("quickLoadDossierButton").addEventListener("click", loadDossier);
+  $("quickRelatedWorkButton").addEventListener("click", createRelatedWorkMatrix);
+  $("quickProposalDraftButton").addEventListener("click", createProposalDraft);
+  $("quickExperimentRunButton").addEventListener("click", createExperimentRun);
+  $("quickResearchPacketButton").addEventListener("click", loadResearchPacket);
+  $("quickProjectBundleButton").addEventListener("click", downloadProjectBundle);
   $("jobsTable").addEventListener("click", handleJobAction);
   $("loadDossierButton").addEventListener("click", loadDossier);
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);

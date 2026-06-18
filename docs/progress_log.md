@@ -2189,3 +2189,9 @@ Product-effect interpretation for this slice: the backend demo baseline still ho
 - Added a first-screen Latest Workflow continuation band above Pilot Launch so a refreshed Workbench session shows the recovered job, status, active paper, and latest idea without requiring the operator to scroll into Jobs or Dossier.
 - Wired the continuation band to `refreshJobs`, `loadDossier`, queued workflow status, job polling, job artifact loading, and completed-job restoration so the browser UI stays aligned with the latest workflow state.
 - Added static Workbench contract coverage for the continuation band, cache-busted assets, continuation controls, mobile layout styles, and JavaScript state rendering hooks.
+
+## 2026-06-18 - Dossier Primary Action Surface
+
+- Added a Dossier primary action bar for the common demo path: load dossier, related work, proposal draft, experiment run, research packet, and project bundle.
+- Moved the long Dossier control surface behind an Advanced Actions disclosure while preserving the existing button ids and event handlers for the full workflow surface.
+- Extended Workbench static contracts to protect the primary Dossier controls, Advanced Actions disclosure, cache-busted assets, responsive styles, and quick-action JavaScript bindings.
