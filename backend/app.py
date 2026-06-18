@@ -145,6 +145,7 @@ def create_app() -> FastAPI:
             "database": _database_ready(),
             "paper_upload_dir": _paper_upload_dir_ready(),
             "write_audit_dir": _write_audit_dir_ready(),
+            "external_literature_search": _external_literature_search_ready(),
         }
         ready = all(item["ok"] for item in checks.values())
         payload = {
@@ -297,6 +298,84 @@ def _request_api_key(request: Request) -> str:
     if authorization.lower().startswith("bearer "):
         return authorization[7:].strip()
     return ""
+
+
+def _external_literature_search_ready() -> dict:
+    enabled = _external_literature_search_enabled()
+    providers, invalid_providers = _external_literature_providers()
+    if not enabled:
+        return {
+            "ok": True,
+            "enabled": False,
+            "providers": providers,
+            "invalid_providers": invalid_providers,
+        }
+
+    base_urls_configured = {
+        provider: bool(_external_literature_provider_base_url(provider)) for provider in providers
+    }
+    missing_base_url_providers = [
+        provider for provider, configured in base_urls_configured.items() if not configured
+    ]
+    ok = bool(providers) and not invalid_providers and not missing_base_url_providers
+    payload = {
+        "ok": ok,
+        "enabled": True,
+        "providers": providers,
+        "invalid_providers": invalid_providers,
+        "base_urls_configured": base_urls_configured,
+    }
+    if not providers:
+        payload["error"] = (
+            "External literature search is enabled but no supported providers are configured."
+        )
+    if missing_base_url_providers:
+        payload["missing_base_url_providers"] = missing_base_url_providers
+    return payload
+
+
+def _external_literature_search_enabled() -> bool:
+    raw = os.getenv("EXTERNAL_LITERATURE_SEARCH_ENABLED")
+    if raw is None:
+        return settings.external_literature_search_enabled
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _external_literature_providers() -> tuple[list[str], list[str]]:
+    raw = os.getenv("EXTERNAL_LITERATURE_PROVIDERS")
+    if raw is None:
+        raw = settings.external_literature_providers
+    providers = []
+    invalid_providers = []
+    for provider in raw.split(","):
+        normalized = provider.strip().lower()
+        if not normalized:
+            continue
+        if normalized in {"semantic-scholar", "semanticscholar"}:
+            normalized = "semantic_scholar"
+        if normalized in {"openalex", "arxiv", "semantic_scholar"}:
+            if normalized not in providers:
+                providers.append(normalized)
+        elif normalized not in invalid_providers:
+            invalid_providers.append(normalized)
+    return providers, invalid_providers
+
+
+def _external_literature_provider_base_url(provider: str) -> str:
+    env_names = {
+        "openalex": "OPENALEX_BASE_URL",
+        "arxiv": "ARXIV_BASE_URL",
+        "semantic_scholar": "SEMANTIC_SCHOLAR_BASE_URL",
+    }
+    settings_values = {
+        "openalex": settings.openalex_base_url,
+        "arxiv": settings.arxiv_base_url,
+        "semantic_scholar": settings.semantic_scholar_base_url,
+    }
+    env_name = env_names[provider]
+    if env_name in os.environ:
+        return os.environ.get(env_name, "").strip()
+    return settings_values[provider].strip()
 
 
 def _database_ready() -> dict:

@@ -2238,3 +2238,20 @@ Verification completed:
 - `bash scripts/check_suite_contracts.sh` passed.
 - `bash scripts/check_deployment_contracts.sh` passed: `1 passed`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including the new preflight stage and all default focused checks.
+
+## 2026-06-18 - External Literature Readiness Signal
+
+Implemented in progress:
+
+- Added an `external_literature_search` check to `GET /health/ready` so pilot operators can see whether optional external literature search is disabled, correctly configured, or blocked by invalid providers or missing base URLs.
+- Kept the check non-networked and credential-safe: it validates provider names and base URL presence only, without outbound requests or secret exposure.
+- Added `external_literature_readiness_check` to the research status capability list.
+- Updated the pilot readiness suite, README capability list, deployment checklist, and deployment docs.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/app.py backend/research/routes.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py backend/research/routes.py tests/test_app.py` passed after formatting `backend/app.py` and `tests/test_app.py`.
+- Focused pytest passed: `tests/test_app.py::test_health_ready_checks_database_and_storage`, `tests/test_app.py::test_health_ready_checks_external_literature_configuration`, and `tests/test_app.py::test_research_status` (`3 passed`).
+- `bash scripts/check_pilot_readiness.sh` passed: `30 passed`.

@@ -62,6 +62,32 @@ def test_health_ready_checks_database_and_storage() -> None:
     assert body["checks"]["paper_upload_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["enabled"] is False
+    assert body["checks"]["external_literature_search"]["ok"] is True
+    assert body["checks"]["external_literature_search"]["enabled"] is False
+
+
+def test_health_ready_checks_external_literature_configuration(monkeypatch) -> None:
+    monkeypatch.setenv("EXTERNAL_LITERATURE_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("EXTERNAL_LITERATURE_PROVIDERS", "openalex,unknown,semantic-scholar")
+    monkeypatch.setenv("OPENALEX_BASE_URL", "")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_BASE_URL", "https://example.test/search")
+
+    client = TestClient(create_app())
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    body = response.json()
+    check = body["checks"]["external_literature_search"]
+    assert body["status"] == "not_ready"
+    assert check["ok"] is False
+    assert check["enabled"] is True
+    assert check["providers"] == ["openalex", "semantic_scholar"]
+    assert check["invalid_providers"] == ["unknown"]
+    assert check["base_urls_configured"] == {
+        "openalex": False,
+        "semantic_scholar": True,
+    }
+    assert check["missing_base_url_providers"] == ["openalex"]
 
 
 def test_product_effect_scorecard_separates_quality_from_completion() -> None:
@@ -814,6 +840,7 @@ def test_research_status() -> None:
     assert "write_operation_audit_admin_summary" in body["implemented_capabilities"]
     assert "write_operation_audit_admin_export" in body["implemented_capabilities"]
     assert "write_operation_audit_readiness_check" in body["implemented_capabilities"]
+    assert "external_literature_readiness_check" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
     assert "idea_assumption_audits" in body["implemented_capabilities"]

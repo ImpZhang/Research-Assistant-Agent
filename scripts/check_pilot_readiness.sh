@@ -9,6 +9,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_health \
   tests/test_app.py::test_health_ready_checks_database_and_storage \
   tests/test_app.py::test_health_ready_checks_write_audit_dir_when_enabled \
+  tests/test_app.py::test_health_ready_checks_external_literature_configuration \
   tests/test_app.py::test_research_status \
   tests/test_app.py::test_optional_api_key_guard_protects_research_routes \
   tests/test_app.py::test_write_audit_admin_summary_disabled_by_default \
