@@ -164,7 +164,9 @@ def call_tool(
             return _tool_content(payload, response.headers.get("content-type", ""))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {exc.code} from {tool['name']}: {detail}") from exc
+        request_id = _request_id_from_headers(exc.headers)
+        request_label = f" | req {request_id[:12]}" if request_id else ""
+        raise RuntimeError(f"HTTP {exc.code} from {tool['name']}: {detail}{request_label}") from exc
 
 
 def fill_path_parameters(path: str, arguments: JSON) -> str:
@@ -290,6 +292,16 @@ def _response(request_id: Any, result: JSON) -> JSON:
 
 def _error(request_id: Any, message: str) -> JSON:
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": message}}
+
+
+def _request_id_from_headers(headers: Any) -> str:
+    configured = os.environ.get("REQUEST_ID_HEADER_NAME", "X-Request-ID")
+    candidates = [configured, "X-Request-ID", "X-Request-Id"]
+    for name in candidates:
+        value = headers.get(name) if headers else ""
+        if value:
+            return str(value)
+    return ""
 
 
 def _auth_headers(auth: BridgeAuth | None) -> dict[str, str]:

@@ -1,4 +1,8 @@
 import json
+from email.message import Message
+from io import BytesIO
+
+import pytest
 
 from scripts import mcp_http_bridge
 
@@ -150,6 +154,35 @@ def test_zip_tool_content_is_base64_text() -> None:
 
     assert payload["content_type"] == "application/zip"
     assert payload["base64"]
+
+
+def test_call_tool_http_error_includes_short_request_id(monkeypatch) -> None:
+    headers = Message()
+    headers["X-Request-ID"] = "req-bridge-1234567890"
+
+    def fake_urlopen(request, timeout):
+        raise mcp_http_bridge.urllib.error.HTTPError(
+            request.full_url,
+            503,
+            "Service Unavailable",
+            headers,
+            BytesIO(b'{"detail":"backend unavailable"}'),
+        )
+
+    monkeypatch.setattr(mcp_http_bridge.urllib.request, "urlopen", fake_urlopen)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        mcp_http_bridge.call_tool(
+            "http://localhost:8000",
+            {"name": "get_project_status", "http": {"method": "GET", "path": "/research/status"}},
+            {},
+            timeout=1,
+        )
+
+    message = str(exc_info.value)
+    assert "HTTP 503 from get_project_status" in message
+    assert "backend unavailable" in message
+    assert "req req-bridge-" in message
 
 
 def test_bridge_auth_headers_forward_api_key() -> None:

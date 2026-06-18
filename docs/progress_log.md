@@ -2557,3 +2557,16 @@ Verification completed:
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check backend/research/routes.py tests/test_app.py` passed.
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -q tests/test_app.py::test_research_status` passed: `1 passed in 4.25s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 125.69s`.
+
+## 2026-06-18 - MCP Bridge Request ID Errors
+
+Implemented in progress:
+
+- Updated `scripts/mcp_http_bridge.py` so backend HTTP errors include a short request id when the response carries the configured request-id header.
+- Added unit coverage for HTTPError request-id extraction and updated README, deployment, and technical design documentation.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `12 passed in 2.26s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 125.65s`.
