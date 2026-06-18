@@ -74,6 +74,11 @@ def test_health_ready_checks_database_and_storage() -> None:
     body = response.json()
     assert body["status"] == "ready"
     assert body["checks"]["database"]["ok"] is True
+    database_storage = body["checks"]["database_storage"]
+    assert database_storage["ok"] is True
+    assert database_storage["database_type"] == "sqlite"
+    assert database_storage["persistent"] is True
+    assert database_storage["parent"].endswith("data/research")
     assert body["checks"]["paper_upload_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["enabled"] is False
@@ -765,6 +770,7 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "Pilot Operational Preflight" in deployment
     assert "PILOT_PREFLIGHT_STRICT_GIT=true" in deployment
     assert "APP_COMMIT_SHA=local" in deployment
+    assert "database_storage.ok=true" in deployment
     assert "Do not read or print real `.env` values" in deployment
     assert "No automatic migration execution" in migration
     assert "APP_COMMIT_SHA" in compose

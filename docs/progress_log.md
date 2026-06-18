@@ -2360,3 +2360,20 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/research/routes.py tests/test_app.py scripts/smoke_api.py` passed.
 - `.venv/bin/pytest -q tests/test_app.py::test_research_status` passed: `1 passed in 4.49s`.
 - `bash scripts/check_product_effect_smoke.sh` passed with `tool_manifest_count=120`, `tool_bridge_count=120`, `product_effect_score=0.9352`, and band `demo_ready`.
+
+## 2026-06-18 - Database Storage Readiness Signal
+
+Implemented in progress:
+
+- Added a `database_storage` check to `GET /health/ready` so deployments can see whether SQLite database storage is persistent and whether the database parent directory exists and is writable.
+- Kept external database deployments non-blocking by reporting non-SQLite storage as not app-managed instead of requiring a local file path.
+- Updated health readiness tests and deployment documentation without reading secrets, starting services, running migrations, or modifying production data.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_health_ready_checks_database_and_storage tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `2 passed in 4.23s`.
+- `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 4.25s`.
+- `bash scripts/check_remote_safe_suite.sh` passed after the health readiness and deployment documentation updates.

@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 
 from backend.research.config import settings
 from backend.research.db import engine, init_db
@@ -147,6 +148,7 @@ def create_app() -> FastAPI:
     def readiness():
         checks = {
             "database": _database_ready(),
+            "database_storage": _database_storage_ready(),
             "paper_upload_dir": _paper_upload_dir_ready(),
             "write_audit_dir": _write_audit_dir_ready(),
             "external_literature_search": _external_literature_search_ready(),
@@ -395,6 +397,41 @@ def _database_ready() -> dict:
         return {"ok": True}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+def _database_storage_ready() -> dict:
+    raw_database_url = os.getenv("RESEARCH_DB_URL") or settings.research_db_url
+    try:
+        database_url = make_url(raw_database_url)
+    except Exception as exc:
+        return {"ok": False, "database_type": "unknown", "error": str(exc)}
+
+    database_type = database_url.get_backend_name()
+    if database_type != "sqlite":
+        return {
+            "ok": True,
+            "database_type": database_type,
+            "managed_by_app": False,
+        }
+
+    database_path = database_url.database or ":memory:"
+    if database_path == ":memory:":
+        return {
+            "ok": True,
+            "database_type": "sqlite",
+            "path": database_path,
+            "persistent": False,
+        }
+
+    db_path = Path(database_path)
+    parent = db_path.parent if str(db_path.parent) else Path(".")
+    return {
+        "ok": parent.is_dir() and os.access(parent, os.W_OK),
+        "database_type": "sqlite",
+        "path": str(db_path),
+        "parent": str(parent),
+        "persistent": True,
+    }
 
 
 def _paper_upload_dir_ready() -> dict:
