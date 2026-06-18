@@ -2207,3 +2207,9 @@ Product-effect interpretation for this slice: the backend demo baseline still ho
 - Extended the project cockpit response with a `pilot_task_sequence` that maps Setup, Evidence, Generate, Review, Dossier, and Delivery to status, detail, Workbench anchor, API action, and task owner type.
 - Added a Pilot Task Sequence section to cockpit Markdown exports so handoff artifacts include the same real-pilot execution lane shown in Workbench.
 - Wired Workbench Pilot Path rendering to `cockpit.pilot_task_sequence` while preserving the static stage rail as a fallback.
+
+## 2026-06-18 - Evidence Ledger Quality Signals
+
+- Added evidence-ledger quality signals for direct evidence links, context evidence links, linked evidence type coverage, and linked source-paper coverage.
+- Updated evidence-ledger coverage scoring so representative-paper quality depends more on direct claim support plus evidence type/source diversity instead of raw evidence volume alone.
+- Added Evidence Quality Signals to evidence-ledger Markdown exports and regression coverage for typed evidence routing quality metadata.

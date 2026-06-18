@@ -3691,6 +3691,16 @@ def test_evidence_ledger_routes_typed_source_evidence_to_claims() -> None:
         assert f"{marker}-method" in linked_support_ids
         assert f"{marker}-foreign" not in linked_support_ids
         assert ledger.summary_json["supported_claim_count"] == len(supported_claims)
+        assert ledger.summary_json["direct_evidence_link_count"] >= 3
+        assert ledger.summary_json["linked_evidence_type_count"] >= 3
+        assert set(ledger.summary_json["linked_evidence_types"]) >= {
+            "limitation",
+            "future_work",
+            "method",
+        }
+        assert ledger.summary_json["linked_source_paper_count"] == 1
+        assert "## Evidence Quality Signals" in ledger.markdown_export
+        assert "Linked Evidence Types" in ledger.markdown_export
         assert ledger.coverage_score >= 0.5
     finally:
         session.close()

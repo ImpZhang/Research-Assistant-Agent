@@ -70,9 +70,11 @@ class IdeaEvidenceLedgerService:
             analysis=analysis,
             missing_evidence=missing_evidence,
         )
+        evidence_quality = self._evidence_quality(evidence_links)
         coverage_score = self._coverage_score(
             ledger_claims=ledger_claims,
             evidence_links=evidence_links,
+            evidence_quality=evidence_quality,
             missing_evidence=missing_evidence,
             counterevidence=counterevidence,
             analysis=analysis,
@@ -80,6 +82,7 @@ class IdeaEvidenceLedgerService:
         summary = self._summary(
             ledger_claims=ledger_claims,
             evidence_links=evidence_links,
+            evidence_quality=evidence_quality,
             counterevidence=counterevidence,
             missing_evidence=missing_evidence,
             risk_register=risk_register,
@@ -447,11 +450,28 @@ class IdeaEvidenceLedgerService:
             )
         return self._dedupe_dicts(risks, key="risk")
 
+    def _evidence_quality(self, evidence_links: list[dict]) -> dict:
+        direct_links = [link for link in evidence_links if link.get("linked_claim_ids")]
+        context_links = [link for link in evidence_links if not link.get("linked_claim_ids")]
+        direct_types = {
+            link.get("evidence_type") for link in direct_links if link.get("evidence_type")
+        }
+        direct_papers = {link.get("paper_id") for link in direct_links if link.get("paper_id")}
+        return {
+            "direct_evidence_link_count": len(direct_links),
+            "context_evidence_link_count": len(context_links),
+            "linked_evidence_type_count": len(direct_types),
+            "linked_evidence_types": sorted(direct_types),
+            "linked_source_paper_count": len(direct_papers),
+            "linked_source_paper_ids": sorted(direct_papers),
+        }
+
     def _coverage_score(
         self,
         *,
         ledger_claims: list[dict],
         evidence_links: list[dict],
+        evidence_quality: dict,
         missing_evidence: list[dict],
         counterevidence: list[dict],
         analysis: ExperimentAnalysis | None,
@@ -462,7 +482,9 @@ class IdeaEvidenceLedgerService:
             [claim for claim in ledger_claims if claim.get("supporting_evidence_ids")]
         )
         claim_support = supported_claims / len(ledger_claims)
-        evidence_bonus = min(len(evidence_links), 8) / 20
+        direct_evidence_bonus = min(evidence_quality["direct_evidence_link_count"], 8) / 24
+        type_diversity_bonus = min(evidence_quality["linked_evidence_type_count"], 4) / 20
+        source_diversity_bonus = min(evidence_quality["linked_source_paper_count"], 3) / 30
         analysis_bonus = 0.15 if analysis and analysis.decision == "supports_hypothesis" else 0.0
         missing_penalty = min(len(missing_evidence), 8) * 0.04
         counter_penalty = min(len(counterevidence), 8) * 0.03
@@ -471,8 +493,10 @@ class IdeaEvidenceLedgerService:
                 0.0,
                 min(
                     1.0,
-                    claim_support * 0.7
-                    + evidence_bonus
+                    claim_support * 0.6
+                    + direct_evidence_bonus
+                    + type_diversity_bonus
+                    + source_diversity_bonus
                     + analysis_bonus
                     - missing_penalty
                     - counter_penalty,
@@ -486,6 +510,7 @@ class IdeaEvidenceLedgerService:
         *,
         ledger_claims: list[dict],
         evidence_links: list[dict],
+        evidence_quality: dict,
         counterevidence: list[dict],
         missing_evidence: list[dict],
         risk_register: list[dict],
@@ -498,6 +523,7 @@ class IdeaEvidenceLedgerService:
             "supported_claim_count": supported,
             "unsupported_claim_count": len(ledger_claims) - supported,
             "evidence_link_count": len(evidence_links),
+            **evidence_quality,
             "counterevidence_count": len(counterevidence),
             "missing_evidence_count": len(missing_evidence),
             "high_risk_count": high_risks,
@@ -552,6 +578,16 @@ class IdeaEvidenceLedgerService:
                 lines.append("Challenge signals:")
                 lines.extend(f"- {item}" for item in challenges)
                 lines.append("")
+
+        lines.extend(["", "## Evidence Quality Signals", ""])
+        lines.extend(
+            [
+                f"- Direct Evidence Links: {summary.get('direct_evidence_link_count', 0)}",
+                f"- Context Evidence Links: {summary.get('context_evidence_link_count', 0)}",
+                f"- Linked Evidence Types: {self._inline_ids(summary.get('linked_evidence_types') or [])}",
+                f"- Linked Source Papers: {self._inline_ids(summary.get('linked_source_paper_ids') or [])}",
+            ]
+        )
 
         lines.extend(["", "## Evidence Links", ""])
         if ledger.evidence_links_json:
