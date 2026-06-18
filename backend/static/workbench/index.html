@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Research Assistant Workbench</title>
-    <link rel="stylesheet" href="/workbench-assets/styles.css?v=20260618-dossier-primary1" />
+    <link rel="stylesheet" href="/workbench-assets/styles.css?v=20260618-pilot-path1" />
   </head>
   <body>
     <div class="app-shell">
@@ -18,6 +18,7 @@
         </div>
 
         <nav class="nav-list" aria-label="Workbench sections">
+          <a href="#pilot-path">Pilot Path</a>
           <a href="#pilot-launch">Pilot Launch</a>
           <a href="#onboarding">Onboarding</a>
           <a href="#ingest">Ingest</a>
@@ -70,6 +71,45 @@
             <span><strong>Status</strong><code>-</code></span>
             <span><strong>Paper</strong><code>-</code></span>
             <span><strong>Idea</strong><code>-</code></span>
+          </div>
+        </section>
+
+        <section id="pilot-path" class="band pilot-path">
+          <div class="section-heading">
+            <h3>Pilot Path</h3>
+            <p>Customer pilot operating lane from setup to delivery evidence.</p>
+          </div>
+          <div class="pilot-path-steps" aria-label="Pilot workflow stages">
+            <a href="#onboarding">
+              <span>01</span>
+              <strong>Setup</strong>
+              <small>Readiness</small>
+            </a>
+            <a href="#ingest">
+              <span>02</span>
+              <strong>Evidence</strong>
+              <small>Paper</small>
+            </a>
+            <a href="#workflow">
+              <span>03</span>
+              <strong>Generate</strong>
+              <small>Ideas</small>
+            </a>
+            <a href="#advisor">
+              <span>04</span>
+              <strong>Review</strong>
+              <small>Advisor</small>
+            </a>
+            <a href="#dossier">
+              <span>05</span>
+              <strong>Dossier</strong>
+              <small>Packet</small>
+            </a>
+            <a href="#dossier">
+              <span>06</span>
+              <strong>Delivery</strong>
+              <small>Bundle</small>
+            </a>
           </div>
         </section>
 
@@ -344,9 +384,9 @@
             <summary>Advanced Actions</summary>
             <div class="dossier-actions">
               <div class="action-group action-group-wide">
-              <span class="action-group-title">Idea Loop</span>
-              <textarea id="refineFocus" rows="2">sharpen novelty and first executable experiment</textarea>
-              <button id="refineIdeaButton" type="button">Refine Idea</button>
+                <span class="action-group-title">Idea Loop</span>
+                <textarea id="refineFocus" rows="2">sharpen novelty and first executable experiment</textarea>
+                <button id="refineIdeaButton" type="button">Refine Idea</button>
               <button id="shortlistIdeaButton" type="button">Shortlist</button>
               <button id="rankIdeasButton" type="button">Rank Ideas</button>
               <button id="savePortfolioButton" type="button">Save Portfolio</button>
@@ -463,6 +503,6 @@
       <div class="empty-state">No records yet.</div>
     </template>
 
-    <script src="/workbench-assets/app.js?v=20260618-dossier-primary1" defer></script>
+    <script src="/workbench-assets/app.js?v=20260618-pilot-path1" defer></script>
   </body>
 </html>

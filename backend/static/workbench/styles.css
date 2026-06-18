@@ -363,6 +363,40 @@ textarea {
   align-items: start;
 }
 
+.pilot-path-steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pilot-path-steps a {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal);
+  border-radius: 6px;
+  background: #fbfdff;
+  color: var(--ink);
+  padding: 10px;
+  text-decoration: none;
+  display: grid;
+  gap: 4px;
+}
+
+.pilot-path-steps a:hover {
+  border-color: var(--teal);
+  background: #ecfdf5;
+}
+
+.pilot-path-steps span,
+.pilot-path-steps small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pilot-path-steps strong {
+  overflow-wrap: anywhere;
+}
+
 .latest-workflow-actions {
   display: flex;
   gap: 10px;
@@ -580,6 +614,7 @@ code {
   .api-key-control,
   .two-column,
   .latest-workflow-facts,
+  .pilot-path-steps,
   .pilot-metrics {
     grid-template-columns: 1fr;
   }

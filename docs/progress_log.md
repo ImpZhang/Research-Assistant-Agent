@@ -2195,3 +2195,9 @@ Product-effect interpretation for this slice: the backend demo baseline still ho
 - Added a Dossier primary action bar for the common demo path: load dossier, related work, proposal draft, experiment run, research packet, and project bundle.
 - Moved the long Dossier control surface behind an Advanced Actions disclosure while preserving the existing button ids and event handlers for the full workflow surface.
 - Extended Workbench static contracts to protect the primary Dossier controls, Advanced Actions disclosure, cache-busted assets, responsive styles, and quick-action JavaScript bindings.
+
+## 2026-06-18 - Workbench Pilot Path Stage Rail
+
+- Added a first-screen Pilot Path stage rail between Latest Workflow and Pilot Launch so the operator can jump through Setup, Evidence, Generate, Review, Dossier, and Delivery without scanning the full navigation list.
+- Added responsive Pilot Path styling and cache-busted Workbench assets for the new stage rail.
+- Extended Workbench static contracts to protect the Pilot Path nav link, stage ordering, labels, styles, and placement before Pilot Launch.

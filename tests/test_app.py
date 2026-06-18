@@ -1767,8 +1767,15 @@ def test_workbench_static_assets_are_served() -> None:
     assert "latestWorkflowFacts" in response.text
     assert "latestWorkflowRefreshJobsButton" in response.text
     assert "latestWorkflowLoadDossierButton" in response.text
-    assert "20260618-dossier-primary1" in response.text
+    assert "20260618-pilot-path1" in response.text
     assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-launch"')
+    assert "pilot-path" in response.text
+    assert "pilot-path-steps" in response.text
+    assert "Pilot workflow stages" in response.text
+    assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-path"')
+    assert response.text.index('id="pilot-path"') < response.text.index('id="pilot-launch"')
+    for stage_label in ["Setup", "Evidence", "Generate", "Review", "Dossier", "Delivery"]:
+        assert stage_label in response.text
     assert "pilot-launch" in response.text
     assert "pilotLaunchRefreshButton" in response.text
     assert "pilotLaunchMetrics" in response.text
@@ -1805,6 +1812,7 @@ def test_workbench_static_assets_are_served() -> None:
         'id="dossierPreview"'
     )
     expected_sections = {
+        "pilot-path": "Pilot Path",
         "pilot-launch": "Pilot Launch",
         "onboarding": "Onboarding",
         "ingest": "Ingest",
@@ -1826,6 +1834,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "grid-template-columns" in styles.text
     assert ".controls-grid" in styles.text
     assert ".latest-workflow-facts" in styles.text
+    assert ".pilot-path-steps" in styles.text
     assert ".secondary-link" in styles.text
     assert ".dossier-command-bar" in styles.text
     assert ".advanced-action-panel" in styles.text
@@ -2042,6 +2051,7 @@ def test_workbench_user_path_contract_supports_pilot_demo_loop() -> None:
     html = response.text
 
     demo_sections = [
+        ("pilot-path", "Pilot Path"),
         ("pilot-launch", "Pilot Launch"),
         ("onboarding", "Onboarding"),
         ("ingest", "Paper Ingest"),
@@ -2055,6 +2065,7 @@ def test_workbench_user_path_contract_supports_pilot_demo_loop() -> None:
     latest_workflow_position = html.index('id="latest-workflow"')
     assert "Latest Workflow" in html
     assert "latestWorkflowLoadDossierButton" in html
+    assert "Pilot workflow stages" in html
     assert "quickLoadDossierButton" in html
     assert "Advanced Actions" in html
 
