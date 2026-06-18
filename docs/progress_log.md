@@ -2528,3 +2528,17 @@ Verification completed:
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check tests/test_app.py` passed.
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served tests/test_app.py::test_project_scope_reports_default_compatibility_boundary` passed: `2 passed in 4.65s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 126.54s`.
+
+## 2026-06-18 - Representative Paper Review Protocol
+
+Implemented in progress:
+
+- Added `docs/representative_paper_review.md` as the human review protocol and findings template for a real representative-paper pilot review.
+- Documented required inputs, review steps, qualitative findings, exit criteria, and non-goals so the project does not mistake synthetic smoke results for human acceptance.
+- Wired the protocol into `scripts/check_handoff_docs.sh` and updated README/TODO references.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 127.52s`.

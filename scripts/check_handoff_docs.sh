@@ -37,6 +37,12 @@ checks = {
         "## 2026-06-13",
         "Verification completed",
     ],
+    "docs/representative_paper_review.md": [
+        "Representative Paper Human Review Protocol",
+        "Workbench-first",
+        "Exit Criteria",
+        "PRODUCT_EFFECT_SMOKE_PAPER_FILE",
+    ],
 }
 
 errors = []

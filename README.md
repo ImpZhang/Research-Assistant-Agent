@@ -350,7 +350,7 @@ Run the isolated product-effect smoke to validate the complete research-assistan
 bash scripts/check_product_effect_smoke.sh
 ```
 
-Use `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/path/to/paper.md` with `check_product_effect_smoke.sh` to run the same product-effect smoke against a representative paper fixture. The JSON output includes `product_effect_score`, `product_effect_band`, and a dimension-level `product_effect_scorecard` for foundation, research workflow, quality signal, and delivery loop readiness.
+Use `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/path/to/paper.md` with `check_product_effect_smoke.sh` to run the same product-effect smoke against a representative paper fixture. The JSON output includes `product_effect_score`, `product_effect_band`, and a dimension-level `product_effect_scorecard` for foundation, research workflow, quality signal, and delivery loop readiness. Use `docs/representative_paper_review.md` for the human review protocol and findings table before marking a representative-paper pilot review acceptable.
 
 Run focused write-audit guardrail checks without reading production audit logs:
 
@@ -654,3 +654,4 @@ See `docs/deployment.md` for the runtime contract, pilot deployment checklist, `
 - `docs/workflow_queue_design.md`
 - `docs/graphrag_langgraph_deerflow_evaluation.md`
 - `docs/context_search_evaluation_plan.md`
+- `docs/representative_paper_review.md`
