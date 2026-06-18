@@ -9,6 +9,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_health \
   tests/test_app.py::test_health_ready_includes_build_metadata \
   tests/test_app.py::test_health_ready_checks_database_and_storage \
+  tests/test_app.py::test_health_ready_reports_missing_api_key_when_auth_is_enabled \
   tests/test_app.py::test_health_ready_checks_write_audit_dir_when_enabled \
   tests/test_app.py::test_health_ready_checks_external_literature_configuration \
   tests/test_app.py::test_research_status \

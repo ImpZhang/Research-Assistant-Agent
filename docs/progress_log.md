@@ -2377,3 +2377,22 @@ Verification completed:
 - `.venv/bin/pytest -q tests/test_app.py::test_health_ready_checks_database_and_storage tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `2 passed in 4.23s`.
 - `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 4.25s`.
 - `bash scripts/check_remote_safe_suite.sh` passed after the health readiness and deployment documentation updates.
+
+## 2026-06-18 - API Key Auth Readiness Signal
+
+Implemented in progress:
+
+- Added an `api_key_auth` check to `GET /health/ready` so deployments that enable API-key protection without a configured key report `not_ready` before Workbench or MCP clients hit `/research/*` failures.
+- Kept the readiness payload secret-safe: it reports enabled/configured/header state and a generic error, never the API key value.
+- Added regression coverage for default disabled auth, enabled auth with a configured key, and enabled auth with no configured key.
+- Updated deployment documentation so operators verify `api_key_auth.ok=true` when API-key protection is enabled.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_health_ready_checks_database_and_storage tests/test_app.py::test_health_ready_reports_missing_api_key_when_auth_is_enabled tests/test_app.py::test_optional_api_key_guard_protects_research_routes tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `4 passed in 5.20s`.
+- `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 3.83s`.
+- `bash scripts/check_focused_test_coverage.sh` passed after adding the new readiness test to `scripts/check_pilot_readiness.sh`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `33` pilot readiness tests.

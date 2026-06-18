@@ -10,6 +10,7 @@ from xml.etree import ElementTree
 
 from fastapi.testclient import TestClient
 
+import backend.app as app_module
 from backend.app import create_app
 from backend.research.db import SessionLocal
 from backend.research.models import (
@@ -79,11 +80,42 @@ def test_health_ready_checks_database_and_storage() -> None:
     assert database_storage["database_type"] == "sqlite"
     assert database_storage["persistent"] is True
     assert database_storage["parent"].endswith("data/research")
+    assert body["checks"]["api_key_auth"] == {
+        "ok": True,
+        "enabled": False,
+        "configured": False,
+        "header": "X-Research-Assistant-Key",
+    }
     assert body["checks"]["paper_upload_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["enabled"] is False
     assert body["checks"]["external_literature_search"]["ok"] is True
     assert body["checks"]["external_literature_search"]["enabled"] is False
+
+
+def test_health_ready_reports_missing_api_key_when_auth_is_enabled(monkeypatch) -> None:
+    monkeypatch.delenv("API_KEY_AUTH_ENABLED", raising=False)
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("RESEARCH_ASSISTANT_API_KEY", raising=False)
+    monkeypatch.setattr(
+        app_module,
+        "settings",
+        app_module.settings.__class__(api_key_auth_enabled=True, api_key=""),
+    )
+
+    client = TestClient(app_module.create_app())
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "not_ready"
+    assert body["checks"]["api_key_auth"] == {
+        "ok": False,
+        "enabled": True,
+        "configured": False,
+        "header": "X-Research-Assistant-Key",
+        "error": "API key auth is enabled but no API key is configured.",
+    }
 
 
 def test_health_ready_checks_external_literature_configuration(monkeypatch) -> None:
@@ -396,7 +428,17 @@ def test_optional_api_key_guard_protects_research_routes(monkeypatch) -> None:
         headers={"Authorization": "Bearer pytest-secret"},
     )
 
+    readiness = client.get("/health/ready")
+
     assert health.status_code == 200
+    assert readiness.status_code == 200
+    assert readiness.json()["checks"]["api_key_auth"] == {
+        "ok": True,
+        "enabled": True,
+        "configured": True,
+        "header": "X-Research-Assistant-Key",
+    }
+    assert "pytest-secret" not in readiness.text
     assert missing.status_code == 401
     assert wrong.status_code == 401
     assert header_ok.status_code == 200
@@ -771,6 +813,7 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "PILOT_PREFLIGHT_STRICT_GIT=true" in deployment
     assert "APP_COMMIT_SHA=local" in deployment
     assert "database_storage.ok=true" in deployment
+    assert "api_key_auth.ok=true" in deployment
     assert "Do not read or print real `.env` values" in deployment
     assert "No automatic migration execution" in migration
     assert "APP_COMMIT_SHA" in compose

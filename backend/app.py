@@ -149,6 +149,7 @@ def create_app() -> FastAPI:
         checks = {
             "database": _database_ready(),
             "database_storage": _database_storage_ready(),
+            "api_key_auth": _api_key_auth_ready(),
             "paper_upload_dir": _paper_upload_dir_ready(),
             "write_audit_dir": _write_audit_dir_ready(),
             "external_literature_search": _external_literature_search_ready(),
@@ -220,6 +221,20 @@ def _requires_api_key(path: str) -> bool:
     return any(
         path == prefix or path.startswith(f"{prefix}/") for prefix in PROTECTED_PATH_PREFIXES
     )
+
+
+def _api_key_auth_ready() -> dict:
+    enabled = _api_key_auth_enabled()
+    configured = bool(_configured_api_key())
+    payload = {
+        "ok": not enabled or configured,
+        "enabled": enabled,
+        "configured": configured,
+        "header": _api_key_header_name(),
+    }
+    if enabled and not configured:
+        payload["error"] = "API key auth is enabled but no API key is configured."
+    return payload
 
 
 def _api_key_auth_enabled() -> bool:
