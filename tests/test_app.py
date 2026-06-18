@@ -1767,9 +1767,10 @@ def test_workbench_static_assets_are_served() -> None:
     assert "latestWorkflowFacts" in response.text
     assert "latestWorkflowRefreshJobsButton" in response.text
     assert "latestWorkflowLoadDossierButton" in response.text
-    assert "20260618-pilot-path1" in response.text
+    assert "20260618-pilot-sequence1" in response.text
     assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-launch"')
     assert "pilot-path" in response.text
+    assert "pilotPathSteps" in response.text
     assert "pilot-path-steps" in response.text
     assert "Pilot workflow stages" in response.text
     assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-path"')
@@ -1860,6 +1861,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/cockpit" in script.text
     assert "loadPilotLaunch" in script.text
     assert "renderPilotMetric" in script.text
+    assert "renderPilotPathSequence" in script.text
+    assert "cockpit.pilot_task_sequence" in script.text
     assert "/research/onboarding/setup" in script.text
     assert "/research/onboarding/tasks" in script.text
     assert "/research/onboarding/progress" in script.text
@@ -5460,9 +5463,26 @@ Future work should preserve proposal drafts as reviewable artifacts.
     assert cockpit_body["primary_next_action"]["label"]
     assert cockpit_body["quick_actions"]
     assert cockpit_body["workflow_stages"]
+    assert cockpit_body["pilot_task_sequence"]
+    assert [step["stage"] for step in cockpit_body["pilot_task_sequence"]] == [
+        "setup",
+        "evidence",
+        "generate",
+        "review",
+        "dossier",
+        "delivery",
+    ]
+    assert all(
+        step["workbench_anchor"].startswith("#") for step in cockpit_body["pilot_task_sequence"]
+    )
+    assert all(
+        step["action_path"].startswith("/research/") for step in cockpit_body["pilot_task_sequence"]
+    )
+    assert cockpit_body["pilot_task_sequence"][0]["status"] == "complete"
     assert cockpit_body["setup_status"]
     assert cockpit_body["source_summaries"]["quality"]["decision_counts"]
     assert "# Project Cockpit" in cockpit_body["markdown_export"]
+    assert "## Pilot Task Sequence" in cockpit_body["markdown_export"]
 
     cockpit_markdown = client.get("/research/cockpit/export/markdown")
     assert cockpit_markdown.status_code == 200

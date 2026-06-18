@@ -2312,6 +2312,7 @@ def get_project_cockpit(
         risk_focus=risk_focus,
     )
     workflow_stages = _project_cockpit_workflow_stages(metrics, profile)
+    pilot_task_sequence = _project_cockpit_pilot_task_sequence(metrics, profile)
     setup_status = _project_cockpit_setup_status(metrics, profile)
     risk_alerts = _project_cockpit_risk_alerts(metrics, risk_focus, radar)
     highlights = _project_cockpit_highlights(metrics, recommended_focus, radar)
@@ -2330,6 +2331,7 @@ def get_project_cockpit(
         primary_next_action=primary_next_action,
         quick_actions=quick_actions,
         workflow_stages=workflow_stages,
+        pilot_task_sequence=pilot_task_sequence,
         setup_status=setup_status,
         risk_alerts=risk_alerts,
         highlights=highlights,
@@ -2342,6 +2344,7 @@ def get_project_cockpit(
         primary_next_action=primary_next_action,
         quick_actions=quick_actions,
         workflow_stages=workflow_stages,
+        pilot_task_sequence=pilot_task_sequence,
         setup_status=setup_status,
         project_metrics=metrics,
         risk_alerts=risk_alerts,
@@ -4345,6 +4348,141 @@ def _project_cockpit_workflow_stages(
     ]
 
 
+def _project_cockpit_pilot_task_sequence(
+    metrics: dict[str, Any],
+    profile: ResearchProfile | None,
+) -> list[dict[str, Any]]:
+    profile_ready = _project_cockpit_profile_ready(profile)
+    paper_ready = metrics["paper_count"] > 0
+    idea_ready = metrics["idea_count"] > 0
+    validation_ready = metrics["claim_validation_result_count"] > 0
+    handoff_ready = metrics["brief_count"] > 0 or metrics["research_plan_count"] > 0
+    delivery_ready = idea_ready and (metrics["task_count"] > 0 or handoff_ready)
+    return [
+        _project_cockpit_pilot_step(
+            rank=1,
+            stage="setup",
+            label="Setup",
+            status="complete" if profile_ready else "pending",
+            detail="Research profile configured."
+            if profile_ready
+            else "Research profile needs setup.",
+            workbench_anchor="#onboarding",
+            action_label="Save setup",
+            action_method="POST",
+            action_path="/research/onboarding/setup",
+            enabled=True,
+            task_owner_type="project_onboarding",
+        ),
+        _project_cockpit_pilot_step(
+            rank=2,
+            stage="evidence",
+            label="Evidence",
+            status="complete"
+            if metrics["evidence_count"]
+            else ("ready" if profile_ready else "pending"),
+            detail=(
+                f"{metrics['paper_count']} papers and {metrics['evidence_count']} evidence records."
+            ),
+            workbench_anchor="#ingest",
+            action_label="Upload papers",
+            action_method="POST",
+            action_path="/research/papers/upload",
+            enabled=profile_ready,
+            task_owner_type="paper_ingest",
+        ),
+        _project_cockpit_pilot_step(
+            rank=3,
+            stage="generate",
+            label="Generate",
+            status="complete" if idea_ready else ("ready" if paper_ready else "pending"),
+            detail=f"{metrics['gap_count']} gaps and {metrics['idea_count']} ideas.",
+            workbench_anchor="#workflow",
+            action_label="Run workflow",
+            action_method="POST",
+            action_path="/research/workflows/literature-to-ideas/async",
+            enabled=paper_ready,
+            task_owner_type="literature_to_ideas_workflow",
+        ),
+        _project_cockpit_pilot_step(
+            rank=4,
+            stage="review",
+            label="Review",
+            status="complete" if validation_ready else ("active" if idea_ready else "pending"),
+            detail=(
+                f"{metrics['evidence_ledger_count']} ledgers and "
+                f"{metrics['claim_validation_result_count']} claim results."
+            ),
+            workbench_anchor="#advisor",
+            action_label="Ask advisor",
+            action_method="POST",
+            action_path="/research/advisor/chat",
+            enabled=idea_ready,
+            task_owner_type="advisor_chat",
+        ),
+        _project_cockpit_pilot_step(
+            rank=5,
+            stage="dossier",
+            label="Dossier",
+            status="complete" if handoff_ready else ("ready" if idea_ready else "pending"),
+            detail=(
+                f"{metrics['brief_count']} briefs and {metrics['research_plan_count']} research plans."
+            ),
+            workbench_anchor="#dossier",
+            action_label="Build packet",
+            action_method="GET",
+            action_path="/research/progress/overview",
+            enabled=idea_ready,
+            task_owner_type="research_packet",
+        ),
+        _project_cockpit_pilot_step(
+            rank=6,
+            stage="delivery",
+            label="Delivery",
+            status="ready" if delivery_ready else ("active" if idea_ready else "pending"),
+            detail=(
+                f"{metrics['task_count']} tasks, {metrics['open_task_count']} open, "
+                f"{metrics['blocked_task_count']} blocked."
+            ),
+            workbench_anchor="#dossier",
+            action_label="Export bundle",
+            action_method="GET",
+            action_path="/research/export/project-bundle",
+            enabled=idea_ready,
+            task_owner_type="project_bundle",
+        ),
+    ]
+
+
+def _project_cockpit_pilot_step(
+    *,
+    rank: int,
+    stage: str,
+    label: str,
+    status: str,
+    detail: str,
+    workbench_anchor: str,
+    action_label: str,
+    action_method: str,
+    action_path: str,
+    enabled: bool,
+    task_owner_type: str,
+) -> dict[str, Any]:
+    return {
+        "rank": rank,
+        "stage": stage,
+        "label": label,
+        "status": status,
+        "detail": detail,
+        "workbench_anchor": workbench_anchor,
+        "action_label": action_label,
+        "action_method": action_method,
+        "action_path": action_path,
+        "enabled": enabled,
+        "task_owner_type": task_owner_type,
+    }
+
+
 def _project_cockpit_profile_ready(profile: ResearchProfile | None) -> bool:
     if profile is None:
         return False
@@ -4448,6 +4586,7 @@ def _render_project_cockpit_markdown(
     primary_next_action: dict[str, Any],
     quick_actions: list[dict[str, Any]],
     workflow_stages: list[dict[str, Any]],
+    pilot_task_sequence: list[dict[str, Any]],
     setup_status: list[dict[str, Any]],
     risk_alerts: list[str],
     highlights: list[str],
@@ -4493,6 +4632,13 @@ def _render_project_cockpit_markdown(
     for stage in workflow_stages:
         lines.append(
             f"- `{stage['status']}` {stage['name']} (count={stage['count']}): {stage['summary']}"
+        )
+    lines.extend(["", "## Pilot Task Sequence", ""])
+    for step in pilot_task_sequence:
+        enabled = "enabled" if step["enabled"] else "disabled"
+        lines.append(
+            f"- `{step['status']}` `{enabled}` {step['rank']}. {step['label']}: "
+            f"{step['detail']} -> `{step['action_method']} {step['action_path']}`"
         )
     lines.extend(["", "## Highlights", ""])
     if highlights:

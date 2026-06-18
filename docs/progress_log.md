@@ -2201,3 +2201,9 @@ Product-effect interpretation for this slice: the backend demo baseline still ho
 - Added a first-screen Pilot Path stage rail between Latest Workflow and Pilot Launch so the operator can jump through Setup, Evidence, Generate, Review, Dossier, and Delivery without scanning the full navigation list.
 - Added responsive Pilot Path styling and cache-busted Workbench assets for the new stage rail.
 - Extended Workbench static contracts to protect the Pilot Path nav link, stage ordering, labels, styles, and placement before Pilot Launch.
+
+## 2026-06-18 - Cockpit Pilot Task Sequence
+
+- Extended the project cockpit response with a `pilot_task_sequence` that maps Setup, Evidence, Generate, Review, Dossier, and Delivery to status, detail, Workbench anchor, API action, and task owner type.
+- Added a Pilot Task Sequence section to cockpit Markdown exports so handoff artifacts include the same real-pilot execution lane shown in Workbench.
+- Wired Workbench Pilot Path rendering to `cockpit.pilot_task_sequence` while preserving the static stage rail as a fallback.

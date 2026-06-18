@@ -940,6 +940,7 @@ class ProjectCockpitResponse(BaseModel):
     primary_next_action: dict[str, Any] = Field(default_factory=dict)
     quick_actions: list[dict[str, Any]] = Field(default_factory=list)
     workflow_stages: list[dict[str, Any]] = Field(default_factory=list)
+    pilot_task_sequence: list[dict[str, Any]] = Field(default_factory=list)
     setup_status: list[dict[str, Any]] = Field(default_factory=list)
     project_metrics: dict[str, Any] = Field(default_factory=dict)
     risk_alerts: list[str] = Field(default_factory=list)

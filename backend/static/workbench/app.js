@@ -913,6 +913,30 @@ function renderPilotMetric(label, value, detail) {
   `;
 }
 
+function renderPilotPathSequence(sequence) {
+  const target = $("pilotPathSteps");
+  if (!target || !Array.isArray(sequence) || !sequence.length) {
+    return;
+  }
+  target.innerHTML = sequence
+    .slice()
+    .sort((left, right) => (left.rank || 0) - (right.rank || 0))
+    .map((step) => {
+      const href = step.workbench_anchor || "#pilot-path";
+      const status = step.status || "pending";
+      const rank = String(step.rank || "").padStart(2, "0");
+      const detail = step.detail || step.action_label || "";
+      return `
+        <a href="${escapeHtml(href)}" data-stage="${escapeHtml(step.stage || "")}" data-status="${escapeHtml(status)}">
+          <span>${escapeHtml(rank)}</span>
+          <strong>${escapeHtml(step.label || step.stage || "Stage")}</strong>
+          <small>${escapeHtml(status)} - ${escapeHtml(detail)}</small>
+        </a>
+      `;
+    })
+    .join("");
+}
+
 function renderPilotActionList(actions) {
   if (!actions.length) {
     return "";
@@ -950,6 +974,7 @@ async function loadPilotLaunch() {
       ),
     ];
     $("pilotLaunchMetrics").innerHTML = metrics.join("");
+    renderPilotPathSequence(cockpit.pilot_task_sequence);
     const primaryAction =
       (cockpit.primary_next_action && cockpit.primary_next_action.label) || progress.next_action;
     const actions = [
