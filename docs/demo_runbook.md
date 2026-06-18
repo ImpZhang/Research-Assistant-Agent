@@ -65,7 +65,7 @@ pgrep -af 'uvicorn|smoke_api|pytest|check_remote' || true
 
 ## Interpreting The Current Baseline
 
-The 2026-06-16 product-effect smoke baseline produced these representative metrics:
+The latest isolated in-process product-effect smoke baseline produced these representative metrics:
 
 - Tool manifest: `119` tools.
 - MCP bridge: `119` tools.
@@ -73,11 +73,11 @@ The 2026-06-16 product-effect smoke baseline produced these representative metri
 - Proposal review: `ready_for_advisor_review`, score `0.92`.
 - Readiness: score `0.7791`, decision `needs_targeted_work` before final delivery packaging.
 - Quality gate: score `0.725`, decision `de_risk_novelty`.
-- Evidence ledger: coverage score `0.54` on the default smoke paper.
+- Evidence ledger: coverage score `0.59` on the default smoke paper, with direct-support, context-evidence, evidence-type, and source-paper quality signals.
 - Project bundle: `71` files, readiness `delivery_ready`, score `1.0`.
 - Graph summary: `100` nodes and `100` edges in the smoke output.
-- Product-effect scorecard: overall score `0.9331`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7323`, delivery loop `1.0`, failed checks `[]`.
+- Product-effect scorecard: overall score `0.9352`, band `demo_ready`, foundation `1.0`, research workflow `1.0`, quality signal `0.7407`, delivery loop `1.0`, failed checks `[]`.
 
 ## Demo Decision
 
-Use this runbook to prove the backend workflow is backend-demo-ready at the workflow level. Before a user-facing demo, still inspect the Workbench visually and review real or representative paper outputs qualitatively, especially the quality-signal dimension.
+Primary demo target: Workbench-first. Use the Workbench to show the customer pilot path from Latest Workflow through Pilot Path, Dossier, cockpit/advisor state, bundle, release review, and signoff evidence. Keep API-first and MCP/tool-consumer demos as secondary technical paths for integration audiences. Before a user-facing demo, still review real or representative paper outputs qualitatively, especially generated gaps, ideas, evidence-ledger claims, and claim-validation actions.

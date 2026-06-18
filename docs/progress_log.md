@@ -2213,3 +2213,9 @@ Product-effect interpretation for this slice: the backend demo baseline still ho
 - Added evidence-ledger quality signals for direct evidence links, context evidence links, linked evidence type coverage, and linked source-paper coverage.
 - Updated evidence-ledger coverage scoring so representative-paper quality depends more on direct claim support plus evidence type/source diversity instead of raw evidence volume alone.
 - Added Evidence Quality Signals to evidence-ledger Markdown exports and regression coverage for typed evidence routing quality metadata.
+
+## 2026-06-18 - Workbench-First Demo Target Decision
+
+- Updated the demo runbook baseline to the latest isolated in-process product-effect smoke: overall `0.9352`, band `demo_ready`, quality signal `0.7407`, and evidence-ledger coverage `0.59`.
+- Set the primary demo target to Workbench-first, with API-first and MCP/tool-consumer paths reserved for technical integration audiences.
+- Documented the remaining qualitative review gate: real or representative paper outputs still need human review for generated gaps, ideas, evidence-ledger claims, and claim-validation actions.
