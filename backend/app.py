@@ -57,28 +57,40 @@ def create_app() -> FastAPI:
     )
 
     @app.middleware("http")
+    async def request_id_header(request: Request, call_next):
+        _request_id_for(request)
+        response = await call_next(request)
+        return _attach_request_id_header(request, response)
+
+    @app.middleware("http")
     async def api_key_guard(request: Request, call_next):
         if request.method == "OPTIONS" or not _requires_api_key(request.url.path):
             return await call_next(request)
         configured_key = _configured_api_key()
         if not configured_key:
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "detail": (
-                        "API key auth is enabled but API_KEY or RESEARCH_ASSISTANT_API_KEY "
-                        "is not configured."
-                    )
-                },
+            return _attach_request_id_header(
+                request,
+                JSONResponse(
+                    status_code=503,
+                    content={
+                        "detail": (
+                            "API key auth is enabled but API_KEY or RESEARCH_ASSISTANT_API_KEY "
+                            "is not configured."
+                        )
+                    },
+                ),
             )
         supplied_key = _request_api_key(request)
         if supplied_key:
             request.state.api_key_fingerprint = _secret_fingerprint(supplied_key)
         if not supplied_key or not secrets.compare_digest(supplied_key, configured_key):
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Valid API key required."},
-                headers={"WWW-Authenticate": "Bearer"},
+            return _attach_request_id_header(
+                request,
+                JSONResponse(
+                    status_code=401,
+                    content={"detail": "Valid API key required."},
+                    headers={"WWW-Authenticate": "Bearer"},
+                ),
             )
         return await call_next(request)
 
@@ -87,17 +99,14 @@ def create_app() -> FastAPI:
         if not write_audit_enabled() or not is_write_operation(request.method, request.url.path):
             return await call_next(request)
 
-        request_id = request.headers.get(_request_id_header_name()) or uuid.uuid4().hex
+        request_id = _request_id_for(request)
         request.state.audit_context = {}
         started_at = time.perf_counter()
         response = None
         error_type = None
         try:
             response = await call_next(request)
-            request_id_header = _request_id_header_name()
-            if request_id_header not in response.headers:
-                response.headers[request_id_header] = request_id
-            return response
+            return _attach_request_id_header(request, response)
         except Exception as exc:
             error_type = exc.__class__.__name__
             raise
@@ -254,6 +263,21 @@ def _api_key_header_name() -> str:
 
 def _request_id_header_name() -> str:
     return os.getenv("REQUEST_ID_HEADER_NAME") or settings.request_id_header_name
+
+
+def _request_id_for(request: Request) -> str:
+    request_id = getattr(request.state, "request_id", "")
+    if not request_id:
+        request_id = request.headers.get(_request_id_header_name()) or uuid.uuid4().hex
+        request.state.request_id = request_id
+    return request_id
+
+
+def _attach_request_id_header(request: Request, response):
+    request_id_header = _request_id_header_name()
+    if request_id_header not in response.headers:
+        response.headers[request_id_header] = _request_id_for(request)
+    return response
 
 
 def _write_audit_client_header_name() -> str:

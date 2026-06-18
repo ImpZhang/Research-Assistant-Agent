@@ -410,6 +410,21 @@ def test_health_ready_checks_write_audit_dir_when_enabled(tmp_path, monkeypatch)
     assert audit_dir.is_dir()
 
 
+def test_request_id_header_is_returned_for_health_and_auth_errors(monkeypatch) -> None:
+    monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
+    monkeypatch.setenv("API_KEY", "pytest-secret")
+
+    client = TestClient(create_app())
+
+    health = client.get("/health", headers={"X-Request-ID": "req-health-1"})
+    missing = client.get("/research/status")
+
+    assert health.status_code == 200
+    assert health.headers["X-Request-ID"] == "req-health-1"
+    assert missing.status_code == 401
+    assert missing.headers["X-Request-ID"]
+
+
 def test_optional_api_key_guard_protects_research_routes(monkeypatch) -> None:
     monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_KEY", "pytest-secret")
@@ -814,6 +829,7 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "APP_COMMIT_SHA=local" in deployment
     assert "database_storage.ok=true" in deployment
     assert "api_key_auth.ok=true" in deployment
+    assert "request-id header" in deployment
     assert "Do not read or print real `.env` values" in deployment
     assert "No automatic migration execution" in migration
     assert "APP_COMMIT_SHA" in compose

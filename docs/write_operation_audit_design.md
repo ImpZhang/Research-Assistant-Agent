@@ -100,5 +100,5 @@ The first implementation should pass these checks:
 ## Open Questions
 
 - Should audit summaries enter project handoff bundles, or remain operator-only?
-- Should Workbench display a local request id after failed writes so users can report it?
+- Workbench can display the response request id after failed writes; the backend now returns the configured request-id header on all responses and the write audit reuses the same id.
 - Should API-key fingerprints be derived in app config or inside auth middleware?

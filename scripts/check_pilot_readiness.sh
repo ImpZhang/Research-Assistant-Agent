@@ -12,6 +12,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_health_ready_reports_missing_api_key_when_auth_is_enabled \
   tests/test_app.py::test_health_ready_checks_write_audit_dir_when_enabled \
   tests/test_app.py::test_health_ready_checks_external_literature_configuration \
+  tests/test_app.py::test_request_id_header_is_returned_for_health_and_auth_errors \
   tests/test_app.py::test_research_status \
   tests/test_app.py::test_project_scope_reports_default_compatibility_boundary \
   tests/test_app.py::test_optional_api_key_guard_protects_research_routes \

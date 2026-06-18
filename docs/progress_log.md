@@ -2396,3 +2396,22 @@ Verification completed:
 - `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 3.83s`.
 - `bash scripts/check_focused_test_coverage.sh` passed after adding the new readiness test to `scripts/check_pilot_readiness.sh`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `33` pilot readiness tests.
+
+## 2026-06-18 - Request ID Response Header
+
+Implemented in progress:
+
+- Added a request-id middleware that returns the configured request-id header on normal health, Workbench, and research API responses.
+- Ensured API-key guard errors also include a request id, so missing/invalid-key failures can be reported without exposing secrets.
+- Updated write-operation audit to reuse the same request id that is returned to the client.
+- Added regression coverage and registered the new test in the pilot readiness script.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_request_id_header_is_returned_for_health_and_auth_errors tests/test_app.py::test_optional_api_key_guard_protects_research_routes tests/test_app.py::test_write_operation_audit_jsonl_records_sanitized_metadata tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `4 passed in 5.01s`.
+- `bash scripts/check_focused_test_coverage.sh` passed after registering the request-id test in `scripts/check_pilot_readiness.sh`.
+- `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 3.81s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests.
