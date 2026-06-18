@@ -159,6 +159,7 @@ def create_app() -> FastAPI:
             "database": _database_ready(),
             "database_storage": _database_storage_ready(),
             "api_key_auth": _api_key_auth_ready(),
+            "request_id_header": _request_id_header_ready(),
             "workbench_assets": _workbench_assets_ready(),
             "model_provider_configuration": _model_provider_configuration_ready(),
             "paper_upload_dir": _paper_upload_dir_ready(),
@@ -264,7 +265,13 @@ def _api_key_header_name() -> str:
 
 
 def _request_id_header_name() -> str:
-    return os.getenv("REQUEST_ID_HEADER_NAME") or settings.request_id_header_name
+    configured_header = os.getenv("REQUEST_ID_HEADER_NAME") or settings.request_id_header_name
+    return configured_header.strip() or "X-Request-ID"
+
+
+def _request_id_header_ready() -> dict:
+    header = _request_id_header_name()
+    return {"ok": bool(header), "header": header}
 
 
 def _request_id_for(request: Request) -> str:

@@ -2496,3 +2496,19 @@ Verification completed:
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check backend/research/routes.py tests/test_app.py` passed.
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -q tests/test_app.py::test_research_status` passed: `1 passed in 5.05s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 128.13s`.
+
+## 2026-06-18 - Request ID Header Readiness
+
+Implemented in progress:
+
+- Added a non-secret `request_id_header` check to `/health/ready` so operators can verify the configured request-id response header name.
+- Updated Workbench to learn the configured request-id header from readiness before displaying short request ids in connection and error states.
+- Added a Req ID readiness badge, cache-busted Workbench assets, and expanded backend/static/documentation assertions.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check backend/app.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check backend/app.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -q tests/test_app.py::test_health_ready_checks_database_and_storage tests/test_app.py::test_request_id_header_is_returned_for_health_and_auth_errors tests/test_app.py::test_workbench_static_assets_are_served tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `4 passed in 5.12s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 127.39s`.

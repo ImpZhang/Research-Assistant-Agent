@@ -33,6 +33,7 @@ const state = {
   onboardingReadiness: null,
   pollTimer: null,
   requestId: "",
+  requestIdHeader: "X-Request-ID",
 };
 
 const API_KEY_STORAGE_KEY = "researchAssistantApiKey";
@@ -51,11 +52,20 @@ function setConnection(ok, text) {
 }
 
 function rememberRequestId(response) {
-  const requestId = response.headers.get(REQUEST_ID_HEADER);
+  const requestId =
+    response.headers.get(state.requestIdHeader || REQUEST_ID_HEADER) ||
+    response.headers.get(REQUEST_ID_HEADER);
   if (requestId) {
     state.requestId = requestId;
   }
   return requestId;
+}
+
+function rememberReadinessConfig(body) {
+  const header = body?.checks?.request_id_header?.header;
+  if (header) {
+    state.requestIdHeader = header;
+  }
 }
 
 function requestIdLabel(requestId = state.requestId) {
@@ -344,6 +354,8 @@ async function fetchReadiness() {
   } catch (_error) {
     body = { status: "unknown", checks: {} };
   }
+  rememberReadinessConfig(body);
+  rememberRequestId(response);
   return { ok: response.ok, body };
 }
 
@@ -353,6 +365,7 @@ function renderOperationalReadiness(readiness) {
     ["DB", checks.database],
     ["Storage", checks.database_storage],
     ["Auth", checks.api_key_auth],
+    ["Req ID", checks.request_id_header],
     ["Workbench", checks.workbench_assets],
     ["Model", checks.model_provider_configuration],
     ["Literature", checks.external_literature_search],

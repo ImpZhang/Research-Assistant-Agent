@@ -86,6 +86,7 @@ def test_health_ready_checks_database_and_storage() -> None:
         "configured": False,
         "header": "X-Research-Assistant-Key",
     }
+    assert body["checks"]["request_id_header"] == {"ok": True, "header": "X-Request-ID"}
     assert body["checks"]["workbench_assets"] == {
         "ok": True,
         "path": str(Path(__file__).resolve().parents[1] / "backend" / "static" / "workbench"),
@@ -425,16 +426,24 @@ def test_health_ready_checks_write_audit_dir_when_enabled(tmp_path, monkeypatch)
 def test_request_id_header_is_returned_for_health_and_auth_errors(monkeypatch) -> None:
     monkeypatch.setenv("API_KEY_AUTH_ENABLED", "true")
     monkeypatch.setenv("API_KEY", "pytest-secret")
+    monkeypatch.setenv("REQUEST_ID_HEADER_NAME", "X-Test-Request-ID")
 
     client = TestClient(create_app())
 
-    health = client.get("/health", headers={"X-Request-ID": "req-health-1"})
+    health = client.get("/health", headers={"X-Test-Request-ID": "req-health-1"})
+    readiness = client.get("/health/ready")
     missing = client.get("/research/status")
 
     assert health.status_code == 200
-    assert health.headers["X-Request-ID"] == "req-health-1"
+    assert health.headers["X-Test-Request-ID"] == "req-health-1"
+    assert readiness.status_code == 200
+    assert readiness.headers["X-Test-Request-ID"]
+    assert readiness.json()["checks"]["request_id_header"] == {
+        "ok": True,
+        "header": "X-Test-Request-ID",
+    }
     assert missing.status_code == 401
-    assert missing.headers["X-Request-ID"]
+    assert missing.headers["X-Test-Request-ID"]
 
 
 def test_optional_api_key_guard_protects_research_routes(monkeypatch) -> None:
@@ -843,6 +852,7 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "api_key_auth.ok=true" in deployment
     assert "workbench_assets.ok=true" in deployment
     assert "model_provider_configuration.roles" in deployment
+    assert "request_id_header.ok=true" in deployment
     assert "request-id header" in deployment
     assert "Do not read or print real `.env` values" in deployment
     assert "No automatic migration execution" in migration
@@ -1938,7 +1948,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "latestWorkflowFacts" in response.text
     assert "latestWorkflowRefreshJobsButton" in response.text
     assert "latestWorkflowLoadDossierButton" in response.text
-    assert "20260618-request-id-strip1" in response.text
+    assert "20260618-request-id-header1" in response.text
     assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-launch"')
     assert "pilot-path" in response.text
     assert "pilotPathSteps" in response.text
@@ -2043,6 +2053,9 @@ def test_workbench_static_assets_are_served() -> None:
     assert "REQUEST_ID_HEADER" in script.text
     assert "rememberRequestId" in script.text
     assert "withRequestId" in script.text
+    assert "rememberReadinessConfig" in script.text
+    assert "request_id_header" in script.text
+    assert "Req ID" in script.text
     assert "model_provider_configuration" in script.text
     assert "/health/ready" in script.text
     assert "/research/onboarding/setup" in script.text
