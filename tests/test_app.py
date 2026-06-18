@@ -49,7 +49,22 @@ def test_health() -> None:
     client = TestClient(create_app())
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["build"]["commit_sha"]
+
+
+def test_health_ready_includes_build_metadata(monkeypatch) -> None:
+    monkeypatch.setenv("APP_COMMIT_SHA", "pytest-build-sha")
+
+    client = TestClient(create_app())
+    health = client.get("/health")
+    ready = client.get("/health/ready")
+
+    assert health.status_code == 200
+    assert ready.status_code == 200
+    assert health.json()["build"] == {"commit_sha": "pytest-build-sha"}
+    assert ready.json()["build"] == {"commit_sha": "pytest-build-sha"}
 
 
 def test_health_ready_checks_database_and_storage() -> None:
@@ -749,8 +764,11 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "MCP bridge" in deployment
     assert "Pilot Operational Preflight" in deployment
     assert "PILOT_PREFLIGHT_STRICT_GIT=true" in deployment
+    assert "APP_COMMIT_SHA=local" in deployment
     assert "Do not read or print real `.env` values" in deployment
     assert "No automatic migration execution" in migration
+    assert "APP_COMMIT_SHA" in compose
+    assert "APP_COMMIT_SHA" in env_example
     assert "AUDIT_ADMIN_EXPORT_ENABLED" in env_example
     assert "check_pilot_operational_preflight.sh" in readme
     assert "bash scripts/check_pilot_operational_preflight.sh" in remote_safe_suite

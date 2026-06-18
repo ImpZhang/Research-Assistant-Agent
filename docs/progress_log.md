@@ -2275,3 +2275,21 @@ Verification completed:
 - `bash scripts/check_pilot_readiness.sh` passed: `31 passed`.
 - `bash scripts/check_product_effect_smoke.sh` passed with `tool_manifest_count=120`, `tool_bridge_count=120`, `product_effect_score=0.9352`, and band `demo_ready`.
 - `bash scripts/check_remote_safe_suite.sh` passed after the scope contract and smoke documentation updates.
+
+## 2026-06-18 - Health Build Metadata
+
+Implemented in progress:
+
+- Added non-secret build metadata to `GET /health` and `GET /health/ready`, using `APP_COMMIT_SHA` or `GIT_COMMIT_SHA` when provided and `unknown` otherwise.
+- Added `APP_COMMIT_SHA=local` to `.env.example` and wired `APP_COMMIT_SHA` through `docker-compose.yml` for pilot deployment traceability.
+- Updated deployment docs and tests so operators verify the health payload commit against the intended deployed commit before sharing Workbench.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/app.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/app.py tests/test_app.py` passed after formatting `tests/test_app.py`.
+- Focused pytest passed for health, health readiness build metadata, and deployment artifacts: `3 passed`.
+- `bash scripts/check_deployment_contracts.sh` passed: `1 passed`.
+- `bash scripts/check_pilot_readiness.sh` passed: `32 passed`.
+- `bash scripts/check_product_effect_smoke.sh` passed with health/readiness build metadata, `tool_manifest_count=120`, `tool_bridge_count=120`, `product_effect_score=0.9352`, and band `demo_ready`.

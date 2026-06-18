@@ -137,7 +137,11 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     def health() -> dict:
-        return {"status": "ok", "service": "research-assistant-agent"}
+        return {
+            "status": "ok",
+            "service": "research-assistant-agent",
+            "build": _build_metadata(),
+        }
 
     @app.get("/health/ready")
     def readiness():
@@ -152,6 +156,7 @@ def create_app() -> FastAPI:
             "status": "ready" if ready else "not_ready",
             "service": "research-assistant-agent",
             "environment": settings.app_env,
+            "build": _build_metadata(),
             "checks": checks,
         }
         if ready:
@@ -200,6 +205,11 @@ def create_app() -> FastAPI:
 
     app.include_router(research_router)
     return app
+
+
+def _build_metadata() -> dict:
+    commit_sha = os.getenv("APP_COMMIT_SHA") or os.getenv("GIT_COMMIT_SHA") or "unknown"
+    return {"commit_sha": commit_sha}
 
 
 def _requires_api_key(path: str) -> bool:

@@ -7,6 +7,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 .venv/bin/ruff format --check tests/test_app.py backend/app.py backend/research/config.py
 .venv/bin/pytest -q \
   tests/test_app.py::test_health \
+  tests/test_app.py::test_health_ready_includes_build_metadata \
   tests/test_app.py::test_health_ready_checks_database_and_storage \
   tests/test_app.py::test_health_ready_checks_write_audit_dir_when_enabled \
   tests/test_app.py::test_health_ready_checks_external_literature_configuration \

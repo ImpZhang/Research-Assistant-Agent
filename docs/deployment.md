@@ -16,6 +16,7 @@ Copy `.env.example` to `.env` and set at least:
 
 ```bash
 APP_ENV=production
+APP_COMMIT_SHA=local
 API_KEY_AUTH_ENABLED=true
 API_KEY=replace-with-a-long-random-secret
 RESEARCH_DB_URL=sqlite:////app/data/research/research_assistant.db
@@ -69,7 +70,7 @@ Before starting or upgrading a customer-pilot service:
 - [ ] Back up `/app/data` or the equivalent data volume before rebuilds, migrations, or host moves.
 - [ ] If SQLAlchemy models changed, review `docs/database_migration_strategy.md` and confirm no implicit startup migration is being relied on.
 - [ ] Start or rebuild the service only during an approved deployment window.
-- [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`; if write audit is enabled, confirm the readiness payload includes an enabled, writable `write_audit_dir` check, and if external literature search is enabled, confirm `external_literature_search.ok=true`.
+- [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`; confirm the health payload build commit matches the intended deployment commit; if write audit is enabled, confirm the readiness payload includes an enabled, writable `write_audit_dir` check, and if external literature search is enabled, confirm `external_literature_search.ok=true`.
 - [ ] Open `/workbench`, save the API key in the top bar, refresh Pilot Launch, and confirm the first-run empty/error states are actionable.
 - [ ] If MCP clients are used, run the bridge health check with the same API key and the intended read-only or allow/deny policy.
 - [ ] If audit summary/export features are enabled in a future release, confirm the separate admin authorization gate described in `docs/admin_authorization_policy.md`.
