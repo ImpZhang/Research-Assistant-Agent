@@ -39,10 +39,21 @@ class BridgeAuth:
     header_name: str = "X-Research-Assistant-Key"
 
 
-def load_tool_spec(base_url: str, timeout: float = 30.0, auth: BridgeAuth | None = None) -> JSON:
+@dataclass(frozen=True)
+class BridgeScope:
+    project_id: str = ""
+    header_name: str = "X-Research-Assistant-Project"
+
+
+def load_tool_spec(
+    base_url: str,
+    timeout: float = 30.0,
+    auth: BridgeAuth | None = None,
+    scope: BridgeScope | None = None,
+) -> JSON:
     request = urllib.request.Request(
         _join_url(base_url, "/research/tools/mcp-spec"),
-        headers={"Accept": "application/json", **_auth_headers(auth)},
+        headers={"Accept": "application/json", **_auth_headers(auth), **_scope_headers(scope)},
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
@@ -69,7 +80,12 @@ def tool_allowed(tool: JSON, policy: BridgePolicy) -> bool:
     return True
 
 
-def bridge_health(spec: JSON, policy: BridgePolicy, auth: BridgeAuth | None = None) -> JSON:
+def bridge_health(
+    spec: JSON,
+    policy: BridgePolicy,
+    auth: BridgeAuth | None = None,
+    scope: BridgeScope | None = None,
+) -> JSON:
     filtered = filter_spec_tools(spec, policy)
     all_names = sorted(tool.get("name", "") for tool in spec.get("tools", []) if tool.get("name"))
     exposed_names = sorted(
@@ -89,6 +105,11 @@ def bridge_health(spec: JSON, policy: BridgePolicy, auth: BridgeAuth | None = No
         "auth": {
             "api_key_configured": bool(auth and auth.api_key),
             "header_name": auth.header_name if auth else "X-Research-Assistant-Key",
+        },
+        "scope": {
+            "project_id_configured": bool(scope and scope.project_id),
+            "project_id": scope.project_id if scope else "",
+            "header_name": scope.header_name if scope else "X-Research-Assistant-Project",
         },
         "tools": exposed_names,
         "blocked": blocked_names,
@@ -115,13 +136,18 @@ def call_tool(
     arguments: JSON,
     timeout: float = 60.0,
     auth: BridgeAuth | None = None,
+    scope: BridgeScope | None = None,
 ) -> JSON:
     method = tool.get("http", {}).get("method", "GET")
     path = fill_path_parameters(tool.get("http", {}).get("path", ""), arguments)
     url = _join_url(base_url, path)
     content_type = tool.get("http", {}).get("content_type", "")
     body = arguments.get("body", {})
-    headers = {"Accept": "application/json, text/plain, application/zip", **_auth_headers(auth)}
+    headers = {
+        "Accept": "application/json, text/plain, application/zip",
+        **_auth_headers(auth),
+        **_scope_headers(scope),
+    }
     data: bytes | None = None
 
     if content_type == "multipart/form-data":
@@ -159,6 +185,7 @@ def handle_request(
     spec: JSON,
     timeout: float,
     auth: BridgeAuth | None = None,
+    scope: BridgeScope | None = None,
 ) -> JSON | None:
     method = message.get("method")
     request_id = message.get("id")
@@ -191,6 +218,7 @@ def handle_request(
                 params.get("arguments", {}),
                 timeout,
                 auth=auth,
+                scope=scope,
             )
             return _response(request_id, result)
         raise ValueError(f"Unsupported method: {method}")
@@ -198,8 +226,16 @@ def handle_request(
         return _error(request_id, str(exc))
 
 
-def serve_stdio(base_url: str, timeout: float, policy: BridgePolicy, auth: BridgeAuth) -> None:
-    spec = filter_spec_tools(load_tool_spec(base_url, timeout=timeout, auth=auth), policy)
+def serve_stdio(
+    base_url: str,
+    timeout: float,
+    policy: BridgePolicy,
+    auth: BridgeAuth,
+    scope: BridgeScope,
+) -> None:
+    spec = filter_spec_tools(
+        load_tool_spec(base_url, timeout=timeout, auth=auth, scope=scope), policy
+    )
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -209,6 +245,7 @@ def serve_stdio(base_url: str, timeout: float, policy: BridgePolicy, auth: Bridg
             spec=spec,
             timeout=timeout,
             auth=auth,
+            scope=scope,
         )
         if response is not None:
             sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
@@ -261,6 +298,12 @@ def _auth_headers(auth: BridgeAuth | None) -> dict[str, str]:
     return {auth.header_name: auth.api_key}
 
 
+def _scope_headers(scope: BridgeScope | None) -> dict[str, str]:
+    if not scope or not scope.project_id:
+        return {}
+    return {scope.header_name: scope.project_id}
+
+
 def _build_policy(args: argparse.Namespace) -> BridgePolicy:
     return BridgePolicy(
         allow_tools=_parse_tool_names(args.allow_tool, os.environ.get("MCP_BRIDGE_ALLOW_TOOLS")),
@@ -283,6 +326,21 @@ def _build_auth(args: argparse.Namespace) -> BridgeAuth:
         or "X-Research-Assistant-Key"
     )
     return BridgeAuth(api_key=api_key, header_name=header_name)
+
+
+def _build_scope(args: argparse.Namespace) -> BridgeScope:
+    project_id = (
+        args.project_id
+        or os.environ.get("MCP_BRIDGE_PROJECT_ID", "")
+        or os.environ.get("RESEARCH_ASSISTANT_PROJECT_ID", "")
+    )
+    header_name = (
+        args.project_header
+        or os.environ.get("MCP_BRIDGE_PROJECT_HEADER", "")
+        or os.environ.get("RESEARCH_ASSISTANT_PROJECT_HEADER", "")
+        or "X-Research-Assistant-Project"
+    )
+    return BridgeScope(project_id=project_id, header_name=header_name)
 
 
 def _parse_tool_names(values: list[str], env_value: str | None) -> frozenset[str]:
@@ -332,16 +390,28 @@ def main() -> None:
         default="",
         help="Header name used for API key forwarding.",
     )
+    parser.add_argument(
+        "--project-id",
+        default="",
+        help="Non-secret project id forwarded with Research Assistant tool calls.",
+    )
+    parser.add_argument(
+        "--project-header",
+        default="",
+        help="Header name used for project id forwarding.",
+    )
     args = parser.parse_args()
     policy = _build_policy(args)
     auth = _build_auth(args)
+    scope = _build_scope(args)
     if args.health_check:
-        spec = load_tool_spec(args.base_url, timeout=args.timeout, auth=auth)
+        spec = load_tool_spec(args.base_url, timeout=args.timeout, auth=auth, scope=scope)
         sys.stdout.write(
-            json.dumps(bridge_health(spec, policy, auth), ensure_ascii=False, indent=2) + "\n"
+            json.dumps(bridge_health(spec, policy, auth, scope), ensure_ascii=False, indent=2)
+            + "\n"
         )
         return
-    serve_stdio(args.base_url, args.timeout, policy, auth)
+    serve_stdio(args.base_url, args.timeout, policy, auth, scope)
 
 
 if __name__ == "__main__":

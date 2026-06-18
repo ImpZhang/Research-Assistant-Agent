@@ -2308,3 +2308,21 @@ Verification completed:
 - `bash scripts/check_backup_restore_contracts.sh` passed.
 - `bash scripts/check_script_catalog.sh` passed.
 - `bash scripts/check_suite_contracts.sh` passed.
+
+## 2026-06-18 - MCP Project Scope Forwarding
+
+Implemented in progress:
+
+- Added `BridgeScope` to `scripts/mcp_http_bridge.py` so MCP/tool clients can forward the non-secret active project id with `X-Research-Assistant-Project`.
+- Added `--project-id`, `--project-header`, `MCP_BRIDGE_PROJECT_ID`, `MCP_BRIDGE_PROJECT_HEADER`, `RESEARCH_ASSISTANT_PROJECT_ID`, and `RESEARCH_ASSISTANT_PROJECT_HEADER` support.
+- Included project-scope forwarding state in bridge health-check JSON without treating project ids as secrets or authorization.
+- Added `mcp_bridge_project_scope_forwarding` to the status capability list and updated README/deployment docs.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check scripts/mcp_http_bridge.py tests/test_mcp_http_bridge.py tests/test_app.py backend/research/routes.py` passed.
+- `.venv/bin/ruff format --check scripts/mcp_http_bridge.py tests/test_mcp_http_bridge.py tests/test_app.py backend/research/routes.py` passed after formatting `scripts/mcp_http_bridge.py`.
+- `.venv/bin/python scripts/mcp_http_bridge.py --help` showed the new `--project-id` and `--project-header` options.
+- Focused pytest passed for MCP bridge tests and research status: `10 passed`.
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `11 passed`.

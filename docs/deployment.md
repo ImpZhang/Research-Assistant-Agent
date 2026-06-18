@@ -170,10 +170,11 @@ For a restricted client:
 python scripts/mcp_http_bridge.py \
   --base-url http://127.0.0.1:8000 \
   --api-key "$API_KEY" \
+  --project-id default \
   --read-only
 ```
 
-The bridge also accepts `MCP_BRIDGE_API_KEY`, `RESEARCH_ASSISTANT_API_KEY`, or `API_KEY` from the environment.
+The bridge also accepts `MCP_BRIDGE_API_KEY`, `RESEARCH_ASSISTANT_API_KEY`, or `API_KEY` from the environment. Project ids are not secrets; forward the active compatibility scope with `--project-id`, `MCP_BRIDGE_PROJECT_ID`, or `RESEARCH_ASSISTANT_PROJECT_ID`.
 
 ## Workbench With API Key
 

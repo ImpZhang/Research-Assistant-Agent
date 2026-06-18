@@ -109,6 +109,7 @@ def test_bridge_health_reports_policy_counts() -> None:
         spec,
         mcp_http_bridge.BridgePolicy(read_only=True),
         mcp_http_bridge.BridgeAuth(api_key="secret"),
+        mcp_http_bridge.BridgeScope(project_id="default"),
     )
 
     assert health["status"] == "ok"
@@ -118,6 +119,11 @@ def test_bridge_health_reports_policy_counts() -> None:
     assert health["policy"]["read_only"] is True
     assert health["auth"]["api_key_configured"] is True
     assert health["auth"]["header_name"] == "X-Research-Assistant-Key"
+    assert health["scope"] == {
+        "project_id_configured": True,
+        "project_id": "default",
+        "header_name": "X-Research-Assistant-Project",
+    }
     assert health["tools"] == ["get_project_progress"]
     assert health["blocked"] == ["create_research_plan"]
 
@@ -153,4 +159,14 @@ def test_bridge_auth_headers_forward_api_key() -> None:
     empty = mcp_http_bridge._auth_headers(mcp_http_bridge.BridgeAuth())
 
     assert headers == {"X-Test-Key": "secret"}
+    assert empty == {}
+
+
+def test_bridge_scope_headers_forward_project_id() -> None:
+    headers = mcp_http_bridge._scope_headers(
+        mcp_http_bridge.BridgeScope(project_id="default", header_name="X-Test-Project")
+    )
+    empty = mcp_http_bridge._scope_headers(mcp_http_bridge.BridgeScope())
+
+    assert headers == {"X-Test-Project": "default"}
     assert empty == {}
