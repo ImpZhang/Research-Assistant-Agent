@@ -940,6 +940,7 @@ def test_research_status() -> None:
     assert "write_operation_audit_admin_export" in body["implemented_capabilities"]
     assert "write_operation_audit_readiness_check" in body["implemented_capabilities"]
     assert "external_literature_readiness_check" in body["implemented_capabilities"]
+    assert "runtime_readiness_signals" in body["implemented_capabilities"]
     assert "default_project_scope_contract" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]

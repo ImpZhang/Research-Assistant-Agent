@@ -2481,3 +2481,18 @@ Verification completed:
 - `.venv/bin/ruff format --check tests/test_app.py` passed.
 - `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 4.23s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 131.27s`.
+
+## 2026-06-18 - Runtime Readiness Status Capability
+
+Implemented in progress:
+
+- Added `runtime_readiness_signals` to the `/research/status` implemented capability list so clients can discover that deployment readiness checks are present without calling `/health/ready` first.
+- Added status-test coverage and updated README and technical design documentation for the capability surface.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check backend/research/routes.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check backend/research/routes.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -q tests/test_app.py::test_research_status` passed: `1 passed in 5.05s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 128.13s`.
