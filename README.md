@@ -174,6 +174,7 @@ scripts/
   check_generated_file_guard.sh
   check_graph_rag_lite.sh
   check_handoff_docs.sh
+  check_pilot_operational_preflight.sh
   check_pilot_readiness.sh
   check_product_effect_smoke.sh
   check_project_delivery_loop.sh
@@ -274,6 +275,12 @@ Run the generated-file guard to catch tracked caches, virtualenvs, dependency fo
 
 ```bash
 bash scripts/check_generated_file_guard.sh
+```
+
+Run the pilot operational preflight to confirm docs, runtime artifacts, environment template keys, compose persistence, and safe-suite hooks before a pilot deployment. Use `PILOT_PREFLIGHT_STRICT_GIT=true` during an approved deployment window to require a clean `main` checkout aligned with `origin/main`:
+
+```bash
+bash scripts/check_pilot_operational_preflight.sh
 ```
 
 Run the focused-test coverage map check so new pytest tests stay assigned to a focused remote check:

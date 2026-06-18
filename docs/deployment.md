@@ -62,6 +62,7 @@ Before starting or upgrading a customer-pilot service:
 
 - [ ] Confirm the remote source-of-truth worktree is clean except for known handoff-only files: `git status --short`.
 - [ ] Confirm the branch and commit intended for deployment: `git branch --show-current` and `git log --oneline -5`.
+- [ ] Run `bash scripts/check_pilot_operational_preflight.sh`; during the approved deployment window, run `PILOT_PREFLIGHT_STRICT_GIT=true bash scripts/check_pilot_operational_preflight.sh` so git cleanliness and `origin/main` alignment are enforced.
 - [ ] Create or update `.env` from `.env.example` outside version control; never commit real API keys, cookies, private keys, or database credentials.
 - [ ] Set `API_KEY_AUTH_ENABLED=true` and use a long random `API_KEY` for browser, MCP, and scripted access.
 - [ ] Confirm `RESEARCH_DB_URL` and `PAPER_UPLOAD_DIR` point at persistent storage, not an ephemeral build directory.
@@ -75,6 +76,23 @@ Before starting or upgrading a customer-pilot service:
 - [ ] Record the deployed commit, verification commands, and rollback note in the project progress log or release notes.
 
 Commands that rebuild containers, restart services, change file ownership, or modify databases should be run only after explicit operator approval.
+
+
+## Pilot Operational Preflight
+
+Run the read-only operational preflight before a customer-pilot start, upgrade, or handoff:
+
+```bash
+bash scripts/check_pilot_operational_preflight.sh
+```
+
+During an approved deployment window, make git cleanliness strict:
+
+```bash
+PILOT_PREFLIGHT_STRICT_GIT=true bash scripts/check_pilot_operational_preflight.sh
+```
+
+The preflight checks required runtime files, Workbench assets, remote-safe verification scripts, deployment and migration docs, `.env.example` keys, compose persistence, and healthcheck wiring. It reports whether a real `.env` file exists but does not open it. Do not read or print real `.env` values, API keys, cookies, private keys, provider credentials, or database credentials during preflight. The script does not start services, install dependencies, rebuild containers, restart processes, change file ownership, or modify databases.
 
 ## Docker Compose
 

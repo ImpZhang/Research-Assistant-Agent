@@ -9,6 +9,7 @@ bash scripts/check_secret_file_guard.sh
 bash scripts/check_handoff_docs.sh
 bash scripts/check_generated_file_guard.sh
 bash scripts/check_focused_test_coverage.sh
+bash scripts/check_pilot_operational_preflight.sh
 bash scripts/check_pilot_readiness.sh
 bash scripts/check_deployment_contracts.sh
 bash scripts/check_research_workflow_primitives.sh

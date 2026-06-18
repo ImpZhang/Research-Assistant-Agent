@@ -704,6 +704,14 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     migration = (root / "docs" / "database_migration_strategy.md").read_text(encoding="utf-8")
     admin_policy = (root / "docs" / "admin_authorization_policy.md").read_text(encoding="utf-8")
     env_example = (root / ".env.example").read_text(encoding="utf-8")
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    remote_safe_suite = (root / "scripts" / "check_remote_safe_suite.sh").read_text(
+        encoding="utf-8"
+    )
+    suite_contracts = (root / "scripts" / "check_suite_contracts.sh").read_text(encoding="utf-8")
+    pilot_preflight = (root / "scripts" / "check_pilot_operational_preflight.sh").read_text(
+        encoding="utf-8"
+    )
 
     assert "uvicorn backend.app:app" in dockerfile
     assert "API_KEY_AUTH_ENABLED" in compose
@@ -713,8 +721,18 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "admin_authorization_policy.md" in deployment
     assert "database_migration_strategy.md" in deployment
     assert "MCP bridge" in deployment
+    assert "Pilot Operational Preflight" in deployment
+    assert "PILOT_PREFLIGHT_STRICT_GIT=true" in deployment
+    assert "Do not read or print real `.env` values" in deployment
     assert "No automatic migration execution" in migration
     assert "AUDIT_ADMIN_EXPORT_ENABLED" in env_example
+    assert "check_pilot_operational_preflight.sh" in readme
+    assert "bash scripts/check_pilot_operational_preflight.sh" in remote_safe_suite
+    assert '"bash scripts/check_pilot_operational_preflight.sh"' in suite_contracts
+    assert "PILOT_PREFLIGHT_STRICT_GIT" in pilot_preflight
+    assert "Path.cwd()" in pilot_preflight
+    assert 'ROOT / ".env"' in pilot_preflight
+    assert "contents were not read" in pilot_preflight
     assert "regular pilot API key is not admin authorization" in admin_policy
 
 

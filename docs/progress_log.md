@@ -2219,3 +2219,22 @@ Product-effect interpretation for this slice: the backend demo baseline still ho
 - Updated the demo runbook baseline to the latest isolated in-process product-effect smoke: overall `0.9352`, band `demo_ready`, quality signal `0.7407`, and evidence-ledger coverage `0.59`.
 - Set the primary demo target to Workbench-first, with API-first and MCP/tool-consumer paths reserved for technical integration audiences.
 - Documented the remaining qualitative review gate: real or representative paper outputs still need human review for generated gaps, ideas, evidence-ledger claims, and claim-validation actions.
+## 2026-06-18 - Pilot Operational Preflight
+
+Implemented in progress:
+
+- Added `scripts/check_pilot_operational_preflight.sh`, a read-only pilot hardening preflight that checks required runtime files, Workbench assets, remote-safe scripts, deployment and migration docs, `.env.example` keys, compose persistence, healthcheck wiring, git metadata, and remote development tools.
+- The preflight reports whether a real `.env` exists without opening or printing it. Default mode tolerates development worktree changes as warnings; `PILOT_PREFLIGHT_STRICT_GIT=true` enforces clean `main` checkout alignment with `origin/main` for approved deployment windows.
+- Wired the preflight into `scripts/check_remote_safe_suite.sh`, `scripts/check_suite_contracts.sh`, README verification docs, deployment checklist/runbook, and deployment contract tests.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `bash scripts/check_pilot_operational_preflight.sh` passed in default development mode, warning only on current uncommitted implementation files and missing production `.env`.
+- `git --no-pager diff --check` passed.
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed after formatting the touched test file.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_suite_contracts.sh` passed.
+- `bash scripts/check_deployment_contracts.sh` passed: `1 passed`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including the new preflight stage and all default focused checks.
