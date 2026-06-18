@@ -2542,3 +2542,18 @@ Verification completed:
 
 - `bash scripts/check_handoff_docs.sh` passed.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 127.52s`.
+
+## 2026-06-18 - Representative Review Status Capability
+
+Implemented in progress:
+
+- Added `representative_paper_review_protocol` to `/research/status` implemented capabilities so clients can discover the human-review gate.
+- Added status-test coverage and updated README and technical design documentation.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check backend/research/routes.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check backend/research/routes.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -q tests/test_app.py::test_research_status` passed: `1 passed in 4.25s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 125.69s`.

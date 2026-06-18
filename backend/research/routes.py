@@ -377,6 +377,7 @@ def status() -> ProjectStatus:
             "write_operation_audit_readiness_check",
             "external_literature_readiness_check",
             "runtime_readiness_signals",
+            "representative_paper_review_protocol",
             "default_project_scope_contract",
             "human_idea_feedback",
             "portfolio_markdown_export",
