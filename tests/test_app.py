@@ -1948,7 +1948,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "latestWorkflowFacts" in response.text
     assert "latestWorkflowRefreshJobsButton" in response.text
     assert "latestWorkflowLoadDossierButton" in response.text
-    assert "20260618-request-id-header1" in response.text
+    assert "20260618-scope-status1" in response.text
     assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-launch"')
     assert "pilot-path" in response.text
     assert "pilotPathSteps" in response.text
@@ -2049,6 +2049,10 @@ def test_workbench_static_assets_are_served() -> None:
     assert "PROJECT_ID_HEADER" in script.text
     assert "X-Research-Assistant-Project" in script.text
     assert "loadProjectScope" in script.text
+    assert "refreshProjectScopeStatus" in script.text
+    assert "projectScope" in script.text
+    assert "/research/project/scope" in script.text
+    assert "compatibility" in script.text
     assert "renderOperationalReadiness" in script.text
     assert "REQUEST_ID_HEADER" in script.text
     assert "rememberRequestId" in script.text

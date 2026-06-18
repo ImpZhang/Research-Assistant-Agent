@@ -2512,3 +2512,19 @@ Verification completed:
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check backend/app.py tests/test_app.py` passed.
 - `PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -q tests/test_app.py::test_health_ready_checks_database_and_storage tests/test_app.py::test_request_id_header_is_returned_for_health_and_auth_errors tests/test_app.py::test_workbench_static_assets_are_served tests/test_app.py::test_deployment_artifacts_document_customer_runtime` passed: `4 passed in 5.12s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 127.39s`.
+
+## 2026-06-18 - Workbench Scope Contract Status
+
+Implemented in progress:
+
+- Updated Workbench to call `/research/project/scope` after an API key is available and display the requested project id, active project id, and compatibility/isolation status.
+- Refreshed scope status after saving the API key or project id so browser users can see that current project ids are non-secret compatibility hints, not isolation guarantees.
+- Cache-busted Workbench assets, added static assertions, and updated README and technical design documentation.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served tests/test_app.py::test_project_scope_reports_default_compatibility_boundary` passed: `2 passed in 4.65s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 126.54s`.

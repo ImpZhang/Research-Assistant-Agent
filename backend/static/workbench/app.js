@@ -1,6 +1,7 @@
 const state = {
   apiKey: "",
   projectId: "default",
+  projectScope: null,
   paperId: "",
   jobId: "",
   latestJobStatus: "",
@@ -245,6 +246,7 @@ function saveApiKey() {
     localStorage.removeItem(API_KEY_STORAGE_KEY);
   }
   updateApiKeyStatus();
+  refreshProjectScopeStatus();
 }
 
 function clearApiKey() {
@@ -252,6 +254,7 @@ function clearApiKey() {
   localStorage.removeItem(API_KEY_STORAGE_KEY);
   $("apiKeyInput").value = "";
   updateApiKeyStatus();
+  refreshProjectScopeStatus();
 }
 
 function updateApiKeyStatus() {
@@ -269,10 +272,39 @@ function saveProjectScope() {
   localStorage.setItem(PROJECT_ID_STORAGE_KEY, state.projectId);
   $("projectIdInput").value = state.projectId;
   updateProjectScopeStatus();
+  refreshProjectScopeStatus();
 }
 
 function updateProjectScopeStatus() {
-  $("projectIdStatus").textContent = `Project scope: ${state.projectId || "default"}`;
+  const requested = state.projectId || "default";
+  const scope = state.projectScope;
+  if (!scope) {
+    $("projectIdStatus").textContent = `Project scope: ${requested}`;
+    return;
+  }
+  const active = scope.active_project_id || requested;
+  const mode = scope.compatibility_mode
+    ? "compatibility"
+    : scope.isolation_status || "scoped";
+  $("projectIdStatus").textContent = `Project scope: ${requested} -> ${active} | ${mode}`;
+}
+
+async function refreshProjectScopeStatus() {
+  if (!state.apiKey) {
+    state.projectScope = null;
+    updateProjectScopeStatus();
+    return;
+  }
+  try {
+    const response = await fetch("/research/project/scope", {
+      headers: withAuthHeaders("/research/project/scope"),
+    });
+    rememberRequestId(response);
+    state.projectScope = response.ok ? await response.json() : null;
+  } catch (_error) {
+    state.projectScope = null;
+  }
+  updateProjectScopeStatus();
 }
 
 function withAuthHeaders(path, headers = {}) {
@@ -3670,6 +3702,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("savePortfolioButton").addEventListener("click", savePortfolio);
   loadApiKey();
   loadProjectScope();
+  refreshProjectScopeStatus();
   renderLatestWorkflow();
   checkHealth();
   loadPilotLaunch();
