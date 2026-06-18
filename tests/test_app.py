@@ -1709,7 +1709,6 @@ def test_workbench_static_assets_are_served() -> None:
     assert response.status_code == 200
     assert "Research Assistant Workbench" in response.text
     assert "/workbench-assets/app.js" in response.text
-    assert "20260618-workbench-state-restore2" in response.text
     assert "ideaBundleButton" in response.text
     assert "profileForm" in response.text
     assert "profileRisk" in response.text
@@ -1763,6 +1762,13 @@ def test_workbench_static_assets_are_served() -> None:
     assert "apiKeyInput" in response.text
     assert "saveApiKeyButton" in response.text
     assert "clearApiKeyButton" in response.text
+    assert "latest-workflow" in response.text
+    assert "latestWorkflowSummary" in response.text
+    assert "latestWorkflowFacts" in response.text
+    assert "latestWorkflowRefreshJobsButton" in response.text
+    assert "latestWorkflowLoadDossierButton" in response.text
+    assert "20260618-workbench-continuation1" in response.text
+    assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-launch"')
     assert "pilot-launch" in response.text
     assert "pilotLaunchRefreshButton" in response.text
     assert "pilotLaunchMetrics" in response.text
@@ -1804,6 +1810,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert ".app-shell" in styles.text
     assert "grid-template-columns" in styles.text
     assert ".controls-grid" in styles.text
+    assert ".latest-workflow-facts" in styles.text
+    assert ".secondary-link" in styles.text
     assert "@media" in styles.text
     assert "max-width: 920px" in styles.text
 
@@ -1854,6 +1862,11 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/jobs/${jobId}/artifacts" in script.text
     assert "/research/jobs/${jobId}/${action}" in script.text
     assert "restoreStateFromJob" in script.text
+    assert "renderLatestWorkflow" in script.text
+    assert "latestJobStatus" in script.text
+    assert "Latest workflow restored from completed jobs." in script.text
+    assert "latestWorkflowRefreshJobsButton" in script.text
+    assert "latestWorkflowLoadDossierButton" in script.text
     assert "const latestCompletedJob = jobs.find" in script.text
     assert "restoreStateFromJob(latestCompletedJob)" in script.text
     assert "Active paper from latest job" in script.text
@@ -2016,6 +2029,10 @@ def test_workbench_user_path_contract_supports_pilot_demo_loop() -> None:
         ("jobs", "Recent Jobs"),
         ("dossier", "Dossier Preview"),
     ]
+    latest_workflow_position = html.index('id="latest-workflow"')
+    assert "Latest Workflow" in html
+    assert "latestWorkflowLoadDossierButton" in html
+
     section_positions = []
     for section_id, heading in demo_sections:
         nav_marker = f'href="#{section_id}"'
@@ -2029,6 +2046,7 @@ def test_workbench_user_path_contract_supports_pilot_demo_loop() -> None:
         section_positions.append(section_position)
         assert nav_position < section_position
 
+    assert latest_workflow_position < section_positions[0]
     assert section_positions == sorted(section_positions)
     assert 'aria-label="Workbench sections"' in html
     assert 'aria-live="polite"' in html

@@ -2183,3 +2183,9 @@ Verification completed:
 - `bash scripts/check_pilot_readiness.sh` passed: `29 passed in 68.05s`.
 
 Product-effect interpretation for this slice: the backend demo baseline still holds, and the Workbench is now more robust for a realistic pilot/demo session where the browser is refreshed after a workflow has already completed. Remaining customer-pilot work should focus on human UX polish, project scoping, durable queue/worker policy, backup/restore scripting, and deployment hardening rather than adding more delivery-chain endpoints.
+
+## 2026-06-18 - Workbench Latest Workflow Continuation
+
+- Added a first-screen Latest Workflow continuation band above Pilot Launch so a refreshed Workbench session shows the recovered job, status, active paper, and latest idea without requiring the operator to scroll into Jobs or Dossier.
+- Wired the continuation band to `refreshJobs`, `loadDossier`, queued workflow status, job polling, job artifact loading, and completed-job restoration so the browser UI stays aligned with the latest workflow state.
+- Added static Workbench contract coverage for the continuation band, cache-busted assets, continuation controls, mobile layout styles, and JavaScript state rendering hooks.

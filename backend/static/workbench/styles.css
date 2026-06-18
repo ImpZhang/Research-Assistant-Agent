@@ -57,6 +57,15 @@ button:hover,
   background: var(--teal-strong);
 }
 
+.secondary-link {
+  background: #ffffff;
+  color: var(--teal-strong);
+}
+
+.secondary-link:hover {
+  background: #ecfdf5;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -313,11 +322,46 @@ textarea {
   align-items: end;
 }
 
+.latest-workflow-heading,
 .pilot-launch-heading {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   align-items: start;
+}
+
+.latest-workflow-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.latest-workflow-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.latest-workflow-facts span {
+  min-width: 0;
+  border-top: 3px solid var(--line);
+  padding-top: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.latest-workflow-facts strong {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.latest-workflow-facts code {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pilot-metrics {
@@ -501,6 +545,7 @@ code {
   .profile-grid,
   .api-key-control,
   .two-column,
+  .latest-workflow-facts,
   .pilot-metrics {
     grid-template-columns: 1fr;
   }
@@ -517,7 +562,12 @@ code {
   }
 
   .topbar,
+  .latest-workflow-heading,
   .pilot-launch-heading {
     display: grid;
+  }
+
+  .latest-workflow-actions {
+    justify-content: start;
   }
 }

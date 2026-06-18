@@ -2,6 +2,7 @@ const state = {
   apiKey: "",
   paperId: "",
   jobId: "",
+  latestJobStatus: "",
   latestIdeaId: "",
   latestRelatedWorkMatrixId: "",
   latestExperimentPlanId: "",
@@ -47,6 +48,40 @@ function setConnection(ok, text) {
 function setPaper(id, label) {
   state.paperId = id;
   $("activePaperLabel").textContent = label || (id ? `Active paper: ${id}` : "No active paper selected.");
+  renderLatestWorkflow();
+}
+
+function renderLatestWorkflow(message = "") {
+  const summary = $("latestWorkflowSummary");
+  const facts = $("latestWorkflowFacts");
+  if (!summary || !facts) {
+    return;
+  }
+
+  if (message) {
+    summary.textContent = message;
+  } else if (state.latestIdeaId) {
+    summary.textContent = `Ready on latest idea ${state.latestIdeaId}.`;
+  } else if (state.jobId) {
+    const status = state.latestJobStatus ? ` is ${state.latestJobStatus}` : " is selected";
+    summary.textContent = `Workflow job ${state.jobId}${status}.`;
+  } else {
+    summary.textContent = "No recent workflow selected.";
+  }
+
+  const values = [
+    ["Job", state.jobId],
+    ["Status", state.latestJobStatus],
+    ["Paper", state.paperId],
+    ["Idea", state.latestIdeaId],
+  ];
+  facts.innerHTML = values
+    .map(([label, value]) => {
+      const displayValue = value || "-";
+      const title = value || "Not available";
+      return `<span><strong>${escapeHtml(label)}</strong><code title="${escapeHtml(title)}">${escapeHtml(displayValue)}</code></span>`;
+    })
+    .join("");
 }
 
 function setProgress(value) {
@@ -61,6 +96,10 @@ function restoreStateFromJob(job) {
   let restored = false;
   if (!state.jobId && job.id) {
     state.jobId = job.id;
+    restored = true;
+  }
+  if (job.status && state.latestJobStatus !== job.status) {
+    state.latestJobStatus = job.status;
     restored = true;
   }
   if (!state.paperId && job.input && job.input.paper_id) {
@@ -86,6 +125,9 @@ function restoreStateFromJob(job) {
   ) {
     state.latestNoveltyCheckId = output.novelty_check_ids[0];
     restored = true;
+  }
+  if (restored) {
+    renderLatestWorkflow("Latest workflow restored from completed jobs.");
   }
   return restored;
 }
@@ -612,6 +654,8 @@ async function runWorkflow() {
       }),
     });
     state.jobId = body.id;
+    state.latestJobStatus = body.status || "queued";
+    renderLatestWorkflow("Workflow queued. Waiting for artifacts.");
     renderResult("workflowResult", `Queued job <code>${body.id}</code>. Polling status...`);
     startPollingJob(body.id);
     await refreshJobs();
@@ -631,6 +675,8 @@ function startPollingJob(jobId) {
 async function pollJob(jobId) {
   try {
     const job = await api(`/research/jobs/${jobId}`);
+    state.jobId = job.id || jobId;
+    state.latestJobStatus = job.status || state.latestJobStatus;
     setProgress(job.progress || 0);
     if (job.output && Array.isArray(job.output.idea_ids) && job.output.idea_ids.length) {
       state.latestIdeaId = job.output.idea_ids[0];
@@ -642,6 +688,11 @@ async function pollJob(jobId) {
     ) {
       state.latestExperimentPlanId = job.output.experiment_plan_ids[0];
     }
+    renderLatestWorkflow(
+      job.status === "completed"
+        ? "Workflow completed. Dossier can be loaded."
+        : `Workflow ${job.status || "running"}.`,
+    );
     renderResult(
       "workflowResult",
       `Job <code>${job.id}</code> is <strong>${job.status}</strong> at ${Math.round((job.progress || 0) * 100)}%.<br />${renderJobOutput(job.output)}`,
@@ -684,6 +735,7 @@ async function loadJobArtifacts(jobId) {
   if (artifacts.markdown_export) {
     $("dossierPreview").textContent = artifacts.markdown_export;
   }
+  renderLatestWorkflow("Workflow artifacts loaded.");
   renderResult(
     "workflowResult",
     `Job <code>${escapeHtml(jobId)}</code> completed.<br />${renderArtifactsSummary(artifacts)}`,
@@ -947,6 +999,7 @@ async function refreshJobs() {
     const jobs = await api("/research/jobs?limit=10");
     if (!jobs.length) {
       $("jobsTable").innerHTML = $("emptyTemplate").innerHTML;
+      renderLatestWorkflow("No recent jobs found.");
       return;
     }
     const latestCompletedJob = jobs.find(
@@ -956,7 +1009,11 @@ async function refreshJobs() {
         Array.isArray(job.output.idea_ids) &&
         job.output.idea_ids.length,
     );
-    restoreStateFromJob(latestCompletedJob);
+    if (latestCompletedJob) {
+      restoreStateFromJob(latestCompletedJob);
+    } else {
+      renderLatestWorkflow("No completed workflow with ideas found yet.");
+    }
     const rows = jobs
       .map(
         (job) => `<tr>
@@ -1042,6 +1099,7 @@ async function loadDossier() {
   try {
     const markdown = await api(`/research/ideas/${state.latestIdeaId}/export/markdown`);
     $("dossierPreview").textContent = markdown;
+    renderLatestWorkflow("Dossier loaded for latest idea.");
     renderResult(
       "workflowResult",
       `Loaded dossier for idea <code>${escapeHtml(state.latestIdeaId)}</code>.`,
@@ -3310,6 +3368,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("advisorChatTasksButton").addEventListener("click", createAdvisorChatTasks);
   $("advisorActionSessionButton").addEventListener("click", createAdvisorActionSession);
   $("refreshJobsButton").addEventListener("click", refreshJobs);
+  $("latestWorkflowRefreshJobsButton").addEventListener("click", refreshJobs);
+  $("latestWorkflowLoadDossierButton").addEventListener("click", loadDossier);
   $("jobsTable").addEventListener("click", handleJobAction);
   $("loadDossierButton").addEventListener("click", loadDossier);
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
@@ -3475,6 +3535,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);
   loadApiKey();
+  renderLatestWorkflow();
   checkHealth();
   loadPilotLaunch();
   loadResearchProfile();

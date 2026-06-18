@@ -96,7 +96,7 @@ The product-effect smoke was also run with a representative Markdown fixture thr
 - The smoke paper is synthetic. A real paper or real project brief still needs qualitative evaluation.
 - The generated readiness and quality scores show useful caution; the scorecard makes this visible through a quality-signal dimension of `0.7323` on the default smoke and `0.7407` on the representative Markdown smoke, driven by broader source-paper evidence context, typed evidence-to-claim routing, and mixed claim-validation outcomes.
 - The actual scientific quality of gaps, ideas, novelty claims, and experiment plans still needs human review.
-- Workbench availability is verified, a static demo-path contract protects the pilot flow from paper ingest through delivery closeout, and a browser inspection fixed refreshed-session restoration for latest completed jobs. Further human UX polish is still needed.
+- Workbench availability is verified, a static demo-path contract protects the pilot flow from paper ingest through delivery closeout, browser inspection fixed refreshed-session restoration, and the first viewport now exposes a Latest Workflow continuation band for job/status/paper/idea recovery plus direct dossier loading. Further human UX polish should focus on reducing the long Dossier action surface.
 - Deployment posture is still pilot-oriented: backup, restore, migrations, monitoring, and production data boundaries remain hardening work.
 - Multi-user/project scoping is designed but not production-enforced as a complete product boundary.
 - External literature search is disabled for deterministic verification; live external search quality and failure modes still need a separate approved evaluation.

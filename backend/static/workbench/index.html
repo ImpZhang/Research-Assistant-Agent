@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Research Assistant Workbench</title>
-    <link rel="stylesheet" href="/workbench-assets/styles.css?v=20260618-workbench-state-restore2" />
+    <link rel="stylesheet" href="/workbench-assets/styles.css?v=20260618-workbench-continuation1" />
   </head>
   <body>
     <div class="app-shell">
@@ -52,6 +52,26 @@
             <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API Docs</a>
           </div>
         </header>
+
+        <section id="latest-workflow" class="band latest-workflow" aria-live="polite">
+          <div class="section-heading latest-workflow-heading">
+            <div>
+              <h3>Latest Workflow</h3>
+              <p id="latestWorkflowSummary">No recent workflow selected.</p>
+            </div>
+            <div class="latest-workflow-actions">
+              <button id="latestWorkflowRefreshJobsButton" type="button">Refresh Jobs</button>
+              <button id="latestWorkflowLoadDossierButton" type="button">Load Dossier</button>
+              <a class="docs-link secondary-link" href="#dossier">Dossier</a>
+            </div>
+          </div>
+          <div id="latestWorkflowFacts" class="latest-workflow-facts">
+            <span><strong>Job</strong><code>-</code></span>
+            <span><strong>Status</strong><code>-</code></span>
+            <span><strong>Paper</strong><code>-</code></span>
+            <span><strong>Idea</strong><code>-</code></span>
+          </div>
+        </section>
 
         <section id="pilot-launch" class="band pilot-launch">
           <div class="section-heading pilot-launch-heading">
@@ -432,6 +452,6 @@
       <div class="empty-state">No records yet.</div>
     </template>
 
-    <script src="/workbench-assets/app.js?v=20260618-workbench-state-restore2" defer></script>
+    <script src="/workbench-assets/app.js?v=20260618-workbench-continuation1" defer></script>
   </body>
 </html>
