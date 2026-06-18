@@ -80,9 +80,9 @@ No scoping migration should run implicitly at app startup.
 
 ## Workbench And MCP
 
-- Workbench should show a project selector only after project list/detail routes exist.
-- The selected project should be stored as a non-secret preference, separate from the API key.
-- MCP tools should accept or forward project id in a consistent way, and read-only mode must remain project-scoped.
+- During the compatibility phase, Workbench exposes a project-scope text control that stores the selected id as a non-secret browser preference, separate from the API key, and forwards it on `/research/*` requests with `X-Research-Assistant-Project`.
+- Workbench should upgrade the text control to a project selector after project list/detail routes exist.
+- MCP tools accept or forward project id consistently, and read-only mode must remain project-scoped.
 - Tool manifests should document whether each tool is project-scoped or admin-only.
 
 

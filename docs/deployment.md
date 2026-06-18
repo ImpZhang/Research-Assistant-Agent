@@ -176,9 +176,11 @@ python scripts/mcp_http_bridge.py \
 
 The bridge also accepts `MCP_BRIDGE_API_KEY`, `RESEARCH_ASSISTANT_API_KEY`, or `API_KEY` from the environment. Project ids are not secrets; forward the active compatibility scope with `--project-id`, `MCP_BRIDGE_PROJECT_ID`, or `RESEARCH_ASSISTANT_PROJECT_ID`.
 
-## Workbench With API Key
+## Workbench With API Key And Project Scope
 
 The browser workbench is served at `/workbench`. When API protection is enabled, paste the same key into the top-bar API key field and choose `Save Key`. The key is stored in browser local storage and sent only to `/research/*` requests as `X-Research-Assistant-Key`.
+
+Use the Project ID field to save the active compatibility scope. Project ids are not secrets; Workbench stores the value as a browser preference and sends it only to `/research/*` requests as `X-Research-Assistant-Project`.
 
 Choose `Clear` to remove the key from the browser.
 

@@ -1848,12 +1848,15 @@ def test_workbench_static_assets_are_served() -> None:
     assert "apiKeyInput" in response.text
     assert "saveApiKeyButton" in response.text
     assert "clearApiKeyButton" in response.text
+    assert "projectIdInput" in response.text
+    assert "saveProjectIdButton" in response.text
+    assert "projectIdStatus" in response.text
     assert "latest-workflow" in response.text
     assert "latestWorkflowSummary" in response.text
     assert "latestWorkflowFacts" in response.text
     assert "latestWorkflowRefreshJobsButton" in response.text
     assert "latestWorkflowLoadDossierButton" in response.text
-    assert "20260618-pilot-sequence1" in response.text
+    assert "20260618-project-scope1" in response.text
     assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-launch"')
     assert "pilot-path" in response.text
     assert "pilotPathSteps" in response.text
@@ -1922,6 +1925,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert ".controls-grid" in styles.text
     assert ".latest-workflow-facts" in styles.text
     assert ".pilot-path-steps" in styles.text
+    assert ".project-scope-control" in styles.text
     assert ".secondary-link" in styles.text
     assert ".dossier-command-bar" in styles.text
     assert ".advanced-action-panel" in styles.text
@@ -1949,6 +1953,9 @@ def test_workbench_static_assets_are_served() -> None:
     assert "renderPilotMetric" in script.text
     assert "renderPilotPathSequence" in script.text
     assert "cockpit.pilot_task_sequence" in script.text
+    assert "PROJECT_ID_HEADER" in script.text
+    assert "X-Research-Assistant-Project" in script.text
+    assert "loadProjectScope" in script.text
     assert "/research/onboarding/setup" in script.text
     assert "/research/onboarding/tasks" in script.text
     assert "/research/onboarding/progress" in script.text

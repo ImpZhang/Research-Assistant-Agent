@@ -1,5 +1,6 @@
 const state = {
   apiKey: "",
+  projectId: "default",
   paperId: "",
   jobId: "",
   latestJobStatus: "",
@@ -34,7 +35,9 @@ const state = {
 };
 
 const API_KEY_STORAGE_KEY = "researchAssistantApiKey";
+const PROJECT_ID_STORAGE_KEY = "researchAssistantProjectId";
 const API_KEY_HEADER = "X-Research-Assistant-Key";
+const PROJECT_ID_HEADER = "X-Research-Assistant-Project";
 
 const $ = (id) => document.getElementById(id);
 
@@ -226,10 +229,32 @@ function updateApiKeyStatus() {
   $("apiKeyStatus").textContent = state.apiKey ? "API key saved" : "No API key saved";
 }
 
+function loadProjectScope() {
+  state.projectId = localStorage.getItem(PROJECT_ID_STORAGE_KEY) || "default";
+  $("projectIdInput").value = state.projectId;
+  updateProjectScopeStatus();
+}
+
+function saveProjectScope() {
+  state.projectId = $("projectIdInput").value.trim() || "default";
+  localStorage.setItem(PROJECT_ID_STORAGE_KEY, state.projectId);
+  $("projectIdInput").value = state.projectId;
+  updateProjectScopeStatus();
+}
+
+function updateProjectScopeStatus() {
+  $("projectIdStatus").textContent = `Project scope: ${state.projectId || "default"}`;
+}
+
 function withAuthHeaders(path, headers = {}) {
   const merged = new Headers(headers || {});
-  if (state.apiKey && path.startsWith("/research")) {
-    merged.set(API_KEY_HEADER, state.apiKey);
+  if (path.startsWith("/research")) {
+    if (state.apiKey) {
+      merged.set(API_KEY_HEADER, state.apiKey);
+    }
+    if (state.projectId) {
+      merged.set(PROJECT_ID_HEADER, state.projectId);
+    }
   }
   return merged;
 }
@@ -3360,6 +3385,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("profileForm").addEventListener("submit", saveResearchProfile);
   $("saveApiKeyButton").addEventListener("click", saveApiKey);
   $("clearApiKeyButton").addEventListener("click", clearApiKey);
+  $("saveProjectIdButton").addEventListener("click", saveProjectScope);
   $("onboardingButton").addEventListener("click", () => loadOnboardingReadiness(false));
   $("onboardingMarkdownButton").addEventListener("click", () => loadOnboardingReadiness(true));
   $("onboardingTasksButton").addEventListener("click", createOnboardingTasks);
@@ -3382,6 +3408,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (event.key === "Enter") {
       event.preventDefault();
       saveApiKey();
+    }
+  });
+  $("projectIdInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveProjectScope();
     }
   });
   $("pilotLaunchRefreshButton").addEventListener("click", loadPilotLaunch);
@@ -3566,6 +3598,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("rankIdeasButton").addEventListener("click", rankIdeas);
   $("savePortfolioButton").addEventListener("click", savePortfolio);
   loadApiKey();
+  loadProjectScope();
   renderLatestWorkflow();
   checkHealth();
   loadPilotLaunch();

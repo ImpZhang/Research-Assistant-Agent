@@ -2326,3 +2326,22 @@ Verification completed:
 - `.venv/bin/python scripts/mcp_http_bridge.py --help` showed the new `--project-id` and `--project-header` options.
 - Focused pytest passed for MCP bridge tests and research status: `10 passed`.
 - `bash scripts/check_tool_bridge_contracts.sh` passed: `11 passed`.
+
+## 2026-06-18 - Workbench Project Scope Forwarding
+
+Implemented in progress:
+
+- Added a Workbench project-scope control that stores a non-secret project id preference separately from the API key.
+- Updated Workbench request headers so `/research/*` calls forward `X-Research-Assistant-Project` alongside the API key when configured.
+- Refreshed static asset cache versions, README summary text, deployment notes, static Workbench assertions, and project-scoping design notes.
+- Synchronized the pilot operational preflight README token with the project-scope-aware Workbench wording.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_workbench_static_assets_are_served` passed: `1 passed in 5.01s`.
+- `bash scripts/check_pilot_readiness.sh` passed: `32 passed in 96.21s`.
+- `bash scripts/check_pilot_operational_preflight.sh` passed in development mode with only expected worktree and missing-production-`.env` warnings.
+- `bash scripts/check_remote_safe_suite.sh` passed.

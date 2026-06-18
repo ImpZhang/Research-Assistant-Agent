@@ -160,7 +160,7 @@ require_tokens(
     [
         "check_pilot_operational_preflight.sh",
         "check_remote_safe_suite.sh",
-        "API-key-backed pilot access",
+        "API-key-backed and project-scope-aware pilot access",
     ],
 )
 require_tokens(

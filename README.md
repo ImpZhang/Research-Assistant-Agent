@@ -149,7 +149,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
 - Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.
 - Job cancellation and retry controls for failed or interrupted workflow runs.
-- Browser workbench for API-key-backed pilot access, first-run and delivery empty/API-key/network states, grouped idea/task/delivery/operations controls, pilot launch status, profile editing, upload, workflow launch, job tracking/cancel/retry, search, advisor chat/action sessions, cockpit, readiness, quality gates, decision, audit, bundle export, and dossier preview.
+- Browser workbench for API-key-backed and project-scope-aware pilot access, first-run and delivery empty/API-key/network states, grouped idea/task/delivery/operations controls, pilot launch status, profile editing, upload, workflow launch, job tracking/cancel/retry, search, advisor chat/action sessions, cockpit, readiness, quality gates, decision, audit, bundle export, and dossier preview.
 - End-to-end smoke test covering the current research workflow.
 - Deterministic context-search evaluation fixtures for hit@k, MRR, graph edge hit/noise, score breakdown coverage/consistency, paper-filter leak checks, and empty-query guards.
 

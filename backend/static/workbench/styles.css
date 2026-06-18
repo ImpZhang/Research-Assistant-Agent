@@ -215,18 +215,21 @@ button:disabled {
   justify-content: flex-end;
 }
 
-.api-key-control {
+.api-key-control,
+.project-scope-control {
   display: grid;
   grid-template-columns: minmax(160px, 220px) auto auto;
   gap: 8px;
   align-items: center;
 }
 
-.api-key-control input {
+.api-key-control input,
+.project-scope-control input {
   min-width: 0;
 }
 
-.api-key-control span {
+.api-key-control span,
+.project-scope-control span {
   grid-column: 1 / -1;
   color: var(--muted);
   font-size: 12px;
@@ -612,6 +615,7 @@ code {
   .controls-grid,
   .profile-grid,
   .api-key-control,
+  .project-scope-control,
   .two-column,
   .latest-workflow-facts,
   .pilot-path-steps,

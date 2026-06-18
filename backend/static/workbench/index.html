@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Research Assistant Workbench</title>
-    <link rel="stylesheet" href="/workbench-assets/styles.css?v=20260618-pilot-sequence1" />
+    <link rel="stylesheet" href="/workbench-assets/styles.css?v=20260618-project-scope1" />
   </head>
   <body>
     <div class="app-shell">
@@ -48,6 +48,11 @@
               <button id="saveApiKeyButton" type="button">Save Key</button>
               <button id="clearApiKeyButton" type="button">Clear</button>
               <span id="apiKeyStatus">No API key saved</span>
+            </div>
+            <div class="project-scope-control" aria-label="Project scope settings">
+              <input id="projectIdInput" type="text" autocomplete="off" placeholder="Project ID" />
+              <button id="saveProjectIdButton" type="button">Save Scope</button>
+              <span id="projectIdStatus">Project scope: default</span>
             </div>
             <button id="refreshJobsButton" type="button">Refresh Jobs</button>
             <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API Docs</a>
@@ -503,6 +508,6 @@
       <div class="empty-state">No records yet.</div>
     </template>
 
-    <script src="/workbench-assets/app.js?v=20260618-pilot-sequence1" defer></script>
+    <script src="/workbench-assets/app.js?v=20260618-project-scope1" defer></script>
   </body>
 </html>
