@@ -500,6 +500,8 @@ def run_smoke(
         raise RuntimeError("research status did not include novelty check task generation")
     if "default_project_scope_contract" not in status["implemented_capabilities"]:
         raise RuntimeError("research status did not include default project scope contract")
+    if "workbench_project_scope_forwarding" not in status["implemented_capabilities"]:
+        raise RuntimeError("research status did not include workbench project scope forwarding")
     manifest_names = {tool["name"] for tool in tool_manifest["tools"]}
     if "create_advisor_brief" not in manifest_names:
         raise RuntimeError("tool manifest did not include advisor brief tool")

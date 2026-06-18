@@ -2345,3 +2345,18 @@ Verification completed:
 - `bash scripts/check_pilot_readiness.sh` passed: `32 passed in 96.21s`.
 - `bash scripts/check_pilot_operational_preflight.sh` passed in development mode with only expected worktree and missing-production-`.env` warnings.
 - `bash scripts/check_remote_safe_suite.sh` passed.
+
+## 2026-06-18 - Workbench Project Scope Status Signal
+
+Implemented in progress:
+
+- Added `workbench_project_scope_forwarding` to `/research/status` implemented capabilities so operators and tool clients can see that browser Workbench requests forward the active project scope.
+- Added status regression coverage while preserving the existing default-project and MCP scope capability signals.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/research/routes.py tests/test_app.py scripts/smoke_api.py` passed.
+- `.venv/bin/ruff format --check backend/research/routes.py tests/test_app.py scripts/smoke_api.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_research_status` passed: `1 passed in 4.49s`.
+- `bash scripts/check_product_effect_smoke.sh` passed with `tool_manifest_count=120`, `tool_bridge_count=120`, `product_effect_score=0.9352`, and band `demo_ready`.

@@ -370,6 +370,7 @@ def status() -> ProjectStatus:
             "mcp_stdio_http_bridge",
             "mcp_bridge_policy_controls",
             "mcp_bridge_project_scope_forwarding",
+            "workbench_project_scope_forwarding",
             "write_operation_audit_jsonl",
             "write_operation_audit_admin_summary",
             "write_operation_audit_admin_export",

@@ -855,6 +855,7 @@ def test_research_status() -> None:
     assert "mcp_stdio_http_bridge" in body["implemented_capabilities"]
     assert "mcp_bridge_policy_controls" in body["implemented_capabilities"]
     assert "mcp_bridge_project_scope_forwarding" in body["implemented_capabilities"]
+    assert "workbench_project_scope_forwarding" in body["implemented_capabilities"]
     assert "write_operation_audit_jsonl" in body["implemented_capabilities"]
     assert "write_operation_audit_admin_summary" in body["implemented_capabilities"]
     assert "write_operation_audit_admin_export" in body["implemented_capabilities"]
