@@ -2570,3 +2570,24 @@ Verification completed:
 
 - `bash scripts/check_tool_bridge_contracts.sh` passed: `12 passed in 2.26s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `34` pilot readiness tests and product smoke coverage with `15 passed in 125.65s`.
+
+## 2026-06-19 - Representative Paper Review Records
+
+Implemented in progress:
+
+- Added `RepresentativePaperReviewRecordCreate` and persisted representative-paper human review records as `ResearchBrief` artifacts with scope `representative_paper_review`.
+- Added API and tool-manifest entries for recording, listing, loading, and Markdown-exporting representative-paper review records.
+- Added `/research/status` capability `representative_paper_review_records` so clients can distinguish the protocol from persisted review evidence.
+- Updated README, TODO, and the representative-paper protocol with the new record workflow.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `python3 -m compileall backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check backend/research/routes.py backend/research/schemas.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check backend/research/routes.py backend/research/schemas.py tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_research_status tests/test_app.py::test_tool_manifest_lists_mcp_ready_research_tools tests/test_app.py::test_representative_paper_review_records_persist_and_export_markdown` passed: `3 passed in 3.34s`.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `12 passed in 1.76s`.
+- `bash scripts/check_pilot_readiness.sh` passed: `35 passed in 107.38s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `35` pilot readiness tests and product smoke coverage with `15 passed in 144.98s`.

@@ -55,6 +55,17 @@ Record these fields before the run:
 | Workbench usability | TBD | TBD | TBD |
 | Observability and support correlation | TBD | TBD | TBD |
 
+## Persisted Review Record
+
+After completing the human review, persist the result as a project artifact:
+
+- `POST /research/reviews/representative-paper/records` records reviewer, paper, commit SHA, request-id samples, product-effect score/band, bundle readiness level, findings, exit criteria, accepted artifacts, risks, and follow-up actions.
+- `GET /research/reviews/representative-paper/records` lists saved representative-paper review records.
+- `GET /research/reviews/representative-paper/records/{record_id}` loads a saved record with structured summary and Markdown.
+- `GET /research/reviews/representative-paper/records/{record_id}/export/markdown` exports the human review record for handoff.
+
+The endpoint stores records as `ResearchBrief` artifacts with scope `representative_paper_review`; it does not run migrations, read private papers, or approve production rollout by itself.
+
 ## Exit Criteria
 
 A representative-paper review can be marked pilot-acceptable only when:

@@ -26,7 +26,7 @@ This top-level TODO is a stable index for the current remote-first handoff. The 
 - Run `bash scripts/check_remote_long_suite.sh` for intentionally long focused checks before release-style verification, but keep it separate from the default no-service suite.
 - Keep adding narrow, deterministic tests for user-facing research workflows.
 - Keep README, `codex_handoff/03_TODO.md`, and `docs/progress_log.md` synchronized with completed slices.
-- Use `docs/representative_paper_review.md` before marking real representative-paper human review acceptable.
+- Use `docs/representative_paper_review.md` and `/research/reviews/representative-paper/records` before marking real representative-paper human review acceptable.
 - Prefer docs/tests/API guardrails that do not require dependency installs, migrations, service restarts, or deployment changes.
 
 ## P2 - Operator-Approved Hardening

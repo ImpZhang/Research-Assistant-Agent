@@ -175,6 +175,7 @@ from backend.research.schemas import (
     RankedIdeaRead,
     RelatedWorkMatrixCreate,
     RelatedWorkMatrixRead,
+    RepresentativePaperReviewRecordCreate,
     ResearchBriefCreate,
     ResearchBriefDetail,
     ResearchBriefRead,
@@ -378,6 +379,7 @@ def status() -> ProjectStatus:
             "external_literature_readiness_check",
             "runtime_readiness_signals",
             "representative_paper_review_protocol",
+            "representative_paper_review_records",
             "default_project_scope_contract",
             "human_idea_feedback",
             "portfolio_markdown_export",
@@ -619,6 +621,39 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/export/project-bundle",
             output_model="application/zip",
+        ),
+        ToolManifestItem(
+            name="record_representative_paper_review",
+            description=(
+                "Persist human findings, product-effect metrics, request ids, and follow-up "
+                "actions from a representative paper review."
+            ),
+            method="POST",
+            path="/research/reviews/representative-paper/records",
+            input_model="RepresentativePaperReviewRecordCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_representative_paper_review_records",
+            description="List saved representative paper human review records.",
+            method="GET",
+            path="/research/reviews/representative-paper/records",
+            output_model="list[ResearchBriefRead]",
+        ),
+        ToolManifestItem(
+            name="get_representative_paper_review_record",
+            description="Load one saved representative paper human review record.",
+            method="GET",
+            path="/research/reviews/representative-paper/records/{record_id}",
+            output_model="ResearchBriefDetail",
+        ),
+        ToolManifestItem(
+            name="export_representative_paper_review_record_markdown",
+            description="Export a representative paper human review record as Markdown.",
+            method="GET",
+            path=("/research/reviews/representative-paper/records/{record_id}/export/markdown"),
+            output_model="text/markdown",
         ),
         ToolManifestItem(
             name="create_project_bundle_release_note",
@@ -2309,6 +2344,100 @@ def create_tasks_from_project_pilot_report_snapshot(
         tasks=[_serialize_research_task(task) for task in tasks],
         message=(f"Created {len(tasks)} project tasks from pilot report snapshot {snapshot.id}."),
     )
+
+
+@router.post(
+    "/reviews/representative-paper/records",
+    response_model=ResearchBriefDetail,
+)
+def record_representative_paper_review(
+    payload: RepresentativePaperReviewRecordCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    generated_at = datetime.now(timezone.utc)
+    title = payload.title.strip() or "Representative Paper Human Review"
+    findings = [finding.model_dump(mode="json") for finding in payload.findings]
+    exit_criteria = [criterion.model_dump(mode="json") for criterion in payload.exit_criteria]
+    markdown_export = _render_representative_paper_review_record_markdown(
+        generated_at=generated_at,
+        title=title,
+        payload=payload,
+        findings=findings,
+        exit_criteria=exit_criteria,
+    )
+    record = ResearchBrief(
+        title=title,
+        scope="representative_paper_review",
+        idea_ids_json=[],
+        summary_json={
+            "review_date": payload.review_date,
+            "reviewer": payload.reviewer,
+            "paper_title": payload.paper_title,
+            "paper_source": payload.paper_source,
+            "commit_sha": payload.commit_sha,
+            "workbench_path": payload.workbench_path,
+            "request_id_samples": payload.request_id_samples,
+            "product_effect_score": payload.product_effect_score,
+            "product_effect_band": payload.product_effect_band,
+            "bundle_readiness_level": payload.bundle_readiness_level,
+            "review_decision": payload.review_decision,
+            "summary_notes": payload.summary_notes,
+            "findings": findings,
+            "finding_status_counts": dict(Counter(finding["status"] for finding in findings)),
+            "exit_criteria": exit_criteria,
+            "exit_criteria_status_counts": dict(
+                Counter(criterion["status"] for criterion in exit_criteria)
+            ),
+            "accepted_artifacts": payload.accepted_artifacts,
+            "follow_up_actions": payload.follow_up_actions,
+            "risks": payload.risks,
+            "generated_at": generated_at.isoformat(),
+        },
+        markdown_export=markdown_export,
+        created_by=payload.created_by or "researcher",
+    )
+    session.add(record)
+    session.commit()
+    session.refresh(record)
+    return _serialize_research_brief(record, include_markdown=True)
+
+
+@router.get(
+    "/reviews/representative-paper/records",
+    response_model=list[ResearchBriefRead],
+)
+def list_representative_paper_review_records(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    return [
+        _serialize_research_brief(record)
+        for record in _representative_paper_review_records(session, limit=limit)
+    ]
+
+
+@router.get(
+    "/reviews/representative-paper/records/{record_id}",
+    response_model=ResearchBriefDetail,
+)
+def get_representative_paper_review_record(
+    record_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    record = _get_representative_paper_review_record_or_404(record_id, session)
+    return _serialize_research_brief(record, include_markdown=True)
+
+
+@router.get(
+    "/reviews/representative-paper/records/{record_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_representative_paper_review_record_markdown(
+    record_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    record = _get_representative_paper_review_record_or_404(record_id, session)
+    return PlainTextResponse(record.markdown_export or "", media_type="text/markdown")
 
 
 @router.get("/cockpit", response_model=ProjectCockpitResponse)
@@ -11807,6 +11936,30 @@ def _project_bundle_context(session: Session) -> dict[str, Any]:
     }
 
 
+def _representative_paper_review_records(
+    session: Session,
+    *,
+    limit: int = 50,
+) -> list[ResearchBrief]:
+    return (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "representative_paper_review")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(max(1, min(limit, 200)))
+        .all()
+    )
+
+
+def _get_representative_paper_review_record_or_404(
+    record_id: str,
+    session: Session,
+) -> ResearchBrief:
+    record = session.get(ResearchBrief, record_id)
+    if record is None or record.scope != "representative_paper_review":
+        raise HTTPException(status_code=404, detail="Representative paper review record not found")
+    return record
+
+
 def _project_bundle_pilot_report_snapshots(
     session: Session,
     *,
@@ -12569,6 +12722,79 @@ def _render_project_bundle_release_review_session_markdown(
     else:
         lines.append("- None.")
     return "\n".join(lines).strip() + "\n"
+
+
+def _render_representative_paper_review_record_markdown(
+    *,
+    generated_at: datetime,
+    title: str,
+    payload: RepresentativePaperReviewRecordCreate,
+    findings: list[dict[str, Any]],
+    exit_criteria: list[dict[str, Any]],
+) -> str:
+    score = (
+        "Not recorded"
+        if payload.product_effect_score is None
+        else f"{payload.product_effect_score:.4g}"
+    )
+    lines = [
+        "# Representative Paper Human Review",
+        "",
+        f"- Title: {title}",
+        f"- Generated At: `{generated_at.isoformat()}`",
+        f"- Review Date: {payload.review_date or 'Not recorded'}",
+        f"- Reviewer: {payload.reviewer}",
+        f"- Paper Title: {payload.paper_title or 'Not recorded'}",
+        f"- Paper Source: {payload.paper_source or 'Not recorded'}",
+        f"- Commit SHA: `{payload.commit_sha}`"
+        if payload.commit_sha
+        else "- Commit SHA: Not recorded",
+        f"- Workbench/API Path: {payload.workbench_path}",
+        f"- Product-effect Score: {score}",
+        f"- Product-effect Band: {payload.product_effect_band or 'Not recorded'}",
+        f"- Bundle Readiness Level: {payload.bundle_readiness_level or 'Not recorded'}",
+        f"- Review Decision: `{payload.review_decision}`",
+        "",
+        "## Request Id Samples",
+        "",
+    ]
+    _append_project_bundle_feedback_items(lines, payload.request_id_samples)
+    lines.extend(["", "## Summary Notes", ""])
+    lines.append(payload.summary_notes.strip() or "No summary notes recorded.")
+    lines.extend(["", "## Human Findings", ""])
+    _append_representative_paper_review_findings(lines, findings)
+    lines.extend(["", "## Exit Criteria", ""])
+    _append_representative_paper_review_findings(lines, exit_criteria)
+    lines.extend(["", "## Accepted Artifacts", ""])
+    _append_project_bundle_feedback_items(lines, payload.accepted_artifacts)
+    lines.extend(["", "## Follow-up Actions", ""])
+    _append_project_bundle_feedback_items(lines, payload.follow_up_actions)
+    lines.extend(["", "## Risks", ""])
+    _append_project_bundle_feedback_items(lines, payload.risks)
+    return "\n".join(lines).strip() + "\n"
+
+
+def _append_representative_paper_review_findings(
+    lines: list[str],
+    findings: list[dict[str, Any]],
+) -> None:
+    if not findings:
+        lines.append("- None.")
+        return
+    lines.append("| Area | Status | Evidence | Follow-up |")
+    lines.append("| --- | --- | --- | --- |")
+    for finding in findings:
+        lines.append(
+            "| "
+            f"{_markdown_table_cell(finding.get('area', ''))} | "
+            f"{_markdown_table_cell(finding.get('status', ''))} | "
+            f"{_markdown_table_cell(finding.get('evidence', ''))} | "
+            f"{_markdown_table_cell(finding.get('follow_up', ''))} |"
+        )
+
+
+def _markdown_table_cell(value: Any) -> str:
+    return str(value).replace("\n", "<br>").replace("|", "\\|")
 
 
 def _render_project_bundle_release_review_outcome_markdown(

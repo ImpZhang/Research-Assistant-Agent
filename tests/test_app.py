@@ -952,6 +952,7 @@ def test_research_status() -> None:
     assert "external_literature_readiness_check" in body["implemented_capabilities"]
     assert "runtime_readiness_signals" in body["implemented_capabilities"]
     assert "representative_paper_review_protocol" in body["implemented_capabilities"]
+    assert "representative_paper_review_records" in body["implemented_capabilities"]
     assert "default_project_scope_contract" in body["implemented_capabilities"]
     assert "mcp_tool_bridge_spec" in body["implemented_capabilities"]
     assert "idea_decision_memos" in body["implemented_capabilities"]
@@ -1065,6 +1066,10 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_idea_timeline" in names
     assert "export_idea_bundle" in names
     assert "export_project_bundle" in names
+    assert "record_representative_paper_review" in names
+    assert "list_representative_paper_review_records" in names
+    assert "get_representative_paper_review_record" in names
+    assert "export_representative_paper_review_record_markdown" in names
     assert "get_project_bundle_readiness" in names
     assert "create_tasks_from_project_bundle_readiness" in names
     assert "create_project_bundle_readiness_snapshot" in names
@@ -2501,6 +2506,82 @@ def test_project_pilot_report_combines_onboarding_and_cockpit_state() -> None:
     assert body["cockpit"]["project_metrics"]
     assert body["key_metrics"]["readiness_level"] == body["readiness_level"]
     assert body["next_actions"]
+
+
+def test_representative_paper_review_records_persist_and_export_markdown() -> None:
+    client = TestClient(create_app())
+    title = f"Representative Review {time.time_ns()}"
+    created = client.post(
+        "/research/reviews/representative-paper/records",
+        json={
+            "title": title,
+            "review_date": "2026-06-19",
+            "reviewer": "pytest reviewer",
+            "paper_title": "Pytest Representative Paper",
+            "paper_source": "pytest fixture citation",
+            "commit_sha": "abc1234",
+            "workbench_path": "Workbench-first",
+            "request_id_samples": ["req-pytest-1", "req-pytest-2"],
+            "product_effect_score": 0.9352,
+            "product_effect_band": "demo_ready",
+            "bundle_readiness_level": "delivery_ready",
+            "review_decision": "pilot_acceptable_with_follow_up",
+            "summary_notes": "Representative review found useful artifacts with follow-up work.",
+            "findings": [
+                {
+                    "area": "Paper card fidelity",
+                    "status": "pass",
+                    "evidence": "Card captured the paper objective and method.",
+                    "follow_up": "",
+                },
+                {
+                    "area": "Claim validation quality",
+                    "status": "concern",
+                    "evidence": "One claim still needs stronger support.",
+                    "follow_up": "Add a follow-up evidence task.",
+                },
+            ],
+            "exit_criteria": [
+                {
+                    "area": "Evidence-linked rationale",
+                    "status": "pass",
+                    "evidence": "Top idea includes evidence ledger context.",
+                    "follow_up": "",
+                }
+            ],
+            "accepted_artifacts": ["Paper card", "Evidence ledger", "Project bundle"],
+            "follow_up_actions": ["Create task for the unsupported claim."],
+            "risks": ["Human review remains required for scientific correctness."],
+            "created_by": "pytest",
+        },
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert body["title"] == title
+    assert body["scope"] == "representative_paper_review"
+    assert body["summary"]["reviewer"] == "pytest reviewer"
+    assert body["summary"]["paper_title"] == "Pytest Representative Paper"
+    assert body["summary"]["review_decision"] == "pilot_acceptable_with_follow_up"
+    assert body["summary"]["product_effect_score"] == 0.9352
+    assert body["summary"]["finding_status_counts"]["pass"] == 1
+    assert body["summary"]["finding_status_counts"]["concern"] == 1
+    assert "# Representative Paper Human Review" in body["markdown_export"]
+    assert "Paper card fidelity" in body["markdown_export"]
+
+    listed = client.get("/research/reviews/representative-paper/records?limit=5")
+    assert listed.status_code == 200
+    assert any(item["id"] == body["id"] for item in listed.json())
+
+    fetched = client.get(f"/research/reviews/representative-paper/records/{body['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["markdown_export"] == body["markdown_export"]
+
+    exported = client.get(
+        f"/research/reviews/representative-paper/records/{body['id']}/export/markdown"
+    )
+    assert exported.status_code == 200
+    assert "Representative Paper Human Review" in exported.text
+    assert "req-pytest-1" in exported.text
 
 
 def test_project_pilot_report_snapshots_persist_and_export_markdown() -> None:

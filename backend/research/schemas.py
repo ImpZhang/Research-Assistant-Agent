@@ -1275,6 +1275,41 @@ class ProjectBundleReleaseReviewOutcomeSignoffCreate(BaseModel):
     created_by: str = "researcher"
 
 
+class RepresentativePaperReviewFinding(BaseModel):
+    area: str
+    status: Literal["pass", "concern", "fail"] = "concern"
+    evidence: str = ""
+    follow_up: str = ""
+
+
+class RepresentativePaperReviewRecordCreate(BaseModel):
+    title: str = "Representative Paper Human Review"
+    review_date: str = ""
+    reviewer: str = "researcher"
+    paper_title: str = ""
+    paper_source: str = ""
+    commit_sha: str = ""
+    workbench_path: str = "Workbench-first"
+    request_id_samples: list[str] = Field(default_factory=list)
+    product_effect_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    product_effect_band: str = ""
+    bundle_readiness_level: str = ""
+    review_decision: Literal[
+        "pilot_acceptable",
+        "pilot_acceptable_with_follow_up",
+        "follow_up_needed",
+        "blocked",
+        "rejected",
+    ] = "follow_up_needed"
+    summary_notes: str = ""
+    findings: list[RepresentativePaperReviewFinding] = Field(default_factory=list)
+    exit_criteria: list[RepresentativePaperReviewFinding] = Field(default_factory=list)
+    accepted_artifacts: list[str] = Field(default_factory=list)
+    follow_up_actions: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    created_by: str = "researcher"
+
+
 class ProjectSetupWizardResponse(BaseModel):
     generated_at: datetime
     profile: ResearchProfileRead

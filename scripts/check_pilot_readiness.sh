@@ -39,4 +39,5 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_project_onboarding_tasks_create_task_board_items_and_graph_edges \
   tests/test_app.py::test_project_onboarding_progress_tracks_task_completion \
   tests/test_app.py::test_project_pilot_report_combines_onboarding_and_cockpit_state \
-  tests/test_app.py::test_project_pilot_report_snapshots_persist_and_export_markdown
+  tests/test_app.py::test_project_pilot_report_snapshots_persist_and_export_markdown \
+  tests/test_app.py::test_representative_paper_review_records_persist_and_export_markdown
