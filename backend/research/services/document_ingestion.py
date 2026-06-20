@@ -258,6 +258,18 @@ class DocumentIngestionService:
             return [{"title": "Full Text", "section_type": "full_text", "text": text.strip()}]
 
         sections = []
+        first_match_idx = matches[0][0]
+        if first_match_idx > 0:
+            preamble_text = "\n".join(lines[:first_match_idx]).strip()
+            if preamble_text:
+                sections.append(
+                    {
+                        "title": "Full Text",
+                        "section_type": "full_text",
+                        "text": preamble_text,
+                    }
+                )
+
         for pos, (line_idx, title, section_type) in enumerate(matches):
             next_idx = matches[pos + 1][0] if pos + 1 < len(matches) else len(lines)
             section_text = "\n".join(lines[line_idx + 1 : next_idx]).strip()

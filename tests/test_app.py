@@ -2969,6 +2969,54 @@ Future work should add structured paper-card extraction.
     assert len(evidence_response.json()) == body["evidence_count"]
 
 
+def test_upload_preserves_preamble_when_only_reference_heading_matches(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+    content = b"""GeoToken Style Sparse Heading Paper
+
+This paper studies hierarchical geolocalization of images via next token prediction.
+The body text intentionally lacks standard section headings because some PDF extraction
+paths expose only the References heading as a clean standalone line. The ingestion
+service should still preserve this pre-reference body for paper-card extraction,
+gap mining, and idea generation.
+
+REFERENCES
+[1] Prior geolocalization benchmark.
+[2] Prior vision-language model geolocation work.
+"""
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("reference_only_heading.txt", content, "text/plain")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["section_count"] == 2
+    assert body["evidence_count"] == 2
+
+    evidence_response = client.get(f"/research/papers/{body['paper']['id']}/evidence")
+    assert evidence_response.status_code == 200
+    evidence = evidence_response.json()
+    evidence_types = {item["evidence_type"] for item in evidence}
+    assert "claim" in evidence_types
+    assert "citation" in evidence_types
+    assert any("hierarchical geolocalization" in item["text"] for item in evidence)
+
+    mined = client.post(
+        "/research/gaps/mine",
+        json={"paper_ids": [body["paper"]["id"]], "max_gaps": 3},
+    )
+
+    assert mined.status_code == 200
+    gaps = mined.json()["gaps"]
+    assert gaps
+    assert gaps[0]["gap_type"] == "evaluation_gap"
+    assert "hierarchical geolocalization" in gaps[0]["description"]
+
+
 def test_upload_markdown_paper_uses_default_allowed_extension(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
     client = TestClient(create_app())

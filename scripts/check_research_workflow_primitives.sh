@@ -13,6 +13,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_literature_search_clamps_low_limit_and_truncates_results \
   tests/test_app.py::test_external_literature_provider_config_normalization \
   tests/test_app.py::test_markdown_gap_sections_are_mined_from_headings \
+  tests/test_app.py::test_upload_preserves_preamble_when_only_reference_heading_matches \
   tests/test_app.py::test_external_literature_search_reports_not_configured_status \
   tests/test_app.py::test_external_literature_search_reports_completed_status \
   tests/test_app.py::test_external_literature_search_returns_partial_status \

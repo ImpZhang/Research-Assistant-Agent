@@ -8,6 +8,7 @@ GAP_TYPE_BY_EVIDENCE = {
     "limitation": "method_gap",
     "future_work": "application_gap",
     "problem": "evaluation_gap",
+    "claim": "evaluation_gap",
 }
 
 
@@ -31,6 +32,12 @@ class GapService:
             query = query.filter(Evidence.paper_id.in_(paper_ids))
 
         evidences = query.order_by(Evidence.created_at.asc()).limit(max_gaps).all()
+        if not evidences:
+            fallback_query = self.session.query(Evidence).filter(Evidence.evidence_type == "claim")
+            if paper_ids:
+                fallback_query = fallback_query.filter(Evidence.paper_id.in_(paper_ids))
+            evidences = fallback_query.order_by(Evidence.created_at.asc()).limit(max_gaps).all()
+
         gaps = []
         graph = GraphService(self.session)
         for evidence in evidences:
@@ -81,6 +88,7 @@ class GapService:
             "limitation": "Address limitation",
             "future_work": "Extend future work",
             "problem": "Investigate unresolved problem",
+            "claim": "Investigate research opportunity",
         }.get(evidence.evidence_type, "Research gap")
         text = " ".join((evidence.summary or evidence.text).split())
         if len(text) > 80:
@@ -93,6 +101,8 @@ class GapService:
             return f"The evidence describes a limitation in {source}, which may point to a publishable improvement opportunity."
         if evidence.evidence_type == "future_work":
             return f"The evidence names a future direction in {source}, making it a natural candidate for follow-up research."
+        if evidence.evidence_type == "claim":
+            return f"The evidence captures a central claim or framing in {source}, which can be stress-tested for scope, robustness, and evaluation gaps."
         return f"The evidence frames a problem in {source}, which can be converted into a testable research question."
 
     def _why_unsolved(self, evidence: Evidence) -> str:
@@ -100,6 +110,8 @@ class GapService:
             return "The source frames this as future work, so the current paper likely does not fully solve it."
         if evidence.evidence_type == "limitation":
             return "The source explicitly presents this as a limitation or unresolved weakness."
+        if evidence.evidence_type == "claim":
+            return "The source states or motivates a claim, but additional evidence, stress tests, and comparison slices may be needed."
         return "The source motivates the problem, but additional method and evaluation design are needed."
 
     def _possible_approaches(self, evidence: Evidence) -> list[str]:
@@ -112,6 +124,11 @@ class GapService:
             return [
                 "Turn the future-work direction into a concrete hypothesis.",
                 "Compare against the source paper as the nearest baseline.",
+            ]
+        if evidence.evidence_type == "claim":
+            return [
+                "Turn the claim into a falsifiable research question.",
+                "Design evaluation slices that test robustness, scope, and comparison baselines.",
             ]
         return [
             "Formalize the problem into a measurable research question.",
