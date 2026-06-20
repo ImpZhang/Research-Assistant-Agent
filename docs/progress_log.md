@@ -2610,3 +2610,22 @@ Verification completed:
 - `bash scripts/check_focused_test_coverage.sh` passed.
 - `bash scripts/check_research_workflow_primitives.sh` passed: `42 passed in 114.12s`.
 - `bash scripts/check_remote_safe_suite.sh` passed, including `35` pilot readiness tests, `42` workflow primitive tests, and product smoke coverage with `15 passed in 129.34s`.
+
+## 2026-06-20 - Roman Heading Geolocalization Gap Richness
+
+Implemented in progress:
+
+- Extended section heading detection to recognize Roman numeral prefixes such as `I. INTRODUCTION`, compact headings such as `II. RELATEDWORK`, and Roman-numbered conclusion/experiment headings common in IEEE-style PDFs.
+- Changed gap mining to top up sparse problem/limitation/future-work evidence with claim evidence until `max_gaps` is reached, so papers with useful claims but few explicit limitation headings still produce multiple evaluation gaps.
+- Added regression coverage for Roman numeral sparse headings and claim-evidence gap top-up.
+- Validated the improvement against GeoToken: the representative smoke now completes with `3` gaps, `6` ideas, product-effect score `0.9386`, band `demo_ready`, and no failed scorecard checks.
+- Preserved the two pre-existing untracked root documents and did not read or touch secrets or `.env` content.
+
+Verification completed:
+
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check backend/research/services/document_ingestion.py backend/research/services/gap_service.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check backend/research/services/document_ingestion.py backend/research/services/gap_service.py tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_upload_preserves_preamble_when_only_reference_heading_matches tests/test_app.py::test_upload_detects_roman_heading_sections_and_claim_gap_topup tests/test_app.py::test_markdown_gap_sections_are_mined_from_headings` passed: `3 passed in 7.32s`.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_research_workflow_primitives.sh` passed: `43 passed in 148.31s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including `35` pilot readiness tests, `43` workflow primitive tests, and product smoke coverage with `15 passed in 168.67s`.

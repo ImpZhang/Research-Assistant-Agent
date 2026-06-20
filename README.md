@@ -142,7 +142,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Experiment plan generation.
 - Local hashed embedding index for evidence, gaps, and ideas.
 - Markdown export for paper cards and idea dossiers.
-- Robust sparse-heading paper ingestion and gap-mining fallback for PDFs that expose only a References heading cleanly.
+- Robust sparse-heading paper ingestion and gap-mining fallback for PDFs that expose Roman numeral headings, compact headings such as `RELATEDWORK`, or only a clean References heading.
 - GraphRAG-lite node and edge persistence with same source/target/type edge reuse.
 - Read-only GraphRAG-lite stats for node/edge type counts, orphan edge counts, and duplicate edge group counts.
 - Query-time lexical/vector context retrieval over evidence, gaps, ideas, and optionally filtered graph neighborhoods, with stable ranking tie-breaks and score breakdowns.

@@ -3017,6 +3017,60 @@ REFERENCES
     assert "hierarchical geolocalization" in gaps[0]["description"]
 
 
+def test_upload_detects_roman_heading_sections_and_claim_gap_topup(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+    content = b"""GeoToken Roman Heading Paper
+
+Abstract--This paper studies image geolocalization via token prediction and
+uses a compact heading style similar to IEEE PDF extraction.
+
+I. INTRODUCTION
+Image geolocalization remains difficult under ambiguous visual cues and
+long-tail geographic regions.
+
+II. RELATEDWORK
+Prior work combines retrieval, classification, and vision-language reasoning.
+
+IV. EXPERIMENTS
+The evaluation compares geolocalization accuracy across worldwide benchmarks.
+
+VI. CONCLUSION
+Future extensions should stress-test hierarchical regions and multimodal cues.
+
+REFERENCES
+[1] Prior geolocalization benchmark.
+"""
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("roman_heading_geotoken.txt", content, "text/plain")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["section_count"] >= 6
+
+    evidence_response = client.get(f"/research/papers/{body['paper']['id']}/evidence")
+    assert evidence_response.status_code == 200
+    evidence_types = {item["evidence_type"] for item in evidence_response.json()}
+    assert {"claim", "problem", "comparison", "dataset", "future_work", "citation"}.issubset(
+        evidence_types
+    )
+
+    mined = client.post(
+        "/research/gaps/mine",
+        json={"paper_ids": [body["paper"]["id"]], "max_gaps": 3},
+    )
+
+    assert mined.status_code == 200
+    gaps = mined.json()["gaps"]
+    assert len(gaps) == 3
+    gap_types = {gap["gap_type"] for gap in gaps}
+    assert "evaluation_gap" in gap_types
+    assert "application_gap" in gap_types
+
+
 def test_upload_markdown_paper_uses_default_allowed_extension(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
     client = TestClient(create_app())

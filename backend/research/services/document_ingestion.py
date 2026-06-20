@@ -12,19 +12,31 @@ from backend.research.models import Chunk, Evidence, Paper, PaperSection
 from backend.research.services.graph_service import GraphService
 
 
+SECTION_NUMBERING_PREFIX = r"((\d+|[ivxlcdm]+)\.?\s*)?"
+
+
 SECTION_PATTERNS = [
     ("abstract", r"^\s*(abstract|摘要)\s*$"),
-    ("introduction", r"^\s*(\d+\.?\s*)?(introduction|引言)\s*$"),
-    ("related_work", r"^\s*(\d+\.?\s*)?(related work|background|相关工作)\s*$"),
-    ("method", r"^\s*(\d+\.?\s*)?(method|methodology|approach|model|framework|方法|模型|框架)\s*$"),
-    ("experiment", r"^\s*(\d+\.?\s*)?(experiment|experiments|evaluation|实验|评估)\s*$"),
-    ("result", r"^\s*(\d+\.?\s*)?(results|result|analysis|结果|分析)\s*$"),
-    ("limitation", r"^\s*(\d+\.?\s*)?(limitations|limitation|局限|不足)\s*$"),
+    ("introduction", rf"^\s*{SECTION_NUMBERING_PREFIX}(introduction|引言)\s*$"),
+    ("related_work", rf"^\s*{SECTION_NUMBERING_PREFIX}(related\s*work|background|相关工作)\s*$"),
+    (
+        "method",
+        rf"^\s*{SECTION_NUMBERING_PREFIX}(method|methodology|approach|model|framework|方法|模型|框架)\s*$",
+    ),
+    (
+        "experiment",
+        rf"^\s*{SECTION_NUMBERING_PREFIX}(experiment|experiments|evaluation|实验|评估)\s*$",
+    ),
+    ("result", rf"^\s*{SECTION_NUMBERING_PREFIX}(results|result|analysis|结果|分析)\s*$"),
+    ("limitation", rf"^\s*{SECTION_NUMBERING_PREFIX}(limitations|limitation|局限|不足)\s*$"),
     (
         "future_work",
-        r"^\s*(\d+\.?\s*)?(future work|future directions|next steps|未来工作|后续工作)\s*$",
+        rf"^\s*{SECTION_NUMBERING_PREFIX}(future\s*work|future directions|next steps|未来工作|后续工作)\s*$",
     ),
-    ("conclusion", r"^\s*(\d+\.?\s*)?(conclusion|conclusions|discussion|结论|讨论)\s*$"),
+    (
+        "conclusion",
+        rf"^\s*{SECTION_NUMBERING_PREFIX}(conclusion|conclusions|discussion|结论|讨论)\s*$",
+    ),
     ("reference", r"^\s*(references|bibliography|参考文献)\s*$"),
 ]
 

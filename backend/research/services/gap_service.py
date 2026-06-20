@@ -32,11 +32,19 @@ class GapService:
             query = query.filter(Evidence.paper_id.in_(paper_ids))
 
         evidences = query.order_by(Evidence.created_at.asc()).limit(max_gaps).all()
-        if not evidences:
+        if len(evidences) < max_gaps:
+            existing_ids = {evidence.id for evidence in evidences}
             fallback_query = self.session.query(Evidence).filter(Evidence.evidence_type == "claim")
             if paper_ids:
                 fallback_query = fallback_query.filter(Evidence.paper_id.in_(paper_ids))
-            evidences = fallback_query.order_by(Evidence.created_at.asc()).limit(max_gaps).all()
+            fallback_evidences = fallback_query.order_by(Evidence.created_at.asc()).all()
+            for evidence in fallback_evidences:
+                if evidence.id in existing_ids:
+                    continue
+                evidences.append(evidence)
+                existing_ids.add(evidence.id)
+                if len(evidences) >= max_gaps:
+                    break
 
         gaps = []
         graph = GraphService(self.session)
