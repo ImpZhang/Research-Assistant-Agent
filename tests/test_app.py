@@ -4472,6 +4472,105 @@ def test_evidence_ledger_treats_local_related_work_rows_as_context() -> None:
         session.close()
 
 
+def test_evidence_ledger_deduplicates_missing_searches_across_artifacts() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-ledger-missing-dedupe-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(id=f"{marker}-paper", title="Missing Evidence Dedupe Paper")
+        session.add(paper)
+        session.add_all(
+            [
+                Evidence(
+                    id=f"{marker}-method",
+                    paper_id=paper.id,
+                    evidence_type="method",
+                    text="The method supports missing evidence deduplication.",
+                    summary="The method supports missing evidence deduplication.",
+                    confidence=0.8,
+                ),
+                Evidence(
+                    id=f"{marker}-future",
+                    paper_id=paper.id,
+                    evidence_type="future_work",
+                    text="Future work should compare against external literature.",
+                    summary="Future work should compare against external literature.",
+                    confidence=0.8,
+                ),
+            ]
+        )
+        session.commit()
+
+        gap = ResearchGap(
+            id=f"{marker}-gap",
+            title="Address limitation: duplicate missing evidence",
+            description="Duplicate missing search entries should not double-penalize coverage.",
+            gap_type="method_gap",
+            source_paper_ids_json=[paper.id],
+            evidence_ids_json=[f"{marker}-method", f"{marker}-future"],
+            why_important="Evidence gaps should remain visible without inflated counts.",
+        )
+        idea = IdeaService(session)._build_idea(gap, 0)
+        session.add(idea)
+        session.commit()
+        draft = ProposalDraft(
+            id=f"{marker}-draft",
+            idea_id=idea.id,
+            title="Missing evidence dedupe draft",
+            evidence_ids_json=idea.evidence_ids_json,
+            created_by="pytest",
+        )
+        session.add_all(
+            [
+                draft,
+                ProposalReview(
+                    id=f"{marker}-review",
+                    proposal_draft_id=draft.id,
+                    idea_id=idea.id,
+                    reviewer_type="pytest",
+                    decision="revise",
+                    readiness_score=0.7,
+                    missing_evidence_json=[
+                        "external_literature_search_disabled",
+                        "manual_survey_and_sota_table",
+                    ],
+                    created_by="pytest",
+                ),
+                RelatedWorkMatrix(
+                    id=f"{marker}-matrix",
+                    idea_id=idea.id,
+                    status="completed_related_work_screening",
+                    query="missing evidence dedupe",
+                    items_json=[],
+                    differentiators_json=[],
+                    missing_searches_json=[
+                        "external_literature_search_disabled",
+                        "manual_survey_and_sota_table",
+                        "arxiv_recent_preprints",
+                    ],
+                    checked_sources_json=["local_literature_search"],
+                    summary="Missing evidence dedupe fixture.",
+                    markdown_export="",
+                    created_by="pytest",
+                ),
+            ]
+        )
+        session.commit()
+
+        ledger = IdeaEvidenceLedgerService(session).create_ledger(idea.id)
+        gaps = [item["gap"] for item in ledger.missing_evidence_json]
+
+        assert gaps.count("external_literature_search_disabled") == 1
+        assert gaps.count("manual_survey_and_sota_table") == 1
+        assert any("arxiv_recent_preprints" in gap for gap in gaps)
+        assert len(gaps) == 3
+        assert ledger.summary_json["missing_evidence_count"] == 3
+    finally:
+        session.close()
+
+
 def test_research_packet_pins_latest_evidence_tasks_when_task_list_is_crowded() -> None:
     client = TestClient(create_app())
     assert client.get("/health").status_code == 200

@@ -1,3 +1,5 @@
+import re
+
 from sqlalchemy.orm import Session
 
 from backend.research.models import (
@@ -405,7 +407,7 @@ class IdeaEvidenceLedgerService:
                             "priority": "high" if item.get("risk_level") == "high" else "medium",
                         }
                     )
-        return self._dedupe_dicts(items, key="gap")
+        return self._dedupe_missing_evidence(items)
 
     def _risk_register(
         self,
@@ -724,6 +726,24 @@ class IdeaEvidenceLedgerService:
             seen.add(value)
             deduped.append({**item, key: value})
         return deduped
+
+    def _dedupe_missing_evidence(self, items: list[dict]) -> list[dict]:
+        seen = set()
+        deduped = []
+        for item in items:
+            value = self._clean(str(item.get("gap") or ""))
+            key = self._missing_evidence_key(value)
+            if not value or key in seen:
+                continue
+            seen.add(key)
+            deduped.append({**item, "gap": value})
+        return deduped
+
+    def _missing_evidence_key(self, gap: str) -> str:
+        cleaned = self._clean(gap).lower()
+        cleaned = re.sub(r"^missing related-work search:\s*", "", cleaned)
+        cleaned = re.sub(r"^missing related work search:\s*", "", cleaned)
+        return re.sub(r"[^a-z0-9]+", "_", cleaned).strip("_")
 
     def _overlaps(self, seed: str, *texts: str) -> bool:
         seed_terms = self._terms(seed)
