@@ -2,7 +2,7 @@ import re
 
 from sqlalchemy.orm import Session
 
-from backend.research.models import Evidence, Idea, ResearchGap
+from backend.research.models import Evidence, Idea, Paper, ResearchGap
 from backend.research.services.graph_service import GraphService
 
 
@@ -241,6 +241,7 @@ class IdeaService:
         topic_lower = topic.lower()
         if self._is_geolocalization_topic(topic_lower):
             source_context = self._source_context_for_gap(gap)
+            source_titles = self._source_titles_for_gap(gap)
             source_context_lower = source_context.lower()
             source_datasets = self._source_named_terms(
                 source_context,
@@ -249,6 +250,7 @@ class IdeaService:
                     "IM2GPS3K",
                     "YFCC4K",
                     "YFCC26K",
+                    "MP16-Reason",
                     "MP16-Pro",
                     "MP-16",
                     "MP16",
@@ -256,10 +258,12 @@ class IdeaService:
                     "S2 cells",
                 ],
             )
+            source_datasets = self._prefer_specific_dataset_terms(source_datasets)
             source_baselines = self._source_named_terms(
                 source_context,
                 [
                     "G3",
+                    "GLOBE",
                     "GeoCLIP",
                     "StreetCLIP",
                     "PlaNet",
@@ -269,10 +273,20 @@ class IdeaService:
                     "GeoDecoder",
                     "GeoToken",
                     "GeoRanker",
+                    "Qwen2.5-VL",
+                    "InternVL3",
                 ],
             )
+            source_method_terms = self._source_self_method_terms(
+                source_context,
+                source_titles,
+                source_baselines,
+            )
             source_baselines = [
-                term for term in source_baselines if term.lower() not in {topic_lower, "georanker"}
+                term
+                for term in source_baselines
+                if term.lower() not in {topic_lower, "georanker"}
+                and term not in source_method_terms
             ]
             datasets = [
                 "Source-paper benchmark split",
@@ -397,8 +411,8 @@ class IdeaService:
     def _source_context_for_gap(
         self,
         gap: ResearchGap,
-        max_chars: int = 9000,
-        per_evidence_chars: int = 1600,
+        max_chars: int = 16000,
+        per_evidence_chars: int = 3600,
     ) -> str:
         if self.session is None:
             return ""
@@ -434,6 +448,18 @@ class IdeaService:
             chunks.append(self._source_evidence_chunk(evidence, per_evidence_chars))
         return " ".join(" ".join(chunks).split())[:max_chars]
 
+    def _source_titles_for_gap(self, gap: ResearchGap) -> list[str]:
+        if self.session is None:
+            return []
+        paper_ids = self._dedupe_ids(gap.source_paper_ids_json or [])
+        if not paper_ids:
+            return []
+        by_id = {
+            paper.id: paper
+            for paper in self.session.query(Paper).filter(Paper.id.in_(paper_ids)).all()
+        }
+        return [by_id[paper_id].title or "" for paper_id in paper_ids if paper_id in by_id]
+
     def _source_evidence_chunk(self, evidence: Evidence, max_chars: int) -> str:
         parts: list[str] = []
         for value in [evidence.supports, evidence.summary, evidence.text]:
@@ -444,11 +470,85 @@ class IdeaService:
 
     def _source_named_terms(self, text: str, candidates: list[str]) -> list[str]:
         found: list[str] = []
+        compact_text = self._compact_source_text(text)
         for candidate in candidates:
-            pattern = r"(?<![A-Za-z0-9-])" + re.escape(candidate) + r"(?![A-Za-z0-9-])"
-            if re.search(pattern, text, flags=re.IGNORECASE):
+            pattern = self._source_term_pattern(candidate)
+            if re.search(pattern, text, flags=re.IGNORECASE) or self._loose_source_term_match(
+                candidate,
+                compact_text,
+            ):
                 found.append(candidate)
         return found
+
+    def _source_term_pattern(self, candidate: str) -> str:
+        escaped = re.escape(candidate).replace(r"\-", r"\s*-\s*").replace(r"\ ", r"\s+")
+        return r"(?<![A-Za-z0-9-])" + escaped + r"(?![A-Za-z0-9-])"
+
+    def _loose_source_term_match(self, candidate: str, compact_text: str) -> bool:
+        compact_candidate = self._compact_source_text(candidate)
+        if len(compact_candidate) < 5:
+            return False
+        if not (
+            any(char.isdigit() for char in compact_candidate)
+            or candidate.isupper()
+            or candidate.startswith("Geo")
+        ):
+            return False
+        return compact_candidate in compact_text
+
+    def _prefer_specific_dataset_terms(self, terms: list[str]) -> list[str]:
+        specific_mp16 = any(
+            term.lower().replace(" ", "") in {"mp16-pro", "mp16-reason"} for term in terms
+        )
+        if not specific_mp16:
+            return terms
+        return [term for term in terms if term.lower() not in {"mp16", "mp-16"}]
+
+    def _source_self_method_terms(
+        self,
+        source_context: str,
+        source_titles: list[str],
+        candidates: list[str],
+    ) -> set[str]:
+        compact_context = self._compact_source_text(" ".join(source_titles + [source_context]))
+        compact_titles = [self._compact_source_text(title) for title in source_titles]
+        method_terms: set[str] = set()
+        introduction_markers = [
+            "wepropose",
+            "weproposes",
+            "weintroduce",
+            "wepresent",
+            "wepresented",
+            "thispaperpropose",
+            "thispaperproposes",
+            "thispaperintroduce",
+            "thispaperintroduces",
+            "thispaperpresents",
+        ]
+        method_suffixes = ["framework", "method", "pipeline", "model"]
+        for candidate in candidates:
+            compact_candidate = self._compact_source_text(candidate)
+            if not compact_candidate:
+                continue
+            if any(compact_candidate in title for title in compact_titles):
+                method_terms.add(candidate)
+                continue
+            index = compact_context.find(compact_candidate)
+            while index >= 0:
+                prefix = compact_context[max(0, index - 48) : index]
+                suffix = compact_context[
+                    index + len(compact_candidate) : index + len(compact_candidate) + 120
+                ]
+                if any(marker in prefix for marker in introduction_markers) or any(
+                    suffix.startswith(suffix_marker) for suffix_marker in method_suffixes
+                ):
+                    method_terms.add(candidate)
+                    break
+                index = compact_context.find(compact_candidate, index + 1)
+        return method_terms
+
+    def _compact_source_text(self, text: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
 
     def _merge_ordered(self, primary: list[str], fallback: list[str]) -> list[str]:
         merged: list[str] = []

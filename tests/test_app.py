@@ -4138,6 +4138,64 @@ def test_idea_service_uses_source_evidence_for_geolocalization_profiles() -> Non
         session.close()
 
 
+def test_idea_service_excludes_source_method_names_from_geolocalization_baselines() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-idea-source-method-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            id=f"{marker}-paper",
+            title="Recognition through Reasoning: Reinforcing Image Geo-localization",
+        )
+        session.add(paper)
+        session.add_all(
+            [
+                Evidence(
+                    id=f"{marker}-method",
+                    paper_id=paper.id,
+                    evidence_type="method",
+                    text=(
+                        "We introduceGLOBE, a reasoning-driven geo-localization framework. "
+                        "We compareGLOBEagainst ISNs and GeoCLIP under the same protocol."
+                    ),
+                    summary="GLOBE is introduced and compared against ISNs and GeoCLIP.",
+                ),
+                Evidence(
+                    id=f"{marker}-dataset",
+                    paper_id=paper.id,
+                    evidence_type="dataset",
+                    text=(
+                        "The curated datasetMP16-Reasonand MP16-Pro support experiments "
+                        "on IM2GPS3K and YFCC4K. The original dataset MP16 is provenance only."
+                    ),
+                    summary="MP16-Reason, MP16-Pro, IM2GPS3K, and YFCC4K are used.",
+                ),
+            ]
+        )
+        session.commit()
+
+        gap = ResearchGap(
+            id=f"{marker}-gap",
+            title="Investigate research opportunity: image geo-localization",
+            description="Reasoning-driven image geo-localization needs better evidence.",
+            gap_type="application_gap",
+            source_paper_ids_json=[paper.id],
+            evidence_ids_json=[f"{marker}-method"],
+        )
+        idea = IdeaService(session)._build_idea(gap, 0)
+
+        assert "MP16-Reason" in idea.datasets_json
+        assert "MP16-Pro" in idea.datasets_json
+        assert "MP16" not in idea.datasets_json
+        assert "GeoCLIP source-paper comparison baseline" in idea.baselines_json
+        assert "ISNs source-paper comparison baseline" in idea.baselines_json
+        assert "GLOBE source-paper comparison baseline" not in idea.baselines_json
+    finally:
+        session.close()
+
+
 def test_evidence_ledger_routes_typed_source_evidence_to_claims() -> None:
     client = TestClient(create_app())
     assert client.get("/health").status_code == 200
