@@ -61,6 +61,7 @@ class IdeaService:
     def _build_idea(self, gap: ResearchGap, variant: int) -> Idea:
         topic = self._gap_topic(gap)
         gap_signal = self._gap_signal(gap)
+        experiment_profile = self._experiment_profile(topic, gap)
 
         if variant == 0:
             title = f"Gap-Targeted Method for {topic}"
@@ -109,27 +110,12 @@ class IdeaService:
                 f"The novelty is positioned around an explicit {gap_signal} and linked "
                 "future-work context rather than a broad combination of existing techniques."
             ),
-            datasets_json=["To be selected from source-paper datasets and related benchmarks."],
-            baselines_json=[
-                "Source paper baseline",
-                "Strong recent method",
-                "Ablated proposed variant",
-            ],
-            metrics_json=[
-                "Task metric",
-                "Gap-specific diagnostic metric",
-                "Efficiency/cost metric",
-            ],
-            risks_json=[
-                "The gap may already be addressed by newer external literature.",
-                "The proposed change may improve only a narrow benchmark slice.",
-            ],
-            resource_requirements="MVP experiment should fit a single small benchmark slice first.",
-            target_venues_json=[
-                "Workshop",
-                "Domain conference",
-                "Full conference after validation",
-            ],
+            datasets_json=experiment_profile["datasets"],
+            baselines_json=experiment_profile["baselines"],
+            metrics_json=experiment_profile["metrics"],
+            risks_json=experiment_profile["risks"],
+            resource_requirements=experiment_profile["resource_requirements"],
+            target_venues_json=experiment_profile["target_venues"],
             score_json={
                 "novelty": 3.0,
                 "feasibility": 4.0,
@@ -250,3 +236,116 @@ class IdeaService:
         if sentence_match and len(sentence_match.group(1).split()) >= 5:
             return sentence_match.group(1).strip(" .")
         return compact
+
+    def _experiment_profile(self, topic: str, gap: ResearchGap) -> dict[str, list[str] | str]:
+        topic_lower = topic.lower()
+        if self._is_geolocalization_topic(topic_lower):
+            datasets = [
+                "Source-paper benchmark split",
+                "IM2GPS3K-style worldwide geolocalization test slice",
+                "Region-balanced long-tail geographic slice",
+            ]
+            if "ranking" in topic_lower or "candidate" in topic_lower:
+                datasets.append("Top-k candidate retrieval/ranking slice")
+            baselines = [
+                "Source paper baseline",
+                "Distance-unaware candidate selector",
+                "Strong vision-language geolocalization baseline",
+            ]
+            if "ranking" in topic_lower:
+                baselines.append("Ablated ranker without distance-aware loss")
+            metrics = [
+                "Median geodesic error",
+                "Accuracy within 1km/25km/200km/2500km",
+                "Top-k candidate recall and reranking gain",
+                "Region-balanced failure rate",
+            ]
+            risks = [
+                "The improvement may concentrate on visually distinctive regions.",
+                "Candidate retrieval errors may cap any downstream reranking gain.",
+                "Benchmark leakage or near-duplicate locations could inflate accuracy.",
+            ]
+            return {
+                "datasets": datasets,
+                "baselines": baselines,
+                "metrics": metrics,
+                "risks": risks,
+                "resource_requirements": (
+                    "Start with a cached top-k candidate slice and one small worldwide benchmark "
+                    "before scaling to full retrieval."
+                ),
+                "target_venues": [
+                    "GeoAI workshop",
+                    "Computer vision workshop",
+                    "Full conference after cross-region validation",
+                ],
+            }
+        if any(keyword in topic_lower for keyword in ["evidence", "claim", "validation"]):
+            return {
+                "datasets": [
+                    "Source-paper evidence ledger sample",
+                    "Manually reviewed claim-evidence pairs",
+                    "Held-out representative paper set",
+                ],
+                "baselines": [
+                    "Current heuristic evidence linker",
+                    "Retrieval-only evidence linking baseline",
+                    "Manual reviewer reference labels",
+                ],
+                "metrics": [
+                    "Claim support precision",
+                    "Evidence coverage score",
+                    "Counterevidence recall",
+                    "Traceability completeness",
+                ],
+                "risks": [
+                    "Manual labels may be expensive or inconsistent.",
+                    "High evidence coverage can still miss subtle counterclaims.",
+                    "The method may overfit to one paper style.",
+                ],
+                "resource_requirements": (
+                    "Begin with 20-50 manually checked claim-evidence pairs before broad evaluation."
+                ),
+                "target_venues": [
+                    "Research tooling workshop",
+                    "NLP systems workshop",
+                    "Human-centered AI venue after user validation",
+                ],
+            }
+        return {
+            "datasets": ["Source-paper datasets", "Related benchmark slice", "Small MVP dataset"],
+            "baselines": [
+                "Source paper baseline",
+                "Strong recent method",
+                "Ablated proposed variant",
+            ],
+            "metrics": [
+                "Task metric",
+                "Gap-specific diagnostic metric",
+                "Efficiency/cost metric",
+            ],
+            "risks": [
+                "The gap may already be addressed by newer external literature.",
+                "The proposed change may improve only a narrow benchmark slice.",
+            ],
+            "resource_requirements": "MVP experiment should fit a single small benchmark slice first.",
+            "target_venues": [
+                "Workshop",
+                "Domain conference",
+                "Full conference after validation",
+            ],
+        }
+
+    def _is_geolocalization_topic(self, topic_lower: str) -> bool:
+        return any(
+            keyword in topic_lower
+            for keyword in [
+                "geo-localization",
+                "geolocalization",
+                "geographic",
+                "gps",
+                "coordinate",
+                "distance-aware ranking",
+                "candidate ranking",
+            ]
+        )

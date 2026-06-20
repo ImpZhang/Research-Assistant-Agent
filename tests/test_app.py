@@ -3972,6 +3972,8 @@ def test_idea_service_builds_variants_and_preserves_lineage() -> None:
     assert "generic extension" not in method_idea.research_question
     assert "benchmark slice" in evaluation_idea.research_question
     assert "evidence-grounded claims" in method_idea.method_sketch
+    assert "Manually reviewed claim-evidence pairs" in method_idea.datasets_json
+    assert "Claim support precision" in method_idea.metrics_json
     assert method_idea.score_json["overall_score"] == 3.4
     assert method_idea.status == "draft"
     assert method_idea.version == 1
@@ -3990,6 +3992,9 @@ def test_idea_service_builds_variants_and_preserves_lineage() -> None:
     assert geo_idea.title == "Diagnostic Benchmark for worldwide geolocalization"
     assert "[1, 2]" not in geo_idea.title
     assert "worldwide geolocalization" in geo_idea.research_question
+    assert "IM2GPS3K-style worldwide geolocalization test slice" in geo_idea.datasets_json
+    assert "Median geodesic error" in geo_idea.metrics_json
+    assert "Accuracy within 1km/25km/200km/2500km" in geo_idea.metrics_json
 
 
 def test_idea_service_carries_source_paper_evidence_context() -> None:
