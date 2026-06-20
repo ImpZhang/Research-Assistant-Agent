@@ -33,6 +33,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_gap_service_builds_titles_reasons_and_approaches \
   tests/test_app.py::test_idea_service_builds_variants_and_preserves_lineage \
   tests/test_app.py::test_idea_service_carries_source_paper_evidence_context \
+  tests/test_app.py::test_idea_service_uses_source_evidence_for_geolocalization_profiles \
   tests/test_app.py::test_evidence_ledger_routes_typed_source_evidence_to_claims \
   tests/test_app.py::test_research_packet_pins_latest_evidence_tasks_when_task_list_is_crowded \
   tests/test_app.py::test_mine_research_gaps_from_evidence \

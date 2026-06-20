@@ -240,19 +240,63 @@ class IdeaService:
     def _experiment_profile(self, topic: str, gap: ResearchGap) -> dict[str, list[str] | str]:
         topic_lower = topic.lower()
         if self._is_geolocalization_topic(topic_lower):
+            source_context = self._source_context_for_gap(gap)
+            source_context_lower = source_context.lower()
+            source_datasets = self._source_named_terms(
+                source_context,
+                [
+                    "GeoRanking",
+                    "IM2GPS3K",
+                    "YFCC4K",
+                    "YFCC26K",
+                    "MP16-Pro",
+                    "MP-16",
+                    "MP16",
+                    "GeoGuessr",
+                    "S2 cells",
+                ],
+            )
+            source_baselines = self._source_named_terms(
+                source_context,
+                [
+                    "G3",
+                    "GeoCLIP",
+                    "StreetCLIP",
+                    "PlaNet",
+                    "CPlaNet",
+                    "TransLocator",
+                    "ISNs",
+                    "GeoDecoder",
+                    "GeoToken",
+                    "GeoRanker",
+                ],
+            )
+            source_baselines = [
+                term for term in source_baselines if term.lower() not in {topic_lower, "georanker"}
+            ]
             datasets = [
                 "Source-paper benchmark split",
                 "IM2GPS3K-style worldwide geolocalization test slice",
                 "Region-balanced long-tail geographic slice",
             ]
-            if "ranking" in topic_lower or "candidate" in topic_lower:
+            datasets = self._merge_ordered(source_datasets, datasets)
+            has_ranking_context = (
+                "ranking" in topic_lower
+                or "candidate" in topic_lower
+                or ("ranking" in source_context_lower and "candidate" in source_context_lower)
+            )
+            if has_ranking_context:
                 datasets.append("Top-k candidate retrieval/ranking slice")
             baselines = [
                 "Source paper baseline",
                 "Distance-unaware candidate selector",
                 "Strong vision-language geolocalization baseline",
             ]
-            if "ranking" in topic_lower:
+            baselines = self._merge_ordered(
+                [f"{term} source-paper comparison baseline" for term in source_baselines],
+                baselines,
+            )
+            if has_ranking_context:
                 baselines.append("Ablated ranker without distance-aware loss")
             metrics = [
                 "Median geodesic error",
@@ -349,3 +393,70 @@ class IdeaService:
                 "candidate ranking",
             ]
         )
+
+    def _source_context_for_gap(
+        self,
+        gap: ResearchGap,
+        max_chars: int = 9000,
+        per_evidence_chars: int = 1600,
+    ) -> str:
+        if self.session is None:
+            return ""
+        evidence_ids = self._dedupe_ids(gap.evidence_ids_json or [])
+        paper_ids = self._dedupe_ids(gap.source_paper_ids_json or [])
+        evidences: list[Evidence] = []
+        if evidence_ids:
+            by_id = {
+                evidence.id: evidence
+                for evidence in self.session.query(Evidence)
+                .filter(Evidence.id.in_(evidence_ids))
+                .all()
+            }
+            evidences.extend(
+                by_id[evidence_id] for evidence_id in evidence_ids if evidence_id in by_id
+            )
+        if paper_ids:
+            evidences.extend(
+                self.session.query(Evidence)
+                .filter(Evidence.paper_id.in_(paper_ids))
+                .order_by(Evidence.created_at.asc())
+                .limit(24)
+                .all()
+            )
+        chunks: list[str] = []
+        seen = set()
+        for evidence in evidences:
+            if evidence.id in seen:
+                continue
+            if evidence.evidence_type == "citation":
+                continue
+            seen.add(evidence.id)
+            chunks.append(self._source_evidence_chunk(evidence, per_evidence_chars))
+        return " ".join(" ".join(chunks).split())[:max_chars]
+
+    def _source_evidence_chunk(self, evidence: Evidence, max_chars: int) -> str:
+        parts: list[str] = []
+        for value in [evidence.supports, evidence.summary, evidence.text]:
+            compact = " ".join((value or "").split())
+            if compact:
+                parts.append(compact)
+        return " ".join(parts)[:max_chars]
+
+    def _source_named_terms(self, text: str, candidates: list[str]) -> list[str]:
+        found: list[str] = []
+        for candidate in candidates:
+            pattern = r"(?<![A-Za-z0-9-])" + re.escape(candidate) + r"(?![A-Za-z0-9-])"
+            if re.search(pattern, text, flags=re.IGNORECASE):
+                found.append(candidate)
+        return found
+
+    def _merge_ordered(self, primary: list[str], fallback: list[str]) -> list[str]:
+        merged: list[str] = []
+        seen = set()
+        for value in primary + fallback:
+            key = value.lower()
+            if not value or key in seen:
+                continue
+            seen.add(key)
+            merged.append(value)
+        return merged

@@ -4077,6 +4077,67 @@ def test_idea_service_carries_source_paper_evidence_context() -> None:
         session.close()
 
 
+def test_idea_service_uses_source_evidence_for_geolocalization_profiles() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-idea-source-profile-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(id=f"{marker}-paper", title="GeoRanker Source Profile Paper")
+        session.add(paper)
+        session.add_all(
+            [
+                Evidence(
+                    id=f"{marker}-method",
+                    paper_id=paper.id,
+                    evidence_type="method",
+                    text=(
+                        "The GeoRanking dataset supports GeoRanker training with candidate "
+                        "ranking examples built from the MP16-Pro database."
+                    ),
+                    summary="GeoRanking dataset supports candidate ranking.",
+                ),
+                Evidence(
+                    id=f"{marker}-result",
+                    paper_id=paper.id,
+                    evidence_type="result",
+                    text="Experiments on IM2GPS3K and YFCC4K compare against G3.",
+                    summary="IM2GPS3K and YFCC4K compare against G3.",
+                ),
+                Evidence(
+                    id=f"{marker}-citation",
+                    paper_id=paper.id,
+                    evidence_type="citation",
+                    text="A reference mentions MP16 but it is not part of this source profile.",
+                    summary="Reference mentions MP16.",
+                ),
+            ]
+        )
+        session.commit()
+
+        gap = ResearchGap(
+            id=f"{marker}-gap",
+            title="Extend future work: distance-aware ranking",
+            description="Distance-aware ranking can improve worldwide image geolocalization.",
+            gap_type="application_gap",
+            source_paper_ids_json=[paper.id],
+            evidence_ids_json=[f"{marker}-method"],
+        )
+        idea = IdeaService(session)._build_idea(gap, 0)
+
+        assert "GeoRanking" in idea.datasets_json
+        assert "MP16-Pro" in idea.datasets_json
+        assert "IM2GPS3K" in idea.datasets_json
+        assert "YFCC4K" in idea.datasets_json
+        assert "MP16" not in idea.datasets_json
+        assert "G3 source-paper comparison baseline" in idea.baselines_json
+        assert "GeoRanker source-paper comparison baseline" not in idea.baselines_json
+        assert "Top-k candidate retrieval/ranking slice" in idea.datasets_json
+    finally:
+        session.close()
+
+
 def test_evidence_ledger_routes_typed_source_evidence_to_claims() -> None:
     client = TestClient(create_app())
     assert client.get("/health").status_code == 200
