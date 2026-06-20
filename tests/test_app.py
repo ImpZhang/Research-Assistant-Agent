@@ -20,6 +20,7 @@ from backend.research.models import (
     ProposalDraft,
     ExperimentPlan,
     Idea,
+    NoveltyCheck,
     Paper,
     ResearchEdge,
     ResearchEmbedding,
@@ -4290,6 +4291,183 @@ def test_evidence_ledger_routes_typed_source_evidence_to_claims() -> None:
         assert "## Evidence Quality Signals" in ledger.markdown_export
         assert "Linked Evidence Types" in ledger.markdown_export
         assert ledger.coverage_score >= 0.5
+    finally:
+        session.close()
+
+
+def test_evidence_ledger_ignores_source_context_collision_signals_as_counterevidence() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-ledger-counterevidence-filter-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(id=f"{marker}-paper", title="Counterevidence Filter Paper")
+        session.add(paper)
+        session.add_all(
+            [
+                Evidence(
+                    id=f"{marker}-method",
+                    paper_id=paper.id,
+                    evidence_type="method",
+                    text="The method supports evidence-grounded geolocalization experiments.",
+                    summary="The method supports evidence-grounded geolocalization experiments.",
+                    confidence=0.8,
+                ),
+                Evidence(
+                    id=f"{marker}-problem",
+                    paper_id=paper.id,
+                    evidence_type="problem",
+                    text="Research teams need source evidence context during idea screening.",
+                    summary="Research teams need source evidence context during idea screening.",
+                    confidence=0.8,
+                ),
+            ]
+        )
+        session.commit()
+
+        gap = ResearchGap(
+            id=f"{marker}-gap",
+            title="Investigate research opportunity: evidence-grounded geolocalization",
+            description="Source evidence context should not be treated as counterevidence.",
+            gap_type="application_gap",
+            source_paper_ids_json=[paper.id],
+            evidence_ids_json=[f"{marker}-method"],
+            why_important="Novelty screening should distinguish context from collisions.",
+        )
+        idea = IdeaService(session)._build_idea(gap, 0)
+        session.add(idea)
+        session.commit()
+        session.add(
+            NoveltyCheck(
+                id=f"{marker}-novelty",
+                idea_id=idea.id,
+                status="completed_literature_screening",
+                risk_level="high",
+                summary="Local screening found context plus true collisions.",
+                local_overlap_score=0.7,
+                collision_signals_json=[
+                    {
+                        "source_type": "evidence",
+                        "label": "Source paper evidence should stay context.",
+                        "score": 7.0,
+                    },
+                    {
+                        "source_type": "gap",
+                        "label": "Source gap should stay context.",
+                        "score": 6.0,
+                    },
+                    {
+                        "source_type": "idea",
+                        "label": "Nearby generated idea collision.",
+                        "score": 5.0,
+                    },
+                    {
+                        "source_type": "literature",
+                        "label": "External paper collision.",
+                        "score": 5.0,
+                    },
+                ],
+                missing_searches_json=[],
+                recommended_actions_json=[],
+                checked_sources_json=["local_evidence_index", "local_idea_index"],
+            )
+        )
+        session.commit()
+
+        ledger = IdeaEvidenceLedgerService(session).create_ledger(idea.id)
+        counter_signals = [item["signal"] for item in ledger.counterevidence_json]
+
+        assert "Source paper evidence should stay context." not in counter_signals
+        assert "Source gap should stay context." not in counter_signals
+        assert "Nearby generated idea collision." in counter_signals
+        assert "External paper collision." in counter_signals
+        assert ledger.summary_json["counterevidence_count"] == 2
+    finally:
+        session.close()
+
+
+def test_evidence_ledger_treats_local_related_work_rows_as_context() -> None:
+    client = TestClient(create_app())
+    assert client.get("/health").status_code == 200
+    marker = f"pytest-ledger-related-work-filter-{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(id=f"{marker}-paper", title="Related Work Filter Paper")
+        session.add(paper)
+        session.add(
+            Evidence(
+                id=f"{marker}-method",
+                paper_id=paper.id,
+                evidence_type="method",
+                text="The method supports related-work filtering in evidence ledgers.",
+                summary="The method supports related-work filtering in evidence ledgers.",
+                confidence=0.8,
+            )
+        )
+        session.commit()
+
+        gap = ResearchGap(
+            id=f"{marker}-gap",
+            title="Address limitation: related-work filtering",
+            description="Local related-work context should not be counterevidence.",
+            gap_type="method_gap",
+            source_paper_ids_json=[paper.id],
+            evidence_ids_json=[f"{marker}-method"],
+            why_important="Counterevidence should focus on external literature collisions.",
+        )
+        idea = IdeaService(session)._build_idea(gap, 0)
+        session.add(idea)
+        session.commit()
+        session.add(
+            RelatedWorkMatrix(
+                id=f"{marker}-matrix",
+                idea_id=idea.id,
+                status="completed_related_work_screening",
+                query="related-work filtering",
+                items_json=[
+                    {
+                        "source_type": "idea",
+                        "title": "Sibling generated idea",
+                        "overlap_score": 60.0,
+                    },
+                    {
+                        "source_type": "gap",
+                        "title": "Nearby mined gap",
+                        "overlap_score": 30.0,
+                    },
+                    {
+                        "source_type": "literature",
+                        "title": "Local source paper",
+                        "overlap_score": 29.0,
+                        "metadata": {"provider": "local"},
+                    },
+                    {
+                        "source_type": "literature",
+                        "title": "External nearest paper",
+                        "overlap_score": 0.8,
+                        "metadata": {"provider": "openalex"},
+                    },
+                ],
+                differentiators_json=[],
+                missing_searches_json=[],
+                checked_sources_json=["local_idea_index", "local_literature_search"],
+                summary="Related-work filter fixture.",
+                markdown_export="",
+                created_by="pytest",
+            )
+        )
+        session.commit()
+
+        ledger = IdeaEvidenceLedgerService(session).create_ledger(idea.id)
+        counter_signals = [item["signal"] for item in ledger.counterevidence_json]
+
+        assert "High-overlap related work: Sibling generated idea" not in counter_signals
+        assert "High-overlap related work: Nearby mined gap" not in counter_signals
+        assert "High-overlap related work: Local source paper" not in counter_signals
+        assert "High-overlap related work: External nearest paper" in counter_signals
+        assert ledger.summary_json["counterevidence_count"] == 1
     finally:
         session.close()
 

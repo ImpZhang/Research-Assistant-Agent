@@ -36,6 +36,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_idea_service_uses_source_evidence_for_geolocalization_profiles \
   tests/test_app.py::test_idea_service_excludes_source_method_names_from_geolocalization_baselines \
   tests/test_app.py::test_evidence_ledger_routes_typed_source_evidence_to_claims \
+  tests/test_app.py::test_evidence_ledger_ignores_source_context_collision_signals_as_counterevidence \
+  tests/test_app.py::test_evidence_ledger_treats_local_related_work_rows_as_context \
   tests/test_app.py::test_research_packet_pins_latest_evidence_tasks_when_task_list_is_crowded \
   tests/test_app.py::test_mine_research_gaps_from_evidence \
   tests/test_app.py::test_generate_ideas_from_gap \

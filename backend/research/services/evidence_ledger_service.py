@@ -281,6 +281,8 @@ class IdeaEvidenceLedgerService:
         items = []
         if novelty_check:
             for signal in (novelty_check.collision_signals_json or [])[:6]:
+                if not self._is_counterevidence_collision_signal(signal):
+                    continue
                 items.append(
                     {
                         "source_type": "novelty_check",
@@ -291,18 +293,19 @@ class IdeaEvidenceLedgerService:
                 )
         if matrix:
             for item in (matrix.items_json or [])[:6]:
+                if not self._is_counterevidence_related_work_item(item):
+                    continue
                 overlap = float(item.get("overlap_score") or 0.0)
-                if overlap >= 0.35:
-                    items.append(
-                        {
-                            "source_type": "related_work_matrix",
-                            "source_id": matrix.id,
-                            "signal": self._clean(
-                                f"High-overlap related work: {item.get('title', '')}"
-                            ),
-                            "severity": "high" if overlap >= 0.65 else "medium",
-                        }
-                    )
+                items.append(
+                    {
+                        "source_type": "related_work_matrix",
+                        "source_id": matrix.id,
+                        "signal": self._clean(
+                            f"High-overlap related work: {item.get('title', '')}"
+                        ),
+                        "severity": "high" if overlap >= 0.65 else "medium",
+                    }
+                )
         if review:
             for concern in (review.concerns_json or [])[:6]:
                 items.append(
@@ -326,6 +329,19 @@ class IdeaEvidenceLedgerService:
                     }
                 )
         return self._dedupe_dicts(items, key="signal")
+
+    def _is_counterevidence_collision_signal(self, signal: dict) -> bool:
+        source_type = str(signal.get("source_type") or "").lower()
+        return source_type in {"idea", "literature"}
+
+    def _is_counterevidence_related_work_item(self, item: dict) -> bool:
+        if str(item.get("source_type") or "").lower() != "literature":
+            return False
+        metadata = item.get("metadata") or {}
+        provider = str(metadata.get("provider") or item.get("provider") or "").lower()
+        if provider in {"", "local"}:
+            return False
+        return float(item.get("overlap_score") or 0.0) >= 0.35
 
     def _missing_evidence(
         self,
