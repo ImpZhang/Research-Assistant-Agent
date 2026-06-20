@@ -118,6 +118,10 @@ class DocumentIngestionService:
         chunk_count = 0
         evidence_count = 0
 
+        has_substantive_sections = any(
+            section["section_type"] not in {"full_text", "reference"} for section in sections
+        )
+
         for order_index, section in enumerate(sections):
             section_row = PaperSection(
                 paper_id=paper.id,
@@ -154,7 +158,11 @@ class DocumentIngestionService:
                 self.session.add(chunk)
                 chunk_count += 1
 
-            evidence_text = self._pick_evidence_text(section["text"])
+            evidence_text = self._pick_evidence_text(
+                section["text"],
+                section_type=section["section_type"],
+                has_substantive_sections=has_substantive_sections,
+            )
             if evidence_text:
                 evidence = Evidence(
                     paper_id=paper.id,
@@ -308,8 +316,84 @@ class DocumentIngestionService:
             start = max(0, end - overlap)
         return [chunk for chunk in chunks if chunk]
 
-    def _pick_evidence_text(self, text: str, limit: int = 900) -> str:
-        cleaned = " ".join(text.split())
+    def _pick_evidence_text(
+        self,
+        text: str,
+        limit: int = 900,
+        *,
+        section_type: str = "",
+        has_substantive_sections: bool = False,
+    ) -> str:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if self._looks_like_review_checklist(lines):
+            return ""
+        if section_type == "full_text":
+            lines = self._strip_full_text_metadata_lines(lines)
+        lines = self._drop_leading_non_prose_lines(lines)
+        cleaned = " ".join(" ".join(lines).split())
+        if (
+            section_type == "full_text"
+            and has_substantive_sections
+            and self._looks_like_metadata_preamble(cleaned)
+        ):
+            return ""
         if not cleaned:
             return ""
         return cleaned[:limit]
+
+    def _strip_full_text_metadata_lines(self, lines: list[str]) -> list[str]:
+        for idx, line in enumerate(lines):
+            match = re.match(r"^(abstract|摘要)\s*[-:：.]*\s*(.*)$", line, flags=re.IGNORECASE)
+            if match:
+                first_line = match.group(2).strip()
+                return ([first_line] if first_line else []) + lines[idx + 1 :]
+        return lines
+
+    def _drop_leading_non_prose_lines(self, lines: list[str]) -> list[str]:
+        for idx, line in enumerate(lines):
+            if self._looks_like_substantive_prose_line(line):
+                return lines[idx:]
+        return lines
+
+    def _looks_like_substantive_prose_line(self, line: str) -> bool:
+        normalized = " ".join(line.split())
+        lower = normalized.lower()
+        if lower.startswith(("figure ", "fig. ", "table ", "question:", "answer:", "guidelines:")):
+            return False
+        words = re.findall(r"[A-Za-z][A-Za-z-]+", normalized)
+        if len(words) < 6:
+            return False
+        numeric_chars = sum(char.isdigit() for char in normalized)
+        if numeric_chars / max(len(normalized), 1) > 0.2:
+            return False
+        return True
+
+    def _looks_like_metadata_preamble(self, cleaned: str) -> bool:
+        if len(cleaned) > 700:
+            return False
+        lower = cleaned.lower()
+        if any(
+            keyword in lower
+            for keyword in [
+                "abstract",
+                "this paper",
+                "we propose",
+                "we present",
+                "we study",
+                "challenge",
+                "problem",
+                "evaluation",
+            ]
+        ):
+            return False
+        return True
+
+    def _looks_like_review_checklist(self, lines: list[str]) -> bool:
+        if not lines:
+            return False
+        joined = " ".join(lines[:12]).lower()
+        return (
+            joined.startswith("question: does the paper discuss")
+            and "answer:" in joined
+            and "guidelines:" in joined
+        )

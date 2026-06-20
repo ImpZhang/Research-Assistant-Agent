@@ -3071,6 +3071,70 @@ REFERENCES
     assert "application_gap" in gap_types
 
 
+def test_upload_filters_metadata_checklist_and_leading_chart_noise(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+    content = b"""GeoRanker: Distance-Aware Ranking for Worldwide Image Geolocalization
+Pengyue Jia, Seongheon Park, Song Gao
+Department of Data Science
+
+Abstract
+Worldwide image geolocalization poses a fundamental challenge because visual
+content varies across regions and candidate-ranking pipelines need stronger
+distance-aware evaluation.
+
+1 Introduction
+G3 Top5 Top10 Top20
+0.0
+0.1
+0.2
+Figure 1: Accuracy at 1km threshold for the current system.
+Worldwide image geolocalization refers to predicting the GPS coordinates of
+images captured anywhere on Earth. Global geolocalization poses greater
+challenges than city-level localization because visual evidence is ambiguous.
+
+2. Limitations
+Question: Does the paper discuss the limitations of the work performed by the authors?
+Answer: [Yes]
+Guidelines: The answer NA means that the paper has no limitation while the answer
+No means that the paper has limitations but does not discuss them.
+
+5 Conclusion
+Future work should stress-test distance-aware ranking under harder long-tail
+regions and compare against the source paper as the nearest baseline.
+
+References
+[1] Prior geolocalization benchmark.
+"""
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("georanker_noise_fixture.txt", content, "text/plain")},
+    )
+
+    assert response.status_code == 200
+    paper_id = response.json()["paper"]["id"]
+
+    evidence_response = client.get(f"/research/papers/{paper_id}/evidence")
+    assert evidence_response.status_code == 200
+    evidence = evidence_response.json()
+    assert not any(item["supports"] == "Full Text" for item in evidence)
+    assert not any(item["supports"] == "2. Limitations" for item in evidence)
+
+    intro = next(item for item in evidence if item["supports"] == "1 Introduction")
+    assert intro["text"].startswith("Worldwide image geolocalization refers")
+    assert "G3 Top5" not in intro["text"]
+    assert "Question: Does the paper discuss" not in " ".join(item["text"] for item in evidence)
+
+    mined = client.post("/research/gaps/mine", json={"paper_ids": [paper_id], "max_gaps": 3})
+
+    assert mined.status_code == 200
+    gap_text = " ".join(gap["description"] for gap in mined.json()["gaps"])
+    assert "Question: Does the paper discuss" not in gap_text
+    assert "Department of Data Science" not in gap_text
+    assert "Worldwide image geolocalization refers" in gap_text
+
+
 def test_upload_markdown_paper_uses_default_allowed_extension(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
     client = TestClient(create_app())
