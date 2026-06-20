@@ -3962,17 +3962,34 @@ def test_idea_service_builds_variants_and_preserves_lineage() -> None:
 
     assert service._shorten("  one\n two\t three  ", 20) == "one two three"
     assert service._shorten("x" * 80, 10) == "xxxxxxx..."
-    assert method_idea.title.startswith("Evidence-Guided Study for Address limitation")
-    assert evaluation_idea.title.startswith("Evaluation-Centered Study for Address limitation")
-    assert len(method_idea.title) <= len("Evidence-Guided Study for ") + 72
+    assert method_idea.title == "Gap-Targeted Method for evidence-grounded claims"
+    assert evaluation_idea.title == "Diagnostic Benchmark for evidence-grounded claims"
+    assert len(method_idea.title) <= len("Gap-Targeted Method for ") + 64
     assert method_idea.related_gap_ids_json == ["gap-lineage"]
     assert method_idea.related_paper_ids_json == ["paper-a"]
     assert method_idea.evidence_ids_json == ["evidence-a", "evidence-b"]
-    assert "targeted method improvement" in method_idea.research_question
-    assert "evaluation protocol" in evaluation_idea.research_question
+    assert "evidence-grounded claims" in method_idea.research_question
+    assert "generic extension" not in method_idea.research_question
+    assert "benchmark slice" in evaluation_idea.research_question
+    assert "evidence-grounded claims" in method_idea.method_sketch
     assert method_idea.score_json["overall_score"] == 3.4
     assert method_idea.status == "draft"
     assert method_idea.version == 1
+
+    geo_gap = ResearchGap(
+        id="gap-geo",
+        title="Investigate unresolved problem: Worldwide geolocalization [1, 2] refers...",
+        description=(
+            "Worldwide geolocalization [1, 2] refers to predicting the GPS coordinates "
+            "of images captured anywhere on Earth."
+        ),
+        gap_type="evaluation_gap",
+    )
+    geo_idea = service._build_idea(geo_gap, 1)
+
+    assert geo_idea.title == "Diagnostic Benchmark for worldwide geolocalization"
+    assert "[1, 2]" not in geo_idea.title
+    assert "worldwide geolocalization" in geo_idea.research_question
 
 
 def test_idea_service_carries_source_paper_evidence_context() -> None:

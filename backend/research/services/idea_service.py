@@ -1,3 +1,5 @@
+import re
+
 from sqlalchemy.orm import Session
 
 from backend.research.models import Evidence, Idea, ResearchGap
@@ -57,34 +59,37 @@ class IdeaService:
         return ideas
 
     def _build_idea(self, gap: ResearchGap, variant: int) -> Idea:
-        title_prefix = "Evidence-Guided" if variant == 0 else "Evaluation-Centered"
-        title = f"{title_prefix} Study for {self._shorten(gap.title, 72)}"
+        topic = self._gap_topic(gap)
+        gap_signal = self._gap_signal(gap)
 
         if variant == 0:
+            title = f"Gap-Targeted Method for {topic}"
             research_question = (
-                "Can a targeted method improvement address the documented research gap: "
-                f"{gap.description}"
+                f"Can a method designed around the cited {gap_signal} improve {topic} "
+                "over the source-paper baseline?"
             )
             core_hypothesis = (
-                "A method designed directly around the cited evidence will outperform a generic "
-                "extension because it optimizes for the stated limitation or future-work need."
+                f"Targeting {topic} with the cited evidence as design constraints will outperform "
+                "a generic extension because the intervention is aligned to the observed failure mode."
             )
             method_sketch = (
-                "Use the gap evidence as design constraints, implement a focused method variant, "
-                "and compare it against the source-paper baseline."
+                f"Translate the evidence about {topic} into design constraints, implement one "
+                "focused method variant, keep paper evidence linked to generated ideas, and "
+                "compare it against the source-paper baseline."
             )
         else:
+            title = f"Diagnostic Benchmark for {topic}"
             research_question = (
-                "Can an evaluation protocol expose and measure the gap more clearly than current "
-                f"benchmarks? Gap: {gap.description}"
+                f"Which benchmark slice best exposes failures in {topic}, and do current "
+                "aggregate metrics hide that gap?"
             )
             core_hypothesis = (
-                "A benchmark slice aligned with the gap evidence will reveal failure modes that "
-                "standard aggregate metrics hide."
+                f"A benchmark slice aligned with the cited {gap_signal} will reveal {topic} "
+                "failure modes that standard aggregate metrics hide."
             )
             method_sketch = (
-                "Construct a targeted evaluation split, define metrics around the gap, and test "
-                "existing methods before proposing model changes."
+                f"Construct a targeted evaluation split for {topic}, define diagnostic metrics "
+                "around the cited evidence, and test existing methods before proposing model changes."
             )
 
         return Idea(
@@ -97,12 +102,12 @@ class IdeaService:
             evidence_ids_json=self._evidence_ids_for_gap(gap),
             method_sketch=method_sketch,
             expected_contribution=(
-                "A research contribution that is explicitly grounded in prior-paper evidence and "
-                "evaluated with a focused experimental setup."
+                f"An evidence-grounded contribution on {topic} with a focused experimental setup "
+                "and clear comparison against source-paper baselines."
             ),
             novelty_argument=(
-                "The idea is positioned around an explicit limitation/future-work signal rather "
-                "than a broad combination of existing techniques."
+                f"The novelty is positioned around an explicit {gap_signal} and linked "
+                "future-work context rather than a broad combination of existing techniques."
             ),
             datasets_json=["To be selected from source-paper datasets and related benchmarks."],
             baselines_json=[
@@ -191,3 +196,57 @@ class IdeaService:
         if len(compact) <= max_len:
             return compact
         return compact[: max_len - 3].rstrip() + "..."
+
+    def _gap_signal(self, gap: ResearchGap) -> str:
+        return {
+            "method_gap": "method limitation",
+            "application_gap": "future-work direction",
+            "evaluation_gap": "evaluation gap",
+        }.get(gap.gap_type or "", "research gap")
+
+    def _gap_topic(self, gap: ResearchGap, max_len: int = 64) -> str:
+        text = self._clean_gap_text(gap.description or gap.title or "the documented gap")
+        lower = text.lower()
+        phrase_map = [
+            ("fine-grained geo-localization", "fine-grained geo-localization"),
+            ("fine-grained geolocalization", "fine-grained geolocalization"),
+            ("coordinate-level localization", "coordinate-level localization"),
+            ("coordinate-level geolocalization", "coordinate-level geolocalization"),
+            ("worldwide image geolocalization", "worldwide image geolocalization"),
+            ("worldwide geolocalization", "worldwide geolocalization"),
+            ("image geo-localization", "image geo-localization"),
+            ("image geolocalization", "image geolocalization"),
+            ("distance-aware ranking", "distance-aware ranking"),
+            ("hierarchical geolocalization", "hierarchical geolocalization"),
+            ("hierarchical sequence-prediction", "hierarchical sequence prediction"),
+            ("evidence-grounded claims", "evidence-grounded claims"),
+            ("evidence coverage", "evidence coverage"),
+            ("claim validation", "claim validation"),
+        ]
+        for needle, label in phrase_map:
+            if needle in lower:
+                return label
+        if "gps coordinates" in lower or "geographic coordinates" in lower:
+            return "coordinate-level geolocalization"
+        if "candidate" in lower and "ranking" in lower:
+            return "candidate ranking"
+        words = text.split()
+        if len(words) > 10:
+            text = " ".join(words[:10])
+        return self._shorten(text or "the documented gap", max_len)
+
+    def _clean_gap_text(self, text: str) -> str:
+        compact = " ".join((text or "").split())
+        compact = re.sub(
+            r"^(Address limitation|Extend future work|Investigate unresolved problem|"
+            r"Investigate research opportunity):\s*",
+            "",
+            compact,
+            flags=re.IGNORECASE,
+        )
+        compact = re.sub(r"\[[^\]]+\]", "", compact)
+        compact = re.sub(r"\s+", " ", compact).strip(" .")
+        sentence_match = re.match(r"(.+?[.!?])\s+", compact)
+        if sentence_match and len(sentence_match.group(1).split()) >= 5:
+            return sentence_match.group(1).strip(" .")
+        return compact
