@@ -158,12 +158,14 @@ class LiteratureSearchService:
         return providers
 
     def _openalex_item(self, item: dict[str, Any], idx: int) -> LiteratureSearchItem:
-        authors = [
-            authorship.get("author", {}).get("display_name", "")
-            for authorship in item.get("authorships", [])
-            if authorship.get("author", {}).get("display_name")
-        ]
-        venue = item.get("primary_location", {}).get("source", {}).get("display_name", "")
+        authors = []
+        for authorship in item.get("authorships", []):
+            author = authorship.get("author") or {}
+            if author.get("display_name"):
+                authors.append(author["display_name"])
+        primary_location = item.get("primary_location") or {}
+        source = primary_location.get("source") or {}
+        venue = source.get("display_name", "")
         return LiteratureSearchItem(
             provider="openalex",
             source_id=item.get("id", ""),

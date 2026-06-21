@@ -206,7 +206,11 @@ class NoveltyService:
         literature: LiteratureSearchResponse,
         include_external_literature: bool,
     ) -> list[str]:
-        searches = ["semantic_scholar_adapter", "arxiv_recent_preprints"]
+        searches = []
+        if not self._external_provider_present(literature, "semantic_scholar"):
+            searches.append("semantic_scholar_adapter")
+        if not self._external_provider_present(literature, "arxiv"):
+            searches.append("arxiv_recent_preprints")
         if not include_external_literature:
             searches.insert(0, "external_literature_search_not_requested")
         elif literature.external_status == "disabled":
@@ -216,6 +220,13 @@ class NoveltyService:
         elif literature.external_status == "completed":
             searches.append("external_literature_search_needs_manual_review")
         return searches
+
+    def _external_provider_present(
+        self,
+        literature: LiteratureSearchResponse,
+        provider: str,
+    ) -> bool:
+        return any(item.provider == provider for item in literature.items)
 
     def _recommended_actions(self, risk_level: str) -> list[str]:
         actions = [

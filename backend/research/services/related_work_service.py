@@ -296,11 +296,10 @@ class RelatedWorkService:
         literature: LiteratureSearchResponse,
         include_external: bool,
     ) -> list[str]:
-        searches = [
-            "semantic_scholar_citation_chaining",
-            "arxiv_recent_preprints",
-            "manual_survey_and_sota_table",
-        ]
+        searches = ["semantic_scholar_citation_chaining"]
+        if not self._external_provider_present(literature, "arxiv"):
+            searches.append("arxiv_recent_preprints")
+        searches.append("manual_survey_and_sota_table")
         if not include_external:
             searches.insert(0, "external_literature_search_not_requested")
         elif literature.external_status == "disabled":
@@ -310,6 +309,13 @@ class RelatedWorkService:
         elif literature.external_status == "completed":
             searches.append("external_literature_search_manual_review")
         return searches
+
+    def _external_provider_present(
+        self,
+        literature: LiteratureSearchResponse,
+        provider: str,
+    ) -> bool:
+        return any(item.provider == provider for item in literature.items)
 
     def _summary(self, rows: list[dict[str, Any]], literature: LiteratureSearchResponse) -> str:
         if not rows:

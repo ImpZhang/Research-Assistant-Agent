@@ -3625,8 +3625,9 @@ def test_openalex_literature_item_parser_fallbacks() -> None:
     payload = {
         "id": "https://openalex.org/W9999999999",
         "display_name": "Fallback OpenAlex Work",
-        "primary_location": {},
+        "primary_location": None,
         "authorships": [
+            {"author": None},
             {"author": {"display_name": ""}},
             {"author": {"display_name": "Ada Lovelace"}},
         ],
@@ -4989,12 +4990,29 @@ def test_novelty_service_external_overlap_score_respects_statuses() -> None:
 def test_novelty_service_missing_searches_risk_and_actions() -> None:
     service = NoveltyService(None)
 
-    def response(status: str) -> LiteratureSearchResponse:
+    def provider_item(provider: str) -> LiteratureSearchItem:
+        return LiteratureSearchItem(
+            provider=provider,
+            source_id=f"{provider}-result",
+            title=f"{provider} Result",
+            authors=[],
+            year=None,
+            venue="",
+            url="",
+            abstract="",
+            score=9.0,
+            metadata={},
+        )
+
+    def response(
+        status: str,
+        items: list[LiteratureSearchItem] | None = None,
+    ) -> LiteratureSearchResponse:
         return LiteratureSearchResponse(
             query="agent novelty",
             local_status="completed",
             external_status=status,
-            items=[],
+            items=items or [],
             message="fixture",
         )
 
@@ -5010,6 +5028,22 @@ def test_novelty_service_missing_searches_risk_and_actions() -> None:
     assert service._missing_searches(response("completed"), True)[-1] == (
         "external_literature_search_needs_manual_review"
     )
+
+    completed = service._missing_searches(
+        response("completed", [provider_item("semantic_scholar"), provider_item("arxiv")]),
+        True,
+    )
+    assert completed == ["external_literature_search_needs_manual_review"]
+
+    partial = service._missing_searches(
+        response(
+            "partial:openalex:completed,arxiv:failed:Timeout,semantic_scholar:completed",
+            [provider_item("semantic_scholar")],
+        ),
+        True,
+    )
+    assert "semantic_scholar_adapter" not in partial
+    assert "arxiv_recent_preprints" in partial
 
     nearby_ideas = [ScoredItem(item=Idea(id="nearby-idea"), score=0.9, matched_terms=["agent"])]
     assert service._risk_level(0.0, []) == "unknown"
@@ -5120,12 +5154,29 @@ def test_related_work_service_build_query_cleans_defaults_and_clamps() -> None:
 def test_related_work_service_missing_searches_cover_external_statuses() -> None:
     service = RelatedWorkService(None)
 
-    def response(status: str) -> LiteratureSearchResponse:
+    def provider_item(provider: str) -> LiteratureSearchItem:
+        return LiteratureSearchItem(
+            provider=provider,
+            source_id=f"{provider}-result",
+            title=f"{provider} Result",
+            authors=[],
+            year=None,
+            venue="",
+            url="",
+            abstract="",
+            score=9.0,
+            metadata={},
+        )
+
+    def response(
+        status: str,
+        items: list[LiteratureSearchItem] | None = None,
+    ) -> LiteratureSearchResponse:
         return LiteratureSearchResponse(
             query="agent related work",
             local_status="completed",
             external_status=status,
-            items=[],
+            items=items or [],
             message="fixture",
         )
 
@@ -5140,6 +5191,15 @@ def test_related_work_service_missing_searches_cover_external_statuses() -> None
     )
     completed = service._missing_searches(response("completed"), include_external=True)
     assert completed[-1] == "external_literature_search_manual_review"
+
+    completed_with_arxiv = service._missing_searches(
+        response("completed", [provider_item("arxiv"), provider_item("semantic_scholar")]),
+        include_external=True,
+    )
+    assert "arxiv_recent_preprints" not in completed_with_arxiv
+    assert "semantic_scholar_citation_chaining" in completed_with_arxiv
+    assert "manual_survey_and_sota_table" in completed_with_arxiv
+    assert completed_with_arxiv[-1] == "external_literature_search_manual_review"
 
 
 def test_related_work_service_rows_sort_truncate_and_preserve_metadata() -> None:
