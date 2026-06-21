@@ -424,6 +424,8 @@ def _external_literature_search_ready() -> dict:
         "invalid_providers": invalid_providers,
         "base_urls_configured": base_urls_configured,
     }
+    if "semantic_scholar" in providers:
+        payload["semantic_scholar_api_key_configured"] = _semantic_scholar_api_key_configured()
     if not providers:
         payload["error"] = (
             "External literature search is enabled but no supported providers are configured."
@@ -458,6 +460,12 @@ def _external_literature_providers() -> tuple[list[str], list[str]]:
         elif normalized not in invalid_providers:
             invalid_providers.append(normalized)
     return providers, invalid_providers
+
+
+def _semantic_scholar_api_key_configured() -> bool:
+    if "SEMANTIC_SCHOLAR_API_KEY" in os.environ:
+        return bool(os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "").strip())
+    return bool(settings.semantic_scholar_api_key.strip())
 
 
 def _external_literature_provider_base_url(provider: str) -> str:

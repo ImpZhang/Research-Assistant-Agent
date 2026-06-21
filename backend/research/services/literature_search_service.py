@@ -157,11 +157,20 @@ class LiteratureSearchService:
                 providers.append(normalized)
         return providers
 
-    def _request_external(self, url: str, *, params: dict[str, Any]) -> requests.Response:
+    def _request_external(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any],
+        headers: dict[str, str] | None = None,
+    ) -> requests.Response:
+        request_headers = {"User-Agent": settings.external_literature_user_agent}
+        if headers:
+            request_headers.update(headers)
         response = requests.get(
             url,
             params=params,
-            headers={"User-Agent": settings.external_literature_user_agent},
+            headers=request_headers,
             timeout=settings.external_literature_request_timeout_seconds,
         )
         response.raise_for_status()
@@ -170,6 +179,11 @@ class LiteratureSearchService:
     def _http_error_label(self, exc: requests.HTTPError) -> str:
         status_code = getattr(getattr(exc, "response", None), "status_code", None)
         return f"HTTPError_{status_code}" if status_code else "HTTPError"
+
+    def _semantic_scholar_headers(self) -> dict[str, str]:
+        if not settings.semantic_scholar_api_key:
+            return {}
+        return {"x-api-key": settings.semantic_scholar_api_key}
 
     def _openalex_item(self, item: dict[str, Any], idx: int) -> LiteratureSearchItem:
         authors = []
@@ -262,6 +276,7 @@ class LiteratureSearchService:
                 "limit": limit,
                 "fields": "title,authors,year,venue,url,abstract,citationCount,externalIds",
             },
+            headers=self._semantic_scholar_headers(),
         )
         results = response.json().get("data", [])
         return [self._semantic_scholar_item(item, idx) for idx, item in enumerate(results)]

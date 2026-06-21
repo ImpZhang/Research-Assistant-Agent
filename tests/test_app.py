@@ -153,7 +153,26 @@ def test_health_ready_checks_external_literature_configuration(monkeypatch) -> N
         "openalex": False,
         "semantic_scholar": True,
     }
+    assert check["semantic_scholar_api_key_configured"] is False
     assert check["missing_base_url_providers"] == ["openalex"]
+
+
+def test_health_ready_reports_semantic_scholar_api_key_without_leaking_value(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("EXTERNAL_LITERATURE_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("EXTERNAL_LITERATURE_PROVIDERS", "semantic_scholar")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_BASE_URL", "https://example.test/search")
+    monkeypatch.setenv("SEMANTIC_SCHOLAR_API_KEY", "pytest-semantic-secret")
+
+    client = TestClient(create_app())
+    response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    check = response.json()["checks"]["external_literature_search"]
+    assert check["ok"] is True
+    assert check["semantic_scholar_api_key_configured"] is True
+    assert "pytest-semantic-secret" not in response.text
 
 
 def test_product_effect_scorecard_separates_quality_from_completion() -> None:
@@ -3459,6 +3478,55 @@ def test_external_literature_request_uses_configured_headers_and_timeout(monkeyp
             "params": {"q": "agent"},
             "headers": {"User-Agent": "pytest-agent"},
             "timeout": 12.5,
+        }
+    ]
+
+
+def test_semantic_scholar_search_sends_api_key_when_configured(monkeypatch) -> None:
+    from backend.research.services import literature_search_service
+
+    default_api_key = literature_search_service.settings.semantic_scholar_api_key
+    calls = []
+
+    class Response:
+        def json(self) -> dict:
+            return {"data": []}
+
+    def fake_request(self, url, *, params, headers=None):
+        calls.append(
+            {
+                "url": url,
+                "params": params,
+                "headers": headers,
+            }
+        )
+        return Response()
+
+    monkeypatch.setattr(LiteratureSearchService, "_request_external", fake_request)
+    object.__setattr__(
+        literature_search_service.settings,
+        "semantic_scholar_api_key",
+        "pytest-semantic-key",
+    )
+    try:
+        items = LiteratureSearchService(None)._search_semantic_scholar("agent", 3)
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "semantic_scholar_api_key",
+            default_api_key,
+        )
+
+    assert items == []
+    assert calls == [
+        {
+            "url": literature_search_service.settings.semantic_scholar_base_url,
+            "params": {
+                "query": "agent",
+                "limit": 3,
+                "fields": "title,authors,year,venue,url,abstract,citationCount,externalIds",
+            },
+            "headers": {"x-api-key": "pytest-semantic-key"},
         }
     ]
 
