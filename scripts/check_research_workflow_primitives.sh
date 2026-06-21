@@ -14,6 +14,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_external_literature_provider_config_normalization \
   tests/test_app.py::test_external_literature_request_uses_configured_headers_and_timeout \
   tests/test_app.py::test_semantic_scholar_search_sends_api_key_when_configured \
+  tests/test_app.py::test_external_literature_search_compacts_long_generated_queries \
+  tests/test_app.py::test_external_literature_search_reports_partial_when_provider_completes_without_items \
   tests/test_app.py::test_external_literature_search_reports_http_status_code \
   tests/test_app.py::test_markdown_gap_sections_are_mined_from_headings \
   tests/test_app.py::test_upload_preserves_preamble_when_only_reference_heading_matches \

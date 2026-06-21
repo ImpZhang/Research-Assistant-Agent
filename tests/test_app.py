@@ -3681,6 +3681,112 @@ def test_external_literature_search_returns_partial_status(monkeypatch) -> None:
     assert status == ("partial:openalex:completed,arxiv:failed:Timeout,semantic_scholar:completed")
 
 
+def test_external_literature_search_compacts_long_generated_queries(monkeypatch) -> None:
+    from backend.research.schemas import LiteratureSearchItem
+    from backend.research.services import literature_search_service
+
+    default_providers = literature_search_service.settings.external_literature_providers
+    captured_queries = []
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_providers",
+        "openalex",
+    )
+
+    def openalex_items(self, query, limit):
+        captured_queries.append(query)
+        return [
+            LiteratureSearchItem(
+                provider="openalex",
+                source_id="openalex-result",
+                title="OpenAlex Result",
+                authors=[],
+                year=None,
+                venue="",
+                url="",
+                abstract="",
+                score=10.0,
+                metadata={},
+            )
+        ]
+
+    monkeypatch.setattr(LiteratureSearchService, "_search_openalex", openalex_items)
+
+    try:
+        items, status = LiteratureSearchService(None)._search_external(
+            (
+                "Refined sharpen novelty and first executable experiment: "
+                "Gap-Targeted Method for worldwide image geolocalization. "
+                "Can a method designed around the cited evaluation gap improve "
+                "worldwide image geolocalization over the source-paper baseline? "
+            )
+            * 12,
+            5,
+        )
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_providers",
+            default_providers,
+        )
+
+    assert [item.provider for item in items] == ["openalex"]
+    assert status == "completed"
+    assert captured_queries == ["worldwide image geolocalization"]
+    assert len(captured_queries[0]) <= 240
+
+
+def test_external_literature_search_reports_partial_when_provider_completes_without_items(
+    monkeypatch,
+) -> None:
+    import requests
+
+    from backend.research.services import literature_search_service
+
+    default_providers = literature_search_service.settings.external_literature_providers
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_providers",
+        "openalex,arxiv,semantic_scholar",
+    )
+
+    def openalex_empty(self, query, limit):
+        return []
+
+    def arxiv_failure(self, query, limit):
+        raise requests.Timeout("arxiv unavailable")
+
+    def semantic_scholar_failure(self, query, limit):
+        response = requests.Response()
+        response.status_code = 429
+        exc = requests.HTTPError("too many requests")
+        exc.response = response
+        raise exc
+
+    monkeypatch.setattr(LiteratureSearchService, "_search_openalex", openalex_empty)
+    monkeypatch.setattr(LiteratureSearchService, "_search_arxiv", arxiv_failure)
+    monkeypatch.setattr(
+        LiteratureSearchService,
+        "_search_semantic_scholar",
+        semantic_scholar_failure,
+    )
+
+    try:
+        items, status = LiteratureSearchService(None)._search_external("agent", 5)
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_providers",
+            default_providers,
+        )
+
+    assert items == []
+    assert status == (
+        "partial:openalex:completed,arxiv:failed:Timeout,"
+        "semantic_scholar:rate_limited:HTTPError_429"
+    )
+
+
 def test_external_literature_search_reports_http_status_code(monkeypatch) -> None:
     import requests
 

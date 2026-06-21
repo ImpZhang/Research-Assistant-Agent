@@ -58,6 +58,12 @@ The current project result should therefore be described as:
 5. Mark whether each generated idea is a new method, a recombination of recent methods, an evaluation protocol, or a product workflow improvement.
 6. Keep `pilot_acceptable_with_follow_up` until at least one reviewer signs off on the manual SOTA table.
 
+## Implementation Follow-up From Artifact Inspection
+
+Inspection of the external-provider smokes found that related-work refreshes could send 1600-character generated idea descriptions to external providers. This could make OpenAlex return HTTP 400 and could produce contradictory statuses such as `failed:openalex:completed,...` when one provider completed without items and another provider timed out. The external literature service now compacts generated external queries to short content-term searches and treats any completed provider as a partial external search rather than a full failure.
+
+A GeoRanker external smoke after this change scored `0.9483` / `demo_ready` with no failed checks, and the related-work matrix reported `partial:openalex:completed,arxiv:failed:ReadTimeout,semantic_scholar:rate_limited:HTTPError_429` instead of a contradictory failed status.
+
 ## Follow-up Actions
 
 - Inspect the generated related-work matrix and missing-evidence actions for each representative smoke.

@@ -11,6 +11,80 @@ from backend.research.schemas import LiteratureSearchItem, LiteratureSearchRespo
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_\-]{2,}")
+EXTERNAL_QUERY_MAX_CHARS = 240
+EXTERNAL_QUERY_MAX_TERMS = 16
+EXTERNAL_QUERY_STOPWORDS = {
+    "address",
+    "against",
+    "aligned",
+    "and",
+    "around",
+    "baseline",
+    "because",
+    "before",
+    "cited",
+    "claim",
+    "compare",
+    "constraints",
+    "can",
+    "designed",
+    "design",
+    "effect",
+    "evidence",
+    "evaluation",
+    "executable",
+    "experiment",
+    "extension",
+    "first",
+    "focus",
+    "focused",
+    "for",
+    "from",
+    "generic",
+    "generated",
+    "gap",
+    "gap-targeted",
+    "hypothesis",
+    "idea",
+    "ideas",
+    "implement",
+    "improve",
+    "intervention",
+    "investigate",
+    "keep",
+    "linked",
+    "making",
+    "measurable",
+    "method",
+    "mode",
+    "narrower",
+    "novelty",
+    "observed",
+    "one",
+    "opportunity",
+    "original",
+    "outperform",
+    "over",
+    "planned",
+    "produce",
+    "refined",
+    "research",
+    "revised",
+    "revision",
+    "scaling",
+    "setup",
+    "sharpen",
+    "source-paper",
+    "start",
+    "targeting",
+    "testable",
+    "the",
+    "translate",
+    "variant",
+    "while",
+    "will",
+    "with",
+}
 
 
 class LiteratureSearchService:
@@ -119,16 +193,17 @@ class LiteratureSearchService:
     def _search_external(self, query: str, limit: int) -> tuple[list[LiteratureSearchItem], str]:
         provider_items: list[LiteratureSearchItem] = []
         provider_statuses: list[str] = []
+        external_query = self._external_query(query)
         for provider in self._external_providers():
             try:
                 if provider == "openalex":
-                    provider_items.extend(self._search_openalex(query, limit))
+                    provider_items.extend(self._search_openalex(external_query, limit))
                     provider_statuses.append("openalex:completed")
                 elif provider == "arxiv":
-                    provider_items.extend(self._search_arxiv(query, limit))
+                    provider_items.extend(self._search_arxiv(external_query, limit))
                     provider_statuses.append("arxiv:completed")
                 elif provider == "semantic_scholar":
-                    provider_items.extend(self._search_semantic_scholar(query, limit))
+                    provider_items.extend(self._search_semantic_scholar(external_query, limit))
                     provider_statuses.append("semantic_scholar:completed")
             except requests.HTTPError as exc:
                 provider_statuses.append(f"{provider}:{self._http_error_status(exc)}")
@@ -140,7 +215,7 @@ class LiteratureSearchService:
             return [], "not_configured"
         if all(status.endswith(":completed") for status in provider_statuses):
             return provider_items, "completed"
-        if provider_items:
+        if provider_items or any(status.endswith(":completed") for status in provider_statuses):
             return provider_items, "partial:" + ",".join(provider_statuses)
         if all(":rate_limited:" in status for status in provider_statuses):
             return [], "rate_limited:" + ",".join(provider_statuses)
@@ -158,6 +233,15 @@ class LiteratureSearchService:
             ):
                 providers.append(normalized)
         return providers
+
+    def _external_query(self, query: str) -> str:
+        terms = [term for term in self._terms(query) if term not in EXTERNAL_QUERY_STOPWORDS]
+        if not terms:
+            terms = self._terms(query)
+        compact = " ".join(terms[:EXTERNAL_QUERY_MAX_TERMS])
+        if compact:
+            return compact[:EXTERNAL_QUERY_MAX_CHARS]
+        return query.strip()[:EXTERNAL_QUERY_MAX_CHARS]
 
     def _request_external(
         self,
