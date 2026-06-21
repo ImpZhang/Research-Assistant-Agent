@@ -3716,7 +3716,7 @@ def test_external_literature_search_reports_http_status_code(monkeypatch) -> Non
         )
 
     assert items == []
-    assert status == "failed:semantic_scholar:failed:HTTPError_429"
+    assert status == "rate_limited:semantic_scholar:rate_limited:HTTPError_429"
 
 
 def test_external_literature_search_reports_failed_status(monkeypatch) -> None:
@@ -5194,6 +5194,14 @@ def test_novelty_service_missing_searches_risk_and_actions() -> None:
     assert service._missing_searches(response("failed_timeout"), True)[0] == (
         "external_literature_search_failed_timeout"
     )
+    rate_limited = service._missing_searches(
+        response("rate_limited:semantic_scholar:rate_limited:HTTPError_429"),
+        True,
+    )
+    assert rate_limited[0] == (
+        "external_literature_search_rate_limited:semantic_scholar:rate_limited:HTTPError_429"
+    )
+    assert "semantic_scholar_adapter" not in rate_limited
     assert service._missing_searches(response("completed"), True)[-1] == (
         "external_literature_search_needs_manual_review"
     )
@@ -5358,6 +5366,10 @@ def test_related_work_service_missing_searches_cover_external_statuses() -> None
     assert service._missing_searches(response("failed_timeout"), include_external=True)[0] == (
         "external_literature_search_failed_timeout"
     )
+    assert service._missing_searches(
+        response("rate_limited:semantic_scholar:rate_limited:HTTPError_429"),
+        include_external=True,
+    )[0] == ("external_literature_search_rate_limited:semantic_scholar:rate_limited:HTTPError_429")
     completed = service._missing_searches(response("completed"), include_external=True)
     assert completed[-1] == "external_literature_search_manual_review"
 

@@ -131,7 +131,7 @@ class LiteratureSearchService:
                     provider_items.extend(self._search_semantic_scholar(query, limit))
                     provider_statuses.append("semantic_scholar:completed")
             except requests.HTTPError as exc:
-                provider_statuses.append(f"{provider}:failed:{self._http_error_label(exc)}")
+                provider_statuses.append(f"{provider}:{self._http_error_status(exc)}")
             except requests.RequestException as exc:
                 provider_statuses.append(f"{provider}:failed:{type(exc).__name__}")
             except ElementTree.ParseError:
@@ -142,6 +142,8 @@ class LiteratureSearchService:
             return provider_items, "completed"
         if provider_items:
             return provider_items, "partial:" + ",".join(provider_statuses)
+        if all(":rate_limited:" in status for status in provider_statuses):
+            return [], "rate_limited:" + ",".join(provider_statuses)
         return [], "failed:" + ",".join(provider_statuses)
 
     def _external_providers(self) -> list[str]:
@@ -175,6 +177,12 @@ class LiteratureSearchService:
         )
         response.raise_for_status()
         return response
+
+    def _http_error_status(self, exc: requests.HTTPError) -> str:
+        label = self._http_error_label(exc)
+        if label == "HTTPError_429":
+            return f"rate_limited:{label}"
+        return f"failed:{label}"
 
     def _http_error_label(self, exc: requests.HTTPError) -> str:
         status_code = getattr(getattr(exc, "response", None), "status_code", None)

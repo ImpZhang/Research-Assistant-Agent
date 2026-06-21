@@ -304,6 +304,8 @@ class RelatedWorkService:
             searches.insert(0, "external_literature_search_not_requested")
         elif literature.external_status == "disabled":
             searches.insert(0, "external_literature_search_disabled")
+        elif "rate_limited" in literature.external_status:
+            searches.insert(0, f"external_literature_search_{literature.external_status}")
         elif literature.external_status.startswith("failed"):
             searches.insert(0, f"external_literature_search_{literature.external_status}")
         elif literature.external_status == "completed":
