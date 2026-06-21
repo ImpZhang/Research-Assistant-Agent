@@ -57,7 +57,7 @@ Record these fields before the run:
 
 ## Latest Geolocalization Manual SOTA Draft
 
-The current geolocalization representative-set fallback decision is captured in `docs/geolocalization_manual_sota_review.md`. It records the user-approved OpenAlex + arXiv + manual-review path, the four-paper external-provider smoke metrics, the persisted representative review record `539e9028aa364ce58da8a4e0e2254b2b`, and the current caution that workflow `demo_ready` results do not certify scientific SOTA.
+The current geolocalization representative-set fallback decision is captured in `docs/geolocalization_manual_sota_review.md`, with exact benchmark boundaries in `docs/geolocalization_benchmark_sota_table.md`. Together they record the user-approved OpenAlex + arXiv + manual-review path, the four-paper external-provider smoke metrics, the persisted representative review record `539e9028aa364ce58da8a4e0e2254b2b`, and the current caution that workflow `demo_ready` results do not certify scientific SOTA.
 
 ## Persisted Review Record
 
