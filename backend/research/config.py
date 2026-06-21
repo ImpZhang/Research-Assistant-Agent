@@ -70,6 +70,13 @@ class Settings:
         "SEMANTIC_SCHOLAR_BASE_URL",
         "https://api.semanticscholar.org/graph/v1/paper/search",
     )
+    external_literature_request_timeout_seconds: float = float(
+        os.getenv("EXTERNAL_LITERATURE_REQUEST_TIMEOUT_SECONDS", "30")
+    )
+    external_literature_user_agent: str = os.getenv(
+        "EXTERNAL_LITERATURE_USER_AGENT",
+        "Research Assistant Agent external-literature/1.0",
+    )
 
     main_model: str = os.getenv("MAIN_MODEL") or os.getenv("MODEL", "")
     main_base_url: str = os.getenv("MAIN_BASE_URL") or os.getenv("BASE_URL", "")

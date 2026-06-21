@@ -3400,6 +3400,69 @@ def test_external_literature_provider_config_normalization() -> None:
     assert providers == ["openalex", "arxiv", "semantic_scholar"]
 
 
+def test_external_literature_request_uses_configured_headers_and_timeout(monkeypatch) -> None:
+    import requests
+
+    from backend.research.services import literature_search_service
+
+    default_timeout = literature_search_service.settings.external_literature_request_timeout_seconds
+    default_user_agent = literature_search_service.settings.external_literature_user_agent
+    calls = []
+
+    class Response:
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_get(url, *, params, headers, timeout):
+        calls.append(
+            {
+                "url": url,
+                "params": params,
+                "headers": headers,
+                "timeout": timeout,
+            }
+        )
+        return Response()
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_request_timeout_seconds",
+        12.5,
+    )
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_user_agent",
+        "pytest-agent",
+    )
+    try:
+        response = LiteratureSearchService(None)._request_external(
+            "https://example.test/search",
+            params={"q": "agent"},
+        )
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_request_timeout_seconds",
+            default_timeout,
+        )
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_user_agent",
+            default_user_agent,
+        )
+
+    assert isinstance(response, Response)
+    assert calls == [
+        {
+            "url": "https://example.test/search",
+            "params": {"q": "agent"},
+            "headers": {"User-Agent": "pytest-agent"},
+            "timeout": 12.5,
+        }
+    ]
+
+
 def test_external_literature_search_reports_not_configured_status() -> None:
     from backend.research.services import literature_search_service
 
@@ -3548,6 +3611,44 @@ def test_external_literature_search_returns_partial_status(monkeypatch) -> None:
 
     assert [item.provider for item in items] == ["openalex", "semantic_scholar"]
     assert status == ("partial:openalex:completed,arxiv:failed:Timeout,semantic_scholar:completed")
+
+
+def test_external_literature_search_reports_http_status_code(monkeypatch) -> None:
+    import requests
+
+    from backend.research.services import literature_search_service
+
+    default_providers = literature_search_service.settings.external_literature_providers
+    object.__setattr__(
+        literature_search_service.settings,
+        "external_literature_providers",
+        "semantic_scholar",
+    )
+
+    def semantic_scholar_failure(self, query, limit):
+        response = requests.Response()
+        response.status_code = 429
+        exc = requests.HTTPError("too many requests")
+        exc.response = response
+        raise exc
+
+    monkeypatch.setattr(
+        LiteratureSearchService,
+        "_search_semantic_scholar",
+        semantic_scholar_failure,
+    )
+
+    try:
+        items, status = LiteratureSearchService(None)._search_external("agent", 5)
+    finally:
+        object.__setattr__(
+            literature_search_service.settings,
+            "external_literature_providers",
+            default_providers,
+        )
+
+    assert items == []
+    assert status == "failed:semantic_scholar:failed:HTTPError_429"
 
 
 def test_external_literature_search_reports_failed_status(monkeypatch) -> None:

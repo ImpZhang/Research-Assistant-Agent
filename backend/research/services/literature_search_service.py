@@ -109,12 +109,10 @@ class LiteratureSearchService:
         return grouped
 
     def _search_openalex(self, query: str, limit: int) -> list[LiteratureSearchItem]:
-        response = requests.get(
+        response = self._request_external(
             f"{settings.openalex_base_url.rstrip('/')}/works",
             params={"search": query, "per-page": limit},
-            timeout=20,
         )
-        response.raise_for_status()
         results = response.json().get("results", [])
         return [self._openalex_item(item, idx) for idx, item in enumerate(results)]
 
@@ -132,6 +130,8 @@ class LiteratureSearchService:
                 elif provider == "semantic_scholar":
                     provider_items.extend(self._search_semantic_scholar(query, limit))
                     provider_statuses.append("semantic_scholar:completed")
+            except requests.HTTPError as exc:
+                provider_statuses.append(f"{provider}:failed:{self._http_error_label(exc)}")
             except requests.RequestException as exc:
                 provider_statuses.append(f"{provider}:failed:{type(exc).__name__}")
             except ElementTree.ParseError:
@@ -156,6 +156,20 @@ class LiteratureSearchService:
             ):
                 providers.append(normalized)
         return providers
+
+    def _request_external(self, url: str, *, params: dict[str, Any]) -> requests.Response:
+        response = requests.get(
+            url,
+            params=params,
+            headers={"User-Agent": settings.external_literature_user_agent},
+            timeout=settings.external_literature_request_timeout_seconds,
+        )
+        response.raise_for_status()
+        return response
+
+    def _http_error_label(self, exc: requests.HTTPError) -> str:
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+        return f"HTTPError_{status_code}" if status_code else "HTTPError"
 
     def _openalex_item(self, item: dict[str, Any], idx: int) -> LiteratureSearchItem:
         authors = []
@@ -183,7 +197,7 @@ class LiteratureSearchService:
         )
 
     def _search_arxiv(self, query: str, limit: int) -> list[LiteratureSearchItem]:
-        response = requests.get(
+        response = self._request_external(
             settings.arxiv_base_url,
             params={
                 "search_query": f"all:{query}",
@@ -192,9 +206,7 @@ class LiteratureSearchService:
                 "sortBy": "relevance",
                 "sortOrder": "descending",
             },
-            timeout=20,
         )
-        response.raise_for_status()
         root = ElementTree.fromstring(response.text)
         namespace = {"atom": "http://www.w3.org/2005/Atom"}
         entries = root.findall("atom:entry", namespace)
@@ -243,16 +255,14 @@ class LiteratureSearchService:
         return element.text.strip()
 
     def _search_semantic_scholar(self, query: str, limit: int) -> list[LiteratureSearchItem]:
-        response = requests.get(
+        response = self._request_external(
             settings.semantic_scholar_base_url,
             params={
                 "query": query,
                 "limit": limit,
                 "fields": "title,authors,year,venue,url,abstract,citationCount,externalIds",
             },
-            timeout=20,
         )
-        response.raise_for_status()
         results = response.json().get("data", [])
         return [self._semantic_scholar_item(item, idx) for idx, item in enumerate(results)]
 
