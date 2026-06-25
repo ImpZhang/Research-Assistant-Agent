@@ -2,6 +2,26 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-25 - Personal Local Agent Product Scope
+
+Decision recorded:
+
+- Locked the current product target to a personal, local-deployable research agent distributed by GitHub clone.
+- Clarified that each operator owns their local `.env`, model provider keys, SQLite data, uploaded papers, benchmark files, generated outputs, logs, and caches.
+- Marked multi-user accounts, tenant isolation, hosted SaaS operations, billing, SSO, central admin workflows, and remote-server workflow as out of scope for the current build.
+- Added `docs/local_agent_distribution.md` as the clone-to-run and local distribution source of truth.
+- Updated README, TODO, deployment, admin authorization, documentation index, development process, and user/project scoping docs to align with the local personal-agent target.
+- Updated deployment contract tests and the local operational preflight script so their required tokens match the local deployment target.
+
+Verification completed:
+
+- `git diff --check` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_secret_file_guard.sh` passed.
+- `bash scripts/check_generated_file_guard.sh` passed.
+- `bash scripts/check_deployment_contracts.sh` passed: `1 passed in 1.42s`.
+- `bash scripts/check_pilot_operational_preflight.sh` passed with expected dirty-worktree warnings for this in-progress change; it did not read `.env` values.
+
 ## 2026-06-25 - Benchmark Evidence Task Generation
 
 Implementation completed:

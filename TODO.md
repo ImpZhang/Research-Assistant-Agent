@@ -2,6 +2,8 @@
 
 This top-level TODO is the local development index for Research Assistant Agent. Development happens in this repository and is synchronized through GitHub.
 
+Current product target: personal local deployment. A user should be able to clone the GitHub repository, create an untracked `.env`, provide their own model API keys, and run the agent locally without a central server, system access key, or multi-user SaaS layer.
+
 ## P0 - Local Development Safety
 
 - Treat this local clone plus GitHub `main` as the current source of truth.
@@ -26,14 +28,15 @@ This top-level TODO is the local development index for Research Assistant Agent.
 - Run `bash scripts/check_research_proposal_contracts.sh` before changing proposal drafts, proposal readiness reviews, proposal revisions, revision follow-up tasks, or proposal Markdown exports.
 - `scripts/check_remote_safe_suite.sh` and `scripts/check_remote_long_suite.sh` are historical names; when used locally, treat them as local focused suites, not instructions to contact the remote server.
 
-## P2 - Product Follow-Ups
+## P2 - Personal Local Agent Follow-Ups
 
-- Enable live external-search providers in production settings and require completed SOTA external-search evidence packages before final signoff.
-- Add a benchmark command runner that executes local benchmark commands, captures logs, and attaches artifacts to benchmark run packets.
-- Add real multi-project/user isolation beyond default-project compatibility mode.
+- Polish clone-to-run setup, local preflight, and `.env.example` so first-time users can configure model API keys without reading internal docs.
+- Enable live external-search providers for local real-provider settings and require completed SOTA external-search evidence packages before final signoff.
+- Add practical local benchmark recipes and prediction-generation pipelines on top of the guarded benchmark runner.
+- Keep real multi-project/user isolation deferred; the current product is single-operator local deployment with a default project.
 - Add Alembic-style migrations.
-- Harden queue/worker execution for long-running workflows and benchmark runs.
-- Add monitoring, backup/restore rehearsal, and production deployment checks.
+- Harden local queue/worker execution for long-running workflows and benchmark runs.
+- Add local backup/export/import rehearsal and optional single-user Docker deployment checks.
 - Improve page/figure/table-aware PDF evidence extraction.
 
 ## P3 - Needs Explicit Operator Approval

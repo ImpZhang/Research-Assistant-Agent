@@ -10,6 +10,7 @@ This document is the starting point for future development. Use it to find the r
 | `README.md` | Product overview, capabilities, setup, and API entry points. | When orienting on the project. |
 | `TODO.md` | Current prioritized follow-up list. | Before choosing the next task. |
 | `docs/development_process.md` | Standard development workflow, verification ladder, and documentation policy. | Before implementing changes. |
+| `docs/local_agent_distribution.md` | Personal local-agent distribution target, clone-to-run flow, and out-of-scope SaaS boundaries. | Before changing packaging, setup, deployment, auth, or project-scoping assumptions. |
 | `docs/local_isolation.md` | Mac-local environment, cache, data, cleanup, and run commands. | Before running locally or installing dependencies. |
 | `docs/progress_log.md` | Durable history of nontrivial work and verification. | After completing meaningful changes. |
 
@@ -19,17 +20,17 @@ This document is the starting point for future development. Use it to find the r
 | --- | --- |
 | `docs/research_assistant_requirements.md` | Product requirements and user workflows. |
 | `docs/research_assistant_technical_design.md` | Architecture, component design, API design, and technical direction. |
-| `docs/user_project_scoping_design.md` | User/project scoping design and compatibility boundaries. |
+| `docs/user_project_scoping_design.md` | Deferred user/project scoping design and default-project compatibility boundaries. |
 | `docs/workflow_queue_design.md` | Queue, job, and workflow execution design. |
 | `docs/graphrag_langgraph_deerflow_evaluation.md` | GraphRAG, LangGraph, DeerFlow comparison and integration evaluation. |
 | `docs/model_provider_strategy.md` | Chat, embedding, rerank, provider, and test-safety strategy. |
-| `docs/real_paper_evaluation_report.md` | Real-provider, real-PDF geolocalization evaluation metrics and remaining production blockers. |
+| `docs/real_paper_evaluation_report.md` | Real-provider, real-PDF geolocalization evaluation metrics and remaining local-product blockers. |
 
 ## Operations And Deployment
 
 | Document | Purpose |
 | --- | --- |
-| `docs/deployment.md` | Runtime contract, environment variables, pilot deployment, backup/restore, MCP bridge, and Workbench access. |
+| `docs/deployment.md` | Runtime contract, environment variables, local deployment, optional Docker, backup/restore, MCP bridge, and Workbench access. |
 | `docs/database_migration_strategy.md` | Current `create_all` behavior, migration policy, and future Alembic direction. |
 | `docs/admin_authorization_policy.md` | Admin-only authorization policy for sensitive audit operations. |
 | `docs/write_audit_retention_policy.md` | Write-audit retention and export rules. |

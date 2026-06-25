@@ -1,18 +1,22 @@
-# Research Assistant Agent Deployment
+# Research Assistant Agent Local Deployment
 
-This project can run as a local FastAPI app or as a single-container service for an internal customer pilot.
+This project is currently targeted as a personal, local-deployable research agent. The normal distribution path is: clone the GitHub repository, create an untracked local `.env`, configure the operator's own model API keys, run the FastAPI backend and browser Workbench on localhost, and keep all data, caches, outputs, logs, and optional model artifacts inside the project root.
+
+Single-container Docker remains optional for one operator. Multi-user SaaS hosting, tenant isolation, central user administration, billing, and SSO are not part of the current deployment target.
 
 ## Runtime Contract
 
 - Health: `GET /health`
 - Readiness: `GET /health/ready`
 - Protected API prefix: `/research`
-- Default auth mode: disabled for local development, enabled in `docker-compose.yml`
+- Default auth mode: disabled for localhost development; optional for local Docker or non-local access
 - API key headers: `X-Research-Assistant-Key: <key>` or `Authorization: Bearer <key>`
 
 ## Environment
 
-Copy `.env.example` to `.env` and set at least:
+Copy `.env.example` to `.env`. For the recommended localhost flow, model provider values are the important real-world settings and API-key auth can stay disabled unless the service is exposed beyond the local machine.
+
+For production-like local Docker or any non-local access, set at least:
 
 ```bash
 APP_ENV=production
@@ -41,9 +45,9 @@ AUDIT_ADMIN_KEY=
 AUDIT_ADMIN_KEY_HEADER_NAME=X-Research-Assistant-Admin-Key
 ```
 
-`GET /health/ready` checks the database connection, SQLite database storage parent, API-key auth configuration, request-id header configuration, Workbench static assets, upload directory, and audit directory when `WRITE_AUDIT_ENABLED=true`, and it reports model-provider configuration state without making outbound requests. Pilot deployments fail readiness if required persistence, required API-key protection, or the browser Workbench entrypoint cannot be prepared. All HTTP responses include the configured request-id header so operators can correlate browser, MCP, and audit reports without logging secrets. MCP bridge HTTP errors include the short request id when the backend returns one. It also reports the external-literature provider configuration without making outbound network requests or exposing credentials. Audit records are JSONL metadata only. They may include a short SHA-256 API-key fingerprint prefix for correlation, but must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials. Operator-only audit summary/export features must follow `docs/admin_authorization_policy.md`; audit retention and raw-export workflow are defined in `docs/write_audit_retention_policy.md`. The regular pilot API key is not admin authorization by itself. When `AUDIT_ADMIN_EXPORT_ENABLED=true`, the read-only summary endpoint is available at `GET /research/admin/write-audit/summary`, and bounded raw JSONL export is available at `GET /research/admin/write-audit/export`; both require the separate admin key header.
+`GET /health/ready` checks the database connection, SQLite database storage parent, API-key auth configuration, request-id header configuration, Workbench static assets, upload directory, and audit directory when `WRITE_AUDIT_ENABLED=true`, and it reports model-provider configuration state without making outbound requests. Production-like local deployments fail readiness if required persistence, required API-key protection, or the browser Workbench entrypoint cannot be prepared. All HTTP responses include the configured request-id header so local operators can correlate browser, MCP, and audit reports without logging secrets. MCP bridge HTTP errors include the short request id when the backend returns one. It also reports the external-literature provider configuration without making outbound network requests or exposing credentials. Audit records are JSONL metadata only. They may include a short SHA-256 API-key fingerprint prefix for correlation, but must not contain raw request bodies, uploaded paper content, API keys, cookies, private keys, `.env` values, or provider credentials. Optional local-owner audit summary/export features must follow `docs/admin_authorization_policy.md`; audit retention and raw-export workflow are defined in `docs/write_audit_retention_policy.md`. The normal local API key is not admin authorization by itself. When `AUDIT_ADMIN_EXPORT_ENABLED=true`, the read-only summary endpoint is available at `GET /research/admin/write-audit/summary`, and bounded raw JSONL export is available at `GET /research/admin/write-audit/export`; both require the separate admin key header.
 
-The local benchmark command runner is disabled by default. Enable it only in a trusted local or controlled production environment; it executes command-argument lists without a shell and writes captured artifacts under `BENCHMARK_RUNNER_OUTPUT_DIR`:
+The local benchmark command runner is disabled by default. Enable it only in a trusted local or controlled production-like environment; it executes command-argument lists without a shell and writes captured artifacts under `BENCHMARK_RUNNER_OUTPUT_DIR`:
 
 ```bash
 BENCHMARK_RUNNER_ENABLED=false
@@ -106,21 +110,21 @@ By default, the evaluator also compares configured retrieval with a local hash/n
 
 Reports are written under `outputs/evaluations/` and should be treated as local artifacts unless deliberately sanitized for sharing. The browser Workbench exposes the latest local report in the Real Eval panel, and the same report summaries are available through `GET /research/evaluations/real-paper/reports` and `GET /research/evaluations/real-paper/reports/latest`.
 
-## Pilot Deployment Checklist
+## Local Deployment Checklist
 
-Before starting or upgrading a customer-pilot service:
+Before starting or upgrading a local personal-agent service:
 
-- [ ] Confirm the remote source-of-truth worktree is clean except for known handoff-only files: `git status --short`.
+- [ ] Confirm the local source-of-truth worktree is clean except for known handoff-only files: `git status --short`.
 - [ ] Confirm the branch and commit intended for deployment: `git branch --show-current` and `git log --oneline -5`.
-- [ ] Run `bash scripts/check_pilot_operational_preflight.sh`; during the approved deployment window, run `PILOT_PREFLIGHT_STRICT_GIT=true bash scripts/check_pilot_operational_preflight.sh` so git cleanliness and `origin/main` alignment are enforced.
+- [ ] Run `bash scripts/check_pilot_operational_preflight.sh`; before sharing a packaged release, run `PILOT_PREFLIGHT_STRICT_GIT=true bash scripts/check_pilot_operational_preflight.sh` so git cleanliness and `origin/main` alignment are enforced.
 - [ ] Create or update `.env` from `.env.example` outside version control; never commit real API keys, cookies, private keys, or database credentials.
-- [ ] Set `API_KEY_AUTH_ENABLED=true` and use a long random `API_KEY` for browser, MCP, and scripted access.
+- [ ] For localhost-only use, API-key auth may stay disabled; for Docker or non-local access, set `API_KEY_AUTH_ENABLED=true` and use a long random `API_KEY` for browser, MCP, and scripted access.
 - [ ] Confirm `RESEARCH_DB_URL` and `PAPER_UPLOAD_DIR` point at persistent storage, not an ephemeral build directory.
 - [ ] Back up `/app/data` or the equivalent data volume before rebuilds, migrations, or host moves.
 - [ ] If SQLAlchemy models changed, review `docs/database_migration_strategy.md` and confirm no implicit startup migration is being relied on.
-- [ ] Start or rebuild the service only during an approved deployment window.
+- [ ] Start or rebuild Docker only after explicit operator approval.
 - [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`; confirm the health payload build commit matches the intended deployment commit; confirm the response includes `X-Request-ID` or the configured request-id header; confirm `request_id_header.ok=true`; confirm `database_storage.ok=true` for SQLite persistence; confirm `workbench_assets.ok=true` for the browser entrypoint; review `model_provider_configuration.roles` for fallback versus external-model mode; if API-key auth is enabled, confirm `api_key_auth.ok=true` and `api_key_auth.configured=true`; if write audit is enabled, confirm the readiness payload includes an enabled, writable `write_audit_dir` check, and if external literature search is enabled, confirm `external_literature_search.ok=true`.
-- [ ] Open `/workbench`, save the API key in the top bar, refresh Pilot Launch, and confirm the first-run empty/error states are actionable.
+- [ ] Open `/workbench`, save the API key in the top bar if auth is enabled, refresh Pilot Launch, and confirm the first-run empty/error states are actionable.
 - [ ] If MCP clients are used, run the bridge health check with the same API key and the intended read-only or allow/deny policy.
 - [ ] If audit summary/export features are enabled in a future release, confirm the separate admin authorization gate described in `docs/admin_authorization_policy.md`.
 - [ ] Record the deployed commit, verification commands, and rollback note in the project progress log or release notes.
@@ -128,15 +132,15 @@ Before starting or upgrading a customer-pilot service:
 Commands that rebuild containers, restart services, change file ownership, or modify databases should be run only after explicit operator approval.
 
 
-## Pilot Operational Preflight
+## Local Operational Preflight
 
-Run the read-only operational preflight before a customer-pilot start, upgrade, or handoff:
+Run the read-only operational preflight before a local start, upgrade, package check, or handoff:
 
 ```bash
 bash scripts/check_pilot_operational_preflight.sh
 ```
 
-During an approved deployment window, make git cleanliness strict:
+Before sharing a packaged local release, make git cleanliness strict:
 
 ```bash
 PILOT_PREFLIGHT_STRICT_GIT=true bash scripts/check_pilot_operational_preflight.sh
@@ -150,11 +154,11 @@ The preflight checks required runtime files, Workbench assets, remote-safe verif
 docker compose up --build
 ```
 
-The compose file mounts a named volume at `/app/data`, so SQLite data, uploaded papers, and generated artifacts survive container restarts.
+The compose file mounts a named volume at `/app/data`, so SQLite data, uploaded papers, and generated artifacts survive container restarts. Treat this as optional single-user packaging, not the default multi-user deployment path.
 
 ## Backup And Restore Notes
 
-The production compose file declares a `research_assistant_data` volume mounted at `/app/data`. Docker Compose usually creates an engine volume named `<compose-project>_research_assistant_data`, so confirm the actual volume name before backing up or restoring.
+The compose file declares a `research_assistant_data` volume mounted at `/app/data`. Docker Compose usually creates an engine volume named `<compose-project>_research_assistant_data`, so confirm the actual volume name before backing up or restoring.
 
 Back up this data before rebuilds, host moves, database migrations, or destructive maintenance. A backup should include:
 
@@ -164,7 +168,7 @@ Back up this data before rebuilds, host moves, database migrations, or destructi
 
 Keep `.env`, API keys, cookies, private keys, and provider credentials in a separate secret manager or operator vault. Do not put them in git or public handoff bundles.
 
-Cold backup is the preferred first-pilot path because SQLite and uploaded files can be copied consistently while the service is stopped. Example operator flow, only after explicit approval:
+Cold backup is the preferred local path because SQLite and uploaded files can be copied consistently while the service is stopped. Example operator flow, only after explicit approval:
 
 ```bash
 mkdir -p backups

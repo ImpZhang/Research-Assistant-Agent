@@ -130,8 +130,8 @@ require_tokens(
 require_tokens(
     "docs/deployment.md",
     [
-        "Pilot Deployment Checklist",
-        "Pilot Operational Preflight",
+        "Local Deployment Checklist",
+        "Local Operational Preflight",
         "Backup And Restore Notes",
         "database_migration_strategy.md",
         "PILOT_PREFLIGHT_STRICT_GIT=true",
@@ -221,15 +221,15 @@ for tool in venv_tools:
     if path.exists():
         notes.append(f"tool available: {tool}")
     else:
-        warnings.append(f"remote development tool not found: {tool}")
+        warnings.append(f"local development tool not found: {tool}")
 
 if (ROOT / ".env").exists():
     notes.append(".env file exists; contents were not read")
 else:
-    warnings.append(".env file not found; create it from .env.example before production compose")
+    warnings.append(".env file not found; create it from .env.example before local deployment")
 
 if errors:
-    print("Pilot operational preflight failed:")
+    print("Local operational preflight failed:")
     for error in errors:
         print(f"- {error}")
     if warnings:
@@ -238,7 +238,7 @@ if errors:
             print(f"- {warning}")
     sys.exit(1)
 
-print("Pilot operational preflight passed.")
+print("Local operational preflight passed.")
 if warnings:
     print("Warnings:")
     for warning in warnings:
@@ -248,5 +248,5 @@ if notes:
     for note in notes:
         print(f"- {note}")
 if not STRICT_GIT:
-    print("Set PILOT_PREFLIGHT_STRICT_GIT=true for deployment-window git cleanliness checks.")
+    print("Set PILOT_PREFLIGHT_STRICT_GIT=true before sharing a packaged local release.")
 PYIN

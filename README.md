@@ -2,6 +2,14 @@
 
 Research Assistant Agent is a backend-first research workflow system rebuilt from the lessons of SuperMew. It is not a plain RAG chatbot: the goal is to turn literature evidence into research gaps, testable ideas, novelty checks, related-work matrices, proposal drafts, reviewer critiques, experiment plans, graph context, and exportable proposal dossiers.
 
+## Current Distribution Target
+
+The current product target is a personal, local-deployable research agent. Each user clones `ImpZhang/Research-Assistant-Agent.git`, creates an untracked local `.env`, configures their own model provider API keys, and runs the backend, Workbench, optional MCP bridge, data, caches, models, benchmarks, logs, and outputs inside the local project root.
+
+Multi-user accounts, tenant isolation, hosted SaaS operations, billing, SSO, and central admin workflows are intentionally out of scope for the current build. Historical `pilot`, `customer`, and `project scope` wording in API names and older docs should be read as single-operator local workflow and handoff terminology unless a future product decision changes the target.
+
+See `docs/local_agent_distribution.md` and `docs/local_isolation.md` before changing packaging, setup, storage, or deployment behavior.
+
 ## Current Workflow
 
 ```text
@@ -44,7 +52,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 ## Implemented Capabilities
 
 - FastAPI API layer with OpenAPI docs.
-- Production-readiness checks with `/health/ready`, SQLite storage readiness, API-key auth readiness, Workbench asset readiness, model-provider configuration visibility, request-id response headers and header readiness, external-literature configuration checks, default-project scope contract, runtime readiness status capability, health build metadata, optional API-key protection for `/research/*`, Dockerfile, and docker-compose pilot deployment.
+- Local runtime-readiness checks with `/health/ready`, SQLite storage readiness, optional API-key auth readiness, Workbench asset readiness, model-provider configuration visibility, request-id response headers and header readiness, external-literature configuration checks, default-project scope contract, runtime readiness status capability, health build metadata, optional API-key protection for `/research/*`, Dockerfile, and docker-compose single-user deployment.
 - SQLite/SQLAlchemy research database.
 - Research profile for durable domains, goals, constraints, risk tolerance, target venues, and ranking weights.
 - Upload and ingest size-limited `.txt`, `.md`, and `.pdf` papers with lightweight content sniffing before files are written.
@@ -213,16 +221,20 @@ Start future development from:
 - `AGENTS.md` for repository operating rules.
 - `docs/documentation_index.md` for the documentation map.
 - `docs/development_process.md` for the standard change workflow and verification ladder.
+- `docs/local_agent_distribution.md` for the personal local-agent distribution target.
 - `docs/local_isolation.md` for Mac-local dependency, cache, data, model, output, and cleanup rules.
 - `docs/model_provider_strategy.md` for chat, embedding, rerank, and provider configuration.
 
 ## Quick Start
 
-This project is developed with `uv`.
+This project is developed as a local clone. Keep dependencies, caches, data, model artifacts, generated outputs, and logs inside the project root.
 
 ```bash
-uv sync --extra dev
-uv run uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+cp .env.example .env
+# edit .env locally; never commit real keys
+./scripts/setup-local.sh
+source scripts/env.sh
+./scripts/run-local.sh
 ```
 
 API docs:
@@ -314,7 +326,7 @@ Run the generated-file guard to catch tracked caches, virtualenvs, dependency fo
 bash scripts/check_generated_file_guard.sh
 ```
 
-Run the pilot operational preflight to confirm docs, runtime artifacts, environment template keys, compose persistence, and safe-suite hooks before a pilot deployment. Use `PILOT_PREFLIGHT_STRICT_GIT=true` during an approved deployment window to require a clean `main` checkout aligned with `origin/main`:
+Run the local operational preflight to confirm docs, runtime artifacts, environment template keys, compose persistence, and safe-suite hooks before a packaged local deployment. Use `PILOT_PREFLIGHT_STRICT_GIT=true` before sharing a release to require a clean `main` checkout aligned with `origin/main`:
 
 ```bash
 bash scripts/check_pilot_operational_preflight.sh
@@ -326,7 +338,7 @@ Run the focused-test coverage map check so new pytest tests stay assigned to a f
 bash scripts/check_focused_test_coverage.sh
 ```
 
-Run focused deployment artifact and customer runtime contract checks without starting a service:
+Run focused deployment artifact and local runtime contract checks without starting a service:
 
 ```bash
 bash scripts/check_deployment_contracts.sh
@@ -338,7 +350,7 @@ Run backup/restore contract checks to keep persistent data volume, cold-backup, 
 bash scripts/check_backup_restore_contracts.sh
 ```
 
-Run focused context-search evaluation checks on the remote `.venv`:
+Run focused context-search evaluation checks on the local `.venv`:
 
 ```bash
 bash scripts/check_context_search_evaluations.sh
@@ -383,7 +395,7 @@ Run the long focused suite for checks that are intentionally kept out of the def
 bash scripts/check_remote_long_suite.sh
 ```
 
-Run focused pilot-readiness, status capability, first-run onboarding, and pilot-report guardrail checks without starting a service:
+Run focused local readiness, status capability, first-run onboarding, and report guardrail checks without starting a service:
 
 ```bash
 bash scripts/check_pilot_readiness.sh
@@ -395,9 +407,9 @@ Run the isolated product-effect smoke to validate the complete research-assistan
 bash scripts/check_product_effect_smoke.sh
 ```
 
-Use `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/path/to/paper.md` with `check_product_effect_smoke.sh` to run the same product-effect smoke against a representative paper fixture. The JSON output includes `product_effect_score`, `product_effect_band`, and a dimension-level `product_effect_scorecard` for foundation, research workflow, quality signal, and delivery loop readiness. Use `docs/representative_paper_review.md` for the human review protocol and findings table before marking a representative-paper pilot review acceptable.
+Use `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/path/to/paper.md` with `check_product_effect_smoke.sh` to run the same product-effect smoke against a representative paper fixture. The JSON output includes `product_effect_score`, `product_effect_band`, and a dimension-level `product_effect_scorecard` for foundation, research workflow, quality signal, and delivery loop readiness. Use `docs/representative_paper_review.md` for the human review protocol and findings table before marking a representative-paper local review acceptable.
 
-Run focused write-audit guardrail checks without reading production audit logs:
+Run focused write-audit guardrail checks without reading local audit logs:
 
 ```bash
 bash scripts/check_write_audit_guardrails.sh
@@ -666,26 +678,35 @@ uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000 --heal
 When `/research/*` API-key protection is enabled, forward the same key with `--api-key`, `MCP_BRIDGE_API_KEY`, `RESEARCH_ASSISTANT_API_KEY`, or `API_KEY`. Forward the non-secret project scope with `--project-id`, `MCP_BRIDGE_PROJECT_ID`, or `RESEARCH_ASSISTANT_PROJECT_ID`; the default header is `X-Research-Assistant-Project`.
 The same policy can be configured with `MCP_BRIDGE_READ_ONLY`, `MCP_BRIDGE_ALLOW_TOOLS`, and `MCP_BRIDGE_DENY_TOOLS`.
 
-## Deployment
+## Local Deployment
 
-For a single-container internal pilot:
+For the normal local personal-agent path:
 
 ```bash
 cp .env.example .env
-# set API_KEY to a long random value
+# fill model provider keys in .env, then:
+./scripts/setup-local.sh
+source scripts/env.sh
+./scripts/run-local.sh
+```
+
+For optional single-user Docker use, set a local `API_KEY` in `.env` and run Docker only after explicit operator approval:
+
+```bash
 docker compose up --build
 ```
 
-See `docs/deployment.md` for the runtime contract, pilot deployment checklist, `/app/data` backup/restore operator notes, database/upload/audit ready checks, API key calls, Workbench key storage, MCP bridge auth forwarding, and backup notes. Write-operation audit logging has a configurable JSONL prototype plus default-off admin-gated summary and bounded export endpoints described in `docs/write_operation_audit_design.md`. Admin-only audit access rules are documented in `docs/admin_authorization_policy.md`, and retention/export workflow is documented in `docs/write_audit_retention_policy.md`. Database migration policy is documented in `docs/database_migration_strategy.md` before migration tooling is introduced. Long-running workflow queue migration is documented in `docs/workflow_queue_design.md` before adding worker dependencies or deployment services.
+See `docs/deployment.md` for the runtime contract, local deployment checklist, `/app/data` backup/restore operator notes, database/upload/audit ready checks, API key calls, Workbench key storage, MCP bridge auth forwarding, and backup notes. Write-operation audit logging has a configurable JSONL prototype plus default-off local-owner summary and bounded export endpoints described in `docs/write_operation_audit_design.md`. Admin-only audit access rules are documented in `docs/admin_authorization_policy.md`, and retention/export workflow is documented in `docs/write_audit_retention_policy.md`. Database migration policy is documented in `docs/database_migration_strategy.md` before migration tooling is introduced. Long-running workflow queue migration is documented in `docs/workflow_queue_design.md` before adding worker dependencies or deployment services.
 
 ## Near-Term Roadmap
 
+- Polish the clone-to-run local setup path, local preflight, and `.env.example` guidance.
 - Add real-provider smoke tests, batch embedding, page-image retrieval, and retrieval-mode evaluation fixtures.
+- Add practical local benchmark recipes and prediction-generation pipelines for geolocalization evaluation.
 - Add fully automated current-SOTA closure on top of manual SOTA review packages and external novelty search adapters.
-- Add durable worker queues, richer retry policies, and resumable workflow state.
-- Expand the research workbench into a full review/edit loop.
-- Harden auth, deployment observability, and richer binary artifact handling around the lightweight MCP bridge.
-- Introduce LangGraph/DeerFlow-style explicit workflow graphs once the service boundaries stabilize.
+- Add durable local worker queues, richer retry policies, and resumable workflow state for long runs.
+- Expand the research Workbench into a full single-researcher review/edit loop.
+- Harden optional local auth, backup/export, and richer binary artifact handling around the lightweight MCP bridge.
 
 ## Handoff And Operations
 
@@ -698,6 +719,7 @@ See `docs/deployment.md` for the runtime contract, pilot deployment checklist, `
 
 - `docs/research_assistant_requirements.md`
 - `docs/research_assistant_technical_design.md`
+- `docs/local_agent_distribution.md`
 - `docs/admin_authorization_policy.md`
 - `docs/database_migration_strategy.md`
 - `docs/write_operation_audit_design.md`

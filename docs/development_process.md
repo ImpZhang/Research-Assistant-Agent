@@ -35,7 +35,7 @@ Use the smallest accurate category:
 | Documentation-only | Runbooks, process docs, design notes | The changed doc plus `docs/progress_log.md` if nontrivial |
 | Backend behavior | Routes, schemas, services, adapters | `README.md`, requirements/design docs, focused tests |
 | Workflow/product loop | Literature-to-ideas, tasks, cockpit, bundles | Requirements/design docs, progress log, smoke or focused suites |
-| Runtime/deployment | Env vars, health checks, Docker, local scripts | `docs/deployment.md`, `docs/local_isolation.md`, preflight checks |
+| Runtime/deployment | Env vars, health checks, Docker, local scripts, clone-to-run packaging | `docs/deployment.md`, `docs/local_agent_distribution.md`, `docs/local_isolation.md`, preflight checks |
 | Data/schema | SQLAlchemy models, stored artifacts, migrations | `docs/database_migration_strategy.md`, migration notes |
 | Audit/security | API keys, admin gate, audit logs, sensitive export | audit/admin policy docs and redaction tests |
 | Evaluation/SOTA | Product-effect, representative papers, benchmark boundaries | matching evaluation docs and manual-review notes |

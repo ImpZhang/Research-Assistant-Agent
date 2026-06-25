@@ -882,7 +882,8 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "admin_authorization_policy.md" in deployment
     assert "database_migration_strategy.md" in deployment
     assert "MCP bridge" in deployment
-    assert "Pilot Operational Preflight" in deployment
+    assert "Local Deployment Checklist" in deployment
+    assert "Local Operational Preflight" in deployment
     assert "PILOT_PREFLIGHT_STRICT_GIT=true" in deployment
     assert "APP_COMMIT_SHA=local" in deployment
     assert "database_storage.ok=true" in deployment
@@ -903,7 +904,7 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "Path.cwd()" in pilot_preflight
     assert 'ROOT / ".env"' in pilot_preflight
     assert "contents were not read" in pilot_preflight
-    assert "regular pilot API key is not admin authorization" in admin_policy
+    assert "regular local API key is not admin authorization" in admin_policy
 
 
 def test_research_status() -> None:

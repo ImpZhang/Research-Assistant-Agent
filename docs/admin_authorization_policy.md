@@ -1,17 +1,17 @@
 # Admin Authorization Policy
 
-This document defines the pilot authorization boundary for operator-only features. It is intentionally conservative because the current service has API-key protection but does not yet have user accounts, roles, or sessions.
+This document defines the local authorization boundary for operator-only features. It is intentionally conservative because the current service has optional API-key protection but does not yet have user accounts, roles, or sessions.
 
 ## Current State
 
-- `/research/*` can be protected with `API_KEY_AUTH_ENABLED=true` and a shared deployment API key.
-- The shared API key proves that a caller is allowed to use the pilot API; it does not prove that the caller is an administrator.
-- Workbench, scripts, and the MCP HTTP bridge may all use the same API key during an internal pilot.
+- `/research/*` can be protected with `API_KEY_AUTH_ENABLED=true` and a local deployment API key.
+- The local API key proves that a caller is allowed to use the local API; it does not prove that the caller is an administrator.
+- Workbench, scripts, and the MCP HTTP bridge may all use the same API key during a personal local deployment.
 - Write-operation audit JSONL records may include sanitized metadata and short API-key fingerprint prefixes, never key values or payload text.
 
 ## Policy
 
-Until a stronger identity model exists, the regular pilot API key is not admin authorization by itself. Operator-only features must require a separate admin gate.
+Until a stronger identity model exists, the regular local API key is not admin authorization by itself. Operator-only features must require a separate admin gate.
 
 Admin-only features include:
 
@@ -26,7 +26,7 @@ Admin-only features include:
 Before adding an audit summary or export endpoint, the implementation should require all of the following:
 
 - An explicit feature flag such as `AUDIT_ADMIN_EXPORT_ENABLED=true`, disabled by default.
-- A separate admin credential or upstream reverse-proxy identity, not the normal pilot API key alone.
+- A separate admin credential or upstream reverse-proxy identity, not the normal local API key alone.
 - Server-side checks that reject unauthenticated requests and reject ordinary API-key callers.
 - No admin credential in query parameters, logs, Workbench local storage, project bundles, or handoff files.
 - A non-secret admin actor label for audit correlation, such as a reverse-proxy username or configured operator label.
@@ -36,7 +36,7 @@ A first implementation may prefer a separate header such as `X-Research-Assistan
 
 ## Implemented Summary Gate
 
-The current implementation registers `GET /research/admin/write-audit/summary` only when `AUDIT_ADMIN_EXPORT_ENABLED=true`. The endpoint returns sanitized aggregate counts from `write-operations.jsonl`; it does not return raw events, actor labels, API-key fingerprints, request bodies, uploaded content, prompts, model responses, or credentials. Requests must include the separate admin key header configured by `AUDIT_ADMIN_KEY_HEADER_NAME`. If `/research/*` API-key protection is enabled, callers also need the normal pilot API key to pass the outer API guard.
+The current implementation registers `GET /research/admin/write-audit/summary` only when `AUDIT_ADMIN_EXPORT_ENABLED=true`. The endpoint returns sanitized aggregate counts from `write-operations.jsonl`; it does not return raw events, actor labels, API-key fingerprints, request bodies, uploaded content, prompts, model responses, or credentials. Requests must include the separate admin key header configured by `AUDIT_ADMIN_KEY_HEADER_NAME`. If `/research/*` API-key protection is enabled, callers also need the normal local API key to pass the outer API guard.
 
 Raw JSONL export is implemented only as a default-off, bounded admin endpoint at `GET /research/admin/write-audit/export`; retention and operator workflow expectations are documented in `docs/write_audit_retention_policy.md`.
 
@@ -53,7 +53,7 @@ Raw JSONL export should remain operator-only and disabled by default. If impleme
 
 ## Workbench And MCP
 
-- Workbench must not display audit summaries by default just because a browser has the pilot API key saved.
+- Workbench must not display audit summaries by default just because a browser has the local API key saved.
 - MCP bridge must not expose audit export tools in read-only or generic allowlist setups unless the operator explicitly allows them and admin auth is active.
 - Any future audit UI should show a clear operator mode state without revealing credentials.
 
