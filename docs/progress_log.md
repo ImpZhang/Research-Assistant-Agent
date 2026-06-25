@@ -2,6 +2,19 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-25 - Benchmark Evidence Task Generation
+
+Implementation completed:
+
+- Added benchmark evidence readiness follow-up task generation.
+- Added `POST /research/ideas/{idea_id}/benchmark-evidence/readiness/tasks`.
+- Added Workbench `Benchmark Tasks` to create task-board items from missing benchmark runs, missing comparison briefs, artifact gaps, regression warnings, or signoff handoff actions.
+- Added duplicate protection so repeated clicks do not create duplicate open tasks for the same readiness action.
+
+Production boundary:
+
+- Task generation does not run benchmarks automatically; it turns benchmark readiness gaps into explicit execution work.
+
 ## 2026-06-25 - Benchmark Readiness In SOTA Signoff
 
 Implementation completed:

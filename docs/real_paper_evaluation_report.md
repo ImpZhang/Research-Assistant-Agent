@@ -76,6 +76,7 @@ Implemented after the first evaluation round:
 - Added a benchmark profile registry plus `scripts/benchmark_geoloc_predictions.py` so Workbench can discover runnable profiles, report missing local benchmark files, and execute a real geolocalization JSONL harness when ground truth and prediction files are present.
 - Added benchmark run comparison briefs so repeated measured runs can be compared by metric delta and saved as auditable Markdown evidence.
 - Added benchmark evidence readiness checks so completed runs and comparison briefs can gate manual SOTA signoff.
+- Added benchmark evidence readiness task generation so missing benchmark runs, comparison briefs, artifacts, or regression follow-ups can enter the task board.
 - Surfaced benchmark evidence readiness inside SOTA review packages and SOTA signoff manual-gate summaries.
 
 Remaining hardening:

@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.research.models import ExperimentRun, Idea, ResearchBrief
+from backend.research.models import (
+    ExperimentRun,
+    Idea,
+    ResearchBrief,
+    ResearchTask,
+    ResearchTaskEvent,
+)
 
 
 BENCHMARK_EXECUTION_KINDS = {"benchmark", "benchmark_command"}
@@ -74,6 +81,69 @@ class BenchmarkEvidenceService:
             "markdown_export": markdown_export,
         }
 
+    def create_readiness_tasks(
+        self,
+        idea_id: str,
+        *,
+        created_by: str = "system",
+        limit: int = 8,
+    ) -> list[ResearchTask]:
+        readiness = self.readiness_for_idea(idea_id)
+        actions = list(readiness.get("recommended_actions") or [])[: max(1, min(limit, 20))]
+        tasks = []
+        for action in actions:
+            source_id = _action_source_id(action)
+            if self._existing_task(idea_id, source_id) is not None:
+                continue
+            tasks.append(
+                ResearchTask(
+                    idea_id=idea_id,
+                    owner_type="benchmark_evidence_readiness",
+                    owner_id=idea_id,
+                    source_type="benchmark_evidence_readiness_action",
+                    source_id=source_id,
+                    title=_task_title(action),
+                    description=action,
+                    priority=_task_priority(action, readiness),
+                    status="todo",
+                    due_phase="benchmark_evidence_follow_up",
+                    metadata_json={
+                        "readiness_status": readiness["readiness_status"],
+                        "ready_for_sota_review": readiness["ready_for_sota_review"],
+                        "latest_completed_run_id": readiness["latest_completed_run_id"],
+                        "latest_comparison_brief_id": readiness["latest_comparison_brief_id"],
+                        "action": action,
+                    },
+                    created_by=created_by or "system",
+                )
+            )
+        if not tasks:
+            return []
+        self.session.add_all(tasks)
+        self.session.flush()
+        self.session.add_all(
+            [
+                ResearchTaskEvent(
+                    task_id=task.id,
+                    idea_id=task.idea_id,
+                    event_type="created",
+                    status_to=task.status,
+                    priority_to=task.priority,
+                    note="Created from benchmark evidence readiness gate.",
+                    metadata_json={
+                        "owner_type": task.owner_type,
+                        "source_id": task.source_id,
+                    },
+                    created_by=created_by or "system",
+                )
+                for task in tasks
+            ]
+        )
+        self.session.commit()
+        for task in tasks:
+            self.session.refresh(task)
+        return tasks
+
     def _benchmark_runs(self, idea_id: str) -> list[ExperimentRun]:
         runs = (
             self.session.query(ExperimentRun)
@@ -97,6 +167,19 @@ class BenchmarkEvidenceService:
             .all()
         )
         return [record for record in records if idea_id in (record.idea_ids_json or [])]
+
+    def _existing_task(self, idea_id: str, source_id: str) -> ResearchTask | None:
+        return (
+            self.session.query(ResearchTask)
+            .filter(
+                ResearchTask.idea_id == idea_id,
+                ResearchTask.owner_type == "benchmark_evidence_readiness",
+                ResearchTask.source_id == source_id,
+                ResearchTask.status.in_(["todo", "doing", "blocked"]),
+            )
+            .order_by(ResearchTask.created_at.desc())
+            .first()
+        )
 
 
 def render_benchmark_evidence_readiness_markdown(
@@ -168,3 +251,26 @@ def _markdown_bullets(items: list[str]) -> list[str]:
     if not items:
         return ["- None."]
     return [f"- {item}" for item in items]
+
+
+def _action_source_id(action: str) -> str:
+    digest = hashlib.sha256(action.encode("utf-8")).hexdigest()[:12]
+    return f"benchmark_readiness_{digest}"
+
+
+def _task_title(action: str) -> str:
+    clean = " ".join(action.split())
+    return f"Benchmark evidence: {clean[:96]}"
+
+
+def _task_priority(action: str, readiness: dict[str, Any]) -> str:
+    lowered = action.lower()
+    if "at least one completed benchmark" in lowered:
+        return "critical"
+    if "compare" in lowered:
+        return "high"
+    if readiness.get("warnings"):
+        return "high"
+    if readiness.get("ready_for_sota_review"):
+        return "medium"
+    return "high"

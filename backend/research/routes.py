@@ -426,6 +426,7 @@ def status() -> ProjectStatus:
             "geolocalization_jsonl_benchmark_harness",
             "benchmark_run_comparison_records",
             "benchmark_evidence_readiness_gate",
+            "benchmark_evidence_task_generation",
             "experiment_result_analysis",
             "experiment_analysis_task_generation",
             "literature_to_ideas_workflow",
@@ -1691,6 +1692,15 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/ideas/{idea_id}/benchmark-evidence/readiness",
             output_model="BenchmarkEvidenceReadinessResponse",
+        ),
+        ToolManifestItem(
+            name="create_tasks_from_benchmark_evidence_readiness",
+            description="Turn benchmark evidence readiness actions into research task-board items.",
+            method="POST",
+            path="/research/ideas/{idea_id}/benchmark-evidence/readiness/tasks",
+            input_model="ResearchTaskGenerateRequest",
+            output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
         ),
         ToolManifestItem(
             name="analyze_experiment_run",
@@ -15142,6 +15152,28 @@ def get_benchmark_evidence_readiness(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return BenchmarkEvidenceReadinessResponse(**readiness)
+
+
+@router.post(
+    "/ideas/{idea_id}/benchmark-evidence/readiness/tasks",
+    response_model=ResearchTaskGenerationResponse,
+)
+def create_tasks_from_benchmark_evidence_readiness(
+    idea_id: str,
+    payload: ResearchTaskGenerateRequest,
+    session: Session = Depends(get_session),
+) -> ResearchTaskGenerationResponse:
+    try:
+        tasks = BenchmarkEvidenceService(session).create_readiness_tasks(
+            idea_id,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ResearchTaskGenerationResponse(
+        tasks=[_serialize_research_task(task) for task in tasks],
+        message=f"Created {len(tasks)} benchmark evidence follow-up tasks for idea {idea_id}.",
+    )
 
 
 @router.get("/benchmark-profiles", response_model=BenchmarkProfileListResponse)

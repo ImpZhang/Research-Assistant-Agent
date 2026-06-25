@@ -15,6 +15,7 @@ from backend.research.models import (
     Paper,
     ResearchBrief,
     ResearchGap,
+    ResearchTask,
 )
 from backend.research.schemas import LiteratureSearchItem, LiteratureSearchResponse
 from backend.research.services.literature_search_service import LiteratureSearchService
@@ -322,6 +323,51 @@ def test_benchmark_run_comparison_persists_brief() -> None:
     assert readiness_body["benchmark_comparison_count"] == 1
     assert readiness_body["latest_comparison_brief_id"] == body["brief_id"]
     assert "Benchmark Evidence Readiness" in readiness_body["markdown_export"]
+
+
+def test_benchmark_evidence_readiness_creates_follow_up_tasks() -> None:
+    marker = f"benchmark-tasks-{uuid4().hex}"
+    idea_id = f"{marker}-idea"
+
+    with SessionLocal() as session:
+        session.add(
+            Idea(
+                id=idea_id,
+                title="Benchmark Evidence Task Idea",
+                research_question="Can benchmark evidence gaps become executable tasks?",
+                core_hypothesis="Readiness gaps should create task-board follow-ups.",
+            )
+        )
+        session.commit()
+
+    client = TestClient(create_app())
+    response = client.post(
+        f"/research/ideas/{idea_id}/benchmark-evidence/readiness/tasks",
+        json={"created_by": "pytest"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["tasks"]) == 2
+    assert {task["owner_type"] for task in body["tasks"]} == {"benchmark_evidence_readiness"}
+    assert {task["priority"] for task in body["tasks"]} == {"critical", "high"}
+
+    duplicate = client.post(
+        f"/research/ideas/{idea_id}/benchmark-evidence/readiness/tasks",
+        json={"created_by": "pytest"},
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.json()["tasks"] == []
+
+    with SessionLocal() as session:
+        tasks = (
+            session.query(ResearchTask)
+            .filter(ResearchTask.idea_id == idea_id)
+            .order_by(ResearchTask.created_at.desc())
+            .all()
+        )
+        assert len(tasks) == 2
+        assert {task.source_type for task in tasks} == {"benchmark_evidence_readiness_action"}
 
 
 def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:

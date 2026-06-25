@@ -2005,6 +2005,31 @@ async function loadBenchmarkEvidenceReadiness() {
   }
 }
 
+async function createBenchmarkEvidenceTasks() {
+  if (!state.latestIdeaId) {
+    renderWorkbenchEmpty("workflowResult", "Run or load an idea first.");
+    return;
+  }
+  renderResult("workflowResult", "Creating benchmark evidence tasks...", "warn");
+  try {
+    const body = await api(
+      `/research/ideas/${state.latestIdeaId}/benchmark-evidence/readiness/tasks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ created_by: "workbench" }),
+      },
+    );
+    state.latestTaskIds = body.tasks.map((task) => task.id);
+    renderResult(
+      "workflowResult",
+      `${escapeHtml(body.message)}<br />${renderList("Benchmark tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+    );
+  } catch (error) {
+    renderWorkbenchError("workflowResult", error);
+  }
+}
+
 async function analyzeExperimentRun() {
   if (!state.latestExperimentRunId) {
     renderWorkbenchEmpty("workflowResult", "Record an experiment run first.");
@@ -3904,6 +3929,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("benchmarkExecuteButton").addEventListener("click", executeBenchmarkRun);
   $("benchmarkCompareButton").addEventListener("click", compareBenchmarkRuns);
   $("benchmarkGateButton").addEventListener("click", loadBenchmarkEvidenceReadiness);
+  $("benchmarkTasksButton").addEventListener("click", createBenchmarkEvidenceTasks);
   $("experimentAnalysisButton").addEventListener("click", analyzeExperimentRun);
   $("analysisTasksButton").addEventListener("click", createAnalysisTasks);
   $("decisionMemoButton").addEventListener("click", createDecisionMemo);

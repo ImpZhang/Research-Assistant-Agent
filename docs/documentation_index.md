@@ -51,6 +51,7 @@ This document is the starting point for future development. Use it to find the r
 | `/research/ideas/{idea_id}/sota-external-search-evidence` | Runtime API that persists local/external literature search statuses, result summaries, and signoff readiness for SOTA review queries. |
 | `/research/ideas/{idea_id}/sota-signoffs` | Runtime API that records the human novelty/SOTA decision, nearest work, evidence links, benchmark links, and blockers. |
 | `/research/ideas/{idea_id}/benchmark-evidence/readiness` | Runtime API that checks whether benchmark runs and comparisons are ready for manual SOTA signoff. |
+| `/research/ideas/{idea_id}/benchmark-evidence/readiness/tasks` | Runtime API that turns benchmark evidence readiness actions into task-board items. |
 | `/research/benchmark-profiles` | Runtime API that lists benchmark profiles, runner readiness, command templates, and missing project-local data paths. |
 | `/research/experiment-plans/{plan_id}/benchmark-run` | Runtime API that records structured benchmark packets as reproducible experiment runs. |
 | `/research/experiment-plans/{plan_id}/benchmark-run/execute` | Runtime API that executes a guarded local benchmark command and saves captured metrics/artifacts as an experiment run. |
