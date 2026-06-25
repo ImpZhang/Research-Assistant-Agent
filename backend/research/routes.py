@@ -51,6 +51,7 @@ from backend.research.schemas import (
     AdvisorChatRequest,
     AdvisorChatResponse,
     AdvisorChatTaskGenerateRequest,
+    BenchmarkExecutionCreate,
     ClaimValidationQueueItem,
     ClaimValidationQueueResponse,
     ClaimValidationQueueTaskGenerateRequest,
@@ -216,6 +217,7 @@ from backend.research.schemas import (
     ToolManifestResponse,
 )
 from backend.research.services.artifact_graph_service import ArtifactGraphService
+from backend.research.services.benchmark_runner_service import BenchmarkCommandRunnerService
 from backend.research.services.brief_service import ResearchBriefService
 from backend.research.services.assumption_audit_service import IdeaAssumptionAuditService
 from backend.research.services.document_ingestion import DocumentIngestionService
@@ -408,6 +410,7 @@ def status() -> ProjectStatus:
             "experiment_planning",
             "experiment_run_tracking",
             "benchmark_run_packets",
+            "benchmark_command_runner",
             "experiment_result_analysis",
             "experiment_analysis_task_generation",
             "literature_to_ideas_workflow",
@@ -1627,6 +1630,18 @@ def tool_manifest() -> ToolManifestResponse:
             method="POST",
             path="/research/experiment-plans/{plan_id}/benchmark-run",
             input_model="BenchmarkRunCreate",
+            output_model="ExperimentRunRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="execute_benchmark_command",
+            description=(
+                "Execute a guarded local benchmark command, capture stdout/stderr/metrics, "
+                "and save the result as an experiment run."
+            ),
+            method="POST",
+            path="/research/experiment-plans/{plan_id}/benchmark-run/execute",
+            input_model="BenchmarkExecutionCreate",
             output_model="ExperimentRunRead",
             side_effect=True,
         ),
@@ -15120,6 +15135,47 @@ def create_benchmark_run(
             reproducibility_notes=payload.reproducibility_notes,
             created_by=payload.created_by,
         )
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return _serialize_experiment_run(run)
+
+
+@router.post(
+    "/experiment-plans/{plan_id}/benchmark-run/execute",
+    response_model=ExperimentRunRead,
+)
+def execute_benchmark_command(
+    plan_id: str,
+    payload: BenchmarkExecutionCreate,
+    session: Session = Depends(get_session),
+) -> ExperimentRunRead:
+    try:
+        run = BenchmarkCommandRunnerService(session).execute(
+            plan_id,
+            title=payload.title,
+            task_id=payload.task_id,
+            benchmark_name=payload.benchmark_name,
+            dataset=payload.dataset,
+            split=payload.split,
+            baseline_name=payload.baseline_name,
+            primary_metric=payload.primary_metric,
+            metric_direction=payload.metric_direction,
+            candidate_result=payload.candidate_result,
+            baseline_result=payload.baseline_result,
+            metric_results=payload.metric_results,
+            command_args=payload.command_args,
+            working_directory=payload.working_directory,
+            metrics_output_path=payload.metrics_output_path,
+            parse_stdout_json=payload.parse_stdout_json,
+            config=payload.config,
+            artifact_links=payload.artifact_links,
+            timeout_seconds=payload.timeout_seconds,
+            reproducibility_notes=payload.reproducibility_notes,
+            created_by=payload.created_by,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         status_code = 404 if "not found" in str(exc).lower() else 400
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc

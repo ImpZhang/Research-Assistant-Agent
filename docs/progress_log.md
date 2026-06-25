@@ -18,6 +18,22 @@ Verification completed:
 - `bash scripts/check_generated_file_guard.sh` passed.
 - `git diff --check` passed before the handoff script update.
 
+## 2026-06-25 - Guarded Benchmark Command Runner
+
+Implementation completed:
+
+- Added `BENCHMARK_RUNNER_*` local configuration with the runner disabled by default.
+- Added `BenchmarkExecutionCreate` and `POST /research/experiment-plans/{plan_id}/benchmark-run/execute`.
+- Added `BenchmarkCommandRunnerService`, which validates allowed commands, keeps working/output paths inside the project root, executes command-argument lists without a shell, captures stdout/stderr/command metadata/metrics, and saves artifacts under `outputs/benchmark-runs/`.
+- Saved executed benchmark results as `ExperimentRun` records with `execution_kind=benchmark_command`, parsed metric results, artifact links, and Markdown export.
+- Added Workbench `Benchmark Exec` control and readiness reporting under `/health/ready`.
+- Added tests for disabled-by-default behavior and successful local command execution.
+
+Production boundary:
+
+- The runner is a controlled local execution hook, not a scheduler or sandbox.
+- Real scientific claims still require a real dataset harness, captured artifacts, repeated runs, and SOTA signoff evidence.
+
 ## 2026-06-25 - SOTA Signoff And Benchmark Run Packets
 
 Implementation completed:

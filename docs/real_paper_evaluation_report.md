@@ -72,9 +72,10 @@ Implemented after the first evaluation round:
 - Added SOTA external-search evidence packages that persist review-query search statuses, local/external result summaries, missing searches, and signoff readiness.
 - Added manual SOTA signoff records that persist the reviewer decision, linked external-search evidence package, effective external-search completion state, nearest work, linked benchmark runs, final novelty claim, limitations, and blockers.
 - Added benchmark run packets so dry-run or real-mode benchmark evidence can be recorded as first-class experiment runs with dataset, split, baseline, primary metric, command, artifacts, and reproducibility notes.
+- Added a guarded local benchmark command runner that is disabled by default, executes command-argument lists without a shell when enabled, captures stdout/stderr/metrics, and stores artifacts under `outputs/benchmark-runs/`.
 
 Remaining hardening:
 
 1. Enable live external-search providers in production settings and require completed evidence packages before final signoff.
 2. Add optional page-image/figure-aware PDF evidence extraction for scanned or figure-heavy geolocalization papers.
-3. Add a command-runner benchmark executor so dry-run benchmark packets can be replaced by measured geolocalization metrics with captured logs.
+3. Replace Workbench smoke commands with real geolocalization benchmark harness commands and datasets.

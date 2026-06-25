@@ -13,6 +13,7 @@ This checkout is the Mac-local deployable copy of `ImpZhang/Research-Assistant-A
 - SQLite database and uploaded papers: `data/`
 - Model weights or manually downloaded local models: `models/`
 - Generated exports and experiment outputs: `outputs/`
+- Benchmark command-runner stdout/stderr/metrics artifacts: `outputs/benchmark-runs/`
 - Runtime logs: `logs/`
 - Docker project metadata: `.docker/`
 

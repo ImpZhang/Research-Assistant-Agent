@@ -108,6 +108,11 @@ def test_health_ready_checks_database_and_storage() -> None:
     assert "api_key_configured" in model_provider["roles"]["embedding"]
     assert "api_key_configured" in model_provider["roles"]["rerank"]
     assert set(model_provider["retrieval_provider_modes"]) == {"embedding", "rerank"}
+    benchmark_runner = body["checks"]["benchmark_command_runner"]
+    assert benchmark_runner["ok"] is True
+    assert benchmark_runner["enabled"] is False
+    assert benchmark_runner["shell"] is False
+    assert "python" in benchmark_runner["allowed_commands"]
     assert "pytest-secret" not in response.text
     assert body["checks"]["paper_upload_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["ok"] is True
@@ -1029,6 +1034,7 @@ def test_research_status() -> None:
     assert "sota_external_search_evidence_packages" in body["implemented_capabilities"]
     assert "manual_sota_signoff_records" in body["implemented_capabilities"]
     assert "benchmark_run_packets" in body["implemented_capabilities"]
+    assert "benchmark_command_runner" in body["implemented_capabilities"]
     assert "external_embedding_provider" not in body["next_capabilities"]
     assert "learned_reranking" not in body["next_capabilities"]
 
@@ -1179,6 +1185,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_sota_signoff_record" in names
     assert "create_advisor_brief" in names
     assert "create_benchmark_run_packet" in names
+    assert "execute_benchmark_command" in names
     assert "analyze_experiment_run" in names
     assert "cancel_job" in names
     assert "retry_job" in names
@@ -2045,6 +2052,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "sotaSignoffButton" in response.text
     assert "sotaExternalSearchButton" in response.text
     assert "benchmarkRunButton" in response.text
+    assert "benchmarkExecuteButton" in response.text
     assert response.text.index('class="dossier-command-bar"') < response.text.index(
         'class="advanced-action-panel"'
     )
@@ -2189,6 +2197,10 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/tasks/${taskId}/claim-validation-result" in script.text
     assert "/research/experiment-plans/${state.latestExperimentPlanId}/runs" in script.text
     assert "/research/experiment-plans/${state.latestExperimentPlanId}/benchmark-run" in script.text
+    assert (
+        "/research/experiment-plans/${state.latestExperimentPlanId}/benchmark-run/execute"
+        in script.text
+    )
     assert "/research/experiment-runs/${state.latestExperimentRunId}/analysis" in script.text
     assert "/research/experiment-analyses/${state.latestExperimentAnalysisId}/tasks" in script.text
     assert "/research/ideas/${state.latestIdeaId}/lineage" in script.text

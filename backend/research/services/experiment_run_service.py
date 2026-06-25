@@ -379,6 +379,7 @@ class ExperimentRunService:
             delta = round(float(candidate_result) - float(baseline_result), 6)
             improved = delta > 0 if metric_direction == "higher_is_better" else delta < 0
         results[metric_name] = {
+            "value": candidate_result,
             "candidate": candidate_result,
             "baseline": baseline_result,
             "delta": delta,

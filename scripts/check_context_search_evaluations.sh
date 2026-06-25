@@ -10,10 +10,13 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_sota_review_package.py \
   tests/test_sota_signoff_and_benchmark.py \
   tests/test_structured_idea_service.py \
+  backend/app.py \
+  backend/research/config.py \
   backend/research/routes.py \
   backend/research/schemas.py \
   backend/research/adapters/retrieval_provider_adapter.py \
   backend/research/adapters/model_adapter.py \
+  backend/research/services/benchmark_runner_service.py \
   backend/research/services/evaluation_report_service.py \
   backend/research/services/experiment_run_service.py \
   backend/research/services/sota_review_service.py \
@@ -28,10 +31,13 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_sota_review_package.py \
   tests/test_sota_signoff_and_benchmark.py \
   tests/test_structured_idea_service.py \
+  backend/app.py \
+  backend/research/config.py \
   backend/research/routes.py \
   backend/research/schemas.py \
   backend/research/adapters/retrieval_provider_adapter.py \
   backend/research/adapters/model_adapter.py \
+  backend/research/services/benchmark_runner_service.py \
   backend/research/services/evaluation_report_service.py \
   backend/research/services/experiment_run_service.py \
   backend/research/services/sota_review_service.py \

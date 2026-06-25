@@ -1,3 +1,4 @@
+import sys
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -7,6 +8,119 @@ from backend.research.db import SessionLocal
 from backend.research.models import Evidence, ExperimentPlan, Idea, Paper, ResearchGap
 from backend.research.schemas import LiteratureSearchItem, LiteratureSearchResponse
 from backend.research.services.literature_search_service import LiteratureSearchService
+
+
+def test_benchmark_command_runner_executes_local_command(monkeypatch) -> None:
+    marker = f"benchmark-exec-{uuid4().hex}"
+    idea_id = f"{marker}-idea"
+    plan_id = f"{marker}-plan"
+    output_dir = f"outputs/benchmark-runs/{marker}"
+    monkeypatch.setenv("BENCHMARK_RUNNER_ENABLED", "true")
+    monkeypatch.setenv("BENCHMARK_RUNNER_OUTPUT_DIR", output_dir)
+    monkeypatch.setenv("BENCHMARK_RUNNER_ALLOWED_COMMANDS", sys.executable)
+    monkeypatch.setenv("BENCHMARK_RUNNER_TIMEOUT_SECONDS", "30")
+
+    with SessionLocal() as session:
+        session.add(
+            Idea(
+                id=idea_id,
+                title="Executable Geo-localization Benchmark",
+                research_question="Can a local benchmark runner capture metric evidence?",
+                core_hypothesis="Executed benchmark metrics improve evidence traceability.",
+                method_sketch="Run a small command that emits benchmark JSON.",
+                novelty_argument="Requires measured benchmark artifacts.",
+                datasets_json=["local-smoke"],
+                metrics_json=["country_accuracy"],
+            )
+        )
+        session.add(
+            ExperimentPlan(
+                id=plan_id,
+                idea_id=idea_id,
+                objective="Execute a local benchmark command.",
+                hypothesis="The runner captures metrics and artifacts.",
+                datasets_json=["local-smoke"],
+                baselines_json=["baseline"],
+                metrics_json=["country_accuracy"],
+            )
+        )
+        session.commit()
+
+    client = TestClient(create_app())
+    response = client.post(
+        f"/research/experiment-plans/{plan_id}/benchmark-run/execute",
+        json={
+            "title": "Executable benchmark smoke",
+            "benchmark_name": "Local command benchmark",
+            "dataset": "local-smoke",
+            "split": "validation",
+            "baseline_name": "baseline",
+            "primary_metric": "country_accuracy",
+            "metric_direction": "higher_is_better",
+            "candidate_result": 0.74,
+            "baseline_result": 0.7,
+            "command_args": [
+                sys.executable,
+                "-c",
+                ("import json; print(json.dumps({'metrics': {'latency_ms': {'value': 12.5}}}))"),
+            ],
+            "working_directory": ".",
+            "parse_stdout_json": True,
+            "timeout_seconds": 30,
+            "created_by": "pytest",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["parameters"]["execution_kind"] == "benchmark_command"
+    assert body["parameters"]["runner"]["exit_code"] == 0
+    assert body["parameters"]["runner"]["timed_out"] is False
+    assert body["metric_results"]["latency_ms"]["value"] == 12.5
+    assert body["metric_results"]["country_accuracy"]["improved"] is True
+    assert any(item["label"] == "benchmark_stdout" for item in body["artifact_links"])
+    assert any(item["label"] == "benchmark_metrics" for item in body["artifact_links"])
+    assert body["parameters"]["runner_output_dir"].startswith(output_dir)
+
+
+def test_benchmark_command_runner_is_disabled_by_default(monkeypatch) -> None:
+    marker = f"benchmark-disabled-{uuid4().hex}"
+    idea_id = f"{marker}-idea"
+    plan_id = f"{marker}-plan"
+    monkeypatch.setenv("BENCHMARK_RUNNER_ENABLED", "false")
+
+    with SessionLocal() as session:
+        session.add(
+            Idea(
+                id=idea_id,
+                title="Disabled Benchmark Runner Idea",
+                research_question="Should disabled runner reject execution?",
+                core_hypothesis="Disabled runner prevents accidental execution.",
+            )
+        )
+        session.add(
+            ExperimentPlan(
+                id=plan_id,
+                idea_id=idea_id,
+                objective="Attempt execution while disabled.",
+                hypothesis="The route returns a policy error.",
+            )
+        )
+        session.commit()
+
+    client = TestClient(create_app())
+    response = client.post(
+        f"/research/experiment-plans/{plan_id}/benchmark-run/execute",
+        json={
+            "benchmark_name": "Disabled command benchmark",
+            "command_args": [sys.executable, "-c", "print('{}')"],
+            "created_by": "pytest",
+        },
+    )
+
+    assert response.status_code == 403
+    assert "disabled" in response.json()["detail"].lower()
 
 
 def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:

@@ -1876,6 +1876,58 @@ async function createBenchmarkRun() {
   }
 }
 
+async function executeBenchmarkRun() {
+  if (!state.latestIdeaId) {
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
+    return;
+  }
+  renderResult("workflowResult", "Executing benchmark command...", "warn");
+  try {
+    if (!state.latestExperimentPlanId) {
+      const plan = await api(`/research/ideas/${state.latestIdeaId}/experiment-plan`, {
+        method: "POST",
+      });
+      state.latestExperimentPlanId = plan.id;
+    }
+    const body = await api(
+      `/research/experiment-plans/${state.latestExperimentPlanId}/benchmark-run/execute`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Workbench benchmark execution",
+          task_id: state.latestTaskIds.length ? state.latestTaskIds[0] : null,
+          benchmark_name: "Workbench benchmark smoke",
+          dataset: "local-smoke",
+          split: "validation",
+          baseline_name: "recorded baseline",
+          primary_metric: "primary_metric",
+          metric_direction: "higher_is_better",
+          command_args: [
+            "python3",
+            "-c",
+            "import json; print(json.dumps({'metrics': {'primary_metric': {'value': 0.0}}}))",
+          ],
+          working_directory: ".",
+          parse_stdout_json: true,
+          timeout_seconds: 30,
+          config: { source: "workbench" },
+          created_by: "workbench",
+        }),
+      },
+    );
+    state.latestExperimentRunId = body.id;
+    state.latestExperimentAnalysisId = "";
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Executed benchmark run <code>${escapeHtml(body.id)}</code> with status ${escapeHtml(body.status)}.`,
+    );
+  } catch (error) {
+    renderWorkbenchError("workflowResult", error);
+  }
+}
+
 async function analyzeExperimentRun() {
   if (!state.latestExperimentRunId) {
     renderWorkbenchEmpty("workflowResult", "Record an experiment run first.");
@@ -3772,6 +3824,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("claimResultButton").addEventListener("click", recordClaimValidationResult);
   $("experimentRunButton").addEventListener("click", createExperimentRun);
   $("benchmarkRunButton").addEventListener("click", createBenchmarkRun);
+  $("benchmarkExecuteButton").addEventListener("click", executeBenchmarkRun);
   $("experimentAnalysisButton").addEventListener("click", analyzeExperimentRun);
   $("analysisTasksButton").addEventListener("click", createAnalysisTasks);
   $("decisionMemoButton").addEventListener("click", createDecisionMemo);

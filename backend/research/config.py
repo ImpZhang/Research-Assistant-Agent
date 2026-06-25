@@ -105,5 +105,26 @@ class Settings:
 
     model_provider_timeout_seconds: float = float(os.getenv("MODEL_PROVIDER_TIMEOUT_SECONDS", "60"))
 
+    benchmark_runner_enabled: bool = os.getenv("BENCHMARK_RUNNER_ENABLED", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    benchmark_runner_output_dir: str = os.getenv(
+        "BENCHMARK_RUNNER_OUTPUT_DIR",
+        "./outputs/benchmark-runs",
+    )
+    benchmark_runner_timeout_seconds: int = int(
+        os.getenv("BENCHMARK_RUNNER_TIMEOUT_SECONDS", "120")
+    )
+    benchmark_runner_allowed_commands: str = os.getenv(
+        "BENCHMARK_RUNNER_ALLOWED_COMMANDS",
+        "python,python3,.venv/bin/python",
+    )
+    benchmark_runner_max_output_chars: int = int(
+        os.getenv("BENCHMARK_RUNNER_MAX_OUTPUT_CHARS", "200000")
+    )
+
 
 settings = Settings()

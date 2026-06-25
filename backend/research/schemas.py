@@ -578,6 +578,29 @@ class BenchmarkRunCreate(BaseModel):
     created_by: str = "system"
 
 
+class BenchmarkExecutionCreate(BaseModel):
+    title: str = ""
+    task_id: str | None = None
+    benchmark_name: str = "Primary benchmark"
+    dataset: str = ""
+    split: str = ""
+    baseline_name: str = ""
+    primary_metric: str = ""
+    metric_direction: Literal["higher_is_better", "lower_is_better"] = "higher_is_better"
+    candidate_result: float | None = None
+    baseline_result: float | None = None
+    metric_results: dict[str, Any] = Field(default_factory=dict)
+    command_args: list[str] = Field(default_factory=list)
+    working_directory: str = "."
+    metrics_output_path: str = ""
+    parse_stdout_json: bool = True
+    config: dict[str, Any] = Field(default_factory=dict)
+    artifact_links: list[dict[str, Any]] = Field(default_factory=list)
+    timeout_seconds: int | None = Field(default=None, ge=1, le=3600)
+    reproducibility_notes: str = ""
+    created_by: str = "system"
+
+
 class ExperimentRunUpdate(BaseModel):
     status: Literal["planned", "running", "completed", "failed", "inconclusive"] | None = None
     dataset_snapshot: str | None = None

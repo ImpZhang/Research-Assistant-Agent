@@ -162,6 +162,7 @@ def create_app() -> FastAPI:
             "request_id_header": _request_id_header_ready(),
             "workbench_assets": _workbench_assets_ready(),
             "model_provider_configuration": _model_provider_configuration_ready(),
+            "benchmark_command_runner": _benchmark_command_runner_ready(),
             "paper_upload_dir": _paper_upload_dir_ready(),
             "write_audit_dir": _write_audit_dir_ready(),
             "external_literature_search": _external_literature_search_ready(),
@@ -411,6 +412,56 @@ def _model_provider_role_status(model: str, base_url: str, api_key: str) -> dict
         "api_key_configured": bool(api_key),
         "partially_configured": partially_configured,
     }
+
+
+def _benchmark_command_runner_ready() -> dict:
+    enabled = _benchmark_runner_enabled()
+    output_dir = _benchmark_runner_output_dir()
+    allowed_commands = _benchmark_runner_allowed_commands()
+    ok = not enabled or (bool(output_dir) and bool(allowed_commands))
+    payload = {
+        "ok": ok,
+        "enabled": enabled,
+        "output_dir": output_dir,
+        "allowed_commands": allowed_commands,
+        "timeout_seconds": _benchmark_runner_timeout_seconds(),
+        "max_output_chars": _benchmark_runner_max_output_chars(),
+        "shell": False,
+    }
+    if enabled and not allowed_commands:
+        payload["error"] = "Benchmark runner is enabled but no allowed commands are configured."
+    return payload
+
+
+def _benchmark_runner_enabled() -> bool:
+    raw = os.getenv("BENCHMARK_RUNNER_ENABLED")
+    if raw is None:
+        return settings.benchmark_runner_enabled
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _benchmark_runner_output_dir() -> str:
+    return os.getenv("BENCHMARK_RUNNER_OUTPUT_DIR") or settings.benchmark_runner_output_dir
+
+
+def _benchmark_runner_allowed_commands() -> list[str]:
+    raw = os.getenv("BENCHMARK_RUNNER_ALLOWED_COMMANDS")
+    configured = raw if raw is not None else settings.benchmark_runner_allowed_commands
+    return [item.strip() for item in configured.split(",") if item.strip()]
+
+
+def _benchmark_runner_timeout_seconds() -> int:
+    raw = os.getenv("BENCHMARK_RUNNER_TIMEOUT_SECONDS")
+    if raw:
+        return int(raw)
+    return settings.benchmark_runner_timeout_seconds
+
+
+def _benchmark_runner_max_output_chars() -> int:
+    raw = os.getenv("BENCHMARK_RUNNER_MAX_OUTPUT_CHARS")
+    if raw:
+        return int(raw)
+    return settings.benchmark_runner_max_output_chars
 
 
 def _external_literature_search_ready() -> dict:
