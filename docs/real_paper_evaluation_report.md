@@ -75,6 +75,7 @@ Implemented after the first evaluation round:
 - Added a guarded local benchmark command runner that is disabled by default, executes command-argument lists without a shell when enabled, captures stdout/stderr/metrics, and stores artifacts under `outputs/benchmark-runs/`.
 - Added a benchmark profile registry plus `scripts/benchmark_geoloc_predictions.py` so Workbench can discover runnable profiles, report missing local benchmark files, and execute a real geolocalization JSONL harness when ground truth and prediction files are present.
 - Added benchmark run comparison briefs so repeated measured runs can be compared by metric delta and saved as auditable Markdown evidence.
+- Added benchmark evidence readiness checks so completed runs and comparison briefs can gate manual SOTA signoff.
 
 Remaining hardening:
 

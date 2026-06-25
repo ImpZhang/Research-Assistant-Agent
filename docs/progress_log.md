@@ -2,6 +2,20 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-25 - Benchmark Evidence Readiness Gate
+
+Implementation completed:
+
+- Added `BenchmarkEvidenceService` to summarize an idea's completed benchmark runs and benchmark comparison briefs.
+- Added `GET /research/ideas/{idea_id}/benchmark-evidence/readiness` with missing items, warnings, recommended actions, readiness status, and Markdown export.
+- Added Workbench `Benchmark Gate` so a researcher can inspect whether benchmark evidence is ready before manual SOTA signoff.
+- Added readiness coverage to benchmark comparison tests, status capability checks, tool manifest checks, and Workbench static checks.
+
+Production boundary:
+
+- Readiness is an evidence-completeness gate, not an automatic scientific approval.
+- Human signoff and external SOTA evidence remain required before publication-grade claims.
+
 ## 2026-06-25 - Benchmark Run Comparison Briefs
 
 Implementation completed:

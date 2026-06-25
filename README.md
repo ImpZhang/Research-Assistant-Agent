@@ -68,6 +68,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Guarded local benchmark command runner that is disabled by default, executes command-argument lists without a shell when enabled, captures stdout/stderr/metrics under `outputs/benchmark-runs/`, and saves the result as an experiment run.
 - Benchmark profile registry and a project-local geolocalization JSONL harness so Workbench/API clients can discover runnable benchmark profiles, see missing data/prediction paths, execute profile-backed commands, and parse country-accuracy/geodesic-distance metrics.
 - Benchmark run comparison records that compute metric deltas between two experiment runs and persist the result as an auditable Markdown research brief.
+- Benchmark evidence readiness gate that summarizes completed runs, comparison briefs, missing evidence, warnings, and whether an idea is ready for manual SOTA signoff.
 - Experiment result analysis that turns run metrics into a decision, concerns, next actions, task events, and Markdown analysis reports.
 - Follow-up task generation from experiment analysis next actions.
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.

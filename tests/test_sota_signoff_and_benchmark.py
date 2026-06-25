@@ -312,6 +312,17 @@ def test_benchmark_run_comparison_persists_brief() -> None:
         assert brief.scope == "benchmark_run_comparison"
         assert brief.summary_json["comparison_status"] == "improved"
 
+    readiness = client.get(f"/research/ideas/{idea_id}/benchmark-evidence/readiness")
+
+    assert readiness.status_code == 200
+    readiness_body = readiness.json()
+    assert readiness_body["ready_for_sota_review"] is True
+    assert readiness_body["readiness_status"] == "ready_for_sota_review"
+    assert readiness_body["completed_benchmark_run_count"] == 2
+    assert readiness_body["benchmark_comparison_count"] == 1
+    assert readiness_body["latest_comparison_brief_id"] == body["brief_id"]
+    assert "Benchmark Evidence Readiness" in readiness_body["markdown_export"]
+
 
 def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:
     marker = f"sota-signoff-{uuid4().hex}"

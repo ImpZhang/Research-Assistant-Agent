@@ -709,6 +709,7 @@ proposal revision 之后需要进入 task backlog：
 - benchmark run 需要支持 profile-backed execution：先列出可运行 profile、缺失的本地数据/预测路径和命令模板，再把执行结果保存为 run artifact。
 - 地理定位 benchmark 的第一版真实 harness 需要读取项目本地 JSON/JSONL ground truth 和 prediction 文件，输出 country accuracy 和可选 geodesic-distance 指标；真实数据和预测文件不得提交到 Git。
 - 多次 benchmark run 需要支持 comparison brief：计算 baseline/candidate metric delta、方向和 improved/regressed 状态，并保存为可审计 Markdown artifact。
+- idea 需要支持 benchmark evidence readiness gate：汇总 completed benchmark runs、comparison briefs、缺失项、警告和推荐动作，用于进入人工 SOTA signoff 前的证据完整性检查。
 
 实验运行之后需要支持 experiment analysis：
 

@@ -1039,6 +1039,7 @@ def test_research_status() -> None:
     assert "benchmark_run_packets" in body["implemented_capabilities"]
     assert "benchmark_command_runner" in body["implemented_capabilities"]
     assert "benchmark_run_comparison_records" in body["implemented_capabilities"]
+    assert "benchmark_evidence_readiness_gate" in body["implemented_capabilities"]
     assert "external_embedding_provider" not in body["next_capabilities"]
     assert "learned_reranking" not in body["next_capabilities"]
 
@@ -1211,6 +1212,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_benchmark_run_packet" in names
     assert "execute_benchmark_command" in names
     assert "compare_benchmark_runs" in names
+    assert "get_benchmark_evidence_readiness" in names
     assert "analyze_experiment_run" in names
     assert "cancel_job" in names
     assert "retry_job" in names
@@ -2079,6 +2081,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "benchmarkRunButton" in response.text
     assert "benchmarkExecuteButton" in response.text
     assert "benchmarkCompareButton" in response.text
+    assert "benchmarkGateButton" in response.text
     assert response.text.index('class="dossier-command-bar"') < response.text.index(
         'class="advanced-action-panel"'
     )
@@ -2228,6 +2231,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "selectedProfile.id" in script.text
     assert "compareBenchmarkRuns" in script.text
     assert "/research/experiment-runs/compare" in script.text
+    assert "loadBenchmarkEvidenceReadiness" in script.text
+    assert "/benchmark-evidence/readiness" in script.text
     assert (
         "/research/experiment-plans/${state.latestExperimentPlanId}/benchmark-run/execute"
         in script.text

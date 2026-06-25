@@ -673,6 +673,23 @@ class BenchmarkRunComparisonResponse(BaseModel):
     created_at: datetime
 
 
+class BenchmarkEvidenceReadinessResponse(BaseModel):
+    idea_id: str
+    readiness_status: str
+    ready_for_sota_review: bool = False
+    benchmark_run_count: int = 0
+    completed_benchmark_run_count: int = 0
+    benchmark_comparison_count: int = 0
+    latest_run_id: str = ""
+    latest_completed_run_id: str = ""
+    latest_comparison_brief_id: str = ""
+    latest_comparison_status: str = ""
+    missing_items: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+    markdown_export: str = ""
+
+
 class ExperimentRunRead(BaseModel):
     id: str
     experiment_plan_id: str
