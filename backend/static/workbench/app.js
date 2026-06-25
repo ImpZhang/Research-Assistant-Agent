@@ -479,13 +479,13 @@ async function loadOnboardingProgress() {
 }
 
 async function loadPilotReport() {
-  renderResult("onboardingResult", "Loading pilot report...", "warn");
+  renderResult("onboardingResult", "Loading status report...", "warn");
   try {
     const body = await api("/research/pilot/report");
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "onboardingResult",
-      `Pilot report <code>${escapeHtml(body.report_status)}</code>. Phase <code>${escapeHtml(body.cockpit_phase)}</code>; readiness <code>${escapeHtml(body.readiness_level)}</code>.<br />${escapeHtml(body.executive_summary)}`,
+      `Status report <code>${escapeHtml(body.report_status)}</code>. Phase <code>${escapeHtml(body.cockpit_phase)}</code>; readiness <code>${escapeHtml(body.readiness_level)}</code>.<br />${escapeHtml(body.executive_summary)}`,
     );
   } catch (error) {
     renderWorkbenchError("onboardingResult", error);
@@ -493,13 +493,13 @@ async function loadPilotReport() {
 }
 
 async function savePilotReportSnapshot() {
-  renderResult("onboardingResult", "Saving pilot report snapshot...", "warn");
+  renderResult("onboardingResult", "Saving status report snapshot...", "warn");
   try {
     const body = await api("/research/pilot/report/snapshots", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: "Workbench Pilot Status Report",
+        title: "Workbench Local Status Report",
         created_by: "workbench",
       }),
     });
@@ -507,7 +507,7 @@ async function savePilotReportSnapshot() {
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "onboardingResult",
-      `Saved pilot report snapshot <code>${escapeHtml(body.id)}</code> with ${body.markdown_export_chars} Markdown chars.`,
+      `Saved status report snapshot <code>${escapeHtml(body.id)}</code> with ${body.markdown_export_chars} Markdown chars.`,
     );
   } catch (error) {
     renderWorkbenchError("onboardingResult", error);
@@ -516,10 +516,10 @@ async function savePilotReportSnapshot() {
 
 async function createPilotReportSnapshotTasks() {
   if (!state.latestPilotReportSnapshotId) {
-    renderWorkbenchEmpty("onboardingResult", "Save a pilot report snapshot first.");
+    renderWorkbenchEmpty("onboardingResult", "Save a status report snapshot first.");
     return;
   }
-  renderResult("onboardingResult", "Creating pilot report snapshot tasks...", "warn");
+  renderResult("onboardingResult", "Creating status report snapshot tasks...", "warn");
   try {
     const body = await api(
       `/research/pilot/report/snapshots/${state.latestPilotReportSnapshotId}/tasks`,
@@ -538,7 +538,7 @@ async function createPilotReportSnapshotTasks() {
     state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
     renderResult(
       "onboardingResult",
-      `${escapeHtml(body.message)}<br />${renderList("Pilot report tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+      `${escapeHtml(body.message)}<br />${renderList("Status report tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
     renderWorkbenchError("onboardingResult", error);
@@ -546,11 +546,11 @@ async function createPilotReportSnapshotTasks() {
 }
 
 async function comparePilotReportSnapshots() {
-  renderResult("onboardingResult", "Comparing latest pilot report snapshots...", "warn");
+  renderResult("onboardingResult", "Comparing latest status report snapshots...", "warn");
   try {
     const snapshots = await api("/research/pilot/report/snapshots?limit=2");
     if (snapshots.length < 2) {
-      renderWorkbenchEmpty("onboardingResult", "Save at least two pilot report snapshots first.");
+      renderWorkbenchEmpty("onboardingResult", "Save at least two status report snapshots first.");
       return;
     }
     const [candidate, baseline] = snapshots;
@@ -573,11 +573,11 @@ async function comparePilotReportSnapshots() {
 }
 
 async function createPilotReportSnapshotComparisonTasks() {
-  renderResult("onboardingResult", "Creating pilot report comparison tasks...", "warn");
+  renderResult("onboardingResult", "Creating status report comparison tasks...", "warn");
   try {
     const snapshots = await api("/research/pilot/report/snapshots?limit=2");
     if (snapshots.length < 2) {
-      renderWorkbenchEmpty("onboardingResult", "Save at least two pilot report snapshots first.");
+      renderWorkbenchEmpty("onboardingResult", "Save at least two status report snapshots first.");
       return;
     }
     const [candidate, baseline] = snapshots;
@@ -597,7 +597,7 @@ async function createPilotReportSnapshotComparisonTasks() {
     state.latestTaskIds = [...state.latestTaskIds, ...body.tasks.map((task) => task.id)];
     renderResult(
       "onboardingResult",
-      `${escapeHtml(body.message)}<br />${renderList("Pilot report comparison tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
+      `${escapeHtml(body.message)}<br />${renderList("Status report comparison tasks", body.tasks, (task) => `${task.priority}/${task.status}: ${task.title}`)}`,
     );
   } catch (error) {
     renderWorkbenchError("onboardingResult", error);
@@ -619,7 +619,7 @@ function fillProfileForm(profile) {
 }
 
 function fillSetupWizardForm(profile) {
-  $("setupName").value = profile.name || "Research Pilot";
+  $("setupName").value = profile.name || "Local Research Agent";
   $("setupDomains").value = formatCsv(profile.primary_domains);
   $("setupQuestions").value = formatCsv(profile.active_questions);
   $("setupVenues").value = formatCsv(profile.target_venues);
@@ -648,7 +648,7 @@ function profilePayload() {
 
 function setupWizardPayload() {
   return {
-    name: $("setupName").value.trim() || "Research Pilot",
+    name: $("setupName").value.trim() || "Local Research Agent",
     primary_domains: parseCsv($("setupDomains").value),
     active_questions: parseCsv($("setupQuestions").value),
     target_venues: parseCsv($("setupVenues").value),
@@ -658,7 +658,7 @@ function setupWizardPayload() {
     timeline_horizon: $("setupTimeline").value.trim(),
     negative_preferences: [],
     evaluation_weights: {},
-    customer_context: "Workbench pilot setup",
+    customer_context: "Workbench local setup",
     success_criteria: parseCsv($("setupCriteria").value),
     first_milestone: $("setupMilestone").value.trim(),
     notes: "",
@@ -1117,7 +1117,7 @@ async function loadPilotLaunch() {
     ].filter(Boolean);
     renderResult(
       "pilotLaunchResult",
-      `Pilot readiness <code>${escapeHtml(readiness.readiness_level)}</code>; cockpit phase <code>${escapeHtml(cockpit.phase)}</code>.${renderPilotActionList(actions)}`,
+      `Local readiness <code>${escapeHtml(readiness.readiness_level)}</code>; cockpit phase <code>${escapeHtml(cockpit.phase)}</code>.${renderPilotActionList(actions)}`,
     );
   } catch (error) {
     $("pilotLaunchMetrics").innerHTML = [
@@ -2366,7 +2366,7 @@ async function saveProjectBundleReleaseNote() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: "Workbench Project Bundle Release Note",
-        recipient: "advisor_or_customer",
+        recipient: "advisor_or_reviewer",
         release_notes: "Workbench release note generated before project bundle handoff.",
         created_by: "workbench",
       }),
@@ -2498,7 +2498,7 @@ async function recordProjectBundleReleaseFeedback() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: "Workbench Project Bundle Release Feedback",
-        recipient: "advisor_or_customer",
+        recipient: "advisor_or_reviewer",
         feedback_status: "changes_requested",
         signoff_confirmed: false,
         feedback_notes: "Workbench feedback captured after project bundle handoff.",
@@ -2923,7 +2923,7 @@ async function recordProjectBundleReleaseReviewOutcome() {
         body: JSON.stringify({
           title: "Workbench Project Bundle Release Review Outcome",
           review_decision: "follow_up_needed",
-          participants: ["workbench user", "advisor_or_customer"],
+          participants: ["workbench user", "advisor_or_reviewer"],
           outcome_notes:
             "Workbench review outcome captured from the release review session.",
           decisions: ["Confirm owners for unresolved acceptance follow-up."],
@@ -3114,7 +3114,7 @@ async function recordProjectBundleReleaseReviewOutcomeSignoff() {
         body: JSON.stringify({
           title: "Workbench Project Bundle Release Review Outcome Signoff",
           signoff_decision: "deferred",
-          approver: "advisor_or_customer",
+          approver: "advisor_or_reviewer",
           signoff_notes:
             "Workbench signoff evidence captured with the current review outcome progress snapshot.",
           accepted_artifacts: [

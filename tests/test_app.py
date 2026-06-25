@@ -2079,7 +2079,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "pilot-path" in response.text
     assert "pilotPathSteps" in response.text
     assert "pilot-path-steps" in response.text
-    assert "Pilot workflow stages" in response.text
+    assert "Local workflow stages" in response.text
     assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-path"')
     assert response.text.index('id="pilot-path"') < response.text.index('id="pilot-launch"')
     for stage_label in ["Setup", "Evidence", "Generate", "Review", "Dossier", "Delivery"]:
@@ -2133,8 +2133,8 @@ def test_workbench_static_assets_are_served() -> None:
         'id="dossierPreview"'
     )
     expected_sections = {
-        "pilot-path": "Pilot Path",
-        "pilot-launch": "Pilot Launch",
+        "pilot-path": "Local Path",
+        "pilot-launch": "Local Launch",
         "real-eval": "Real Eval",
         "onboarding": "Onboarding",
         "ingest": "Ingest",
@@ -2413,8 +2413,8 @@ def test_workbench_user_path_contract_supports_pilot_demo_loop() -> None:
     html = response.text
 
     demo_sections = [
-        ("pilot-path", "Pilot Path"),
-        ("pilot-launch", "Pilot Launch"),
+        ("pilot-path", "Local Path"),
+        ("pilot-launch", "Local Launch"),
         ("onboarding", "Onboarding"),
         ("ingest", "Paper Ingest"),
         ("workflow", "Async Workflow"),
@@ -2427,7 +2427,7 @@ def test_workbench_user_path_contract_supports_pilot_demo_loop() -> None:
     latest_workflow_position = html.index('id="latest-workflow"')
     assert "Latest Workflow" in html
     assert "latestWorkflowLoadDossierButton" in html
-    assert "Pilot workflow stages" in html
+    assert "Local workflow stages" in html
     assert "quickLoadDossierButton" in html
     assert "Advanced Actions" in html
 

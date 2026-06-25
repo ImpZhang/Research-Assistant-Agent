@@ -29,6 +29,21 @@ Verification completed:
 - `bash scripts/check_remote_safe_suite.sh` passed, including local readiness, deployment contracts `2 passed`, backup/restore contracts, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `37 passed`.
 - `git diff --check` passed.
 
+## 2026-06-26 - Workbench Local Operator Copy
+
+Implementation completed:
+
+- Updated visible Workbench first-run navigation and setup copy from historical customer-pilot wording to local personal-agent wording.
+- Changed visible labels to `Local Path`, `Local Launch`, `Status Report`, and `Save Status Report` while preserving DOM ids, CSS classes, and `/research/pilot/*` API compatibility.
+- Updated Workbench default setup name and constraints to local deployment wording.
+- Updated Workbench-generated release recipient defaults from `advisor_or_customer` to `advisor_or_reviewer`.
+
+Verification completed:
+
+- `bash scripts/check_pilot_readiness.sh` passed: `36 passed in 6.97s`.
+- `bash scripts/check_deployment_contracts.sh` passed: `2 passed in 1.59s`.
+- `git diff --check` passed.
+
 ## 2026-06-25 - Personal Local Agent Product Scope
 
 Decision recorded:

@@ -18,8 +18,8 @@
         </div>
 
         <nav class="nav-list" aria-label="Workbench sections">
-          <a href="#pilot-path">Pilot Path</a>
-          <a href="#pilot-launch">Pilot Launch</a>
+          <a href="#pilot-path">Local Path</a>
+          <a href="#pilot-launch">Local Launch</a>
           <a href="#real-eval">Real Eval</a>
           <a href="#onboarding">Onboarding</a>
           <a href="#ingest">Ingest</a>
@@ -83,10 +83,10 @@
 
         <section id="pilot-path" class="band pilot-path">
           <div class="section-heading">
-            <h3>Pilot Path</h3>
-            <p>Customer pilot operating lane from setup to delivery evidence.</p>
+            <h3>Local Path</h3>
+            <p>Local research lane from setup to delivery evidence.</p>
           </div>
-          <div id="pilotPathSteps" class="pilot-path-steps" aria-label="Pilot workflow stages">
+          <div id="pilotPathSteps" class="pilot-path-steps" aria-label="Local workflow stages">
             <a href="#onboarding">
               <span>01</span>
               <strong>Setup</strong>
@@ -123,8 +123,8 @@
         <section id="pilot-launch" class="band pilot-launch">
           <div class="section-heading pilot-launch-heading">
             <div>
-              <h3>Pilot Launch</h3>
-              <p>Current customer pilot state, setup progress, and next operating action.</p>
+              <h3>Local Launch</h3>
+              <p>Current local research state, setup progress, and next operating action.</p>
             </div>
             <button id="pilotLaunchRefreshButton" type="button">Refresh</button>
           </div>
@@ -168,12 +168,12 @@
         <section id="onboarding" class="band">
           <div class="section-heading">
             <h3>Onboarding</h3>
-            <p>Check pilot setup, missing inputs, and first customer-facing actions.</p>
+            <p>Check local setup, missing inputs, and first research actions.</p>
           </div>
           <form id="setupWizardForm" class="profile-grid">
             <label>
               Project
-              <input id="setupName" type="text" value="Research Pilot" />
+              <input id="setupName" type="text" value="Local Research Agent" />
             </label>
             <label>
               Domains
@@ -201,7 +201,7 @@
             </label>
             <label class="wide-field">
               Resource constraints
-              <textarea id="setupConstraints" rows="2">limited GPU budget, reproducible local experiments, small pilot dataset</textarea>
+              <textarea id="setupConstraints" rows="2">limited GPU budget, reproducible local experiments, small local dataset</textarea>
             </label>
             <label>
               Timeline
@@ -224,8 +224,8 @@
             <button id="onboardingMarkdownButton" type="button">Preview Report</button>
             <button id="onboardingTasksButton" type="button">Onboarding Tasks</button>
             <button id="onboardingProgressButton" type="button">Onboarding Progress</button>
-            <button id="pilotReportButton" type="button">Pilot Report</button>
-            <button id="pilotReportSnapshotButton" type="button">Save Pilot Report</button>
+            <button id="pilotReportButton" type="button">Status Report</button>
+            <button id="pilotReportSnapshotButton" type="button">Save Status Report</button>
             <button id="pilotReportSnapshotCompareButton" type="button">Compare Reports</button>
             <button id="pilotReportSnapshotComparisonTasksButton" type="button">Comparison Tasks</button>
             <button id="pilotReportSnapshotTasksButton" type="button">Report Tasks</button>
