@@ -46,6 +46,8 @@ This document is the starting point for future development. Use it to find the r
 | `docs/geolocalization_manual_sota_review.md` | Manual SOTA screening for geolocalization sources. |
 | `docs/geolocalization_benchmark_sota_table.md` | Exact benchmark boundary table for geolocalization claims. |
 | `/research/ideas/{idea_id}/sota-review-package` | Runtime API that turns an idea into a persisted manual SOTA review checklist and collision package. |
+| `/research/ideas/{idea_id}/sota-signoffs` | Runtime API that records the human novelty/SOTA decision, nearest work, evidence links, benchmark links, and blockers. |
+| `/research/experiment-plans/{plan_id}/benchmark-run` | Runtime API that records structured benchmark packets as reproducible experiment runs. |
 
 ## Handoff Documents
 

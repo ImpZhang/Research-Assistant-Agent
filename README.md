@@ -13,6 +13,8 @@ paper upload
   -> novelty/collision screening
   -> reviewer simulation
   -> experiment planning
+  -> benchmark run packet / experiment run tracking
+  -> manual SOTA signoff record
   -> Markdown research dossier
   -> GraphRAG-lite context retrieval
 ```
@@ -54,12 +56,14 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Novelty/collision checks against existing evidence, gaps, ideas, and literature search results.
 - Persisted related-work matrices that compare an idea with local evidence, gaps, nearby ideas, and literature search rows.
 - Manual SOTA review packages that combine novelty screening, related-work rows, missing searches, review queries, and Markdown checklists before claiming novelty.
+- Manual SOTA signoff records that capture reviewer decision, external-search completion, nearest work, evidence links, linked benchmark runs, final novelty claim, limitations, and remaining blockers.
 - Persisted proposal drafts that bundle an idea, related-work positioning, experiment plan, risks, milestones, and evidence IDs.
 - Proposal readiness reviews with advisor-style scores, concerns, required revisions, and missing evidence.
 - Proposal revision artifacts that turn readiness-review actions into a revised proposal checkpoint.
 - Research task backlog generation from proposal revisions, with task listing, status updates, and workbench task-board controls.
 - Research task event logs for created/updated/progress/blocker notes and execution history.
 - Experiment run tracking that links an experiment plan to task events, metrics, conclusions, artifacts, and Markdown run reports.
+- Benchmark run packets that structure dataset, split, nearest baseline, primary metric, metric direction, command, dry-run flag, artifacts, and reproducibility notes as first-class experiment runs.
 - Experiment result analysis that turns run metrics into a decision, concerns, next actions, task events, and Markdown analysis reports.
 - Follow-up task generation from experiment analysis next actions.
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.

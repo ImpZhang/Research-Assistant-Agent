@@ -8,12 +8,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_evaluation_reports.py \
   tests/test_retrieval_provider_adapter.py \
   tests/test_sota_review_package.py \
+  tests/test_sota_signoff_and_benchmark.py \
   tests/test_structured_idea_service.py \
   backend/research/routes.py \
   backend/research/schemas.py \
   backend/research/adapters/retrieval_provider_adapter.py \
   backend/research/adapters/model_adapter.py \
   backend/research/services/evaluation_report_service.py \
+  backend/research/services/experiment_run_service.py \
   backend/research/services/sota_review_service.py \
   backend/research/services/structured_idea_service.py \
   backend/research/services/retrieval_service.py \
@@ -24,12 +26,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_evaluation_reports.py \
   tests/test_retrieval_provider_adapter.py \
   tests/test_sota_review_package.py \
+  tests/test_sota_signoff_and_benchmark.py \
   tests/test_structured_idea_service.py \
   backend/research/routes.py \
   backend/research/schemas.py \
   backend/research/adapters/retrieval_provider_adapter.py \
   backend/research/adapters/model_adapter.py \
   backend/research/services/evaluation_report_service.py \
+  backend/research/services/experiment_run_service.py \
   backend/research/services/sota_review_service.py \
   backend/research/services/structured_idea_service.py \
   backend/research/services/retrieval_service.py \
@@ -39,6 +43,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_evaluation_reports.py \
   tests/test_retrieval_provider_adapter.py \
   tests/test_sota_review_package.py \
+  tests/test_sota_signoff_and_benchmark.py \
   tests/test_structured_idea_service.py \
   tests/test_app.py::test_context_search_ranking_tie_breaks_by_matched_terms_and_recency \
   tests/test_app.py::test_context_search_empty_query_guard_fixture \

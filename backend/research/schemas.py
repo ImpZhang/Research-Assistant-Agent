@@ -558,6 +558,26 @@ class ExperimentRunCreate(BaseModel):
     created_by: str = "system"
 
 
+class BenchmarkRunCreate(BaseModel):
+    title: str = ""
+    task_id: str | None = None
+    benchmark_name: str = "Primary benchmark"
+    dataset: str = ""
+    split: str = ""
+    baseline_name: str = ""
+    primary_metric: str = ""
+    metric_direction: Literal["higher_is_better", "lower_is_better"] = "higher_is_better"
+    candidate_result: float | None = None
+    baseline_result: float | None = None
+    metric_results: dict[str, Any] = Field(default_factory=dict)
+    command: str = ""
+    config: dict[str, Any] = Field(default_factory=dict)
+    artifact_links: list[dict[str, Any]] = Field(default_factory=list)
+    dry_run: bool = True
+    reproducibility_notes: str = ""
+    created_by: str = "system"
+
+
 class ExperimentRunUpdate(BaseModel):
     status: Literal["planned", "running", "completed", "failed", "inconclusive"] | None = None
     dataset_snapshot: str | None = None
@@ -1482,6 +1502,25 @@ class ResearchBriefCreate(BaseModel):
 class SotaReviewPackageCreate(BaseModel):
     include_external: bool = False
     limit: int = Field(default=8, ge=1, le=20)
+    created_by: str = "researcher"
+
+
+class SotaSignoffCreate(BaseModel):
+    review_package_id: str = ""
+    decision: Literal[
+        "confirmed_novel",
+        "not_novel",
+        "needs_more_search",
+        "benchmark_required",
+    ] = "needs_more_search"
+    reviewer: str = "researcher"
+    external_searches_completed: bool = False
+    nearest_work: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_links: list[dict[str, Any]] = Field(default_factory=list)
+    benchmark_run_ids: list[str] = Field(default_factory=list)
+    final_novelty_claim: str = ""
+    limitations: list[str] = Field(default_factory=list)
+    notes: str = ""
     created_by: str = "researcher"
 
 

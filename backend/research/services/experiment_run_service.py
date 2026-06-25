@@ -80,6 +80,83 @@ class ExperimentRunService:
         self.session.commit()
         return run
 
+    def create_benchmark_run(
+        self,
+        experiment_plan_id: str,
+        *,
+        title: str = "",
+        task_id: str | None = None,
+        benchmark_name: str = "Primary benchmark",
+        dataset: str = "",
+        split: str = "",
+        baseline_name: str = "",
+        primary_metric: str = "",
+        metric_direction: str = "higher_is_better",
+        candidate_result: float | None = None,
+        baseline_result: float | None = None,
+        metric_results: dict | None = None,
+        command: str = "",
+        config: dict | None = None,
+        artifact_links: list[dict] | None = None,
+        dry_run: bool = True,
+        reproducibility_notes: str = "",
+        created_by: str = "system",
+    ) -> ExperimentRun:
+        metric_name = (primary_metric or "primary_metric").strip()
+        benchmark_metrics = self._benchmark_metrics(
+            metric_name=metric_name,
+            metric_direction=metric_direction,
+            candidate_result=candidate_result,
+            baseline_result=baseline_result,
+            metric_results=metric_results or {},
+            dry_run=dry_run,
+        )
+        parameters = {
+            "execution_kind": "benchmark",
+            "benchmark_name": benchmark_name.strip() or "Primary benchmark",
+            "dataset": dataset.strip(),
+            "split": split.strip(),
+            "baseline_name": baseline_name.strip(),
+            "primary_metric": metric_name,
+            "metric_direction": metric_direction,
+            "command": command.strip(),
+            "config": config or {},
+            "dry_run": dry_run,
+            "reproducibility_notes": reproducibility_notes.strip(),
+        }
+        status = "inconclusive" if dry_run else "completed"
+        if not dry_run and candidate_result is None and not benchmark_metrics:
+            status = "inconclusive"
+        conclusion = self._benchmark_conclusion(
+            benchmark_name=parameters["benchmark_name"],
+            metric_name=metric_name,
+            metrics=benchmark_metrics,
+            dry_run=dry_run,
+        )
+        notes = self._benchmark_notes(
+            dry_run=dry_run,
+            command=command,
+            reproducibility_notes=reproducibility_notes,
+        )
+        dataset_snapshot = self._benchmark_dataset_snapshot(
+            benchmark_name=parameters["benchmark_name"],
+            dataset=dataset,
+            split=split,
+        )
+        return self.create_run(
+            experiment_plan_id,
+            title=title or f"Benchmark run - {parameters['benchmark_name']}",
+            task_id=task_id,
+            status=status,
+            dataset_snapshot=dataset_snapshot,
+            parameters=parameters,
+            metric_results=benchmark_metrics,
+            artifact_links=artifact_links or [],
+            conclusion=conclusion,
+            notes=notes,
+            created_by=created_by,
+        )
+
     def update_run(
         self,
         run_id: str,
@@ -282,3 +359,86 @@ class ExperimentRunService:
         if not datasets:
             return "Dataset not specified in the experiment plan."
         return ", ".join(str(dataset) for dataset in datasets)
+
+    def _benchmark_metrics(
+        self,
+        *,
+        metric_name: str,
+        metric_direction: str,
+        candidate_result: float | None,
+        baseline_result: float | None,
+        metric_results: dict,
+        dry_run: bool,
+    ) -> dict:
+        results = dict(metric_results)
+        if candidate_result is None and baseline_result is None:
+            return results
+        delta = None
+        improved = None
+        if candidate_result is not None and baseline_result is not None:
+            delta = round(float(candidate_result) - float(baseline_result), 6)
+            improved = delta > 0 if metric_direction == "higher_is_better" else delta < 0
+        results[metric_name] = {
+            "candidate": candidate_result,
+            "baseline": baseline_result,
+            "delta": delta,
+            "direction": metric_direction,
+            "improved": improved,
+            "dry_run": dry_run,
+        }
+        return results
+
+    def _benchmark_conclusion(
+        self,
+        *,
+        benchmark_name: str,
+        metric_name: str,
+        metrics: dict,
+        dry_run: bool,
+    ) -> str:
+        if dry_run:
+            return (
+                f"Dry-run benchmark packet for {benchmark_name}; use a real run before "
+                "claiming measured improvement."
+            )
+        primary = metrics.get(metric_name)
+        if isinstance(primary, dict) and primary.get("improved") is True:
+            return f"{benchmark_name} improved on {metric_name} against the recorded baseline."
+        if isinstance(primary, dict) and primary.get("improved") is False:
+            return (
+                f"{benchmark_name} did not improve on {metric_name} against the recorded baseline."
+            )
+        if metrics:
+            return f"{benchmark_name} completed with recorded metric results."
+        return f"{benchmark_name} completed without a primary metric result."
+
+    def _benchmark_notes(
+        self,
+        *,
+        dry_run: bool,
+        command: str,
+        reproducibility_notes: str,
+    ) -> str:
+        notes = []
+        notes.append(
+            "Benchmark execution mode: dry-run." if dry_run else "Benchmark execution mode: real."
+        )
+        if command.strip():
+            notes.append(f"Command: {command.strip()}")
+        if reproducibility_notes.strip():
+            notes.append(reproducibility_notes.strip())
+        return "\n".join(notes)
+
+    def _benchmark_dataset_snapshot(
+        self,
+        *,
+        benchmark_name: str,
+        dataset: str,
+        split: str,
+    ) -> str:
+        parts = [benchmark_name.strip() or "Primary benchmark"]
+        if dataset.strip():
+            parts.append(f"dataset={dataset.strip()}")
+        if split.strip():
+            parts.append(f"split={split.strip()}")
+        return "; ".join(parts)

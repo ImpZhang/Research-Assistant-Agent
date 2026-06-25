@@ -1026,6 +1026,8 @@ def test_research_status() -> None:
     assert "real_paper_evaluation_reports" in body["implemented_capabilities"]
     assert "real_provider_evaluation_smoke" in body["implemented_capabilities"]
     assert "manual_sota_review_packages" in body["implemented_capabilities"]
+    assert "manual_sota_signoff_records" in body["implemented_capabilities"]
+    assert "benchmark_run_packets" in body["implemented_capabilities"]
     assert "external_embedding_provider" not in body["next_capabilities"]
     assert "learned_reranking" not in body["next_capabilities"]
 
@@ -1172,7 +1174,9 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "refresh_idea_novelty_search" in names
     assert "create_tasks_from_idea_novelty_check" in names
     assert "create_sota_review_package" in names
+    assert "create_sota_signoff_record" in names
     assert "create_advisor_brief" in names
+    assert "create_benchmark_run_packet" in names
     assert "analyze_experiment_run" in names
     assert "cancel_job" in names
     assert "retry_job" in names
@@ -2036,6 +2040,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "quickExperimentRunButton" in response.text
     assert "quickResearchPacketButton" in response.text
     assert "quickProjectBundleButton" in response.text
+    assert "sotaSignoffButton" in response.text
+    assert "benchmarkRunButton" in response.text
     assert response.text.index('class="dossier-command-bar"') < response.text.index(
         'class="advanced-action-panel"'
     )
@@ -2153,6 +2159,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "quickProjectBundleButton" in script.text
     assert "createSotaReviewPackage" in script.text
     assert "/research/ideas/${state.latestIdeaId}/sota-review-package" in script.text
+    assert "createSotaSignoff" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/sota-signoffs" in script.text
     assert "const latestCompletedJob = jobs.find" in script.text
     assert "restoreStateFromJob(latestCompletedJob)" in script.text
     assert "Active paper from latest job" in script.text
@@ -2175,6 +2183,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/tasks/${taskId}" in script.text
     assert "/research/tasks/${taskId}/claim-validation-result" in script.text
     assert "/research/experiment-plans/${state.latestExperimentPlanId}/runs" in script.text
+    assert "/research/experiment-plans/${state.latestExperimentPlanId}/benchmark-run" in script.text
     assert "/research/experiment-runs/${state.latestExperimentRunId}/analysis" in script.text
     assert "/research/experiment-analyses/${state.latestExperimentAnalysisId}/tasks" in script.text
     assert "/research/ideas/${state.latestIdeaId}/lineage" in script.text

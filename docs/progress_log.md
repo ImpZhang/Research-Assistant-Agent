@@ -2,6 +2,21 @@
 
 This log records remote-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-25 - SOTA Signoff And Benchmark Run Packets
+
+Implementation completed:
+
+- Added structured benchmark run packets at `POST /research/experiment-plans/{plan_id}/benchmark-run`, backed by `ExperimentRun` so dataset, split, baseline, primary metric, command, artifacts, dry-run mode, and reproducibility notes can be analyzed and exported through existing experiment workflows.
+- Added manual SOTA signoff records at `POST /research/ideas/{idea_id}/sota-signoffs`, stored as `ResearchBrief(scope="sota_signoff_record")` with reviewer decision, external-search completion, nearest work, evidence links, linked benchmark runs, final novelty claim, limitations, and signoff blockers.
+- Added list/detail/Markdown export endpoints for SOTA signoff records.
+- Updated the tool manifest, status capabilities, Workbench buttons, README, documentation index, and focused evaluation script.
+- Added an end-to-end regression test proving a real-mode benchmark packet can anchor a `sota_confirmed` signoff when external search and nearest-work evidence are recorded.
+
+Production boundary:
+
+- The signoff API records human/current-literature review state; it does not automatically prove SOTA.
+- Benchmark packets can represent dry-run or real-mode runs; publication-grade claims still require linked artifacts, current literature review, and repeatable metric execution.
+
 ## 2026-06-25 - Local Documentation And Development Process Index
 
 Documentation maintenance completed:

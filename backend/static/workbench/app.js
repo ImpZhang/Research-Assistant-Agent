@@ -14,6 +14,8 @@ const state = {
   latestProposalReviewId: "",
   latestProposalRevisionId: "",
   latestNoveltyCheckId: "",
+  latestSotaReviewPackageId: "",
+  latestSotaSignoffId: "",
   latestDecisionMemoId: "",
   latestAssumptionAuditId: "",
   latestEvidenceLedgerId: "",
@@ -1406,11 +1408,49 @@ async function createSotaReviewPackage() {
         created_by: "workbench",
       }),
     });
+    state.latestSotaReviewPackageId = body.id;
     $("dossierPreview").textContent = body.markdown_export;
     const summary = body.summary || {};
     renderResult(
       "workflowResult",
       `Created SOTA package <code>${escapeHtml(body.id)}</code> with status <code>${escapeHtml(summary.review_status || "manual_sota_review_required")}</code>. Missing searches: ${(summary.missing_searches || []).length}.`,
+    );
+  } catch (error) {
+    renderWorkbenchError("workflowResult", error);
+  }
+}
+
+async function createSotaSignoff() {
+  if (!state.latestIdeaId) {
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
+    return;
+  }
+  renderResult("workflowResult", "Recording SOTA signoff...", "warn");
+  try {
+    const benchmarkRunIds = state.latestExperimentRunId ? [state.latestExperimentRunId] : [];
+    const body = await api(`/research/ideas/${state.latestIdeaId}/sota-signoffs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        review_package_id: state.latestSotaReviewPackageId,
+        decision: "needs_more_search",
+        reviewer: "workbench",
+        external_searches_completed: false,
+        nearest_work: [],
+        evidence_links: [],
+        benchmark_run_ids: benchmarkRunIds,
+        final_novelty_claim: $("refineFocus").value.trim(),
+        limitations: ["Workbench signoff is provisional until external search and nearest-work review are complete."],
+        notes: "Workbench-created signoff record for manual SOTA closure.",
+        created_by: "workbench",
+      }),
+    });
+    state.latestSotaSignoffId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    const summary = body.summary || {};
+    renderResult(
+      "workflowResult",
+      `Recorded SOTA signoff <code>${escapeHtml(body.id)}</code> with status <code>${escapeHtml(summary.signoff_status || "needs_more_search")}</code>.`,
     );
   } catch (error) {
     renderWorkbenchError("workflowResult", error);
@@ -1749,6 +1789,54 @@ async function createExperimentRun() {
     renderResult(
       "workflowResult",
       `Recorded experiment run <code>${escapeHtml(body.id)}</code> with status ${escapeHtml(body.status)}.`,
+    );
+  } catch (error) {
+    renderWorkbenchError("workflowResult", error);
+  }
+}
+
+async function createBenchmarkRun() {
+  if (!state.latestIdeaId) {
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
+    return;
+  }
+  renderResult("workflowResult", "Recording benchmark run packet...", "warn");
+  try {
+    if (!state.latestExperimentPlanId) {
+      const plan = await api(`/research/ideas/${state.latestIdeaId}/experiment-plan`, {
+        method: "POST",
+      });
+      state.latestExperimentPlanId = plan.id;
+    }
+    const body = await api(`/research/experiment-plans/${state.latestExperimentPlanId}/benchmark-run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Workbench benchmark packet",
+        task_id: state.latestTaskIds.length ? state.latestTaskIds[0] : null,
+        benchmark_name: "First validation benchmark",
+        dataset: "Dataset to be confirmed",
+        split: "validation",
+        baseline_name: "nearest recorded baseline",
+        primary_metric: "primary_metric",
+        metric_direction: "higher_is_better",
+        candidate_result: null,
+        baseline_result: null,
+        metric_results: {},
+        command: "",
+        config: { source: "workbench" },
+        artifact_links: [],
+        dry_run: true,
+        reproducibility_notes: $("refineFocus").value.trim(),
+        created_by: "workbench",
+      }),
+    });
+    state.latestExperimentRunId = body.id;
+    state.latestExperimentAnalysisId = "";
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Recorded benchmark packet <code>${escapeHtml(body.id)}</code> with status ${escapeHtml(body.status)}.`,
     );
   } catch (error) {
     renderWorkbenchError("workflowResult", error);
@@ -3635,6 +3723,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
   $("noveltyRefreshButton").addEventListener("click", refreshNoveltySearch);
   $("sotaReviewPackageButton").addEventListener("click", createSotaReviewPackage);
+  $("sotaSignoffButton").addEventListener("click", createSotaSignoff);
   $("noveltyTasksButton").addEventListener("click", createNoveltyTasks);
   $("relatedWorkButton").addEventListener("click", createRelatedWorkMatrix);
   $("proposalDraftButton").addEventListener("click", createProposalDraft);
@@ -3648,6 +3737,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("blockTaskButton").addEventListener("click", () => updateSelectedTask("blocked"));
   $("claimResultButton").addEventListener("click", recordClaimValidationResult);
   $("experimentRunButton").addEventListener("click", createExperimentRun);
+  $("benchmarkRunButton").addEventListener("click", createBenchmarkRun);
   $("experimentAnalysisButton").addEventListener("click", analyzeExperimentRun);
   $("analysisTasksButton").addEventListener("click", createAnalysisTasks);
   $("decisionMemoButton").addEventListener("click", createDecisionMemo);

@@ -69,9 +69,11 @@ Implemented after the first evaluation round:
 - Added a Workbench Real Eval panel for loading the latest report into the dossier preview.
 - Added evaluator-side retrieval comparison between configured retrieval and a local hash/no-rerank baseline.
 - Added manual SOTA review packages that persist novelty/related-work collision evidence, missing searches, review queries, and Markdown checklists.
+- Added manual SOTA signoff records that persist the reviewer decision, external-search completion state, nearest work, linked benchmark runs, final novelty claim, limitations, and blockers.
+- Added benchmark run packets so dry-run or real-mode benchmark evidence can be recorded as first-class experiment runs with dataset, split, baseline, primary metric, command, artifacts, and reproducibility notes.
 
 Remaining hardening:
 
-1. Connect manual SOTA review packages to live external-search completion and human signoff records.
+1. Connect signoff records to live external-search providers and saved search-result evidence.
 2. Add optional page-image/figure-aware PDF evidence extraction for scanned or figure-heavy geolocalization papers.
-3. Add benchmark-execution hooks so dry-run experiment plans can be replaced by measured geolocalization metrics.
+3. Add a command-runner benchmark executor so dry-run benchmark packets can be replaced by measured geolocalization metrics with captured logs.

@@ -57,6 +57,7 @@ from backend.research.schemas import (
     ClaimValidationResultCreate,
     ContextSearchRequest,
     ContextSearchResponse,
+    BenchmarkRunCreate,
     EmbeddingRebuildRequest,
     EmbeddingRebuildResponse,
     EvidenceRead,
@@ -205,6 +206,7 @@ from backend.research.schemas import (
     ScoredIdeaRead,
     ScoredResearchGapRead,
     SotaReviewPackageCreate,
+    SotaSignoffCreate,
     TaskBoardSnapshotCreate,
     TaskBoardSnapshotDetail,
     TaskBoardSnapshotRead,
@@ -404,6 +406,7 @@ def status() -> ProjectStatus:
             "reviewer_simulation",
             "experiment_planning",
             "experiment_run_tracking",
+            "benchmark_run_packets",
             "experiment_result_analysis",
             "experiment_analysis_task_generation",
             "literature_to_ideas_workflow",
@@ -421,6 +424,7 @@ def status() -> ProjectStatus:
             "real_paper_evaluation_reports",
             "real_provider_evaluation_smoke",
             "manual_sota_review_packages",
+            "manual_sota_signoff_records",
             "lexical_context_retrieval",
             "graph_rag_lite_schema",
             "graph_rag_lite_workflow_links",
@@ -1255,6 +1259,18 @@ def tool_manifest() -> ToolManifestResponse:
             side_effect=True,
         ),
         ToolManifestItem(
+            name="create_sota_signoff_record",
+            description=(
+                "Record the manual novelty/SOTA decision with nearest work, external-search "
+                "completion, linked benchmark runs, and final signoff blockers."
+            ),
+            method="POST",
+            path="/research/ideas/{idea_id}/sota-signoffs",
+            input_model="SotaSignoffCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
             name="get_project_progress_overview",
             description="Load project-level progress, open tasks, blockers, and recommended actions.",
             method="GET",
@@ -1584,6 +1600,18 @@ def tool_manifest() -> ToolManifestResponse:
             method="POST",
             path="/research/experiment-plans/{plan_id}/runs",
             input_model="ExperimentRunCreate",
+            output_model="ExperimentRunRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_benchmark_run_packet",
+            description=(
+                "Record a structured benchmark run packet with dataset, split, baseline, "
+                "primary metric, execution mode, command, artifacts, and reproducibility notes."
+            ),
+            method="POST",
+            path="/research/experiment-plans/{plan_id}/benchmark-run",
+            input_model="BenchmarkRunCreate",
             output_model="ExperimentRunRead",
             side_effect=True,
         ),
@@ -5280,6 +5308,75 @@ def export_sota_review_package_markdown(
     brief = SotaReviewPackageService(session).get_package(idea_id, brief_id)
     if brief is None:
         raise HTTPException(status_code=404, detail="SOTA review package not found")
+    return PlainTextResponse(brief.markdown_export or "", media_type="text/markdown")
+
+
+@router.post("/ideas/{idea_id}/sota-signoffs", response_model=ResearchBriefDetail)
+def create_sota_signoff(
+    idea_id: str,
+    payload: SotaSignoffCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    try:
+        brief = SotaReviewPackageService(session).create_signoff(
+            idea_id,
+            review_package_id=payload.review_package_id,
+            decision=payload.decision,
+            reviewer=payload.reviewer,
+            external_searches_completed=payload.external_searches_completed,
+            nearest_work=payload.nearest_work,
+            evidence_links=payload.evidence_links,
+            benchmark_run_ids=payload.benchmark_run_ids,
+            final_novelty_claim=payload.final_novelty_claim,
+            limitations=payload.limitations,
+            notes=payload.notes,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get("/ideas/{idea_id}/sota-signoffs", response_model=list[ResearchBriefRead])
+def list_sota_signoffs(
+    idea_id: str,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    try:
+        briefs = SotaReviewPackageService(session).list_signoffs_for_idea(idea_id, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_research_brief(brief) for brief in briefs]
+
+
+@router.get(
+    "/ideas/{idea_id}/sota-signoffs/{brief_id}",
+    response_model=ResearchBriefDetail,
+)
+def get_sota_signoff(
+    idea_id: str,
+    brief_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    brief = SotaReviewPackageService(session).get_signoff(idea_id, brief_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="SOTA signoff record not found")
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get(
+    "/ideas/{idea_id}/sota-signoffs/{brief_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_sota_signoff_markdown(
+    idea_id: str,
+    brief_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    brief = SotaReviewPackageService(session).get_signoff(idea_id, brief_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="SOTA signoff record not found")
     return PlainTextResponse(brief.markdown_export or "", media_type="text/markdown")
 
 
@@ -14900,6 +14997,39 @@ def create_experiment_run(
             artifact_links=payload.artifact_links,
             conclusion=payload.conclusion,
             notes=payload.notes,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return _serialize_experiment_run(run)
+
+
+@router.post("/experiment-plans/{plan_id}/benchmark-run", response_model=ExperimentRunRead)
+def create_benchmark_run(
+    plan_id: str,
+    payload: BenchmarkRunCreate,
+    session: Session = Depends(get_session),
+) -> ExperimentRunRead:
+    try:
+        run = ExperimentRunService(session).create_benchmark_run(
+            plan_id,
+            title=payload.title,
+            task_id=payload.task_id,
+            benchmark_name=payload.benchmark_name,
+            dataset=payload.dataset,
+            split=payload.split,
+            baseline_name=payload.baseline_name,
+            primary_metric=payload.primary_metric,
+            metric_direction=payload.metric_direction,
+            candidate_result=payload.candidate_result,
+            baseline_result=payload.baseline_result,
+            metric_results=payload.metric_results,
+            command=payload.command,
+            config=payload.config,
+            artifact_links=payload.artifact_links,
+            dry_run=payload.dry_run,
+            reproducibility_notes=payload.reproducibility_notes,
             created_by=payload.created_by,
         )
     except ValueError as exc:
