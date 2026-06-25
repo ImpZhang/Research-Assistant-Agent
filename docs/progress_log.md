@@ -2,6 +2,19 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-25 - Benchmark Readiness In SOTA Signoff
+
+Implementation completed:
+
+- Added compact benchmark evidence readiness summaries to SOTA review packages.
+- Added benchmark evidence readiness status, missing items, and warnings to SOTA signoff manual-gate summaries.
+- Updated SOTA signoff Markdown so reviewers can see benchmark evidence readiness beside external-search and nearest-work gates.
+
+Production boundary:
+
+- Benchmark readiness is currently advisory inside signoff; it does not automatically reject an otherwise confirmed signoff.
+- Publication-grade claims should still link completed benchmark runs, comparison briefs, external SOTA evidence, and reviewer notes explicitly.
+
 ## 2026-06-25 - Benchmark Evidence Readiness Gate
 
 Implementation completed:

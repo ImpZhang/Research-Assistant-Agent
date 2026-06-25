@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from backend.research.models import ExperimentRun, Idea, ResearchBrief
+from backend.research.services.benchmark_evidence_service import BenchmarkEvidenceService
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.related_work_service import RelatedWorkService
@@ -44,6 +45,7 @@ class SotaReviewPackageService:
             list(novelty.missing_searches_json or []) + list(matrix.missing_searches_json or [])
         )
         checklist = self._manual_checklist(include_external, missing_searches)
+        benchmark_readiness = BenchmarkEvidenceService(self.session).readiness_for_idea(idea_id)
         summary = {
             "idea_id": idea.id,
             "idea_title": idea.title,
@@ -59,6 +61,7 @@ class SotaReviewPackageService:
             "manual_checklist": checklist,
             "collision_signal_count": len(novelty.collision_signals_json or []),
             "related_work_item_count": len(matrix.items_json or []),
+            "benchmark_evidence_readiness": _compact_benchmark_readiness(benchmark_readiness),
         }
         brief = ResearchBrief(
             title=f"SOTA Review Package - {idea.title[:160]}",
@@ -227,6 +230,7 @@ class SotaReviewPackageService:
             external_search_evidence,
         )
         benchmark_runs = self._load_benchmark_runs(idea_id, benchmark_run_ids or [])
+        benchmark_readiness = BenchmarkEvidenceService(self.session).readiness_for_idea(idea_id)
         clean_nearest_work = [_compact_mapping(row) for row in (nearest_work or [])]
         clean_evidence_links = [_compact_mapping(row) for row in (evidence_links or [])]
         clean_limitations = _unique([str(item) for item in (limitations or [])])
@@ -257,6 +261,7 @@ class SotaReviewPackageService:
             "evidence_links": clean_evidence_links,
             "benchmark_run_ids": [run.id for run in benchmark_runs],
             "benchmark_run_statuses": {run.id: run.status for run in benchmark_runs},
+            "benchmark_evidence_readiness": _compact_benchmark_readiness(benchmark_readiness),
             "final_novelty_claim": final_novelty_claim.strip(),
             "limitations": clean_limitations,
             "notes": notes.strip(),
@@ -266,6 +271,7 @@ class SotaReviewPackageService:
                 external_searches_completed=effective_external_search_completed,
                 nearest_work=clean_nearest_work,
                 benchmark_runs=benchmark_runs,
+                benchmark_readiness=benchmark_readiness,
             ),
         }
         brief = ResearchBrief(
@@ -528,6 +534,7 @@ class SotaReviewPackageService:
         external_searches_completed: bool,
         nearest_work: list[dict[str, Any]],
         benchmark_runs: list[ExperimentRun],
+        benchmark_readiness: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         blockers: list[str] = []
         if not external_searches_completed:
@@ -542,6 +549,18 @@ class SotaReviewPackageService:
             "blockers": blockers,
             "nearest_work_count": len(nearest_work),
             "benchmark_run_count": len(benchmark_runs),
+            "benchmark_evidence_ready_for_sota_review": bool(
+                (benchmark_readiness or {}).get("ready_for_sota_review", False)
+            ),
+            "benchmark_evidence_readiness_status": (benchmark_readiness or {}).get(
+                "readiness_status",
+                "",
+            ),
+            "benchmark_evidence_missing_items": (benchmark_readiness or {}).get(
+                "missing_items",
+                [],
+            ),
+            "benchmark_evidence_warnings": (benchmark_readiness or {}).get("warnings", []),
         }
 
     def _render_markdown(
@@ -570,6 +589,14 @@ class SotaReviewPackageService:
         lines.extend(f"- {query}" for query in summary["review_queries"])
         lines.extend(["", "## Manual Checklist", ""])
         lines.extend(f"- [ ] {item}" for item in summary["manual_checklist"])
+        lines.extend(["", "## Benchmark Evidence Readiness", ""])
+        readiness = summary.get("benchmark_evidence_readiness") or {}
+        lines.append(f"- Status: `{readiness.get('readiness_status', 'unknown')}`")
+        lines.append(f"- Ready For SOTA Review: `{readiness.get('ready_for_sota_review', False)}`")
+        lines.append(
+            f"- Completed Benchmark Runs: {readiness.get('completed_benchmark_run_count', 0)}"
+        )
+        lines.append(f"- Comparison Briefs: {readiness.get('benchmark_comparison_count', 0)}")
         lines.extend(["", "## Collision Signals", ""])
         if collision_signals:
             for signal in collision_signals[:8]:
@@ -662,6 +689,14 @@ class SotaReviewPackageService:
         lines.extend(["", "## Manual Gate", ""])
         gate = summary.get("manual_gate_summary") or {}
         lines.append(f"- Ready For SOTA Claim: `{gate.get('ready_for_sota_claim', False)}`")
+        lines.append(
+            "- Benchmark Evidence Ready: "
+            f"`{gate.get('benchmark_evidence_ready_for_sota_review', False)}`"
+        )
+        if gate.get("benchmark_evidence_readiness_status"):
+            lines.append(
+                f"- Benchmark Evidence Status: `{gate.get('benchmark_evidence_readiness_status')}`"
+            )
         blockers = gate.get("blockers") or []
         if blockers:
             lines.extend(f"- Blocker: `{blocker}`" for blocker in blockers)
@@ -750,6 +785,24 @@ def _compact_mapping(row: dict[str, Any]) -> dict[str, Any]:
         else:
             compact[str(key)] = value
     return compact
+
+
+def _compact_benchmark_readiness(readiness: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "readiness_status": readiness.get("readiness_status", ""),
+        "ready_for_sota_review": bool(readiness.get("ready_for_sota_review", False)),
+        "benchmark_run_count": int(readiness.get("benchmark_run_count", 0) or 0),
+        "completed_benchmark_run_count": int(
+            readiness.get("completed_benchmark_run_count", 0) or 0
+        ),
+        "benchmark_comparison_count": int(readiness.get("benchmark_comparison_count", 0) or 0),
+        "latest_completed_run_id": readiness.get("latest_completed_run_id", ""),
+        "latest_comparison_brief_id": readiness.get("latest_comparison_brief_id", ""),
+        "latest_comparison_status": readiness.get("latest_comparison_status", ""),
+        "missing_items": list(readiness.get("missing_items") or []),
+        "warnings": list(readiness.get("warnings") or []),
+        "recommended_actions": list(readiness.get("recommended_actions") or []),
+    }
 
 
 def _literature_item_payload(item: Any) -> dict[str, Any]:

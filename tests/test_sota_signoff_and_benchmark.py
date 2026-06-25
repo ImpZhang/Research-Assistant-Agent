@@ -435,6 +435,10 @@ def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:
     )
 
     assert package.status_code == 200
+    package_readiness = package.json()["summary"]["benchmark_evidence_readiness"]
+    assert package_readiness["completed_benchmark_run_count"] == 1
+    assert package_readiness["benchmark_comparison_count"] == 0
+    assert package_readiness["ready_for_sota_review"] is False
 
     signoff = client.post(
         f"/research/ideas/{idea_id}/sota-signoffs",
@@ -466,8 +470,16 @@ def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:
     assert body["scope"] == "sota_signoff_record"
     assert body["summary"]["signoff_status"] == "sota_confirmed"
     assert body["summary"]["manual_gate_summary"]["ready_for_sota_claim"] is True
+    assert (
+        body["summary"]["manual_gate_summary"]["benchmark_evidence_ready_for_sota_review"] is False
+    )
+    assert (
+        body["summary"]["manual_gate_summary"]["benchmark_evidence_readiness_status"]
+        == "needs_benchmark_evidence"
+    )
     assert body["summary"]["benchmark_run_ids"] == [run["id"]]
     assert "# SOTA Signoff Record" in body["markdown_export"]
+    assert "Benchmark Evidence Ready" in body["markdown_export"]
 
     listed = client.get(f"/research/ideas/{idea_id}/sota-signoffs")
     detail = client.get(f"/research/ideas/{idea_id}/sota-signoffs/{body['id']}")
