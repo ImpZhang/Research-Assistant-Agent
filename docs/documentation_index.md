@@ -53,6 +53,7 @@ This document is the starting point for future development. Use it to find the r
 | `/research/benchmark-profiles` | Runtime API that lists benchmark profiles, runner readiness, command templates, and missing project-local data paths. |
 | `/research/experiment-plans/{plan_id}/benchmark-run` | Runtime API that records structured benchmark packets as reproducible experiment runs. |
 | `/research/experiment-plans/{plan_id}/benchmark-run/execute` | Runtime API that executes a guarded local benchmark command and saves captured metrics/artifacts as an experiment run. |
+| `/research/experiment-runs/compare` | Runtime API that compares two benchmark experiment runs and persists a Markdown comparison brief. |
 
 ## Handoff Documents
 

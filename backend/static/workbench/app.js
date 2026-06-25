@@ -10,6 +10,7 @@ const state = {
   latestExperimentPlanId: "",
   latestExperimentRunId: "",
   latestExperimentAnalysisId: "",
+  latestBenchmarkComparisonBriefId: "",
   latestProposalDraftId: "",
   latestProposalReviewId: "",
   latestProposalRevisionId: "",
@@ -1942,6 +1943,47 @@ async function executeBenchmarkRun() {
   }
 }
 
+async function compareBenchmarkRuns() {
+  if (!state.latestExperimentPlanId) {
+    renderWorkbenchEmpty("workflowResult", "Create or load an experiment plan first.");
+    return;
+  }
+  renderResult("workflowResult", "Comparing recent benchmark runs...", "warn");
+  try {
+    const runs = await api(`/research/experiment-plans/${state.latestExperimentPlanId}/runs?limit=20`);
+    const benchmarkRuns = (runs || []).filter((run) =>
+      ["benchmark", "benchmark_command"].includes(run.parameters?.execution_kind),
+    );
+    if (benchmarkRuns.length < 2) {
+      renderResult(
+        "workflowResult",
+        "At least two benchmark runs are required before a comparison can be created.",
+        "warn",
+      );
+      return;
+    }
+    const [candidateRun, baselineRun] = benchmarkRuns;
+    const body = await api("/research/experiment-runs/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseline_run_id: baselineRun.id,
+        candidate_run_id: candidateRun.id,
+        primary_metric: candidateRun.parameters?.primary_metric || baselineRun.parameters?.primary_metric || "",
+        created_by: "workbench",
+      }),
+    });
+    state.latestBenchmarkComparisonBriefId = body.brief_id;
+    $("dossierPreview").textContent = body.markdown_export;
+    renderResult(
+      "workflowResult",
+      `Compared benchmark runs into brief <code>${escapeHtml(body.brief_id)}</code> with status <code>${escapeHtml(body.status)}</code>.`,
+    );
+  } catch (error) {
+    renderWorkbenchError("workflowResult", error);
+  }
+}
+
 async function analyzeExperimentRun() {
   if (!state.latestExperimentRunId) {
     renderWorkbenchEmpty("workflowResult", "Record an experiment run first.");
@@ -3839,6 +3881,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("experimentRunButton").addEventListener("click", createExperimentRun);
   $("benchmarkRunButton").addEventListener("click", createBenchmarkRun);
   $("benchmarkExecuteButton").addEventListener("click", executeBenchmarkRun);
+  $("benchmarkCompareButton").addEventListener("click", compareBenchmarkRuns);
   $("experimentAnalysisButton").addEventListener("click", analyzeExperimentRun);
   $("analysisTasksButton").addEventListener("click", createAnalysisTasks);
   $("decisionMemoButton").addEventListener("click", createDecisionMemo);

@@ -53,6 +53,8 @@ from backend.research.schemas import (
     AdvisorChatTaskGenerateRequest,
     BenchmarkExecutionCreate,
     BenchmarkProfileListResponse,
+    BenchmarkRunComparisonCreate,
+    BenchmarkRunComparisonResponse,
     ClaimValidationQueueItem,
     ClaimValidationQueueResponse,
     ClaimValidationQueueTaskGenerateRequest,
@@ -218,6 +220,7 @@ from backend.research.schemas import (
     ToolManifestResponse,
 )
 from backend.research.services.artifact_graph_service import ArtifactGraphService
+from backend.research.services.benchmark_comparison_service import BenchmarkRunComparisonService
 from backend.research.services.benchmark_runner_service import (
     BenchmarkCommandRunnerService,
     benchmark_profile_manifest_path,
@@ -419,6 +422,7 @@ def status() -> ProjectStatus:
             "benchmark_command_runner",
             "benchmark_profile_registry",
             "geolocalization_jsonl_benchmark_harness",
+            "benchmark_run_comparison_records",
             "experiment_result_analysis",
             "experiment_analysis_task_generation",
             "literature_to_ideas_workflow",
@@ -1661,6 +1665,18 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/experiment-plans/{plan_id}/benchmark-run/execute",
             input_model="BenchmarkExecutionCreate",
             output_model="ExperimentRunRead",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="compare_benchmark_runs",
+            description=(
+                "Compare two benchmark experiment runs, compute metric deltas, and persist "
+                "a benchmark comparison brief."
+            ),
+            method="POST",
+            path="/research/experiment-runs/compare",
+            input_model="BenchmarkRunComparisonCreate",
+            output_model="BenchmarkRunComparisonResponse",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -15213,6 +15229,24 @@ def execute_benchmark_command(
         status_code = 404 if "not found" in str(exc).lower() else 400
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     return _serialize_experiment_run(run)
+
+
+@router.post("/experiment-runs/compare", response_model=BenchmarkRunComparisonResponse)
+def compare_benchmark_runs(
+    payload: BenchmarkRunComparisonCreate,
+    session: Session = Depends(get_session),
+) -> BenchmarkRunComparisonResponse:
+    try:
+        comparison = BenchmarkRunComparisonService(session).compare_runs(
+            baseline_run_id=payload.baseline_run_id,
+            candidate_run_id=payload.candidate_run_id,
+            primary_metric=payload.primary_metric,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return BenchmarkRunComparisonResponse(**comparison)
 
 
 @router.get("/experiment-plans/{plan_id}/runs", response_model=list[ExperimentRunRead])

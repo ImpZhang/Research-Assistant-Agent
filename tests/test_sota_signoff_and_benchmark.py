@@ -8,7 +8,14 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.research.db import SessionLocal
-from backend.research.models import Evidence, ExperimentPlan, Idea, Paper, ResearchGap
+from backend.research.models import (
+    Evidence,
+    ExperimentPlan,
+    Idea,
+    Paper,
+    ResearchBrief,
+    ResearchGap,
+)
 from backend.research.schemas import LiteratureSearchItem, LiteratureSearchResponse
 from backend.research.services.literature_search_service import LiteratureSearchService
 
@@ -218,6 +225,92 @@ def test_benchmark_command_runner_is_disabled_by_default(monkeypatch) -> None:
 
     assert response.status_code == 403
     assert "disabled" in response.json()["detail"].lower()
+
+
+def test_benchmark_run_comparison_persists_brief() -> None:
+    marker = f"benchmark-compare-{uuid4().hex}"
+    idea_id = f"{marker}-idea"
+    plan_id = f"{marker}-plan"
+
+    with SessionLocal() as session:
+        session.add(
+            Idea(
+                id=idea_id,
+                title="Benchmark Comparison Idea",
+                research_question="Can repeated benchmark runs be compared?",
+                core_hypothesis="Metric deltas should become auditable comparison evidence.",
+            )
+        )
+        session.add(
+            ExperimentPlan(
+                id=plan_id,
+                idea_id=idea_id,
+                objective="Compare baseline and candidate benchmark runs.",
+                hypothesis="Candidate country accuracy improves over baseline run.",
+            )
+        )
+        session.commit()
+
+    client = TestClient(create_app())
+    baseline = client.post(
+        f"/research/experiment-plans/{plan_id}/benchmark-run",
+        json={
+            "title": "Baseline benchmark run",
+            "benchmark_name": "Country accuracy",
+            "dataset": "local-geoloc",
+            "split": "validation",
+            "primary_metric": "country_accuracy",
+            "metric_direction": "higher_is_better",
+            "candidate_result": 0.68,
+            "baseline_result": 0.65,
+            "dry_run": False,
+            "created_by": "pytest",
+        },
+    )
+    candidate = client.post(
+        f"/research/experiment-plans/{plan_id}/benchmark-run",
+        json={
+            "title": "Candidate benchmark run",
+            "benchmark_name": "Country accuracy",
+            "dataset": "local-geoloc",
+            "split": "validation",
+            "primary_metric": "country_accuracy",
+            "metric_direction": "higher_is_better",
+            "candidate_result": 0.72,
+            "baseline_result": 0.68,
+            "dry_run": False,
+            "created_by": "pytest",
+        },
+    )
+
+    assert baseline.status_code == 200
+    assert candidate.status_code == 200
+
+    comparison = client.post(
+        "/research/experiment-runs/compare",
+        json={
+            "baseline_run_id": baseline.json()["id"],
+            "candidate_run_id": candidate.json()["id"],
+            "primary_metric": "country_accuracy",
+            "created_by": "pytest",
+        },
+    )
+
+    assert comparison.status_code == 200
+    body = comparison.json()
+    assert body["status"] == "improved"
+    assert body["primary_metric"] == "country_accuracy"
+    assert body["metric_deltas"][0]["baseline_value"] == 0.68
+    assert body["metric_deltas"][0]["candidate_value"] == 0.72
+    assert body["metric_deltas"][0]["delta"] == 0.04
+    assert body["metric_deltas"][0]["improved"] is True
+    assert "Benchmark Comparison" in body["markdown_export"]
+
+    with SessionLocal() as session:
+        brief = session.get(ResearchBrief, body["brief_id"])
+        assert brief is not None
+        assert brief.scope == "benchmark_run_comparison"
+        assert brief.summary_json["comparison_status"] == "improved"
 
 
 def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:

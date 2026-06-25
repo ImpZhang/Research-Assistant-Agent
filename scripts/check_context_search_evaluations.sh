@@ -16,6 +16,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   backend/research/schemas.py \
   backend/research/adapters/retrieval_provider_adapter.py \
   backend/research/adapters/model_adapter.py \
+  backend/research/services/benchmark_comparison_service.py \
   backend/research/services/benchmark_runner_service.py \
   backend/research/services/evaluation_report_service.py \
   backend/research/services/experiment_run_service.py \
@@ -38,6 +39,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   backend/research/schemas.py \
   backend/research/adapters/retrieval_provider_adapter.py \
   backend/research/adapters/model_adapter.py \
+  backend/research/services/benchmark_comparison_service.py \
   backend/research/services/benchmark_runner_service.py \
   backend/research/services/evaluation_report_service.py \
   backend/research/services/experiment_run_service.py \

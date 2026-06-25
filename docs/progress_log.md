@@ -2,6 +2,21 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-25 - Benchmark Run Comparison Briefs
+
+Implementation completed:
+
+- Added `BenchmarkRunComparisonService` to compare two `ExperimentRun` benchmark records for the same idea.
+- Added `POST /research/experiment-runs/compare`, which computes per-metric baseline/candidate values, deltas, improvement flags, and a comparison status.
+- Persisted comparison outputs as `ResearchBrief(scope="benchmark_run_comparison")` with Markdown export.
+- Added Workbench `Compare Runs` to compare the latest two benchmark runs for the active experiment plan.
+- Added tests for persisted comparison briefs and Workbench/tool-manifest discovery.
+
+Production boundary:
+
+- Comparisons are only as reliable as the underlying benchmark runs and artifacts.
+- Publication-grade claims still need repeated runs, controlled seeds/splits, external SOTA evidence, and human signoff.
+
 ## 2026-06-25 - Benchmark Profiles And Geolocalization Harness
 
 Implementation completed:

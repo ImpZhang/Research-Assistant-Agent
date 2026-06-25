@@ -642,6 +642,37 @@ class ExperimentRunUpdate(BaseModel):
     created_by: str = "system"
 
 
+class BenchmarkRunComparisonCreate(BaseModel):
+    baseline_run_id: str
+    candidate_run_id: str
+    primary_metric: str = ""
+    created_by: str = "system"
+
+
+class BenchmarkRunMetricDelta(BaseModel):
+    metric: str
+    baseline_value: float | None = None
+    candidate_value: float | None = None
+    delta: float | None = None
+    direction: Literal["higher_is_better", "lower_is_better"] = "higher_is_better"
+    improved: bool | None = None
+
+
+class BenchmarkRunComparisonResponse(BaseModel):
+    brief_id: str
+    baseline_run_id: str
+    candidate_run_id: str
+    idea_id: str
+    experiment_plan_ids: list[str] = Field(default_factory=list)
+    primary_metric: str
+    status: str
+    summary: dict[str, Any] = Field(default_factory=dict)
+    metric_deltas: list[BenchmarkRunMetricDelta] = Field(default_factory=list)
+    markdown_export: str = ""
+    created_by: str = "system"
+    created_at: datetime
+
+
 class ExperimentRunRead(BaseModel):
     id: str
     experiment_plan_id: str
