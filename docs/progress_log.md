@@ -9,6 +9,7 @@ Implementation completed:
 - Added structured benchmark run packets at `POST /research/experiment-plans/{plan_id}/benchmark-run`, backed by `ExperimentRun` so dataset, split, baseline, primary metric, command, artifacts, dry-run mode, and reproducibility notes can be analyzed and exported through existing experiment workflows.
 - Added SOTA external-search evidence packages at `POST /research/ideas/{idea_id}/sota-external-search-evidence`, backed by `ResearchBrief(scope="sota_external_search_evidence")`, so local/external provider statuses, result summaries, missing searches, and signoff readiness are persisted before final novelty review.
 - Added manual SOTA signoff records at `POST /research/ideas/{idea_id}/sota-signoffs`, stored as `ResearchBrief(scope="sota_signoff_record")` with reviewer decision, external-search completion, nearest work, evidence links, linked benchmark runs, final novelty claim, limitations, and signoff blockers.
+- Connected signoff records to `external_search_evidence_id`, so a completed saved search evidence package can satisfy effective external-search completion without relying only on a hand-entered boolean.
 - Added list/detail/Markdown export endpoints for SOTA signoff records.
 - Added list/detail/Markdown export endpoints for SOTA external-search evidence packages.
 - Updated the tool manifest, status capabilities, Workbench buttons, README, documentation index, and focused evaluation script.

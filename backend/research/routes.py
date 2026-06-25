@@ -5408,6 +5408,7 @@ def create_sota_signoff(
         brief = SotaReviewPackageService(session).create_signoff(
             idea_id,
             review_package_id=payload.review_package_id,
+            external_search_evidence_id=payload.external_search_evidence_id,
             decision=payload.decision,
             reviewer=payload.reviewer,
             external_searches_completed=payload.external_searches_completed,

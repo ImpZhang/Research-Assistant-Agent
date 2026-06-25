@@ -1515,6 +1515,7 @@ class SotaExternalSearchEvidenceCreate(BaseModel):
 
 class SotaSignoffCreate(BaseModel):
     review_package_id: str = ""
+    external_search_evidence_id: str = ""
     decision: Literal[
         "confirmed_novel",
         "not_novel",

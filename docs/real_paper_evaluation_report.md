@@ -70,7 +70,7 @@ Implemented after the first evaluation round:
 - Added evaluator-side retrieval comparison between configured retrieval and a local hash/no-rerank baseline.
 - Added manual SOTA review packages that persist novelty/related-work collision evidence, missing searches, review queries, and Markdown checklists.
 - Added SOTA external-search evidence packages that persist review-query search statuses, local/external result summaries, missing searches, and signoff readiness.
-- Added manual SOTA signoff records that persist the reviewer decision, external-search completion state, nearest work, linked benchmark runs, final novelty claim, limitations, and blockers.
+- Added manual SOTA signoff records that persist the reviewer decision, linked external-search evidence package, effective external-search completion state, nearest work, linked benchmark runs, final novelty claim, limitations, and blockers.
 - Added benchmark run packets so dry-run or real-mode benchmark evidence can be recorded as first-class experiment runs with dataset, split, baseline, primary metric, command, artifacts, and reproducibility notes.
 
 Remaining hardening:

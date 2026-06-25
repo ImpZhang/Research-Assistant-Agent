@@ -245,3 +245,32 @@ def test_sota_external_search_evidence_records_provider_completion(monkeypatch) 
     assert detail.json()["summary"]["searches"][0]["external_status"] == "completed"
     assert markdown.status_code == 200
     assert "Ready For Signoff: `True`" in markdown.text
+
+    signoff = client.post(
+        f"/research/ideas/{idea_id}/sota-signoffs",
+        json={
+            "external_search_evidence_id": body["id"],
+            "decision": "confirmed_novel",
+            "reviewer": "pytest reviewer",
+            "external_searches_completed": False,
+            "nearest_work": [
+                {
+                    "title": "Current Geo-localization Nearest Work",
+                    "year": 2026,
+                    "relationship": "external nearest-work baseline",
+                }
+            ],
+            "final_novelty_claim": (
+                "External search evidence supports the local nearest-work novelty review."
+            ),
+            "created_by": "pytest",
+        },
+    )
+
+    assert signoff.status_code == 200
+    signoff_body = signoff.json()
+    assert signoff_body["summary"]["external_search_evidence_id"] == body["id"]
+    assert signoff_body["summary"]["external_searches_completed"] is False
+    assert signoff_body["summary"]["effective_external_search_completed"] is True
+    assert signoff_body["summary"]["external_search_status"] == "external_completed"
+    assert signoff_body["summary"]["signoff_status"] == "sota_confirmed"

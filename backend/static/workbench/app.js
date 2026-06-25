@@ -1465,6 +1465,7 @@ async function createSotaSignoff() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         review_package_id: state.latestSotaReviewPackageId,
+        external_search_evidence_id: state.latestSotaExternalSearchEvidenceId,
         decision: "needs_more_search",
         reviewer: "workbench",
         external_searches_completed: false,

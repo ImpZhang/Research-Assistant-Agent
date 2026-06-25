@@ -201,6 +201,7 @@ class SotaReviewPackageService:
         idea_id: str,
         *,
         review_package_id: str = "",
+        external_search_evidence_id: str = "",
         decision: str = "needs_more_search",
         reviewer: str = "researcher",
         external_searches_completed: bool = False,
@@ -217,13 +218,21 @@ class SotaReviewPackageService:
             raise ValueError("Idea not found")
 
         package = self._load_review_package(idea_id, review_package_id)
+        external_search_evidence = self._load_external_search_evidence(
+            idea_id,
+            external_search_evidence_id,
+        )
+        effective_external_search_completed = self._effective_external_search_completed(
+            external_searches_completed,
+            external_search_evidence,
+        )
         benchmark_runs = self._load_benchmark_runs(idea_id, benchmark_run_ids or [])
         clean_nearest_work = [_compact_mapping(row) for row in (nearest_work or [])]
         clean_evidence_links = [_compact_mapping(row) for row in (evidence_links or [])]
         clean_limitations = _unique([str(item) for item in (limitations or [])])
         signoff_status = self._signoff_status(
             decision=decision,
-            external_searches_completed=external_searches_completed,
+            external_searches_completed=effective_external_search_completed,
             nearest_work=clean_nearest_work,
             benchmark_runs=benchmark_runs,
         )
@@ -231,10 +240,19 @@ class SotaReviewPackageService:
             "idea_id": idea.id,
             "idea_title": idea.title,
             "review_package_id": package.id if package else "",
+            "external_search_evidence_id": (
+                external_search_evidence.id if external_search_evidence else ""
+            ),
             "decision": decision,
             "signoff_status": signoff_status,
             "reviewer": reviewer or "researcher",
             "external_searches_completed": external_searches_completed,
+            "effective_external_search_completed": effective_external_search_completed,
+            "external_search_status": (
+                (external_search_evidence.summary_json or {}).get("search_status", "")
+                if external_search_evidence
+                else ""
+            ),
             "nearest_work": clean_nearest_work,
             "evidence_links": clean_evidence_links,
             "benchmark_run_ids": [run.id for run in benchmark_runs],
@@ -245,7 +263,7 @@ class SotaReviewPackageService:
             "manual_gate_summary": self._manual_gate_summary(
                 decision=decision,
                 signoff_status=signoff_status,
-                external_searches_completed=external_searches_completed,
+                external_searches_completed=effective_external_search_completed,
                 nearest_work=clean_nearest_work,
                 benchmark_runs=benchmark_runs,
             ),
@@ -439,6 +457,34 @@ class SotaReviewPackageService:
             raise ValueError("SOTA review package not found")
         return package
 
+    def _load_external_search_evidence(
+        self,
+        idea_id: str,
+        evidence_id: str,
+    ) -> ResearchBrief | None:
+        if not evidence_id:
+            return None
+        evidence = self.session.get(ResearchBrief, evidence_id)
+        if (
+            evidence is None
+            or evidence.scope != "sota_external_search_evidence"
+            or idea_id not in (evidence.idea_ids_json or [])
+        ):
+            raise ValueError("SOTA external search evidence not found")
+        return evidence
+
+    def _effective_external_search_completed(
+        self,
+        external_searches_completed: bool,
+        external_search_evidence: ResearchBrief | None,
+    ) -> bool:
+        if external_searches_completed:
+            return True
+        if external_search_evidence is None:
+            return False
+        summary = external_search_evidence.summary_json or {}
+        return bool(summary.get("ready_for_signoff"))
+
     def _load_benchmark_runs(
         self,
         idea_id: str,
@@ -570,7 +616,9 @@ class SotaReviewPackageService:
             f"- Signoff Status: `{summary['signoff_status']}`",
             f"- Reviewer: `{summary['reviewer']}`",
             f"- External Searches Completed: `{summary['external_searches_completed']}`",
+            f"- Effective External Search Completed: `{summary['effective_external_search_completed']}`",
             f"- Review Package: `{summary['review_package_id'] or 'none'}`",
+            f"- External Search Evidence: `{summary['external_search_evidence_id'] or 'none'}`",
             "",
             "## Final Novelty Claim",
             "",
