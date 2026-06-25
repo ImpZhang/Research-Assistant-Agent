@@ -122,6 +122,12 @@ curl http://127.0.0.1:8000/health/ready
 
 Keep the server in the foreground unless the operator explicitly asks for a persistent background process.
 
+For an automated transient runtime smoke that starts and stops its own local server:
+
+```bash
+bash scripts/check_local_runtime_smoke.sh
+```
+
 ## 6. Cleanup
 
 After tests that write local data:

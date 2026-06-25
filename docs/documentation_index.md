@@ -15,6 +15,7 @@ This document is the starting point for future development. Use it to find the r
 | `docs/progress_log.md` | Durable history of nontrivial work and verification. | After completing meaningful changes. |
 | `scripts/check_local_agent_readiness.sh` | Read-only local-agent clone-to-run readiness check. | Before claiming a local checkout is ready to run. |
 | `scripts/check_local_operational_preflight.sh` | Local deployment preflight wrapper with local strict-git alias. | Before packaging or sharing a local deployment. |
+| `scripts/check_local_runtime_smoke.sh` | Transient localhost runtime smoke for health, readiness, and Workbench. | Before claiming the app starts successfully on the current machine. |
 | `scripts/check_local_safe_suite.sh` | Default local focused verification suite. | Before pushing a completed implementation round. |
 
 ## Product And Architecture

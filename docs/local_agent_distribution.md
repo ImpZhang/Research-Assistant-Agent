@@ -25,7 +25,8 @@ This target does not require a central system access key, centralized user accou
 7. Run `bash scripts/check_local_agent_readiness.sh`.
 8. Start the app with `./scripts/run-local.sh`.
 9. Open `http://127.0.0.1:8000/workbench`.
-10. Run `bash scripts/check_local_safe_suite.sh` before sharing changes.
+10. Optionally run `bash scripts/check_local_runtime_smoke.sh` for a transient health/readiness/Workbench check.
+11. Run `bash scripts/check_local_safe_suite.sh` before sharing changes.
 
 ## Required Local Artifacts
 

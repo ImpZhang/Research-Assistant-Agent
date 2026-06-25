@@ -197,6 +197,7 @@ scripts/
   check_handoff_docs.sh
   check_local_agent_readiness.sh
   check_local_operational_preflight.sh
+  check_local_runtime_smoke.sh
   check_local_safe_suite.sh
   check_pilot_operational_preflight.sh
   check_pilot_readiness.sh
@@ -351,6 +352,12 @@ Run focused deployment artifact and local runtime contract checks without starti
 
 ```bash
 bash scripts/check_deployment_contracts.sh
+```
+
+Run the opt-in local runtime smoke to start a temporary localhost server, verify `/health`, `/health/ready`, and Workbench HTML, then stop the server automatically:
+
+```bash
+bash scripts/check_local_runtime_smoke.sh
 ```
 
 Run backup/restore contract checks to keep persistent data volume, cold-backup, restore, migration, and operator-approval guardrails aligned without touching Docker or live data:

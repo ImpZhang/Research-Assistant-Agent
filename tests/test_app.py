@@ -956,6 +956,26 @@ def test_local_agent_readiness_contract() -> None:
     assert 'HOST="${HOST:-127.0.0.1}"' in run_script
 
 
+def test_local_runtime_smoke_contract() -> None:
+    root = Path(__file__).resolve().parents[1]
+    runtime_smoke = (root / "scripts" / "check_local_runtime_smoke.sh").read_text(encoding="utf-8")
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    distribution = (root / "docs" / "local_agent_distribution.md").read_text(encoding="utf-8")
+    development_process = (root / "docs" / "development_process.md").read_text(encoding="utf-8")
+
+    assert "Local runtime smoke passed." in runtime_smoke
+    assert 'LOG_DIR="${LOG_DIR:-logs}"' in runtime_smoke
+    assert "local-runtime-smoke.log" in runtime_smoke
+    assert "./scripts/run-local.sh" in runtime_smoke
+    assert "/health/ready" in runtime_smoke
+    assert "/workbench" in runtime_smoke
+    assert "Local Launch" in runtime_smoke
+    assert 'kill "$SERVER_PID"' in runtime_smoke
+    assert "scripts/check_local_runtime_smoke.sh" in readme
+    assert "scripts/check_local_runtime_smoke.sh" in distribution
+    assert "scripts/check_local_runtime_smoke.sh" in development_process
+
+
 def test_research_status() -> None:
     client = TestClient(create_app())
     response = client.get("/research/status")

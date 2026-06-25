@@ -64,6 +64,24 @@ Verification completed:
 - `bash scripts/check_focused_test_coverage.sh` passed.
 - `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment contracts `2 passed`, backup/restore contracts, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `37 passed`.
 
+## 2026-06-26 - Local Runtime Smoke
+
+Implementation completed:
+
+- Added `scripts/check_local_runtime_smoke.sh` as an opt-in transient runtime smoke for personal local deployments.
+- The smoke starts `./scripts/run-local.sh` on a configurable localhost port, waits for `/health`, verifies `/health/ready`, confirms Workbench HTML contains local operator copy, writes server logs under `logs/local-runtime-smoke.log`, and stops the server automatically.
+- Documented the runtime smoke in README, development process, documentation index, and local distribution flow.
+- Added deployment contract coverage for the runtime smoke script without adding it to the default safe suite, so routine checks do not start services.
+
+Verification completed:
+
+- `bash -n scripts/check_local_runtime_smoke.sh` passed.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_deployment_contracts.sh` passed: `3 passed in 1.54s`.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `PORT=8011 bash scripts/check_local_runtime_smoke.sh` passed with `Base URL: http://127.0.0.1:8011`.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment contracts `3 passed`, backup/restore contracts, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `37 passed`.
+
 ## 2026-06-25 - Personal Local Agent Product Scope
 
 Decision recorded:
