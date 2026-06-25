@@ -9,8 +9,12 @@ import sys
 
 safe_path = Path("scripts/check_remote_safe_suite.sh")
 long_path = Path("scripts/check_remote_long_suite.sh")
+local_safe_path = Path("scripts/check_local_safe_suite.sh")
+local_preflight_path = Path("scripts/check_local_operational_preflight.sh")
 safe = safe_path.read_text(encoding="utf-8")
 long = long_path.read_text(encoding="utf-8")
+local_safe = local_safe_path.read_text(encoding="utf-8")
+local_preflight = local_preflight_path.read_text(encoding="utf-8")
 
 errors = []
 required_safe = [
@@ -56,6 +60,15 @@ for command in required_long:
 
 if "bash scripts/check_remote_safe_suite.sh" in long:
     errors.append(f"{long_path} must not recursively run the default remote-safe suite")
+
+if "bash scripts/check_remote_safe_suite.sh" not in local_safe:
+    errors.append(f"{local_safe_path} must wrap the historical default local safe suite")
+
+if "bash scripts/check_pilot_operational_preflight.sh" not in local_preflight:
+    errors.append(f"{local_preflight_path} must wrap the historical local operational preflight")
+
+if "LOCAL_PREFLIGHT_STRICT_GIT" not in local_preflight:
+    errors.append(f"{local_preflight_path} must expose a local strict-git alias")
 
 if errors:
     print("Focused suite contract violations:")

@@ -872,8 +872,12 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     remote_safe_suite = (root / "scripts" / "check_remote_safe_suite.sh").read_text(
         encoding="utf-8"
     )
+    local_safe_suite = (root / "scripts" / "check_local_safe_suite.sh").read_text(encoding="utf-8")
     suite_contracts = (root / "scripts" / "check_suite_contracts.sh").read_text(encoding="utf-8")
     pilot_preflight = (root / "scripts" / "check_pilot_operational_preflight.sh").read_text(
+        encoding="utf-8"
+    )
+    local_preflight = (root / "scripts" / "check_local_operational_preflight.sh").read_text(
         encoding="utf-8"
     )
 
@@ -901,8 +905,13 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert "APP_COMMIT_SHA" in env_example
     assert "AUDIT_ADMIN_EXPORT_ENABLED" in env_example
     assert "check_pilot_operational_preflight.sh" in readme
+    assert "check_local_operational_preflight.sh" in readme
+    assert "check_local_safe_suite.sh" in readme
     assert "bash scripts/check_pilot_operational_preflight.sh" in remote_safe_suite
+    assert "bash scripts/check_remote_safe_suite.sh" in local_safe_suite
     assert '"bash scripts/check_pilot_operational_preflight.sh"' in suite_contracts
+    assert "bash scripts/check_pilot_operational_preflight.sh" in local_preflight
+    assert "LOCAL_PREFLIGHT_STRICT_GIT" in local_preflight
     assert "PILOT_PREFLIGHT_STRICT_GIT" in pilot_preflight
     assert "Path.cwd()" in pilot_preflight
     assert 'ROOT / ".env"' in pilot_preflight

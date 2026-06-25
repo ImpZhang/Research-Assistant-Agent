@@ -196,6 +196,8 @@ scripts/
   check_graph_rag_lite.sh
   check_handoff_docs.sh
   check_local_agent_readiness.sh
+  check_local_operational_preflight.sh
+  check_local_safe_suite.sh
   check_pilot_operational_preflight.sh
   check_pilot_readiness.sh
   check_product_effect_smoke.sh
@@ -333,10 +335,10 @@ Run the local-agent readiness check to verify the clone-to-run contract, project
 bash scripts/check_local_agent_readiness.sh
 ```
 
-Run the local operational preflight to confirm docs, runtime artifacts, environment template keys, compose persistence, and safe-suite hooks before a packaged local deployment. Use `PILOT_PREFLIGHT_STRICT_GIT=true` before sharing a release to require a clean `main` checkout aligned with `origin/main`:
+Run the local operational preflight to confirm docs, runtime artifacts, environment template keys, compose persistence, and safe-suite hooks before a packaged local deployment. Use `LOCAL_PREFLIGHT_STRICT_GIT=true` before sharing a release to require a clean `main` checkout aligned with `origin/main`:
 
 ```bash
-bash scripts/check_pilot_operational_preflight.sh
+bash scripts/check_local_operational_preflight.sh
 ```
 
 Run the focused-test coverage map check so new pytest tests stay assigned to a focused remote check:
@@ -434,11 +436,13 @@ Run focused tool manifest and MCP bridge contract checks:
 bash scripts/check_tool_bridge_contracts.sh
 ```
 
-Run the current focused suite without starting services. The script name is historical and does not imply SSH or remote-server work:
+Run the current focused local safe suite without starting services:
 
 ```bash
-bash scripts/check_remote_safe_suite.sh
+bash scripts/check_local_safe_suite.sh
 ```
+
+The historical `check_remote_safe_suite.sh` and `check_pilot_operational_preflight.sh` names remain as compatibility wrappers for older documentation and automation; prefer the `check_local_*` entrypoints for new local work.
 
 Run the full in-process API smoke workflow:
 

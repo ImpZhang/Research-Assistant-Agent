@@ -44,6 +44,25 @@ Verification completed:
 - `bash scripts/check_deployment_contracts.sh` passed: `2 passed in 1.59s`.
 - `git diff --check` passed.
 
+## 2026-06-26 - Local Check Entrypoints
+
+Implementation completed:
+
+- Added `scripts/check_local_operational_preflight.sh` as the preferred local wrapper around the historical operational preflight.
+- Added `LOCAL_PREFLIGHT_STRICT_GIT` as a local-name alias for strict git checks while preserving `PILOT_PREFLIGHT_STRICT_GIT` compatibility.
+- Added `scripts/check_local_safe_suite.sh` as the preferred local wrapper around the historical safe focused suite.
+- Updated README, development process, documentation index, local distribution flow, suite contracts, and deployment contract tests to prefer the `check_local_*` entrypoints while keeping old script names available for compatibility.
+
+Verification completed:
+
+- `bash -n scripts/check_local_operational_preflight.sh scripts/check_local_safe_suite.sh scripts/check_suite_contracts.sh` passed.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_suite_contracts.sh` passed.
+- `bash scripts/check_local_operational_preflight.sh` passed with expected dirty-worktree warnings for this in-progress change; it did not read `.env` values.
+- `bash scripts/check_deployment_contracts.sh` passed: `2 passed in 1.55s`.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment contracts `2 passed`, backup/restore contracts, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `37 passed`.
+
 ## 2026-06-25 - Personal Local Agent Product Scope
 
 Decision recorded:
