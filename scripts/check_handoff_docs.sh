@@ -9,8 +9,8 @@ import sys
 
 checks = {
     "AGENTS.md": [
-        "/home/zhangwz/Research-Assistant-Agent",
-        "source-of-truth",
+        "local clone plus GitHub `main`",
+        "Do not run remote SSH status checks",
         "git status --short",
         ".env",
         "git reset",
@@ -24,10 +24,11 @@ checks = {
         "check_handoff_docs.sh",
     ],
     "TODO.md": [
-        "P0 - Remote-First Safety",
-        "P1 - Pilot Readiness Without Service Changes",
+        "P0 - Local Development Safety",
+        "P1 - Current Local Verification",
         "check_handoff_docs.sh",
-        "P4 - Needs Explicit Operator Approval",
+        "P3 - Needs Explicit Operator Approval",
+        "Any remote SSH/server work",
     ],
     "codex_handoff/03_TODO.md": [
         "check_handoff_docs.sh",

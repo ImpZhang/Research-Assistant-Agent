@@ -298,7 +298,7 @@ Run the secret-file guard to catch sensitive-looking tracked filenames and requi
 bash scripts/check_secret_file_guard.sh
 ```
 
-Run the handoff document consistency check so AGENTS, TODO, README, and the handoff queue keep the remote-first operating rules aligned:
+Run the handoff document consistency check so AGENTS, TODO, README, and the handoff queue keep the local-development operating rules aligned:
 
 ```bash
 bash scripts/check_handoff_docs.sh
@@ -373,7 +373,7 @@ Run the long focused research proposal check for proposal drafts, readiness revi
 bash scripts/check_research_proposal_contracts.sh
 ```
 
-Run the long focused suite for checks that are intentionally kept out of the default remote-safe suite:
+Run the long focused suite for checks that are intentionally kept out of the default local focused suite:
 
 ```bash
 bash scripts/check_remote_long_suite.sh
@@ -385,7 +385,7 @@ Run focused pilot-readiness, status capability, first-run onboarding, and pilot-
 bash scripts/check_pilot_readiness.sh
 ```
 
-Run the isolated product-effect smoke to validate the complete research-assistant workflow without touching the default remote database:
+Run the isolated product-effect smoke to validate the complete research-assistant workflow without touching the default local database:
 
 ```bash
 bash scripts/check_product_effect_smoke.sh
@@ -411,7 +411,7 @@ Run focused tool manifest and MCP bridge contract checks:
 bash scripts/check_tool_bridge_contracts.sh
 ```
 
-Run the current remote-safe focused suite without starting services:
+Run the current focused suite without starting services. The script name is historical and does not imply SSH or remote-server work:
 
 ```bash
 bash scripts/check_remote_safe_suite.sh
@@ -685,8 +685,8 @@ See `docs/deployment.md` for the runtime contract, pilot deployment checklist, `
 
 ## Handoff And Operations
 
-- `AGENTS.md` records remote-first agent rules, safety boundaries, and verification expectations.
-- `TODO.md` summarizes the active remote-first priority queue.
+- `AGENTS.md` records local-development agent rules, safety boundaries, and verification expectations.
+- `TODO.md` summarizes the active local-development priority queue.
 - `codex_handoff/03_TODO.md` keeps the detailed historical handoff queue.
 - `docs/progress_log.md` keeps the chronological implementation and verification log.
 

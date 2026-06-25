@@ -89,13 +89,15 @@ bash scripts/check_graph_rag_lite.sh
 bash scripts/check_context_search_evaluations.sh
 ```
 
-### Broad preflight
+### Broad local preflight
 
 ```bash
 bash scripts/check_remote_safe_suite.sh
 ```
 
-The full `pytest -q` suite can write persistent local test data and has at least one stateful assertion that is not a good standalone local deployment gate. Prefer the focused scripts and the remote-safe suite unless the task specifically requires full pytest investigation.
+`check_remote_safe_suite.sh` is a historical script name. In the current local-only workflow, treat it as a local focused suite; it should not imply SSH or remote-server work.
+
+The full `pytest -q` suite can write persistent local test data and has at least one stateful assertion that is not a good standalone local deployment gate. Prefer the focused scripts and the local focused suite unless the task specifically requires full pytest investigation.
 
 ## 5. Local Runtime Check
 

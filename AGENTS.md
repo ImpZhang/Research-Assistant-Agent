@@ -1,18 +1,15 @@
 # AGENTS.md
 
 This repository is the local deployable clone of Research Assistant Agent.
-
-It was cloned from GitHub for Mac-side local development and verification when the
-remote server is unavailable or when the operator explicitly requests local work.
+It is now the default development and verification workspace.
 
 ## Source Of Truth
 
-- Historical authoritative remote path: `/home/zhangwz/Research-Assistant-Agent`.
 - GitHub repository: `ImpZhang/Research-Assistant-Agent.git`.
-- Upstream source-of-truth remains GitHub/latest remote state when reachable.
-- This local clone is runnable and currently tracks GitHub `main`.
-- Prefer GitHub/latest remote state for upstream truth when the remote server is reachable.
-- When the operator asks for local development, use this repository and keep all artifacts project-local.
+- Current source of truth is this local clone plus GitHub `main`.
+- Historical remote-server notes are reference-only and are not part of the default workflow.
+- Do not check, repair, or depend on remote SSH access unless the operator explicitly asks for remote work.
+- Keep all artifacts project-local.
 
 ## Default Work Location
 
@@ -20,7 +17,6 @@ remote server is unavailable or when the operator explicitly requests local work
 - Use `scripts/env.sh` before local work so caches, data, logs, models, and outputs stay inside this project.
 - Do not install dependencies globally.
 - Do not start services in the background unless the operator explicitly asks for a persistent local service.
-- Do not start or restart remote services unless the operator explicitly approves that action.
 - Prefer small, reviewable changes with focused tests and progress-log updates.
 
 ## Before Modifying Code
@@ -33,19 +29,9 @@ git branch --show-current
 git --no-pager log --oneline -5
 ```
 
-If the remote server is reachable and the task is intended to be pushed upstream, also inspect the remote state before editing:
+If unexpected tracked changes or new untracked files are present, stop and ask the operator before editing, staging, or committing.
 
-```bash
-ssh -i ~/.ssh/id_ed25519_geoloc -p 8502 -o BatchMode=yes zhangwz@39.97.171.237 \
-  'cd /home/zhangwz/Research-Assistant-Agent && git status --short && git branch --show-current && git --no-pager log --oneline -5'
-```
-
-If unexpected tracked changes or new untracked files are present, stop and ask the operator before editing, staging, or committing. Historical remote-only untracked root documents may exist:
-
-- `research_assistant_requirements.md`
-- `research_assistant_technical_design.md`
-
-Do not stage or modify those two files unless the operator explicitly asks.
+Do not run remote SSH status checks as part of the default workflow.
 
 ## Secrets And Sensitive Files
 

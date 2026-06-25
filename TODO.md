@@ -1,20 +1,21 @@
 # TODO
 
-This top-level TODO is a stable index for the current remote-first handoff. The detailed historical queue lives in `codex_handoff/03_TODO.md`; the chronological work log lives in `docs/progress_log.md`.
+This top-level TODO is the local development index for Research Assistant Agent. Development happens in this repository and is synchronized through GitHub.
 
-## P0 - Remote-First Safety
+## P0 - Local Development Safety
 
-- Treat `/home/zhangwz/Research-Assistant-Agent` on the remote server as source of truth.
+- Treat this local clone plus GitHub `main` as the current source of truth.
+- Do not run remote SSH checks unless the operator explicitly asks for remote work.
 - Check `git status --short`, branch, and recent commits before every edit round.
-- Preserve the two historical untracked root documents unless the operator explicitly asks to handle them.
+- Keep dependencies, caches, generated outputs, model files, logs, and data under this project root.
 - Do not read or commit secrets, `.env` values, credentials, cookies, private keys, or production/private data.
 - Run `bash scripts/check_secret_file_guard.sh` before changing ignore rules or adding config/auth-related files.
 - Run `bash scripts/check_handoff_docs.sh` before changing AGENTS, README, TODO, handoff docs, or progress-log structure.
 - Run `bash scripts/check_generated_file_guard.sh` before changing ignore rules or adding generated-artifact-producing tooling.
 
-## P1 - Pilot Readiness Without Service Changes
+## P1 - Current Local Verification
 
-- Run `bash scripts/check_remote_safe_suite.sh` for the current no-service focused verification suite.
+- Run `bash scripts/check_context_search_evaluations.sh` before changing retrieval, external provider adapters, SOTA review/signoff, benchmark packets, or real-paper evaluation flow.
 - Run `bash scripts/check_suite_contracts.sh` before changing default or long suite composition.
 - Run `bash scripts/check_script_catalog.sh` before adding, renaming, or restructuring check scripts.
 - Run `bash scripts/check_focused_test_coverage.sh` before adding or renaming pytest tests so every test remains assigned to a focused check script.
@@ -23,35 +24,22 @@ This top-level TODO is a stable index for the current remote-first handoff. The 
 - Run `bash scripts/check_research_workflow_primitives.sh` before changing local literature search, paper card extraction, structured extraction fallback, gap/idea generation, novelty screening, related-work matrices, or Markdown dossier exports.
 - Run `bash scripts/check_research_planning_contracts.sh` before changing research profiles, advisor briefs, research plans, idea refinement, ranking, portfolios, agenda exports, or lineage/bundle planning metadata.
 - Run `bash scripts/check_research_proposal_contracts.sh` before changing proposal drafts, proposal readiness reviews, proposal revisions, revision follow-up tasks, or proposal Markdown exports.
-- Run `bash scripts/check_remote_long_suite.sh` for intentionally long focused checks before release-style verification, but keep it separate from the default no-service suite.
-- Keep adding narrow, deterministic tests for user-facing research workflows.
-- Keep README, `codex_handoff/03_TODO.md`, and `docs/progress_log.md` synchronized with completed slices.
-- Use `docs/representative_paper_review.md` and `/research/reviews/representative-paper/records` before marking real representative-paper human review acceptable.
-- Prefer docs/tests/API guardrails that do not require dependency installs, migrations, service restarts, or deployment changes.
+- `scripts/check_remote_safe_suite.sh` and `scripts/check_remote_long_suite.sh` are historical names; when used locally, treat them as local focused suites, not instructions to contact the remote server.
 
-## P2 - Operator-Approved Hardening
+## P2 - Product Follow-Ups
 
-- Backup/restore scripts only after deployment host and volume naming are confirmed.
-- Run `bash scripts/check_write_audit_guardrails.sh` before changing write-audit logging, admin summary, or raw export behavior.
-- Write-audit rotation or cleanup only after backup and retention policy are confirmed.
-- Database migration tooling only after dependency sync and migration approach are approved.
-- User/project scoping only after migration tooling and auth identity are explicit.
-- Run `bash scripts/check_workflow_job_controls.sh` before changing workflow job, artifact, async, cancel, or retry behavior.
-- Queue/worker readiness only after deployment topology and backend choice are confirmed.
+- Enable live external-search providers in production settings and require completed SOTA external-search evidence packages before final signoff.
+- Add a benchmark command runner that executes local benchmark commands, captures logs, and attaches artifacts to benchmark run packets.
+- Add real multi-project/user isolation beyond default-project compatibility mode.
+- Add Alembic-style migrations.
+- Harden queue/worker execution for long-running workflows and benchmark runs.
+- Add monitoring, backup/restore rehearsal, and production deployment checks.
+- Improve page/figure/table-aware PDF evidence extraction.
 
-## P3 - Current GraphRAG And Context Search Direction
+## P3 - Needs Explicit Operator Approval
 
-- Run `bash scripts/check_tool_bridge_contracts.sh` before changing `/research/tools/manifest`, `/research/tools/mcp-spec`, or `scripts/mcp_http_bridge.py`.
-- Run `bash scripts/check_context_search_evaluations.sh` before changing context-search scoring or graph-expansion behavior.
-- Continue deterministic context-search evaluation before changing scoring weights.
-- Keep GraphRAG-lite and service-layer workflows as the default until scale, durability, or tool-sandbox triggers are explicit.
-- Treat LangGraph as a future isolated workflow option, not the default runtime.
-- Treat DeerFlow as a future external planner/tool consumer through the stable tool manifest and MCP bridge.
-
-## P4 - Needs Explicit Operator Approval
-
-- Remote smoke workflow against a running service.
 - Dependency installation or synchronization.
-- Docker compose startup or service restarts.
+- Docker compose startup or persistent service restarts.
 - Database migrations or data cleanup.
-- Production data inspection, exports, or backups.
+- Production/private data inspection, exports, or backups.
+- Any remote SSH/server work.

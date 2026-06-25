@@ -1,6 +1,22 @@
 # Progress Log
 
-This log records remote-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
+This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
+
+## 2026-06-25 - Local-Only Development Policy
+
+Policy update completed:
+
+- Updated `AGENTS.md` so the local clone plus GitHub `main` is the current development source of truth.
+- Removed default remote SSH status checks from the local project operating rules.
+- Replaced the top-level TODO with local development, local verification, and local product follow-up priorities.
+- Updated README and development-process wording so historical `check_remote_*` script names are treated as local focused suites rather than instructions to contact a remote server.
+- Updated `scripts/check_handoff_docs.sh` to enforce the new local-only handoff wording.
+
+Verification completed:
+
+- `bash scripts/check_secret_file_guard.sh` passed.
+- `bash scripts/check_generated_file_guard.sh` passed.
+- `git diff --check` passed before the handoff script update.
 
 ## 2026-06-25 - SOTA Signoff And Benchmark Run Packets
 
