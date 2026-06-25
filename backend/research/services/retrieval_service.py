@@ -5,6 +5,8 @@ from typing import Any
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from backend.research.adapters.retrieval_provider_adapter import OpenAICompatibleRerankClient
+from backend.research.config import settings
 from backend.research.models import Evidence, Idea, ResearchEdge, ResearchGap, ResearchNode
 from backend.research.services.embedding_service import EmbeddingService, VectorHit
 
@@ -31,8 +33,26 @@ class ContextSearchResult:
 
 
 class RetrievalService:
-    def __init__(self, session: Session):
+    def __init__(
+        self,
+        session: Session,
+        embedding_service: EmbeddingService | None = None,
+        rerank_client: OpenAICompatibleRerankClient | None = None,
+        rerank_provider_mode: str | None = None,
+    ):
         self.session = session
+        self.embedding_service = embedding_service
+        self.rerank_client = rerank_client or OpenAICompatibleRerankClient(
+            model=settings.rerank_model,
+            base_url=settings.rerank_binding_host,
+            api_key=settings.rerank_api_key,
+            path=settings.rerank_path,
+            timeout=settings.model_provider_timeout_seconds,
+        )
+        self.rerank_provider_mode = _normalized_provider_mode(
+            rerank_provider_mode or settings.retrieval_rerank_provider,
+            default="auto",
+        )
 
     def search_context(
         self,
@@ -47,7 +67,7 @@ class RetrievalService:
             raise ValueError("Query must contain at least one searchable term")
 
         limit = max(1, min(limit, 25))
-        embedding = EmbeddingService(self.session)
+        embedding = self.embedding_service or EmbeddingService(self.session)
         embedding.ensure_indexed(paper_ids or [], 800)
         vector_hits = embedding.search(query, limit=limit * 6, paper_ids=paper_ids or [])
 
@@ -59,6 +79,9 @@ class RetrievalService:
         )
         gaps = self._merge_vector_hits("gap", gaps, vector_hits, paper_ids or [], limit)
         ideas = self._merge_vector_hits("idea", ideas, vector_hits, paper_ids or [], limit)
+        evidences = self._rerank_scored_items("evidence", query, evidences, limit)
+        gaps = self._rerank_scored_items("gap", query, gaps, limit)
+        ideas = self._rerank_scored_items("idea", query, ideas, limit)
 
         graph_nodes: list[ResearchNode] = []
         graph_edges: list[ResearchEdge] = []
@@ -98,9 +121,7 @@ class RetrievalService:
                 " ".join(
                     [
                         evidence.evidence_type,
-                        evidence.text,
-                        evidence.summary,
-                        evidence.supports,
+                        self._document_text("evidence", evidence),
                     ]
                 ),
                 bonus=evidence.confidence,
@@ -131,12 +152,7 @@ class RetrievalService:
                 terms,
                 " ".join(
                     [
-                        gap.title,
-                        gap.description,
-                        gap.gap_type,
-                        gap.why_important,
-                        gap.why_unsolved,
-                        " ".join(gap.possible_approaches_json or []),
+                        self._document_text("gap", gap),
                     ]
                 ),
                 bonus=(gap.feasibility_score or 0.0) / 10,
@@ -165,17 +181,7 @@ class RetrievalService:
                 terms,
                 " ".join(
                     [
-                        idea.title,
-                        idea.research_question,
-                        idea.core_hypothesis,
-                        idea.motivation,
-                        idea.method_sketch,
-                        idea.expected_contribution,
-                        idea.novelty_argument,
-                        " ".join(idea.datasets_json or []),
-                        " ".join(idea.baselines_json or []),
-                        " ".join(idea.metrics_json or []),
-                        " ".join(idea.risks_json or []),
+                        self._document_text("idea", idea),
                     ]
                 ),
                 bonus=(idea.score_json or {}).get("overall_score", 0.0) / 10,
@@ -303,6 +309,42 @@ class RetrievalService:
 
         return self._ranked(list(by_id.values()), limit)
 
+    def _rerank_scored_items(
+        self,
+        owner_type: str,
+        query: str,
+        scored: list[ScoredItem],
+        limit: int,
+    ) -> list[ScoredItem]:
+        if not scored or not self._external_rerank_selected():
+            return scored
+
+        documents = [self._document_text(owner_type, item.item) for item in scored]
+        try:
+            rerank_scores = self.rerank_client.rerank(
+                query=query,
+                documents=documents,
+                top_n=len(documents),
+            )
+        except Exception:
+            if self.rerank_provider_mode == "external":
+                raise
+            return scored
+
+        by_index = {score.index: score.score for score in rerank_scores}
+        updated = []
+        for index, item in enumerate(scored):
+            if index not in by_index:
+                updated.append(item)
+                continue
+            rerank_boost = round(max(0.0, min(float(by_index[index]), 1.0)) * 4.0, 4)
+            item.score = round(item.score + rerank_boost, 4)
+            item.score_breakdown = self._with_rerank_boost(item.score_breakdown, rerank_boost)
+            if "rerank" not in item.matched_terms:
+                item.matched_terms.append("rerank")
+            updated.append(item)
+        return self._ranked(updated, limit)
+
     def _with_vector_boost(
         self,
         score_breakdown: dict[str, float],
@@ -312,16 +354,28 @@ class RetrievalService:
         updated["vector"] = round(updated["vector"] + vector_boost, 4)
         return updated
 
+    def _with_rerank_boost(
+        self,
+        score_breakdown: dict[str, float],
+        rerank_boost: float,
+    ) -> dict[str, float]:
+        updated = self._normalized_score_breakdown(score_breakdown)
+        updated["rerank"] = round(updated.get("rerank", 0.0) + rerank_boost, 4)
+        return updated
+
     def _normalized_score_breakdown(
         self,
         score_breakdown: dict[str, float],
     ) -> dict[str, float]:
-        return {
+        normalized = {
             "lexical": round(float(score_breakdown.get("lexical", 0.0)), 4),
             "bonus": round(float(score_breakdown.get("bonus", 0.0)), 4),
             "phrase": round(float(score_breakdown.get("phrase", 0.0)), 4),
             "vector": round(float(score_breakdown.get("vector", 0.0)), 4),
         }
+        if "rerank" in score_breakdown:
+            normalized["rerank"] = round(float(score_breakdown.get("rerank", 0.0)), 4)
+        return normalized
 
     def _matches_paper_filter(self, owner_type: str, item: Any, paper_ids: list[str]) -> bool:
         if not paper_ids:
@@ -376,6 +430,45 @@ class RetrievalService:
             str(getattr(scored.item, "id", "")),
         )
 
+    def _document_text(self, owner_type: str, item: Any) -> str:
+        if owner_type == "evidence":
+            return " ".join([item.evidence_type, item.text, item.summary, item.supports])
+        if owner_type == "gap":
+            return " ".join(
+                [
+                    item.title,
+                    item.description,
+                    item.gap_type,
+                    item.why_important,
+                    item.why_unsolved,
+                    " ".join(item.possible_approaches_json or []),
+                ]
+            )
+        if owner_type == "idea":
+            return " ".join(
+                [
+                    item.title,
+                    item.research_question,
+                    item.core_hypothesis,
+                    item.motivation,
+                    item.method_sketch,
+                    item.expected_contribution,
+                    item.novelty_argument,
+                    " ".join(item.datasets_json or []),
+                    " ".join(item.baselines_json or []),
+                    " ".join(item.metrics_json or []),
+                    " ".join(item.risks_json or []),
+                ]
+            )
+        return ""
+
+    def _external_rerank_selected(self) -> bool:
+        if self.rerank_provider_mode in {"disabled", "local", "none"}:
+            return False
+        if self.rerank_provider_mode == "external":
+            return True
+        return self.rerank_client.is_configured
+
     def _terms(self, query: str) -> list[str]:
         seen = set()
         terms = []
@@ -406,3 +499,10 @@ class RetrievalService:
         if gaps:
             parts.append(f"Top gap: {gaps[0].item.title}")
         return " ".join(parts) + "."
+
+
+def _normalized_provider_mode(value: str, default: str = "auto") -> str:
+    mode = (value or default).strip().lower()
+    if mode in {"auto", "external", "local", "disabled", "none"}:
+        return mode
+    return default

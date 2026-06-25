@@ -377,11 +377,25 @@ def _model_provider_configuration_ready() -> dict:
             settings.judge_base_url,
             settings.judge_api_key,
         ),
+        "embedding": _model_provider_role_status(
+            settings.embedder,
+            settings.embedder_base_url,
+            settings.embedder_api_key,
+        ),
+        "rerank": _model_provider_role_status(
+            settings.rerank_model,
+            settings.rerank_binding_host,
+            settings.rerank_api_key,
+        ),
     }
     return {
         "ok": True,
         "fallback_supported": True,
         "roles": roles,
+        "retrieval_provider_modes": {
+            "embedding": settings.retrieval_embedding_provider,
+            "rerank": settings.retrieval_rerank_provider,
+        },
         "partial_roles": [name for name, status in roles.items() if status["partially_configured"]],
     }
 

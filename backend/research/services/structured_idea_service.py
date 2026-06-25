@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.research.adapters.model_adapter import OpenAICompatibleJsonClient
 from backend.research.config import settings
-from backend.research.models import Idea, ResearchGap
+from backend.research.models import Evidence, Idea, ResearchGap
 from backend.research.schemas import IdeaCreate
 from backend.research.services.graph_service import GraphService
 from backend.research.services.idea_service import IdeaService
@@ -19,6 +19,7 @@ IDEA_SYSTEM_PROMPT = """You generate evidence-grounded research ideas.
 Return valid JSON only. Do not include markdown.
 Every idea must be testable, tied to the provided gap, and explicit about datasets, baselines, metrics, and risks.
 Avoid vague combinations of buzzwords. Prefer concrete hypotheses and experiments.
+For image geolocalization topics, avoid generic "improve accuracy" ideas. Name the failure mode, method intervention, benchmark slice, baseline family, and geodesic/top-k metric that would prove the claim.
 """
 
 
@@ -142,6 +143,10 @@ class StructuredIdeaService:
         )
 
     def _build_prompt(self, gap: ResearchGap, max_ideas: int) -> str:
+        evidence_payload = self._evidence_payload(gap)
+        topic = self.heuristic._gap_topic(gap)
+        experiment_profile = self.heuristic._experiment_profile(topic, gap)
+        domain_guidance = self._domain_guidance(topic, evidence_payload, experiment_profile)
         schema_hint = {
             "ideas": [
                 {
@@ -178,5 +183,80 @@ class StructuredIdeaService:
         return (
             f"Generate {max(1, max_ideas)} ideas for this research gap.\n\n"
             f"Gap JSON:\n{json.dumps(gap_payload, ensure_ascii=False, indent=2)}\n\n"
+            f"Evidence JSON:\n{json.dumps(evidence_payload, ensure_ascii=False, indent=2)}\n\n"
+            f"Suggested experiment profile:\n"
+            f"{json.dumps(experiment_profile, ensure_ascii=False, indent=2)}\n\n"
+            f"Quality constraints:\n{domain_guidance}\n\n"
             f"Return JSON matching this shape:\n{json.dumps(schema_hint, ensure_ascii=False, indent=2)}"
+        )
+
+    def _evidence_payload(self, gap: ResearchGap, limit: int = 8) -> list[dict]:
+        evidence_ids = gap.evidence_ids_json or []
+        evidences = []
+        if evidence_ids:
+            evidences = (
+                self.session.query(Evidence)
+                .filter(Evidence.id.in_(evidence_ids))
+                .order_by(Evidence.created_at.asc())
+                .limit(limit)
+                .all()
+            )
+        if len(evidences) < limit and (gap.source_paper_ids_json or []):
+            existing_ids = {evidence.id for evidence in evidences}
+            candidates = (
+                self.session.query(Evidence)
+                .filter(Evidence.paper_id.in_(gap.source_paper_ids_json or []))
+                .order_by(Evidence.created_at.asc())
+                .limit(limit * 2)
+                .all()
+            )
+            for evidence in candidates:
+                if evidence.id in existing_ids:
+                    continue
+                evidences.append(evidence)
+                existing_ids.add(evidence.id)
+                if len(evidences) >= limit:
+                    break
+
+        return [
+            {
+                "evidence_id": evidence.id,
+                "type": evidence.evidence_type,
+                "supports": evidence.supports,
+                "summary": evidence.summary[:500],
+                "text": evidence.text[:900],
+            }
+            for evidence in evidences
+        ]
+
+    def _domain_guidance(
+        self,
+        topic: str,
+        evidence_payload: list[dict],
+        experiment_profile: dict,
+    ) -> str:
+        combined = " ".join(
+            [
+                topic,
+                json.dumps(evidence_payload, ensure_ascii=False),
+                json.dumps(experiment_profile, ensure_ascii=False),
+            ]
+        ).lower()
+        if self.heuristic._is_geolocalization_topic(combined):
+            return "\n".join(
+                [
+                    "- Do not propose a generic accuracy-improvement idea.",
+                    "- The title must name a concrete mechanism or evaluation slice, not only the task.",
+                    "- The hypothesis must identify one failure mode such as region imbalance, long-tail geography, candidate retrieval miss, reasoning inconsistency, hierarchy error propagation, or benchmark leakage.",
+                    "- The method sketch must include a specific intervention such as distance-aware reranking, hierarchy-aware token calibration, evidence-guided VLM reasoning, region-balanced hard negative mining, or coordinate uncertainty calibration.",
+                    "- Use the suggested datasets, baselines, metrics, and risks unless the evidence clearly supports better paper-specific choices.",
+                    "- The novelty argument must contrast against the source paper and at least one named baseline family.",
+                ]
+            )
+        return "\n".join(
+            [
+                "- Avoid generic extensions; anchor the idea in the cited evidence.",
+                "- The title must name the intervention and evaluation slice.",
+                "- Prefer a small, executable first experiment with a clear baseline and failure metric.",
+            ]
         )

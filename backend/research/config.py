@@ -91,5 +91,19 @@ class Settings:
     judge_base_url: str = os.getenv("JUDGE_BASE_URL") or main_base_url
     judge_api_key: str = os.getenv("JUDGE_API_KEY") or main_api_key
 
+    embedder: str = os.getenv("EMBEDDER", "")
+    embedder_base_url: str = os.getenv("EMBEDDER_BASE_URL", "")
+    embedder_api_key: str = os.getenv("EMBEDDER_API_KEY", "")
+    embedder_path: str = os.getenv("EMBEDDER_PATH", "/embeddings")
+    retrieval_embedding_provider: str = os.getenv("RETRIEVAL_EMBEDDING_PROVIDER", "auto")
+
+    rerank_model: str = os.getenv("RERANK_MODEL", "")
+    rerank_binding_host: str = os.getenv("RERANK_BINDING_HOST", "")
+    rerank_api_key: str = os.getenv("RERANK_API_KEY", "")
+    rerank_path: str = os.getenv("RERANK_PATH", "/rerank")
+    retrieval_rerank_provider: str = os.getenv("RETRIEVAL_RERANK_PROVIDER", "auto")
+
+    model_provider_timeout_seconds: float = float(os.getenv("MODEL_PROVIDER_TIMEOUT_SECONDS", "60"))
+
 
 settings = Settings()

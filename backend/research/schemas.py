@@ -1479,6 +1479,12 @@ class ResearchBriefCreate(BaseModel):
     created_by: str = "researcher"
 
 
+class SotaReviewPackageCreate(BaseModel):
+    include_external: bool = False
+    limit: int = Field(default=8, ge=1, le=20)
+    created_by: str = "researcher"
+
+
 class ResearchBriefRead(BaseModel):
     id: str
     title: str
@@ -1834,6 +1840,31 @@ class EmbeddingRebuildResponse(BaseModel):
     evidence_count: int
     gap_count: int
     idea_count: int
+    message: str
+
+
+class RealPaperEvaluationReportSummary(BaseModel):
+    report_id: str
+    filename: str
+    started_at: str = ""
+    finished_at: str = ""
+    paper_count: int = 0
+    completed_paper_count: int = 0
+    failed_paper_count: int = 0
+    total_gaps: int = 0
+    total_ideas: int = 0
+    total_embedding_indexed: int = 0
+    embedding_models: list[str] = Field(default_factory=list)
+    average_readiness: float = 0.0
+    average_quality_gate: float = 0.0
+    json_available: bool = False
+    markdown_available: bool = False
+
+
+class RealPaperEvaluationReportDetail(RealPaperEvaluationReportSummary):
+    summary: dict[str, Any] = Field(default_factory=dict)
+    papers: list[dict[str, Any]] = Field(default_factory=list)
+    markdown_export: str = ""
     message: str
 
 

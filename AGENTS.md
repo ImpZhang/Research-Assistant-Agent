@@ -1,33 +1,46 @@
 # AGENTS.md
 
-This repository is the source-of-truth project for Research Assistant Agent on the remote server.
+This repository is the local deployable clone of Research Assistant Agent.
+
+It was cloned from GitHub for Mac-side local development and verification when the
+remote server is unavailable or when the operator explicitly requests local work.
 
 ## Source Of Truth
 
-- Authoritative remote path: `/home/zhangwz/Research-Assistant-Agent`.
+- Historical authoritative remote path: `/home/zhangwz/Research-Assistant-Agent`.
 - GitHub repository: `ImpZhang/Research-Assistant-Agent.git`.
-- Mac-side folders are handoff/context workspaces only unless the operator explicitly asks for a local experiment.
-- Do not assume a Mac-side copy is complete, current, or runnable.
+- Upstream source-of-truth remains GitHub/latest remote state when reachable.
+- This local clone is runnable and currently tracks GitHub `main`.
+- Prefer GitHub/latest remote state for upstream truth when the remote server is reachable.
+- When the operator asks for local development, use this repository and keep all artifacts project-local.
 
 ## Default Work Location
 
-- Run inspection, tests, commits, and pushes from the remote repository first.
-- Do not install dependencies or start services on the Mac workspace by default.
+- For local development, run inspection and tests in this repository first.
+- Use `scripts/env.sh` before local work so caches, data, logs, models, and outputs stay inside this project.
+- Do not install dependencies globally.
+- Do not start services in the background unless the operator explicitly asks for a persistent local service.
 - Do not start or restart remote services unless the operator explicitly approves that action.
 - Prefer small, reviewable changes with focused tests and progress-log updates.
 
-## Before Modifying Remote Code
+## Before Modifying Code
 
-Always inspect the remote state first:
+Always inspect local state first:
 
 ```bash
-cd /home/zhangwz/Research-Assistant-Agent
 git status --short
 git branch --show-current
 git --no-pager log --oneline -5
 ```
 
-If unexpected tracked changes or new untracked files are present, stop and ask the operator before editing, staging, or committing. Two historical untracked root documents may exist:
+If the remote server is reachable and the task is intended to be pushed upstream, also inspect the remote state before editing:
+
+```bash
+ssh -i ~/.ssh/id_ed25519_geoloc -p 8502 -o BatchMode=yes zhangwz@39.97.171.237 \
+  'cd /home/zhangwz/Research-Assistant-Agent && git status --short && git branch --show-current && git --no-pager log --oneline -5'
+```
+
+If unexpected tracked changes or new untracked files are present, stop and ask the operator before editing, staging, or committing. Historical remote-only untracked root documents may exist:
 
 - `research_assistant_requirements.md`
 - `research_assistant_technical_design.md`
@@ -76,9 +89,16 @@ python3 --version
 
 Do not point read commands at sensitive files.
 
+## Development Process
+
+- Start with `docs/documentation_index.md` to locate the relevant design, operation, and evaluation documents.
+- Follow `docs/development_process.md` for the standard change lifecycle.
+- Keep `docs/progress_log.md` updated for nontrivial work.
+- Keep local isolation behavior aligned with `docs/local_isolation.md`.
+
 ## Verification And Commits
 
-- Use `.venv/bin/...` tools already present on the remote host.
+- Use `source scripts/env.sh` and project-local `.venv/bin/...` tools.
 - Prefer focused tests for the changed behavior before broader suites.
 - Update `docs/progress_log.md` for durable handoff when work is nontrivial.
 - Stage only files that belong to the current task.

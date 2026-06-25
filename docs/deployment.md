@@ -46,16 +46,52 @@ AUDIT_ADMIN_KEY_HEADER_NAME=X-Research-Assistant-Admin-Key
 Model provider variables can stay empty for deterministic fallback behavior, or be filled with OpenAI-compatible endpoints:
 
 ```bash
-MAIN_MODEL=
-MAIN_BASE_URL=
+MAIN_MODEL=qwen3-32b
+MAIN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 MAIN_API_KEY=
-EXTRACTION_MODEL=
-EXTRACTION_BASE_URL=
+EXTRACTION_MODEL=qwen3-32b
+EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EXTRACTION_API_KEY=
-JUDGE_MODEL=
-JUDGE_BASE_URL=
+JUDGE_MODEL=qwen3-32b
+JUDGE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 JUDGE_API_KEY=
 ```
+
+Embedding and rerank provider variables control the optional external retrieval path. In `auto` mode, a fully configured provider is used; otherwise the service keeps deterministic local hash embedding and skips learned rerank:
+
+```bash
+EMBEDDER=qwen3-vl-embedding
+EMBEDDER_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDER_API_KEY=
+EMBEDDER_PATH=/embeddings
+RETRIEVAL_EMBEDDING_PROVIDER=auto
+RERANK_MODEL=qwen3-rerank
+RERANK_BINDING_HOST=https://dashscope.aliyuncs.com/compatible-mode/v1
+RERANK_API_KEY=
+RERANK_PATH=/rerank
+RETRIEVAL_RERANK_PROVIDER=auto
+MODEL_PROVIDER_TIMEOUT_SECONDS=60
+```
+
+See `docs/model_provider_strategy.md` for wiring status, provider modes, and test-safety rules.
+
+To verify real providers manually, run the opt-in smoke script from a configured local environment:
+
+```bash
+ALLOW_REAL_MODEL_PROVIDER_SMOKE=1 .venv/bin/python scripts/smoke_model_providers.py
+```
+
+The smoke script reports model names, booleans, dimensions, and rerank indexes only; it does not print key values.
+
+To evaluate real papers through the local agent workflow, use the opt-in evaluator:
+
+```bash
+ALLOW_REAL_PAPER_EVAL=1 .venv/bin/python scripts/evaluate_real_papers.py path/to/paper.pdf
+```
+
+By default, the evaluator also compares configured retrieval with a local hash/no-rerank baseline for the same context queries. Use `--skip-retrieval-mode-comparison` only when the extra local baseline pass is not needed.
+
+Reports are written under `outputs/evaluations/` and should be treated as local artifacts unless deliberately sanitized for sharing. The browser Workbench exposes the latest local report in the Real Eval panel, and the same report summaries are available through `GET /research/evaluations/real-paper/reports` and `GET /research/evaluations/real-paper/reports/latest`.
 
 ## Pilot Deployment Checklist
 

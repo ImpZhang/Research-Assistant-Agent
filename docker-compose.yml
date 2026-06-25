@@ -1,3 +1,5 @@
+name: research-assistant-agent-local
+
 services:
   research-assistant-agent:
     build: .

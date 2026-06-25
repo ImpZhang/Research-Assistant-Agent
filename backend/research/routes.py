@@ -173,6 +173,8 @@ from backend.research.schemas import (
     ProjectTriageSnapshotRead,
     ProjectTriageTaskGenerateRequest,
     RankedIdeaRead,
+    RealPaperEvaluationReportDetail,
+    RealPaperEvaluationReportSummary,
     RelatedWorkMatrixCreate,
     RelatedWorkMatrixRead,
     RepresentativePaperReviewRecordCreate,
@@ -202,6 +204,7 @@ from backend.research.schemas import (
     ScoredEvidenceRead,
     ScoredIdeaRead,
     ScoredResearchGapRead,
+    SotaReviewPackageCreate,
     TaskBoardSnapshotCreate,
     TaskBoardSnapshotDetail,
     TaskBoardSnapshotRead,
@@ -215,6 +218,7 @@ from backend.research.services.assumption_audit_service import IdeaAssumptionAud
 from backend.research.services.document_ingestion import DocumentIngestionService
 from backend.research.services.decision_memo_service import IdeaDecisionMemoService
 from backend.research.services.embedding_service import EmbeddingService
+from backend.research.services.evaluation_report_service import EvaluationReportService
 from backend.research.services.evidence_ledger_service import IdeaEvidenceLedgerService
 from backend.research.services.experiment_analysis_service import ExperimentAnalysisService
 from backend.research.services.experiment_run_service import ExperimentRunService
@@ -248,6 +252,7 @@ from backend.research.services.research_profile_service import (
 )
 from backend.research.services.retrieval_service import RetrievalService
 from backend.research.services.review_service import ReviewService
+from backend.research.services.sota_review_service import SotaReviewPackageService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
 from backend.research.services.structured_idea_service import StructuredIdeaService
 from backend.research.services.task_service import ResearchTaskService
@@ -410,7 +415,12 @@ def status() -> ProjectStatus:
             "external_novelty_refresh",
             "novelty_check_task_generation",
             "local_embedding_index",
+            "external_embedding_provider",
             "embedding_backed_context_retrieval",
+            "learned_reranking",
+            "real_paper_evaluation_reports",
+            "real_provider_evaluation_smoke",
+            "manual_sota_review_packages",
             "lexical_context_retrieval",
             "graph_rag_lite_schema",
             "graph_rag_lite_workflow_links",
@@ -419,8 +429,6 @@ def status() -> ProjectStatus:
             "requirements_and_technical_docs",
         ],
         next_capabilities=[
-            "external_embedding_provider",
-            "learned_reranking",
             "external_novelty_monitoring",
             "managed_mcp_server",
         ],
@@ -1232,6 +1240,18 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/ideas/{idea_id}/novelty-checks/{check_id}/tasks",
             input_model="ResearchTaskGenerateRequest",
             output_model="ResearchTaskGenerationResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_sota_review_package",
+            description=(
+                "Create a persisted manual SOTA review package with novelty signals, "
+                "related-work rows, missing searches, review queries, and Markdown checklist."
+            ),
+            method="POST",
+            path="/research/ideas/{idea_id}/sota-review-package",
+            input_model="SotaReviewPackageCreate",
+            output_model="ResearchBriefDetail",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -5202,6 +5222,67 @@ def _serialize_research_brief(
     return ResearchBriefRead(**payload)
 
 
+@router.post("/ideas/{idea_id}/sota-review-package", response_model=ResearchBriefDetail)
+def create_sota_review_package(
+    idea_id: str,
+    payload: SotaReviewPackageCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    try:
+        brief = SotaReviewPackageService(session).create_package(
+            idea_id,
+            include_external=payload.include_external,
+            limit=payload.limit,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get("/ideas/{idea_id}/sota-review-packages", response_model=list[ResearchBriefRead])
+def list_sota_review_packages(
+    idea_id: str,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    try:
+        briefs = SotaReviewPackageService(session).list_packages_for_idea(idea_id, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_research_brief(brief) for brief in briefs]
+
+
+@router.get(
+    "/ideas/{idea_id}/sota-review-packages/{brief_id}",
+    response_model=ResearchBriefDetail,
+)
+def get_sota_review_package(
+    idea_id: str,
+    brief_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    brief = SotaReviewPackageService(session).get_package(idea_id, brief_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="SOTA review package not found")
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get(
+    "/ideas/{idea_id}/sota-review-packages/{brief_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_sota_review_package_markdown(
+    idea_id: str,
+    brief_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    brief = SotaReviewPackageService(session).get_package(idea_id, brief_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="SOTA review package not found")
+    return PlainTextResponse(brief.markdown_export or "", media_type="text/markdown")
+
+
 @router.post("/briefs", response_model=ResearchBriefDetail)
 def create_research_brief(
     payload: ResearchBriefCreate,
@@ -5620,6 +5701,47 @@ def rebuild_embeddings(
         idea_count=stats.idea_count,
         message=f"Indexed {stats.indexed_count} research objects for vector retrieval.",
     )
+
+
+@router.get(
+    "/evaluations/real-paper/reports",
+    response_model=list[RealPaperEvaluationReportSummary],
+)
+def list_real_paper_evaluation_reports(
+    limit: int = 20,
+) -> list[RealPaperEvaluationReportSummary]:
+    return [
+        RealPaperEvaluationReportSummary(**item)
+        for item in EvaluationReportService().list_real_paper_reports(limit=limit)
+    ]
+
+
+@router.get(
+    "/evaluations/real-paper/reports/latest",
+    response_model=RealPaperEvaluationReportDetail,
+)
+def latest_real_paper_evaluation_report() -> RealPaperEvaluationReportDetail:
+    try:
+        return RealPaperEvaluationReportDetail(
+            **EvaluationReportService().load_latest_real_paper_report()
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get(
+    "/evaluations/real-paper/reports/{report_id}",
+    response_model=RealPaperEvaluationReportDetail,
+)
+def get_real_paper_evaluation_report(report_id: str) -> RealPaperEvaluationReportDetail:
+    try:
+        return RealPaperEvaluationReportDetail(
+            **EvaluationReportService().load_real_paper_report_detail(report_id)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/papers", response_model=list[PaperRead])

@@ -53,6 +53,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - OpenAI-compatible structured idea generation with deterministic fallback.
 - Novelty/collision checks against existing evidence, gaps, ideas, and literature search results.
 - Persisted related-work matrices that compare an idea with local evidence, gaps, nearby ideas, and literature search rows.
+- Manual SOTA review packages that combine novelty screening, related-work rows, missing searches, review queries, and Markdown checklists before claiming novelty.
 - Persisted proposal drafts that bundle an idea, related-work positioning, experiment plan, risks, milestones, and evidence IDs.
 - Proposal readiness reviews with advisor-style scores, concerns, required revisions, and missing evidence.
 - Proposal revision artifacts that turn readiness-review actions into a revised proposal checkpoint.
@@ -140,12 +141,12 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Local literature search with optional OpenAlex, arXiv, and Semantic Scholar external-search adapters.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.
-- Local hashed embedding index for evidence, gaps, and ideas.
+- Local hashed embedding index for evidence, gaps, and ideas, with optional external embedding provider vectors.
 - Markdown export for paper cards and idea dossiers.
 - Robust sparse-heading paper ingestion and gap-mining fallback for PDFs that expose Roman numeral headings, compact headings such as `RELATEDWORK`, or only a clean References heading.
 - GraphRAG-lite node and edge persistence with same source/target/type edge reuse.
 - Read-only GraphRAG-lite stats for node/edge type counts, orphan edge counts, and duplicate edge group counts.
-- Query-time lexical/vector context retrieval over evidence, gaps, ideas, and optionally filtered graph neighborhoods, with stable ranking tie-breaks and score breakdowns.
+- Query-time lexical/vector/rerank context retrieval over evidence, gaps, ideas, and optionally filtered graph neighborhoods, with stable ranking tie-breaks and score breakdowns.
 - Synchronous workflow job trace with input, output, status, progress, and errors.
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
 - Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.
@@ -196,6 +197,16 @@ scripts/
 tests/
 ```
 
+## Development Documents
+
+Start future development from:
+
+- `AGENTS.md` for repository operating rules.
+- `docs/documentation_index.md` for the documentation map.
+- `docs/development_process.md` for the standard change workflow and verification ladder.
+- `docs/local_isolation.md` for Mac-local dependency, cache, data, model, output, and cleanup rules.
+- `docs/model_provider_strategy.md` for chat, embedding, rerank, and provider configuration.
+
 ## Quick Start
 
 This project is developed with `uv`.
@@ -236,11 +247,25 @@ EXTRACTION_MODEL=
 EXTRACTION_BASE_URL=
 EXTRACTION_API_KEY=
 
+JUDGE_MODEL=
+JUDGE_BASE_URL=
+JUDGE_API_KEY=
+
+EMBEDDER=
+EMBEDDER_BASE_URL=
+EMBEDDER_API_KEY=
+RETRIEVAL_EMBEDDING_PROVIDER=auto
+
+RERANK_MODEL=
+RERANK_BINDING_HOST=
+RERANK_API_KEY=
+RETRIEVAL_RERANK_PROVIDER=auto
+
 EXTERNAL_LITERATURE_SEARCH_ENABLED=false
 OPENALEX_BASE_URL=https://api.openalex.org
 ```
 
-If `EXTRACTION_*` is empty, paper card extraction falls back to the heuristic extractor. If `MAIN_*` is empty, idea generation falls back to the deterministic idea generator.
+If `EXTRACTION_*` is empty, paper card extraction falls back to the heuristic extractor. If `MAIN_*` is empty, idea generation falls back to the deterministic idea generator. Retrieval can run without provider credentials through the local hash index; external embedding and rerank providers are used only when configured.
 
 ## Verification
 
@@ -309,6 +334,15 @@ Run focused context-search evaluation checks on the remote `.venv`:
 ```bash
 bash scripts/check_context_search_evaluations.sh
 ```
+
+Run an opt-in real-provider smoke and real-paper PDF evaluation from a configured local environment:
+
+```bash
+ALLOW_REAL_MODEL_PROVIDER_SMOKE=1 .venv/bin/python scripts/smoke_model_providers.py
+ALLOW_REAL_PAPER_EVAL=1 .venv/bin/python scripts/evaluate_real_papers.py path/to/paper.pdf
+```
+
+Real-paper reports are written to `outputs/evaluations/`, can compare configured retrieval against a local hash/no-rerank baseline, and are available in the Workbench Real Eval panel.
 
 Run focused GraphRAG-lite duplicate-edge and graph stats checks:
 
@@ -404,6 +438,9 @@ GET  /research/papers/{paper_id}
 GET  /research/papers/{paper_id}/evidence
 POST /research/literature/search
 POST /research/embeddings/rebuild
+GET  /research/evaluations/real-paper/reports
+GET  /research/evaluations/real-paper/reports/latest
+GET  /research/evaluations/real-paper/reports/{report_id}
 GET  /research/tools/manifest
 GET  /research/tools/mcp-spec
 GET  /research/profile
@@ -547,6 +584,10 @@ POST /research/ideas/{idea_id}/related-work-matrix
 GET  /research/ideas/{idea_id}/related-work-matrices
 GET  /research/ideas/{idea_id}/related-work-matrices/{matrix_id}
 GET  /research/ideas/{idea_id}/related-work-matrices/{matrix_id}/export/markdown
+POST /research/ideas/{idea_id}/sota-review-package
+GET  /research/ideas/{idea_id}/sota-review-packages
+GET  /research/ideas/{idea_id}/sota-review-packages/{brief_id}
+GET  /research/ideas/{idea_id}/sota-review-packages/{brief_id}/export/markdown
 POST /research/ideas/{idea_id}/proposal-draft
 GET  /research/ideas/{idea_id}/proposal-drafts
 GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}
@@ -630,8 +671,8 @@ See `docs/deployment.md` for the runtime contract, pilot deployment checklist, `
 
 ## Near-Term Roadmap
 
-- Add external embedding providers and learned reranking.
-- Add external novelty search through OpenAlex/Semantic Scholar/arXiv adapters.
+- Add real-provider smoke tests, batch embedding, page-image retrieval, and retrieval-mode evaluation fixtures.
+- Add fully automated current-SOTA closure on top of manual SOTA review packages and external novelty search adapters.
 - Add durable worker queues, richer retry policies, and resumable workflow state.
 - Expand the research workbench into a full review/edit loop.
 - Harden auth, deployment observability, and richer binary artifact handling around the lightweight MCP bridge.

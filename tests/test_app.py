@@ -97,8 +97,17 @@ def test_health_ready_checks_database_and_storage() -> None:
     model_provider = body["checks"]["model_provider_configuration"]
     assert model_provider["ok"] is True
     assert model_provider["fallback_supported"] is True
-    assert sorted(model_provider["roles"]) == ["extraction", "judge", "main"]
+    assert sorted(model_provider["roles"]) == [
+        "embedding",
+        "extraction",
+        "judge",
+        "main",
+        "rerank",
+    ]
     assert "api_key_configured" in model_provider["roles"]["main"]
+    assert "api_key_configured" in model_provider["roles"]["embedding"]
+    assert "api_key_configured" in model_provider["roles"]["rerank"]
+    assert set(model_provider["retrieval_provider_modes"]) == {"embedding", "rerank"}
     assert "pytest-secret" not in response.text
     assert body["checks"]["paper_upload_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["ok"] is True
@@ -1012,6 +1021,13 @@ def test_research_status() -> None:
     assert "project_triage_snapshot_comparison_task_generation" in body["implemented_capabilities"]
     assert "external_novelty_refresh" in body["implemented_capabilities"]
     assert "novelty_check_task_generation" in body["implemented_capabilities"]
+    assert "external_embedding_provider" in body["implemented_capabilities"]
+    assert "learned_reranking" in body["implemented_capabilities"]
+    assert "real_paper_evaluation_reports" in body["implemented_capabilities"]
+    assert "real_provider_evaluation_smoke" in body["implemented_capabilities"]
+    assert "manual_sota_review_packages" in body["implemented_capabilities"]
+    assert "external_embedding_provider" not in body["next_capabilities"]
+    assert "learned_reranking" not in body["next_capabilities"]
 
 
 def test_project_scope_reports_default_compatibility_boundary() -> None:
@@ -1155,6 +1171,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "record_claim_validation_result" in names
     assert "refresh_idea_novelty_search" in names
     assert "create_tasks_from_idea_novelty_check" in names
+    assert "create_sota_review_package" in names
     assert "create_advisor_brief" in names
     assert "analyze_experiment_run" in names
     assert "cancel_job" in names
@@ -1974,7 +1991,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "latestWorkflowFacts" in response.text
     assert "latestWorkflowRefreshJobsButton" in response.text
     assert "latestWorkflowLoadDossierButton" in response.text
-    assert "20260618-scope-status1" in response.text
+    assert "20260625-real-eval1" in response.text
     assert response.text.index('id="latest-workflow"') < response.text.index('id="pilot-launch"')
     assert "pilot-path" in response.text
     assert "pilotPathSteps" in response.text
@@ -1988,6 +2005,11 @@ def test_workbench_static_assets_are_served() -> None:
     assert "pilotLaunchRefreshButton" in response.text
     assert "pilotLaunchMetrics" in response.text
     assert "pilotLaunchResult" in response.text
+    assert "real-eval" in response.text
+    assert "realEvalLatestButton" in response.text
+    assert "realEvalListButton" in response.text
+    assert response.text.index('id="pilot-launch"') < response.text.index('id="real-eval"')
+    assert response.text.index('id="real-eval"') < response.text.index('id="onboarding"')
     assert "onboardingButton" in response.text
     assert "onboardingMarkdownButton" in response.text
     assert "onboardingTasksButton" in response.text
@@ -2001,6 +2023,7 @@ def test_workbench_static_assets_are_served() -> None:
     assert "setupWizardButton" in response.text
     assert "action-group-title" in response.text
     assert "Idea Loop" in response.text
+    assert "sotaReviewPackageButton" in response.text
     assert "Task Board" in response.text
     assert "Project Delivery" in response.text
     assert "Project Operations" in response.text
@@ -2022,6 +2045,7 @@ def test_workbench_static_assets_are_served() -> None:
     expected_sections = {
         "pilot-path": "Pilot Path",
         "pilot-launch": "Pilot Launch",
+        "real-eval": "Real Eval",
         "onboarding": "Onboarding",
         "ingest": "Ingest",
         "workflow": "Workflow",
@@ -2127,6 +2151,8 @@ def test_workbench_static_assets_are_served() -> None:
     assert "quickExperimentRunButton" in script.text
     assert "quickResearchPacketButton" in script.text
     assert "quickProjectBundleButton" in script.text
+    assert "createSotaReviewPackage" in script.text
+    assert "/research/ideas/${state.latestIdeaId}/sota-review-package" in script.text
     assert "const latestCompletedJob = jobs.find" in script.text
     assert "restoreStateFromJob(latestCompletedJob)" in script.text
     assert "Active paper from latest job" in script.text

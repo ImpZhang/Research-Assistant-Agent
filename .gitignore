@@ -8,6 +8,10 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.cache/
+.conda/
+.direnv/
+.ipynb_checkpoints/
 
 .venv/
 venv/
@@ -17,6 +21,9 @@ build/
 
 data/
 logs/
+models/
+outputs/
+.docker/
 
 .DS_Store
 Thumbs.db

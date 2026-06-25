@@ -30,6 +30,7 @@ const state = {
   latestProjectBundleReleaseReviewOutcomeId: "",
   latestProjectBundleReleaseReviewOutcomeSignoffId: "",
   latestResearchPlanId: "",
+  latestRealEvalReportId: "",
   researchProfile: null,
   onboardingReadiness: null,
   pollTimer: null,
@@ -1125,6 +1126,69 @@ async function loadPilotLaunch() {
   }
 }
 
+async function listRealPaperEvaluationReports() {
+  renderResult("realEvalResult", "Loading real-paper evaluation reports...", "warn");
+  try {
+    const reports = await api("/research/evaluations/real-paper/reports?limit=8");
+    if (!reports.length) {
+      renderWorkbenchEmpty("realEvalResult", "No real-paper evaluation reports found.");
+      return;
+    }
+    state.latestRealEvalReportId = reports[0].report_id;
+    renderResult(
+      "realEvalResult",
+      renderList(
+        "Reports",
+        reports,
+        (report) =>
+          `${report.report_id}: ${report.completed_paper_count}/${report.paper_count} papers, ${report.total_ideas} ideas, readiness ${report.average_readiness}, quality ${report.average_quality_gate}`,
+      ),
+    );
+  } catch (error) {
+    renderWorkbenchError("realEvalResult", error);
+  }
+}
+
+async function loadLatestRealPaperEvaluationReport() {
+  renderResult("realEvalResult", "Loading latest real-paper evaluation report...", "warn");
+  try {
+    const report = await api("/research/evaluations/real-paper/reports/latest");
+    state.latestRealEvalReportId = report.report_id;
+    $("dossierPreview").textContent =
+      report.markdown_export || JSON.stringify(report.summary, null, 2);
+    renderResult("realEvalResult", renderRealPaperEvaluationReport(report));
+  } catch (error) {
+    renderWorkbenchError("realEvalResult", error);
+  }
+}
+
+function renderRealPaperEvaluationReport(report) {
+  const blockers = [];
+  for (const paper of report.papers || []) {
+    const readinessLevel = paper.metrics?.readiness_level || "";
+    const qualityDecision = paper.metrics?.quality_decision || "";
+    if (readinessLevel && readinessLevel !== "ready") {
+      blockers.push(`${paper.filename}: readiness ${readinessLevel}`);
+    }
+    if (qualityDecision && !["advance", "ready"].includes(qualityDecision)) {
+      blockers.push(`${paper.filename}: quality ${qualityDecision}`);
+    }
+  }
+  const papers = renderList("Papers", report.papers || [], (paper) => {
+    const metrics = paper.metrics || {};
+    return `${paper.filename}: ${paper.status}, ${metrics.gaps || 0} gaps, ${metrics.ideas || 0} ideas, readiness ${metrics.readiness_score || 0}, quality ${metrics.quality_score || 0}`;
+  });
+  const blockerText = blockers.length
+    ? renderList("Blockers", blockers, (blocker) => blocker)
+    : '<h4>Blockers</h4><div class="empty-state">No report-level blockers detected.</div>';
+  return `
+    <strong>${escapeHtml(report.report_id)}</strong><br />
+    Completed ${report.completed_paper_count}/${report.paper_count} papers; gaps ${report.total_gaps}; ideas ${report.total_ideas}; embeddings ${report.total_embedding_indexed}.<br />
+    Avg readiness ${report.average_readiness}; avg quality ${report.average_quality_gate}; models ${escapeHtml((report.embedding_models || []).join(", ") || "n/a")}.
+    ${papers}${blockerText}
+  `;
+}
+
 function renderList(title, items, mapper) {
   if (!items || !items.length) {
     return `<h4>${escapeHtml(title)}</h4><div class="empty-state">No records.</div>`;
@@ -1319,6 +1383,34 @@ async function refreshNoveltySearch() {
     renderResult(
       "workflowResult",
       `Novelty refresh <code>${escapeHtml(body.id)}</code>: ${escapeHtml(body.risk_level)} risk with ${body.collision_signals.length} signals.`,
+    );
+  } catch (error) {
+    renderWorkbenchError("workflowResult", error);
+  }
+}
+
+async function createSotaReviewPackage() {
+  if (!state.latestIdeaId) {
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
+    return;
+  }
+  renderResult("workflowResult", "Creating SOTA review package...", "warn");
+  try {
+    const includeExternal = Boolean($("includeExternal")?.checked);
+    const body = await api(`/research/ideas/${state.latestIdeaId}/sota-review-package`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        include_external: includeExternal,
+        limit: 8,
+        created_by: "workbench",
+      }),
+    });
+    $("dossierPreview").textContent = body.markdown_export;
+    const summary = body.summary || {};
+    renderResult(
+      "workflowResult",
+      `Created SOTA package <code>${escapeHtml(body.id)}</code> with status <code>${escapeHtml(summary.review_status || "manual_sota_review_required")}</code>. Missing searches: ${(summary.missing_searches || []).length}.`,
     );
   } catch (error) {
     renderWorkbenchError("workflowResult", error);
@@ -3520,6 +3612,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   $("pilotLaunchRefreshButton").addEventListener("click", loadPilotLaunch);
+  $("realEvalLatestButton").addEventListener("click", loadLatestRealPaperEvaluationReport);
+  $("realEvalListButton").addEventListener("click", listRealPaperEvaluationReports);
   $("loadProfileButton").addEventListener("click", loadResearchProfile);
   $("previewProfileButton").addEventListener("click", previewResearchProfile);
   $("contextSearchForm").addEventListener("submit", searchContext);
@@ -3540,6 +3634,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("loadDossierButton").addEventListener("click", loadDossier);
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
   $("noveltyRefreshButton").addEventListener("click", refreshNoveltySearch);
+  $("sotaReviewPackageButton").addEventListener("click", createSotaReviewPackage);
   $("noveltyTasksButton").addEventListener("click", createNoveltyTasks);
   $("relatedWorkButton").addEventListener("click", createRelatedWorkMatrix);
   $("proposalDraftButton").addEventListener("click", createProposalDraft);

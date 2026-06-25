@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Research Assistant Workbench</title>
-    <link rel="stylesheet" href="/workbench-assets/styles.css?v=20260618-scope-status1" />
+    <link rel="stylesheet" href="/workbench-assets/styles.css?v=20260625-real-eval1" />
   </head>
   <body>
     <div class="app-shell">
@@ -20,6 +20,7 @@
         <nav class="nav-list" aria-label="Workbench sections">
           <a href="#pilot-path">Pilot Path</a>
           <a href="#pilot-launch">Pilot Launch</a>
+          <a href="#real-eval">Real Eval</a>
           <a href="#onboarding">Onboarding</a>
           <a href="#ingest">Ingest</a>
           <a href="#workflow">Workflow</a>
@@ -150,6 +151,18 @@
             </div>
           </div>
           <div id="pilotLaunchResult" class="result-block muted">Launch status not loaded.</div>
+        </section>
+
+        <section id="real-eval" class="band">
+          <div class="section-heading">
+            <h3>Real Paper Evaluation</h3>
+            <p>Inspect local real-provider PDF evaluation reports and quality blockers.</p>
+          </div>
+          <div class="controls-grid">
+            <button id="realEvalLatestButton" type="button">Load Latest</button>
+            <button id="realEvalListButton" type="button">List Reports</button>
+          </div>
+          <div id="realEvalResult" class="result-block muted">No real-paper evaluation report loaded.</div>
         </section>
 
         <section id="onboarding" class="band">
@@ -397,6 +410,7 @@
               <button id="rankIdeasButton" type="button">Rank Ideas</button>
               <button id="savePortfolioButton" type="button">Save Portfolio</button>
               <button id="noveltyRefreshButton" type="button">Refresh Novelty</button>
+              <button id="sotaReviewPackageButton" type="button">SOTA Package</button>
               <button id="noveltyTasksButton" type="button">Novelty Tasks</button>
               <button id="relatedWorkButton" type="button">Related Work</button>
               <button id="proposalDraftButton" type="button">Proposal Draft</button>
@@ -509,6 +523,6 @@
       <div class="empty-state">No records yet.</div>
     </template>
 
-    <script src="/workbench-assets/app.js?v=20260618-scope-status1" defer></script>
+    <script src="/workbench-assets/app.js?v=20260625-real-eval1" defer></script>
   </body>
 </html>

@@ -25,11 +25,20 @@ def extract_json_object(text: str) -> dict[str, Any]:
 
 
 class OpenAICompatibleJsonClient:
-    def __init__(self, *, model: str, base_url: str, api_key: str, timeout: int = 60):
+    def __init__(
+        self,
+        *,
+        model: str,
+        base_url: str,
+        api_key: str,
+        timeout: int = 60,
+        enable_thinking: bool | None = None,
+    ):
         self.model = model
         self.base_url = (base_url or "").rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self.enable_thinking = enable_thinking
 
     @property
     def is_configured(self) -> bool:
@@ -39,22 +48,34 @@ class OpenAICompatibleJsonClient:
         if not self.is_configured:
             raise RuntimeError("Model client is not configured.")
 
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "temperature": 0,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        enable_thinking = self._enable_thinking_value()
+        if enable_thinking is not None:
+            payload["enable_thinking"] = enable_thinking
+
         response = requests.post(
             f"{self.base_url}/chat/completions",
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": self.model,
-                "temperature": 0,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-            },
+            json=payload,
             timeout=self.timeout,
         )
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
         return extract_json_object(content)
+
+    def _enable_thinking_value(self) -> bool | None:
+        if self.enable_thinking is not None:
+            return self.enable_thinking
+        if "dashscope.aliyuncs.com" in self.base_url and self.model.lower().startswith("qwen3"):
+            return False
+        return None

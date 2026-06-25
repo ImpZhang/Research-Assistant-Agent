@@ -2,6 +2,49 @@
 
 This log records remote-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-25 - Local Documentation And Development Process Index
+
+Documentation maintenance completed:
+
+- Added `docs/documentation_index.md` as the canonical map for product, architecture, operations, evaluation, benchmark, and handoff documents.
+- Added `docs/development_process.md` to define the standard local development lifecycle, verification ladder, runtime checks, cleanup, and handoff expectations.
+- Updated `AGENTS.md` so this local GitHub clone is treated as a runnable local deployment when the operator requests local work, while preserving remote/GitHub source-of-truth awareness.
+- Linked the new documentation entry points from `README.md`.
+
+Verification completed:
+
+- `bash -n scripts/env.sh scripts/setup-local.sh scripts/run-local.sh scripts/clean.sh scripts/deep-clean.sh scripts/docker-clean.sh` passed.
+- Documentation-only workflow; no service restart, dependency install, or data migration was required.
+
+## 2026-06-25 - Local Qwen Provider Configuration
+
+Local configuration completed:
+
+- Wrote the real provider key only to the ignored local `.env` file with user-only file permissions.
+- Configured the local `.env` for `qwen3-32b`, `qwen3-vl-embedding`, and `qwen3-rerank` through a DashScope-style OpenAI-compatible base URL.
+- Updated `.env.example` with model names and base URLs but no secret values.
+- Added embedder and rerank settings to application config and `/health/ready` model-provider readiness reporting without exposing key values.
+- Added OpenAI-compatible embedding/rerank provider adapters, provider modes, local-test safety gates, external embedding index storage, batch embedding, unchanged-text hash skips, learned rerank integration after lexical/vector recall, and an explicit opt-in real-provider smoke script.
+- Fixed DashScope Qwen3 non-streaming chat calls by adding `enable_thinking=false`, added automatic native DashScope fallback for `qwen3-vl-embedding` and `qwen3-rerank`, and verified all five provider roles with the explicit real-provider smoke script.
+- Added `scripts/evaluate_real_papers.py` for opt-in end-to-end PDF/text/Markdown paper evaluation with local JSON/Markdown reports under `outputs/evaluations/`.
+- Ran real-provider deep evaluation on G3, GeoToken, and Recognition through Reasoning PDFs. All 3 completed, external `qwen3-vl-embedding` indexed 30 objects, context search returned evidence/graph context for all queries, and proposal reviews reached `ready_for_advisor_review`; remaining blockers are novelty collision risk, missing related-work searches, and one high-risk assumption per idea.
+- Added `docs/real_paper_evaluation_report.md` as the durable summary of real-PDF metrics and remaining production blockers.
+- Added `docs/model_provider_strategy.md` to record model roles, current wiring status, text-vs-vision embedding guidance, and test-safety rules.
+- Added local real-paper evaluation report APIs and a Workbench Real Eval panel for loading the latest report into the dossier preview.
+- Added evaluator-side retrieval-mode comparison against a local hash/no-rerank baseline for the same context queries.
+- Added manual SOTA review package generation for ideas, including novelty screening, related-work matrix creation, missing-search tracking, review queries, Markdown checklist export, list/detail/export APIs, and a Workbench action.
+- Linked the provider strategy from the documentation index, README, and deployment docs.
+
+Verification completed:
+
+- Confirmed `.env` is ignored by git and has user-only permissions.
+- Verified provider model names and key presence through a redacted local check.
+
+Remaining implementation gap:
+
+- `qwen3-32b` is wired through the existing OpenAI-compatible JSON client.
+- Remaining production hardening: add live external-search SOTA signoff, optional image/page embedding, and measured benchmark execution hooks.
+
 ## 2026-06-12 Remote Handoff Baseline
 
 Remote source of truth:

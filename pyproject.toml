@@ -33,3 +33,16 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+exclude = [
+    "codex_handoff*",
+    "data*",
+    "docs*",
+    "logs*",
+    "models*",
+    "outputs*",
+    "scripts*",
+    "tests*",
+]
