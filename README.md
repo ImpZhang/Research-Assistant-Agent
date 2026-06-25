@@ -195,6 +195,7 @@ scripts/
   check_generated_file_guard.sh
   check_graph_rag_lite.sh
   check_handoff_docs.sh
+  check_local_agent_readiness.sh
   check_pilot_operational_preflight.sh
   check_pilot_readiness.sh
   check_product_effect_smoke.sh
@@ -324,6 +325,12 @@ Run the generated-file guard to catch tracked caches, virtualenvs, dependency fo
 
 ```bash
 bash scripts/check_generated_file_guard.sh
+```
+
+Run the local-agent readiness check to verify the clone-to-run contract, project-local cache/data/output paths, ignored local artifacts, model placeholders, and setup/run scripts without reading `.env` values:
+
+```bash
+bash scripts/check_local_agent_readiness.sh
 ```
 
 Run the local operational preflight to confirm docs, runtime artifacts, environment template keys, compose persistence, and safe-suite hooks before a packaged local deployment. Use `PILOT_PREFLIGHT_STRICT_GIT=true` before sharing a release to require a clean `main` checkout aligned with `origin/main`:

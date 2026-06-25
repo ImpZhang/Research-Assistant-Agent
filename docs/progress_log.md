@@ -2,6 +2,33 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-26 - Local Agent Readiness Preflight
+
+Implementation completed:
+
+- Added `scripts/check_local_agent_readiness.sh` as a read-only clone-to-run readiness check for the personal local-agent target.
+- The check verifies required local deployment files, ignored local artifacts, `.env.example` placeholder coverage, project-local cache/data/model/output/log paths, setup/run scripts, local Python version when `.venv` exists, and benchmark profile override handling.
+- The check reports whether `.env` exists but does not read `.env` values.
+- Wired the check into README, TODO, documentation index, local distribution flow, suite contracts, and the default local safe suite.
+- Added `test_local_agent_readiness_contract` to keep README, env template, local isolation exports, setup/run scripts, and safe-suite wiring aligned.
+- Added the benchmark profile readiness route test to `scripts/check_context_search_evaluations.sh` so focused coverage no longer misses it.
+- Updated backup/restore and database migration contract wording from historical customer-pilot language to local deployment language.
+- Isolated benchmark-runner and structured-extraction fallback tests from local `.env` and shell model-provider settings so the suite remains stable when the personal checkout has real provider keys configured.
+
+Verification completed:
+
+- `bash scripts/check_local_agent_readiness.sh` passed.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_suite_contracts.sh` passed.
+- `bash scripts/check_deployment_contracts.sh` passed: `2 passed in 1.52s`.
+- `bash scripts/check_generated_file_guard.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_context_search_evaluations.sh` passed: `37 passed in 6.63s`.
+- `bash scripts/check_backup_restore_contracts.sh` passed.
+- `bash scripts/check_research_workflow_primitives.sh` passed: `54 passed in 5.58s`.
+- `bash scripts/check_remote_safe_suite.sh` passed, including local readiness, deployment contracts `2 passed`, backup/restore contracts, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `37 passed`.
+- `git diff --check` passed.
+
 ## 2026-06-25 - Personal Local Agent Product Scope
 
 Decision recorded:

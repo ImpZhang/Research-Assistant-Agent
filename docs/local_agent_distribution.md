@@ -22,9 +22,10 @@ This target does not require a central system access key, centralized user accou
 4. Fill model provider keys only in `.env`.
 5. Run `./scripts/setup-local.sh` with a local Python 3.12+ interpreter.
 6. Run `source scripts/env.sh`.
-7. Start the app with `./scripts/run-local.sh`.
-8. Open `http://127.0.0.1:8000/workbench`.
-9. Run focused checks from `scripts/check_*.sh` before sharing changes.
+7. Run `bash scripts/check_local_agent_readiness.sh`.
+8. Start the app with `./scripts/run-local.sh`.
+9. Open `http://127.0.0.1:8000/workbench`.
+10. Run focused checks from `scripts/check_*.sh` before sharing changes.
 
 ## Required Local Artifacts
 

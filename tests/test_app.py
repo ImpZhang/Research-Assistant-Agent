@@ -11,6 +11,7 @@ from xml.etree import ElementTree
 from fastapi.testclient import TestClient
 
 import backend.app as app_module
+import backend.research.services.structured_extraction_service as structured_extraction_module
 from backend.app import create_app
 from backend.research.db import SessionLocal
 from backend.research.models import (
@@ -69,7 +70,9 @@ def test_health_ready_includes_build_metadata(monkeypatch) -> None:
     assert ready.json()["build"] == {"commit_sha": "pytest-build-sha"}
 
 
-def test_health_ready_checks_database_and_storage() -> None:
+def test_health_ready_checks_database_and_storage(monkeypatch) -> None:
+    monkeypatch.setenv("BENCHMARK_RUNNER_ENABLED", "false")
+
     client = TestClient(create_app())
     response = client.get("/health/ready")
     assert response.status_code == 200
@@ -905,6 +908,43 @@ def test_deployment_artifacts_document_customer_runtime() -> None:
     assert 'ROOT / ".env"' in pilot_preflight
     assert "contents were not read" in pilot_preflight
     assert "regular local API key is not admin authorization" in admin_policy
+
+
+def test_local_agent_readiness_contract() -> None:
+    root = Path(__file__).resolve().parents[1]
+    readiness_script = (root / "scripts" / "check_local_agent_readiness.sh").read_text(
+        encoding="utf-8"
+    )
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    distribution = (root / "docs" / "local_agent_distribution.md").read_text(encoding="utf-8")
+    env_example = (root / ".env.example").read_text(encoding="utf-8")
+    env_script = (root / "scripts" / "env.sh").read_text(encoding="utf-8")
+    setup_script = (root / "scripts" / "setup-local.sh").read_text(encoding="utf-8")
+    run_script = (root / "scripts" / "run-local.sh").read_text(encoding="utf-8")
+    safe_suite = (root / "scripts" / "check_remote_safe_suite.sh").read_text(encoding="utf-8")
+    suite_contract = (root / "scripts" / "check_suite_contracts.sh").read_text(encoding="utf-8")
+
+    assert "Local agent readiness passed." in readiness_script
+    assert ".env exists; contents were not read" in readiness_script
+    assert ".env.example must keep" in readiness_script
+    assert "local virtualenv python is ready" in readiness_script
+    assert "configs/benchmark_profiles.json" in readiness_script
+    assert "scripts/check_local_agent_readiness.sh" in readme
+    assert "scripts/check_local_agent_readiness.sh" in distribution
+    assert "bash scripts/check_local_agent_readiness.sh" in safe_suite
+    assert "bash scripts/check_local_agent_readiness.sh" in suite_contract
+    assert "MAIN_API_KEY=" in env_example
+    assert "EMBEDDER_API_KEY=" in env_example
+    assert "RERANK_API_KEY=" in env_example
+    assert "API_KEY=" in env_example
+    assert 'export XDG_CACHE_HOME="$PROJECT_ROOT/.cache"' in env_script
+    assert (
+        'export RESEARCH_DB_URL="${RESEARCH_DB_URL:-sqlite:///$PROJECT_ROOT/data/research/research_assistant.db}"'
+        in env_script
+    )
+    assert "Python >= 3.12 is required" in setup_script
+    assert "uv sync --frozen --extra dev" in setup_script
+    assert 'HOST="${HOST:-127.0.0.1}"' in run_script
 
 
 def test_research_status() -> None:
@@ -10032,7 +10072,17 @@ def test_structured_extraction_prompt_limits_evidence_payload() -> None:
     assert schema_hint["keywords"] == []
 
 
-def test_structured_card_extraction_falls_back_without_model_config() -> None:
+def test_structured_card_extraction_falls_back_without_model_config(monkeypatch) -> None:
+    monkeypatch.setattr(
+        structured_extraction_module,
+        "settings",
+        SimpleNamespace(
+            extraction_model="",
+            extraction_base_url="",
+            extraction_api_key="",
+        ),
+    )
+
     client = TestClient(create_app())
     content = b"""Structured Extraction Fallback Test
 

@@ -1,23 +1,23 @@
 # Database Migration Strategy
 
-This document defines the migration approach for Research Assistant Agent before introducing migration tooling or changing production data.
+This document defines the migration approach for Research Assistant Agent before introducing migration tooling or changing existing local deployment data.
 
 ## Current State
 
-The application uses SQLAlchemy models in `backend/research/models.py` and initializes tables with `Base.metadata.create_all()` from `backend/research/db.py`. The default development database is SQLite at `./data/research/research_assistant.db`; the compose pilot path uses `/app/data/research/research_assistant.db`.
+The application uses SQLAlchemy models in `backend/research/models.py` and initializes tables with `Base.metadata.create_all()` from `backend/research/db.py`. The default local database is SQLite at `./data/research/research_assistant.db`; the optional compose path uses `/app/data/research/research_assistant.db`.
 
-This approach is acceptable for early development because it can create missing tables without a migration step. It is not enough for customer-pilot upgrades once existing rows must be preserved across schema changes.
+This approach is acceptable for early development because it can create missing tables without a migration step. It is not enough for local upgrade paths once existing rows must be preserved across schema changes.
 
-## First-Pilot Policy
+## Local Upgrade Policy
 
-Until migration tooling is added, production-facing schema changes should follow these rules:
+Until migration tooling is added, schema changes that affect existing local data should follow these rules:
 
 - Prefer additive model changes that are backward-compatible with existing SQLite rows.
 - Avoid renaming or deleting columns, tables, indexes, or JSON keys that existing services read.
 - Back up `/app/data` before any deployment that changes SQLAlchemy models or database-related settings.
 - Record the deployed commit and verification commands in `docs/progress_log.md` or release notes.
 - Keep `init_db()` as table creation only; do not hide data migrations inside application startup.
-- Do not run ad hoc SQL against the customer-pilot database without an operator-reviewed backup and rollback note.
+- Do not run ad hoc SQL against a user's local database without an operator-reviewed backup and rollback note.
 
 ## Migration Tooling Direction
 
@@ -38,21 +38,21 @@ User/project scoping should follow `docs/user_project_scoping_design.md`: create
 
 ## Pre-Migration Checklist
 
-Before applying any migration to a pilot database:
+Before applying any migration to an existing local database:
 
-- [ ] Confirm remote git state and deployed commit.
+- [ ] Confirm local git state and deployed commit.
 - [ ] Confirm the exact `RESEARCH_DB_URL` and data volume path.
 - [ ] Create a cold backup using `docs/deployment.md` backup notes.
 - [ ] Run migration checks against a restored copy or staging database when available.
 - [ ] Review generated SQL or migration operations for destructive steps.
 - [ ] Stop the service or enter a maintenance window if SQLite writes may occur.
 - [ ] Apply the migration with operator approval.
-- [ ] Verify `/health/ready`, authenticated `/research/status`, Workbench Pilot Launch, and representative read/write routes.
+- [ ] Verify `/health/ready`, authenticated `/research/status`, the Workbench launch panel, and representative read/write routes.
 - [ ] Record migration id, deployed commit, backup id, verification results, and rollback note.
 
 ## SQLite Constraints
 
-SQLite is suitable for the first internal pilot, but it affects migration design:
+SQLite is suitable for the personal local-agent target, but it affects migration design:
 
 - Many schema changes require table rebuilds rather than simple `ALTER TABLE` operations.
 - Concurrent writes should be avoided during migrations.
@@ -67,13 +67,13 @@ A future migration-tooling implementation should include:
 - Alembic configuration committed without secrets.
 - A baseline migration matching current SQLAlchemy models.
 - Tests or checks that detect metadata drift between models and migrations.
-- Documentation for `alembic current`, `alembic history`, and `alembic upgrade head` in the remote-first runbook.
-- Deployment docs that require backup before `upgrade head` on pilot data.
+- Documentation for `alembic current`, `alembic history`, and `alembic upgrade head` in the local runbook.
+- Deployment docs that require backup before `upgrade head` on existing local data.
 - No automatic migration execution during normal app startup.
 
 ## Open Questions
 
-- When should the project switch from SQLite to Postgres for multi-user or higher-concurrency pilots?
+- When would SQLite stop being enough for personal local-agent usage?
 - Should write-operation audit remain JSONL-only, move into a database table, or use both?
 - Which migration verification command should be required in CI once Alembic is added?
 - Who is the operator responsible for approving destructive or irreversible migrations?

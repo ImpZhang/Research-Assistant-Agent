@@ -30,7 +30,7 @@ Current product target: personal local deployment. A user should be able to clon
 
 ## P2 - Personal Local Agent Follow-Ups
 
-- Polish clone-to-run setup, local preflight, and `.env.example` so first-time users can configure model API keys without reading internal docs.
+- Polish clone-to-run setup, local preflight, and `.env.example` so first-time users can configure model API keys without reading internal docs. Current baseline: `scripts/check_local_agent_readiness.sh` validates the local readiness contract without reading `.env`.
 - Enable live external-search providers for local real-provider settings and require completed SOTA external-search evidence packages before final signoff.
 - Add practical local benchmark recipes and prediction-generation pipelines on top of the guarded benchmark runner.
 - Keep real multi-project/user isolation deferred; the current product is single-operator local deployment with a default project.

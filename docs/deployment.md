@@ -124,7 +124,7 @@ Before starting or upgrading a local personal-agent service:
 - [ ] If SQLAlchemy models changed, review `docs/database_migration_strategy.md` and confirm no implicit startup migration is being relied on.
 - [ ] Start or rebuild Docker only after explicit operator approval.
 - [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`; confirm the health payload build commit matches the intended deployment commit; confirm the response includes `X-Request-ID` or the configured request-id header; confirm `request_id_header.ok=true`; confirm `database_storage.ok=true` for SQLite persistence; confirm `workbench_assets.ok=true` for the browser entrypoint; review `model_provider_configuration.roles` for fallback versus external-model mode; if API-key auth is enabled, confirm `api_key_auth.ok=true` and `api_key_auth.configured=true`; if write audit is enabled, confirm the readiness payload includes an enabled, writable `write_audit_dir` check, and if external literature search is enabled, confirm `external_literature_search.ok=true`.
-- [ ] Open `/workbench`, save the API key in the top bar if auth is enabled, refresh Pilot Launch, and confirm the first-run empty/error states are actionable.
+- [ ] Open `/workbench`, save the API key in the top bar if auth is enabled, refresh the Workbench launch panel, and confirm the first-run empty/error states are actionable.
 - [ ] If MCP clients are used, run the bridge health check with the same API key and the intended read-only or allow/deny policy.
 - [ ] If audit summary/export features are enabled in a future release, confirm the separate admin authorization gate described in `docs/admin_authorization_policy.md`.
 - [ ] Record the deployed commit, verification commands, and rollback note in the project progress log or release notes.
@@ -197,7 +197,7 @@ docker compose start research-assistant-agent
 curl http://127.0.0.1:8000/health/ready
 ```
 
-After restore or volume swap, verify `/health/ready`, authenticated `/research/status`, Workbench Pilot Launch, and a known project bundle or paper record before sharing the service again.
+After restore or volume swap, verify `/health/ready`, authenticated `/research/status`, the Workbench launch panel, and a known project bundle or paper record before sharing the service again.
 
 Check the service:
 

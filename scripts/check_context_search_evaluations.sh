@@ -71,4 +71,5 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_context_search_paper_filter_evaluation_fixture \
   tests/test_app.py::test_context_search_graph_context_respects_paper_filter \
   tests/test_app.py::test_context_search_graph_expansion_keeps_relevant_edge_after_recent_noise \
-  tests/test_app.py::test_context_search_returns_evidence_and_graph_context
+  tests/test_app.py::test_context_search_returns_evidence_and_graph_context \
+  tests/test_app.py::test_benchmark_profiles_report_builtin_readiness

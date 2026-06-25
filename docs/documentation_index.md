@@ -13,6 +13,7 @@ This document is the starting point for future development. Use it to find the r
 | `docs/local_agent_distribution.md` | Personal local-agent distribution target, clone-to-run flow, and out-of-scope SaaS boundaries. | Before changing packaging, setup, deployment, auth, or project-scoping assumptions. |
 | `docs/local_isolation.md` | Mac-local environment, cache, data, cleanup, and run commands. | Before running locally or installing dependencies. |
 | `docs/progress_log.md` | Durable history of nontrivial work and verification. | After completing meaningful changes. |
+| `scripts/check_local_agent_readiness.sh` | Read-only local-agent clone-to-run readiness check. | Before claiming a local checkout is ready to run. |
 
 ## Product And Architecture
 
