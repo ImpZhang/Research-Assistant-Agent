@@ -1881,7 +1881,7 @@ async function executeBenchmarkRun() {
     renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
     return;
   }
-  renderResult("workflowResult", "Executing benchmark command...", "warn");
+  renderResult("workflowResult", "Loading benchmark profiles...", "warn");
   try {
     if (!state.latestExperimentPlanId) {
       const plan = await api(`/research/ideas/${state.latestIdeaId}/experiment-plan`, {
@@ -1889,6 +1889,33 @@ async function executeBenchmarkRun() {
       });
       state.latestExperimentPlanId = plan.id;
     }
+    const profileResponse = await api("/research/benchmark-profiles");
+    const profiles = profileResponse.profiles || [];
+    const selectedProfile =
+      profiles.find((profile) => profile.id === "geoloc-country-accuracy-jsonl" && profile.runnable) ||
+      profiles.find((profile) => profile.id === "json-metrics-smoke" && profile.runnable) ||
+      profiles.find((profile) => profile.runnable);
+    if (!selectedProfile) {
+      const profileDetails = profiles.length
+        ? renderList(
+            "Profiles",
+            profiles,
+            (profile) =>
+              `${profile.id}: ${profile.runnable ? "runnable" : profile.disabled_reason || "not runnable"}`,
+          )
+        : "No benchmark profiles are configured.";
+      renderResult(
+        "workflowResult",
+        `No runnable benchmark profile is available.<br />${profileDetails}`,
+        "warn",
+      );
+      return;
+    }
+    renderResult(
+      "workflowResult",
+      `Executing benchmark profile <code>${escapeHtml(selectedProfile.id)}</code>...`,
+      "warn",
+    );
     const body = await api(
       `/research/experiment-plans/${state.latestExperimentPlanId}/benchmark-run/execute`,
       {
@@ -1897,21 +1924,8 @@ async function executeBenchmarkRun() {
         body: JSON.stringify({
           title: "Workbench benchmark execution",
           task_id: state.latestTaskIds.length ? state.latestTaskIds[0] : null,
-          benchmark_name: "Workbench benchmark smoke",
-          dataset: "local-smoke",
-          split: "validation",
-          baseline_name: "recorded baseline",
-          primary_metric: "primary_metric",
-          metric_direction: "higher_is_better",
-          command_args: [
-            "python3",
-            "-c",
-            "import json; print(json.dumps({'metrics': {'primary_metric': {'value': 0.0}}}))",
-          ],
-          working_directory: ".",
-          parse_stdout_json: true,
-          timeout_seconds: 30,
-          config: { source: "workbench" },
+          profile_id: selectedProfile.id,
+          config: { source: "workbench", selected_profile_label: selectedProfile.label },
           created_by: "workbench",
         }),
       },
@@ -1921,7 +1935,7 @@ async function executeBenchmarkRun() {
     $("dossierPreview").textContent = body.markdown_export;
     renderResult(
       "workflowResult",
-      `Executed benchmark run <code>${escapeHtml(body.id)}</code> with status ${escapeHtml(body.status)}.`,
+      `Executed benchmark profile <code>${escapeHtml(selectedProfile.id)}</code> as run <code>${escapeHtml(body.id)}</code> with status ${escapeHtml(body.status)}.`,
     );
   } catch (error) {
     renderWorkbenchError("workflowResult", error);

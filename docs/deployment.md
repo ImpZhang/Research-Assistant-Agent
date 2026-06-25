@@ -51,7 +51,10 @@ BENCHMARK_RUNNER_OUTPUT_DIR=./outputs/benchmark-runs
 BENCHMARK_RUNNER_TIMEOUT_SECONDS=120
 BENCHMARK_RUNNER_ALLOWED_COMMANDS=python,python3,.venv/bin/python
 BENCHMARK_RUNNER_MAX_OUTPUT_CHARS=200000
+BENCHMARK_PROFILE_MANIFEST_PATH=./configs/benchmark_profiles.json
 ```
+
+`GET /research/benchmark-profiles` lists built-in and optional local benchmark profiles. The committed example manifest is `configs/benchmark_profiles.example.json`; the real `configs/benchmark_profiles.json` file is ignored so local dataset and prediction paths stay machine-specific. The built-in geolocalization profile expects ground truth under `data/benchmarks/geoloc/validation.jsonl` and predictions under `outputs/predictions/geoloc/validation.jsonl`, then runs `scripts/benchmark_geoloc_predictions.py` to emit `country_accuracy` plus optional geodesic-distance metrics.
 
 Model provider variables can stay empty for deterministic fallback behavior, or be filled with OpenAI-compatible endpoints:
 

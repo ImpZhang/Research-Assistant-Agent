@@ -706,6 +706,8 @@ proposal revision 之后需要进入 task backlog：
 - run 需要记录 status、task id、dataset snapshot、parameters、metric results、artifact links、conclusion 和 notes。
 - run 创建和更新时应写入关联 task 的 event log，避免实验结果只存在聊天记录或本地文件名里。
 - run 需要支持 Markdown 导出，用于实验日志、组会和论文复现实验记录。
+- benchmark run 需要支持 profile-backed execution：先列出可运行 profile、缺失的本地数据/预测路径和命令模板，再把执行结果保存为 run artifact。
+- 地理定位 benchmark 的第一版真实 harness 需要读取项目本地 JSON/JSONL ground truth 和 prediction 文件，输出 country accuracy 和可选 geodesic-distance 指标；真实数据和预测文件不得提交到 Git。
 
 实验运行之后需要支持 experiment analysis：
 

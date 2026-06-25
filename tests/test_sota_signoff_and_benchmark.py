@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+import subprocess
 import sys
 from uuid import uuid4
 
@@ -82,6 +85,100 @@ def test_benchmark_command_runner_executes_local_command(monkeypatch) -> None:
     assert any(item["label"] == "benchmark_stdout" for item in body["artifact_links"])
     assert any(item["label"] == "benchmark_metrics" for item in body["artifact_links"])
     assert body["parameters"]["runner_output_dir"].startswith(output_dir)
+
+
+def test_benchmark_command_runner_executes_builtin_profile(monkeypatch) -> None:
+    marker = f"benchmark-profile-{uuid4().hex}"
+    idea_id = f"{marker}-idea"
+    plan_id = f"{marker}-plan"
+    output_dir = f"outputs/benchmark-runs/{marker}"
+    monkeypatch.setenv("BENCHMARK_RUNNER_ENABLED", "true")
+    monkeypatch.setenv("BENCHMARK_RUNNER_OUTPUT_DIR", output_dir)
+    monkeypatch.setenv("BENCHMARK_RUNNER_ALLOWED_COMMANDS", "python3")
+
+    with SessionLocal() as session:
+        session.add(
+            Idea(
+                id=idea_id,
+                title="Profile-backed Benchmark Idea",
+                research_question="Can benchmark profiles execute reproducible metric commands?",
+                core_hypothesis="Profile defaults reduce ad hoc benchmark execution.",
+            )
+        )
+        session.add(
+            ExperimentPlan(
+                id=plan_id,
+                idea_id=idea_id,
+                objective="Execute the built-in JSON metrics smoke profile.",
+                hypothesis="The runner resolves profile defaults and captures metrics.",
+            )
+        )
+        session.commit()
+
+    client = TestClient(create_app())
+    response = client.post(
+        f"/research/experiment-plans/{plan_id}/benchmark-run/execute",
+        json={
+            "profile_id": "json-metrics-smoke",
+            "created_by": "pytest",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["parameters"]["benchmark_profile"]["id"] == "json-metrics-smoke"
+    assert body["parameters"]["config"]["benchmark_profile_id"] == "json-metrics-smoke"
+    assert body["parameters"]["benchmark_name"] == "Workbench benchmark smoke"
+    assert body["metric_results"]["primary_metric"]["value"] == 0.0
+    assert body["parameters"]["runner_output_dir"].startswith(output_dir)
+
+
+def test_geoloc_prediction_benchmark_harness_outputs_metrics(tmp_path) -> None:
+    ground_truth = tmp_path / "ground_truth.jsonl"
+    predictions = tmp_path / "predictions.jsonl"
+    ground_truth.write_text(
+        "\n".join(
+            [
+                json.dumps({"id": "a", "country": "US", "lat": 40.0, "lon": -74.0}),
+                json.dumps({"id": "b", "country": "FR", "lat": 48.8566, "lon": 2.3522}),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    predictions.write_text(
+        "\n".join(
+            [
+                json.dumps({"id": "a", "country": "US", "lat": 40.0, "lon": -74.0}),
+                json.dumps({"id": "b", "country": "DE", "lat": 52.52, "lon": 13.405}),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    script = Path("scripts/benchmark_geoloc_predictions.py")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--ground-truth",
+            str(ground_truth),
+            "--predictions",
+            str(predictions),
+            "--baseline-country-accuracy",
+            "0.4",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    payload = json.loads(completed.stdout)
+
+    assert payload["metrics"]["country_accuracy"]["value"] == 0.5
+    assert payload["metrics"]["country_accuracy"]["baseline"] == 0.4
+    assert payload["metrics"]["country_accuracy"]["improved"] is True
+    assert payload["metrics"]["mean_geodesic_km"]["direction"] == "lower_is_better"
+    assert payload["summary"]["matched_predictions"] == 2
 
 
 def test_benchmark_command_runner_is_disabled_by_default(monkeypatch) -> None:

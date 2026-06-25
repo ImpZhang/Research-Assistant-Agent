@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+configs/benchmark_profiles.json
 
 __pycache__/
 *.py[cod]

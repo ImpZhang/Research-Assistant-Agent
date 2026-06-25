@@ -1,0 +1,39 @@
+{
+  "profiles": [
+    {
+      "id": "my-geoloc-validation",
+      "label": "My geolocalization validation split",
+      "description": "Example project-local profile for a real geolocalization prediction file.",
+      "benchmark_name": "My geolocalization validation",
+      "dataset": "my-local-geoloc-dataset",
+      "split": "validation",
+      "baseline_name": "nearest recorded baseline",
+      "primary_metric": "country_accuracy",
+      "metric_direction": "higher_is_better",
+      "command_args": [
+        "python3",
+        "scripts/benchmark_geoloc_predictions.py",
+        "--ground-truth",
+        "data/benchmarks/geoloc/validation.jsonl",
+        "--predictions",
+        "outputs/predictions/geoloc/validation.jsonl",
+        "--baseline-country-accuracy",
+        "0.0"
+      ],
+      "working_directory": ".",
+      "metrics_output_path": "",
+      "parse_stdout_json": true,
+      "timeout_seconds": 120,
+      "required_paths": [
+        "scripts/benchmark_geoloc_predictions.py",
+        "data/benchmarks/geoloc/validation.jsonl",
+        "outputs/predictions/geoloc/validation.jsonl"
+      ],
+      "config": {
+        "profile_kind": "geolocalization",
+        "ground_truth_path": "data/benchmarks/geoloc/validation.jsonl",
+        "predictions_path": "outputs/predictions/geoloc/validation.jsonl"
+      }
+    }
+  ]
+}

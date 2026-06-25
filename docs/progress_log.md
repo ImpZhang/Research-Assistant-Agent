@@ -2,6 +2,23 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-25 - Benchmark Profiles And Geolocalization Harness
+
+Implementation completed:
+
+- Added `BENCHMARK_PROFILE_MANIFEST_PATH` with ignored local profile overrides at `configs/benchmark_profiles.json` and a committed example at `configs/benchmark_profiles.example.json`.
+- Added built-in benchmark profiles for JSON metric smoke execution and geolocalization country-accuracy JSONL evaluation.
+- Added `GET /research/benchmark-profiles` so Workbench, MCP-style clients, and operators can see runnable profiles, missing project-local data paths, and command templates before execution.
+- Added `profile_id` support to benchmark command execution so profile defaults fill benchmark name, dataset, split, metric, command args, working directory, timeout, and config metadata.
+- Added `scripts/benchmark_geoloc_predictions.py` to evaluate project-local ground truth/prediction JSON or JSONL files, emitting country accuracy plus optional mean/median geodesic-distance metrics.
+- Updated Workbench `Benchmark Exec` to select a runnable profile instead of sending a hard-coded command.
+
+Production boundary:
+
+- Real benchmark data remains untracked under `data/benchmarks/`; predictions remain untracked under `outputs/predictions/`.
+- The built-in geolocalization profile becomes runnable only after the expected ground-truth and prediction files exist.
+- Scientific claims still require repeated measured runs, external SOTA evidence, and signoff review.
+
 ## 2026-06-25 - Local-Only Development Policy
 
 Policy update completed:

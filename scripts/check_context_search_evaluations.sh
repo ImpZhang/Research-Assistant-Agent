@@ -23,7 +23,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   backend/research/services/structured_idea_service.py \
   backend/research/services/retrieval_service.py \
   backend/research/services/embedding_service.py \
-  scripts/evaluate_real_papers.py
+  scripts/evaluate_real_papers.py \
+  scripts/benchmark_geoloc_predictions.py
 .venv/bin/ruff format --check \
   tests/test_app.py \
   tests/test_evaluation_reports.py \
@@ -44,7 +45,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   backend/research/services/structured_idea_service.py \
   backend/research/services/retrieval_service.py \
   backend/research/services/embedding_service.py \
-  scripts/evaluate_real_papers.py
+  scripts/evaluate_real_papers.py \
+  scripts/benchmark_geoloc_predictions.py
 .venv/bin/pytest -q \
   tests/test_evaluation_reports.py \
   tests/test_retrieval_provider_adapter.py \

@@ -52,6 +52,7 @@ from backend.research.schemas import (
     AdvisorChatResponse,
     AdvisorChatTaskGenerateRequest,
     BenchmarkExecutionCreate,
+    BenchmarkProfileListResponse,
     ClaimValidationQueueItem,
     ClaimValidationQueueResponse,
     ClaimValidationQueueTaskGenerateRequest,
@@ -217,7 +218,12 @@ from backend.research.schemas import (
     ToolManifestResponse,
 )
 from backend.research.services.artifact_graph_service import ArtifactGraphService
-from backend.research.services.benchmark_runner_service import BenchmarkCommandRunnerService
+from backend.research.services.benchmark_runner_service import (
+    BenchmarkCommandRunnerService,
+    benchmark_profile_manifest_path,
+    benchmark_runner_enabled,
+    list_benchmark_profile_payloads,
+)
 from backend.research.services.brief_service import ResearchBriefService
 from backend.research.services.assumption_audit_service import IdeaAssumptionAuditService
 from backend.research.services.document_ingestion import DocumentIngestionService
@@ -411,6 +417,8 @@ def status() -> ProjectStatus:
             "experiment_run_tracking",
             "benchmark_run_packets",
             "benchmark_command_runner",
+            "benchmark_profile_registry",
+            "geolocalization_jsonl_benchmark_harness",
             "experiment_result_analysis",
             "experiment_analysis_task_generation",
             "literature_to_ideas_workflow",
@@ -1620,6 +1628,16 @@ def tool_manifest() -> ToolManifestResponse:
             input_model="ExperimentRunCreate",
             output_model="ExperimentRunRead",
             side_effect=True,
+        ),
+        ToolManifestItem(
+            name="list_benchmark_profiles",
+            description=(
+                "List configured benchmark profiles, runner readiness, missing project-local "
+                "data paths, and profile-backed command templates."
+            ),
+            method="GET",
+            path="/research/benchmark-profiles",
+            output_model="BenchmarkProfileListResponse",
         ),
         ToolManifestItem(
             name="create_benchmark_run_packet",
@@ -15082,6 +15100,20 @@ def list_experiment_plans(
     ]
 
 
+@router.get("/benchmark-profiles", response_model=BenchmarkProfileListResponse)
+def list_benchmark_profiles() -> BenchmarkProfileListResponse:
+    try:
+        profiles = list_benchmark_profile_payloads()
+        manifest_path = benchmark_profile_manifest_path()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return BenchmarkProfileListResponse(
+        profiles=profiles,
+        runner_enabled=benchmark_runner_enabled(),
+        manifest_path=manifest_path,
+    )
+
+
 @router.post("/experiment-plans/{plan_id}/runs", response_model=ExperimentRunRead)
 def create_experiment_run(
     plan_id: str,
@@ -15155,6 +15187,7 @@ def execute_benchmark_command(
             plan_id,
             title=payload.title,
             task_id=payload.task_id,
+            profile_id=payload.profile_id,
             benchmark_name=payload.benchmark_name,
             dataset=payload.dataset,
             split=payload.split,

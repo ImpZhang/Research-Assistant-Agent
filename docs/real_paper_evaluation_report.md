@@ -73,9 +73,10 @@ Implemented after the first evaluation round:
 - Added manual SOTA signoff records that persist the reviewer decision, linked external-search evidence package, effective external-search completion state, nearest work, linked benchmark runs, final novelty claim, limitations, and blockers.
 - Added benchmark run packets so dry-run or real-mode benchmark evidence can be recorded as first-class experiment runs with dataset, split, baseline, primary metric, command, artifacts, and reproducibility notes.
 - Added a guarded local benchmark command runner that is disabled by default, executes command-argument lists without a shell when enabled, captures stdout/stderr/metrics, and stores artifacts under `outputs/benchmark-runs/`.
+- Added a benchmark profile registry plus `scripts/benchmark_geoloc_predictions.py` so Workbench can discover runnable profiles, report missing local benchmark files, and execute a real geolocalization JSONL harness when ground truth and prediction files are present.
 
 Remaining hardening:
 
 1. Enable live external-search providers in production settings and require completed evidence packages before final signoff.
 2. Add optional page-image/figure-aware PDF evidence extraction for scanned or figure-heavy geolocalization papers.
-3. Replace Workbench smoke commands with real geolocalization benchmark harness commands and datasets.
+3. Populate project-local benchmark ground truth and prediction artifacts, then replace smoke-profile executions with repeated measured geolocalization runs.

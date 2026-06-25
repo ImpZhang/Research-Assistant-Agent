@@ -18,6 +18,7 @@ from backend.research.config import settings
 from backend.research.db import engine, init_db
 from backend.research.routes import router as research_router
 from backend.research.schemas import WriteAuditSummaryResponse
+from backend.research.services.benchmark_runner_service import benchmark_profile_summary
 from backend.research.services.write_audit_service import (
     append_write_audit_event,
     entity_type_for_path,
@@ -418,7 +419,8 @@ def _benchmark_command_runner_ready() -> dict:
     enabled = _benchmark_runner_enabled()
     output_dir = _benchmark_runner_output_dir()
     allowed_commands = _benchmark_runner_allowed_commands()
-    ok = not enabled or (bool(output_dir) and bool(allowed_commands))
+    profile_summary = benchmark_profile_summary()
+    ok = (not enabled or (bool(output_dir) and bool(allowed_commands))) and profile_summary["ok"]
     payload = {
         "ok": ok,
         "enabled": enabled,
@@ -426,6 +428,7 @@ def _benchmark_command_runner_ready() -> dict:
         "allowed_commands": allowed_commands,
         "timeout_seconds": _benchmark_runner_timeout_seconds(),
         "max_output_chars": _benchmark_runner_max_output_chars(),
+        "profiles": profile_summary,
         "shell": False,
     }
     if enabled and not allowed_commands:

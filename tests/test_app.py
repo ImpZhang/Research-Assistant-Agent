@@ -113,6 +113,9 @@ def test_health_ready_checks_database_and_storage() -> None:
     assert benchmark_runner["enabled"] is False
     assert benchmark_runner["shell"] is False
     assert "python" in benchmark_runner["allowed_commands"]
+    assert benchmark_runner["profiles"]["ok"] is True
+    assert benchmark_runner["profiles"]["profile_count"] >= 2
+    assert "json-metrics-smoke" not in benchmark_runner["profiles"]["runnable_profiles"]
     assert "pytest-secret" not in response.text
     assert body["checks"]["paper_upload_dir"]["ok"] is True
     assert body["checks"]["write_audit_dir"]["ok"] is True
@@ -1059,6 +1062,25 @@ def test_project_scope_reports_default_compatibility_boundary() -> None:
     assert any("cannot be isolated yet" in warning for warning in body["warnings"])
 
 
+def test_benchmark_profiles_report_builtin_readiness(monkeypatch) -> None:
+    monkeypatch.setenv("BENCHMARK_RUNNER_ENABLED", "true")
+    monkeypatch.setenv("BENCHMARK_RUNNER_ALLOWED_COMMANDS", "python3")
+
+    client = TestClient(create_app())
+    response = client.get("/research/benchmark-profiles")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["runner_enabled"] is True
+    assert body["manifest_path"] == "configs/benchmark_profiles.json"
+    profiles = {profile["id"]: profile for profile in body["profiles"]}
+    assert profiles["json-metrics-smoke"]["runnable"] is True
+    geoloc_profile = profiles["geoloc-country-accuracy-jsonl"]
+    assert geoloc_profile["primary_metric"] == "country_accuracy"
+    assert "scripts/benchmark_geoloc_predictions.py" in geoloc_profile["required_paths"]
+    assert "data/benchmarks/geoloc/validation.jsonl" in geoloc_profile["required_paths"]
+
+
 def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     client = TestClient(create_app())
     response = client.get("/research/tools/manifest")
@@ -1184,6 +1206,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "create_sota_external_search_evidence" in names
     assert "create_sota_signoff_record" in names
     assert "create_advisor_brief" in names
+    assert "list_benchmark_profiles" in names
     assert "create_benchmark_run_packet" in names
     assert "execute_benchmark_command" in names
     assert "analyze_experiment_run" in names
@@ -2197,6 +2220,9 @@ def test_workbench_static_assets_are_served() -> None:
     assert "/research/tasks/${taskId}/claim-validation-result" in script.text
     assert "/research/experiment-plans/${state.latestExperimentPlanId}/runs" in script.text
     assert "/research/experiment-plans/${state.latestExperimentPlanId}/benchmark-run" in script.text
+    assert "/research/benchmark-profiles" in script.text
+    assert "geoloc-country-accuracy-jsonl" in script.text
+    assert "selectedProfile.id" in script.text
     assert (
         "/research/experiment-plans/${state.latestExperimentPlanId}/benchmark-run/execute"
         in script.text

@@ -11,13 +11,15 @@ This checkout is the Mac-local deployable copy of `ImpZhang/Research-Assistant-A
 - Python environment: `.venv/`
 - Tool caches: `.cache/`
 - SQLite database and uploaded papers: `data/`
+- Benchmark ground-truth datasets: `data/benchmarks/`
 - Model weights or manually downloaded local models: `models/`
 - Generated exports and experiment outputs: `outputs/`
+- Benchmark prediction files: `outputs/predictions/`
 - Benchmark command-runner stdout/stderr/metrics artifacts: `outputs/benchmark-runs/`
 - Runtime logs: `logs/`
 - Docker project metadata: `.docker/`
 
-Real secrets belong only in untracked `.env` files. Commit only `.env.example` or other placeholder examples.
+Real secrets belong only in untracked `.env` files. Commit only `.env.example` or other placeholder examples. Machine-specific benchmark profile overrides belong in the ignored `configs/benchmark_profiles.json`; commit only `configs/benchmark_profiles.example.json`.
 
 ## Setup
 

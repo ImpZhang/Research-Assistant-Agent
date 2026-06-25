@@ -66,6 +66,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Experiment run tracking that links an experiment plan to task events, metrics, conclusions, artifacts, and Markdown run reports.
 - Benchmark run packets that structure dataset, split, nearest baseline, primary metric, metric direction, command, dry-run flag, artifacts, and reproducibility notes as first-class experiment runs.
 - Guarded local benchmark command runner that is disabled by default, executes command-argument lists without a shell when enabled, captures stdout/stderr/metrics under `outputs/benchmark-runs/`, and saves the result as an experiment run.
+- Benchmark profile registry and a project-local geolocalization JSONL harness so Workbench/API clients can discover runnable benchmark profiles, see missing data/prediction paths, execute profile-backed commands, and parse country-accuracy/geodesic-distance metrics.
 - Experiment result analysis that turns run metrics into a decision, concerns, next actions, task events, and Markdown analysis reports.
 - Follow-up task generation from experiment analysis next actions.
 - Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.

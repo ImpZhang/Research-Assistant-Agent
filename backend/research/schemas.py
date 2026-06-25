@@ -578,9 +578,39 @@ class BenchmarkRunCreate(BaseModel):
     created_by: str = "system"
 
 
+class BenchmarkProfileRead(BaseModel):
+    id: str
+    label: str
+    description: str = ""
+    source: str = "builtin"
+    runnable: bool = False
+    disabled_reason: str = ""
+    benchmark_name: str = "Primary benchmark"
+    dataset: str = ""
+    split: str = ""
+    baseline_name: str = ""
+    primary_metric: str = ""
+    metric_direction: Literal["higher_is_better", "lower_is_better"] = "higher_is_better"
+    command_args: list[str] = Field(default_factory=list)
+    working_directory: str = "."
+    metrics_output_path: str = ""
+    parse_stdout_json: bool = True
+    timeout_seconds: int | None = None
+    required_paths: list[str] = Field(default_factory=list)
+    missing_paths: list[str] = Field(default_factory=list)
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class BenchmarkProfileListResponse(BaseModel):
+    profiles: list[BenchmarkProfileRead] = Field(default_factory=list)
+    runner_enabled: bool = False
+    manifest_path: str = ""
+
+
 class BenchmarkExecutionCreate(BaseModel):
     title: str = ""
     task_id: str | None = None
+    profile_id: str = ""
     benchmark_name: str = "Primary benchmark"
     dataset: str = ""
     split: str = ""

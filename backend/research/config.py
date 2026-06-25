@@ -125,6 +125,10 @@ class Settings:
     benchmark_runner_max_output_chars: int = int(
         os.getenv("BENCHMARK_RUNNER_MAX_OUTPUT_CHARS", "200000")
     )
+    benchmark_profile_manifest_path: str = os.getenv(
+        "BENCHMARK_PROFILE_MANIFEST_PATH",
+        "./configs/benchmark_profiles.json",
+    )
 
 
 settings = Settings()

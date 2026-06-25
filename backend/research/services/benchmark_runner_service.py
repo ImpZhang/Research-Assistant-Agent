@@ -16,6 +16,132 @@ from backend.research.models import ExperimentPlan, ExperimentRun, ResearchTask
 from backend.research.services.experiment_run_service import ExperimentRunService
 
 
+BUILTIN_BENCHMARK_PROFILES: list[dict[str, Any]] = [
+    {
+        "id": "json-metrics-smoke",
+        "label": "JSON metrics smoke",
+        "description": "Runs a tiny local command that emits a benchmark metrics JSON payload.",
+        "benchmark_name": "Workbench benchmark smoke",
+        "dataset": "local-smoke",
+        "split": "validation",
+        "baseline_name": "recorded baseline",
+        "primary_metric": "primary_metric",
+        "metric_direction": "higher_is_better",
+        "command_args": [
+            "python3",
+            "-c",
+            "import json; print(json.dumps({'metrics': {'primary_metric': {'value': 0.0}}}))",
+        ],
+        "working_directory": ".",
+        "metrics_output_path": "",
+        "parse_stdout_json": True,
+        "timeout_seconds": 30,
+        "required_paths": [],
+        "config": {"profile_kind": "smoke"},
+    },
+    {
+        "id": "geoloc-country-accuracy-jsonl",
+        "label": "Geolocalization country accuracy JSONL",
+        "description": (
+            "Evaluates geolocalization predictions against project-local JSONL ground truth "
+            "and emits country accuracy plus optional geodesic-distance metrics."
+        ),
+        "benchmark_name": "Geolocalization country accuracy",
+        "dataset": "project-local geoloc JSONL",
+        "split": "validation",
+        "baseline_name": "nearest recorded baseline",
+        "primary_metric": "country_accuracy",
+        "metric_direction": "higher_is_better",
+        "command_args": [
+            "python3",
+            "scripts/benchmark_geoloc_predictions.py",
+            "--ground-truth",
+            "data/benchmarks/geoloc/validation.jsonl",
+            "--predictions",
+            "outputs/predictions/geoloc/validation.jsonl",
+            "--baseline-country-accuracy",
+            "0.0",
+        ],
+        "working_directory": ".",
+        "metrics_output_path": "",
+        "parse_stdout_json": True,
+        "timeout_seconds": 120,
+        "required_paths": [
+            "scripts/benchmark_geoloc_predictions.py",
+            "data/benchmarks/geoloc/validation.jsonl",
+            "outputs/predictions/geoloc/validation.jsonl",
+        ],
+        "config": {
+            "profile_kind": "geolocalization",
+            "ground_truth_path": "data/benchmarks/geoloc/validation.jsonl",
+            "predictions_path": "outputs/predictions/geoloc/validation.jsonl",
+            "metric_contract": "country_accuracy plus optional mean/median geodesic km",
+        },
+    },
+]
+
+
+def list_benchmark_profile_payloads(project_root: Path | None = None) -> list[dict[str, Any]]:
+    root = (project_root or Path.cwd()).resolve()
+    profiles_by_id: dict[str, dict[str, Any]] = {}
+    for profile in BUILTIN_BENCHMARK_PROFILES:
+        normalized = _normalize_profile(profile, source="builtin")
+        profiles_by_id[normalized["id"]] = normalized
+    for profile in _load_manifest_profiles(root):
+        normalized = _normalize_profile(profile, source="manifest")
+        profiles_by_id[normalized["id"]] = normalized
+    return [_profile_payload(profile, root) for profile in profiles_by_id.values()]
+
+
+def get_benchmark_profile_payload(
+    profile_id: str, project_root: Path | None = None
+) -> dict[str, Any]:
+    normalized_id = profile_id.strip()
+    if not normalized_id:
+        raise ValueError("Benchmark profile_id is empty.")
+    for profile in list_benchmark_profile_payloads(project_root):
+        if profile["id"] == normalized_id:
+            return profile
+    raise ValueError(f"Benchmark profile not found: {normalized_id}")
+
+
+def benchmark_profile_manifest_path(project_root: Path | None = None) -> str:
+    root = (project_root or Path.cwd()).resolve()
+    return _relative_path(_manifest_path(root), root)
+
+
+def benchmark_runner_enabled() -> bool:
+    return _runner_enabled()
+
+
+def benchmark_profile_summary(project_root: Path | None = None) -> dict[str, Any]:
+    root = (project_root or Path.cwd()).resolve()
+    try:
+        manifest_path = benchmark_profile_manifest_path(root)
+    except ValueError:
+        manifest_path = (
+            os.getenv("BENCHMARK_PROFILE_MANIFEST_PATH") or settings.benchmark_profile_manifest_path
+        )
+    try:
+        profiles = list_benchmark_profile_payloads(root)
+    except ValueError as exc:
+        return {
+            "ok": False,
+            "manifest_path": manifest_path,
+            "profile_count": 0,
+            "runnable_profile_count": 0,
+            "runnable_profiles": [],
+            "error": str(exc),
+        }
+    return {
+        "ok": True,
+        "manifest_path": manifest_path,
+        "profile_count": len(profiles),
+        "runnable_profile_count": sum(1 for profile in profiles if profile["runnable"]),
+        "runnable_profiles": [profile["id"] for profile in profiles if profile["runnable"]],
+    }
+
+
 class BenchmarkCommandRunnerService:
     def __init__(self, session: Session):
         self.session = session
@@ -26,6 +152,7 @@ class BenchmarkCommandRunnerService:
         *,
         title: str = "",
         task_id: str | None = None,
+        profile_id: str = "",
         benchmark_name: str = "Primary benchmark",
         dataset: str = "",
         split: str = "",
@@ -52,8 +179,49 @@ class BenchmarkCommandRunnerService:
             raise ValueError("Experiment plan not found")
         self._validate_task(task_id, plan.idea_id)
 
-        args = self._validate_command_args(command_args or [])
         project_root = Path.cwd().resolve()
+        profile = None
+        if profile_id.strip():
+            profile = get_benchmark_profile_payload(profile_id, project_root)
+            if not command_args and not profile["runnable"]:
+                reason = profile["disabled_reason"] or "profile is not runnable"
+                raise ValueError(f"Benchmark profile {profile['id']} is not runnable: {reason}")
+            title = title or f"Benchmark profile execution - {profile['label']}"
+            benchmark_name = _profile_text_value(
+                benchmark_name,
+                default_value="Primary benchmark",
+                profile_value=profile["benchmark_name"],
+            )
+            dataset = _profile_text_value(
+                dataset, default_value="", profile_value=profile["dataset"]
+            )
+            split = _profile_text_value(split, default_value="", profile_value=profile["split"])
+            baseline_name = _profile_text_value(
+                baseline_name,
+                default_value="",
+                profile_value=profile["baseline_name"],
+            )
+            primary_metric = _profile_text_value(
+                primary_metric,
+                default_value="",
+                profile_value=profile["primary_metric"],
+            )
+            if metric_direction == "higher_is_better":
+                metric_direction = profile["metric_direction"] or metric_direction
+            command_args = command_args or profile["command_args"]
+            if working_directory == ".":
+                working_directory = profile["working_directory"] or "."
+            metrics_output_path = metrics_output_path or profile["metrics_output_path"]
+            if timeout_seconds is None:
+                timeout_seconds = profile["timeout_seconds"]
+            config = {
+                **(profile.get("config") or {}),
+                **(config or {}),
+                "benchmark_profile_id": profile["id"],
+                "benchmark_profile_source": profile["source"],
+            }
+
+        args = self._validate_command_args(command_args or [])
         work_dir = self._safe_working_directory(project_root, working_directory)
         run_dir = self._prepare_run_dir(project_root)
         timeout = timeout_seconds or _runner_timeout_seconds()
@@ -146,6 +314,12 @@ class BenchmarkCommandRunnerService:
             "runner": execution_payload,
             "runner_output_dir": _relative_path(run_dir, project_root),
         }
+        if profile is not None:
+            parameters["benchmark_profile"] = {
+                "id": profile["id"],
+                "label": profile["label"],
+                "source": profile["source"],
+            }
         return ExperimentRunService(self.session).create_run(
             experiment_plan_id,
             title=title or f"Benchmark execution - {parameters['benchmark_name']}",
@@ -240,6 +414,134 @@ class BenchmarkCommandRunnerService:
         if metrics:
             return "completed"
         return "inconclusive"
+
+
+def _normalize_profile(profile: dict[str, Any], *, source: str) -> dict[str, Any]:
+    raw_profile_id = str(profile.get("id", "")).strip()
+    if not raw_profile_id:
+        raise ValueError("Benchmark profile id is required.")
+    raw_direction = str(profile.get("metric_direction", "higher_is_better")).strip()
+    metric_direction = (
+        raw_direction
+        if raw_direction in {"higher_is_better", "lower_is_better"}
+        else "higher_is_better"
+    )
+    timeout = profile.get("timeout_seconds")
+    return {
+        "id": raw_profile_id,
+        "label": str(profile.get("label") or raw_profile_id).strip(),
+        "description": str(profile.get("description", "")).strip(),
+        "source": source,
+        "benchmark_name": str(profile.get("benchmark_name") or "Primary benchmark").strip(),
+        "dataset": str(profile.get("dataset", "")).strip(),
+        "split": str(profile.get("split", "")).strip(),
+        "baseline_name": str(profile.get("baseline_name", "")).strip(),
+        "primary_metric": str(profile.get("primary_metric", "")).strip(),
+        "metric_direction": metric_direction,
+        "command_args": [
+            str(item) for item in profile.get("command_args", []) if str(item).strip()
+        ],
+        "working_directory": str(profile.get("working_directory") or ".").strip(),
+        "metrics_output_path": str(profile.get("metrics_output_path", "")).strip(),
+        "parse_stdout_json": bool(profile.get("parse_stdout_json", True)),
+        "timeout_seconds": int(timeout) if timeout is not None else None,
+        "required_paths": [
+            str(item) for item in profile.get("required_paths", []) if str(item).strip()
+        ],
+        "config": dict(profile.get("config") or {}),
+    }
+
+
+def _profile_payload(profile: dict[str, Any], project_root: Path) -> dict[str, Any]:
+    missing_paths = _missing_profile_paths(project_root, profile["required_paths"])
+    disabled_reason = _profile_disabled_reason(project_root, profile, missing_paths)
+    return {
+        **profile,
+        "runnable": not disabled_reason,
+        "disabled_reason": disabled_reason,
+        "missing_paths": missing_paths,
+    }
+
+
+def _profile_disabled_reason(
+    project_root: Path,
+    profile: dict[str, Any],
+    missing_paths: list[str],
+) -> str:
+    if not _runner_enabled():
+        return "Benchmark runner is disabled."
+    if not profile["command_args"]:
+        return "Profile has no command_args."
+    if not _profile_command_allowed(profile["command_args"]):
+        return "Profile command is not allowed by BENCHMARK_RUNNER_ALLOWED_COMMANDS."
+    try:
+        requested_work_dir = profile["working_directory"] or "."
+        work_dir = _safe_profile_path(project_root, requested_work_dir)
+    except ValueError as exc:
+        return str(exc)
+    if not work_dir.exists() or not work_dir.is_dir():
+        return "Profile working_directory does not exist."
+    if missing_paths:
+        return "Profile is missing required project paths: " + ", ".join(missing_paths)
+    return ""
+
+
+def _profile_command_allowed(command_args: list[str]) -> bool:
+    if not command_args:
+        return False
+    command = command_args[0]
+    command_key = Path(command).name
+    allowed = _allowed_commands()
+    return command in allowed or command_key in allowed
+
+
+def _missing_profile_paths(project_root: Path, required_paths: list[str]) -> list[str]:
+    missing = []
+    for raw_path in required_paths:
+        path = _safe_profile_path(project_root, raw_path)
+        if not path.exists():
+            missing.append(raw_path)
+    return missing
+
+
+def _safe_profile_path(project_root: Path, raw_path: str) -> Path:
+    path = Path(raw_path)
+    candidate = path if path.is_absolute() else project_root / path
+    resolved = candidate.resolve()
+    if resolved != project_root and project_root not in resolved.parents:
+        raise ValueError("Benchmark profile paths must stay inside the project root.")
+    return resolved
+
+
+def _load_manifest_profiles(project_root: Path) -> list[dict[str, Any]]:
+    manifest = _manifest_path(project_root)
+    if not manifest.exists():
+        return []
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict) and isinstance(payload.get("profiles"), list):
+        return [item for item in payload["profiles"] if isinstance(item, dict)]
+    raise ValueError("Benchmark profile manifest must be a JSON list or object with profiles list.")
+
+
+def _manifest_path(project_root: Path) -> Path:
+    configured = (
+        os.getenv("BENCHMARK_PROFILE_MANIFEST_PATH") or settings.benchmark_profile_manifest_path
+    )
+    path = Path(configured)
+    candidate = path if path.is_absolute() else project_root / path
+    resolved = candidate.resolve()
+    if resolved != project_root and project_root not in resolved.parents:
+        raise ValueError("BENCHMARK_PROFILE_MANIFEST_PATH must stay inside the project root.")
+    return resolved
+
+
+def _profile_text_value(value: str, *, default_value: str, profile_value: str) -> str:
+    text = (value or "").strip()
+    if not text or text == default_value:
+        return profile_value or text
+    return text
 
 
 def _runner_enabled() -> bool:
