@@ -7,14 +7,17 @@ This log records remote-first maintenance and implementation progress for Resear
 Implementation completed:
 
 - Added structured benchmark run packets at `POST /research/experiment-plans/{plan_id}/benchmark-run`, backed by `ExperimentRun` so dataset, split, baseline, primary metric, command, artifacts, dry-run mode, and reproducibility notes can be analyzed and exported through existing experiment workflows.
+- Added SOTA external-search evidence packages at `POST /research/ideas/{idea_id}/sota-external-search-evidence`, backed by `ResearchBrief(scope="sota_external_search_evidence")`, so local/external provider statuses, result summaries, missing searches, and signoff readiness are persisted before final novelty review.
 - Added manual SOTA signoff records at `POST /research/ideas/{idea_id}/sota-signoffs`, stored as `ResearchBrief(scope="sota_signoff_record")` with reviewer decision, external-search completion, nearest work, evidence links, linked benchmark runs, final novelty claim, limitations, and signoff blockers.
 - Added list/detail/Markdown export endpoints for SOTA signoff records.
+- Added list/detail/Markdown export endpoints for SOTA external-search evidence packages.
 - Updated the tool manifest, status capabilities, Workbench buttons, README, documentation index, and focused evaluation script.
 - Added an end-to-end regression test proving a real-mode benchmark packet can anchor a `sota_confirmed` signoff when external search and nearest-work evidence are recorded.
+- Added a regression test proving completed external-search provider results make a SOTA evidence package ready for signoff.
 
 Production boundary:
 
-- The signoff API records human/current-literature review state; it does not automatically prove SOTA.
+- The evidence and signoff APIs record human/current-literature review state; they do not automatically prove SOTA.
 - Benchmark packets can represent dry-run or real-mode runs; publication-grade claims still require linked artifacts, current literature review, and repeatable metric execution.
 
 ## 2026-06-25 - Local Documentation And Development Process Index

@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from backend.research.models import ExperimentRun, Idea, ResearchBrief
+from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.related_work_service import RelatedWorkService
 
@@ -96,6 +97,100 @@ class SotaReviewPackageService:
         if (
             brief is None
             or brief.scope != "sota_review_package"
+            or idea_id not in (brief.idea_ids_json or [])
+        ):
+            return None
+        return brief
+
+    def create_external_search_evidence(
+        self,
+        idea_id: str,
+        *,
+        review_package_id: str = "",
+        queries: list[str] | None = None,
+        include_external: bool = True,
+        limit: int = 8,
+        created_by: str = "researcher",
+    ) -> ResearchBrief:
+        idea = self.session.get(Idea, idea_id)
+        if idea is None:
+            raise ValueError("Idea not found")
+        package = self._load_review_package(idea_id, review_package_id)
+        query_list = self._external_search_queries(idea, package, queries or [])
+        limit = max(1, min(limit, 20))
+        searches = []
+        service = LiteratureSearchService(self.session)
+        for query in query_list:
+            try:
+                response = service.search(
+                    query=query,
+                    limit=limit,
+                    include_external=include_external,
+                )
+                searches.append(
+                    {
+                        "query": response.query,
+                        "local_status": response.local_status,
+                        "external_status": response.external_status,
+                        "items": [_literature_item_payload(item) for item in response.items],
+                        "message": response.message,
+                    }
+                )
+            except ValueError as exc:
+                searches.append(
+                    {
+                        "query": query,
+                        "local_status": "failed",
+                        "external_status": "not_run",
+                        "items": [],
+                        "message": str(exc),
+                    }
+                )
+        summary = self._external_search_summary(
+            idea=idea,
+            package=package,
+            searches=searches,
+            include_external=include_external,
+        )
+        brief = ResearchBrief(
+            title=f"SOTA External Search Evidence - {idea.title[:160]}",
+            scope="sota_external_search_evidence",
+            idea_ids_json=[idea.id],
+            summary_json=summary,
+            markdown_export=self._render_external_search_markdown(idea, summary),
+            created_by=created_by or "researcher",
+        )
+        self.session.add(brief)
+        self.session.commit()
+        self.session.refresh(brief)
+        return brief
+
+    def list_external_search_evidence(
+        self,
+        idea_id: str,
+        limit: int = 20,
+    ) -> list[ResearchBrief]:
+        if self.session.get(Idea, idea_id) is None:
+            raise ValueError("Idea not found")
+        limit = max(1, min(limit, 100))
+        briefs = (
+            self.session.query(ResearchBrief)
+            .filter(ResearchBrief.scope == "sota_external_search_evidence")
+            .order_by(ResearchBrief.created_at.desc())
+            .limit(300)
+            .all()
+        )
+        return [brief for brief in briefs if idea_id in (brief.idea_ids_json or [])][:limit]
+
+    def get_external_search_evidence(
+        self,
+        idea_id: str,
+        brief_id: str,
+    ) -> ResearchBrief | None:
+        brief = self.session.get(ResearchBrief, brief_id)
+        if (
+            brief is None
+            or brief.scope != "sota_external_search_evidence"
             or idea_id not in (brief.idea_ids_json or [])
         ):
             return None
@@ -231,6 +326,106 @@ class SotaReviewPackageService:
         if missing_searches or risk_level in {"high", "medium", "unknown"}:
             return "manual_sota_review_required"
         return "candidate_ready_for_advisor_sota_confirmation"
+
+    def _external_search_queries(
+        self,
+        idea: Idea,
+        package: ResearchBrief | None,
+        explicit_queries: list[str],
+    ) -> list[str]:
+        package_queries = []
+        if package is not None:
+            package_queries = list((package.summary_json or {}).get("review_queries") or [])
+        candidates = explicit_queries + package_queries
+        if not candidates:
+            candidates = [
+                " ".join([idea.title, "state of the art benchmark"]),
+                " ".join([idea.title, idea.method_sketch, "nearest work"]),
+                " ".join(
+                    [
+                        idea.core_hypothesis,
+                        " ".join(idea.datasets_json or []),
+                        " ".join(idea.metrics_json or []),
+                    ]
+                ),
+            ]
+        return [_compact_query(query) for query in _unique(candidates) if _compact_query(query)][:6]
+
+    def _external_search_summary(
+        self,
+        *,
+        idea: Idea,
+        package: ResearchBrief | None,
+        searches: list[dict[str, Any]],
+        include_external: bool,
+    ) -> dict[str, Any]:
+        external_statuses = [search.get("external_status", "") for search in searches]
+        result_count = sum(len(search.get("items") or []) for search in searches)
+        external_items = [
+            item
+            for search in searches
+            for item in search.get("items", [])
+            if item.get("provider") != "local"
+        ]
+        missing_searches = self._external_missing_searches(include_external, external_statuses)
+        search_status = self._external_search_status(include_external, external_statuses)
+        return {
+            "idea_id": idea.id,
+            "idea_title": idea.title,
+            "review_package_id": package.id if package else "",
+            "include_external": include_external,
+            "search_status": search_status,
+            "ready_for_signoff": search_status == "external_completed",
+            "query_count": len(searches),
+            "result_count": result_count,
+            "external_result_count": len(external_items),
+            "external_statuses": external_statuses,
+            "missing_searches": missing_searches,
+            "queries": [search.get("query", "") for search in searches],
+            "searches": searches,
+        }
+
+    def _external_search_status(
+        self,
+        include_external: bool,
+        external_statuses: list[str],
+    ) -> str:
+        if not include_external:
+            return "external_not_requested"
+        if external_statuses and all(status == "completed" for status in external_statuses):
+            return "external_completed"
+        if any(status.startswith("partial:") for status in external_statuses):
+            return "external_partial"
+        if any(status.startswith("rate_limited:") for status in external_statuses):
+            return "external_rate_limited"
+        if any(status == "disabled" for status in external_statuses):
+            return "external_disabled"
+        if any(status.startswith("failed:") for status in external_statuses):
+            return "external_failed"
+        return "external_not_completed"
+
+    def _external_missing_searches(
+        self,
+        include_external: bool,
+        external_statuses: list[str],
+    ) -> list[str]:
+        if not include_external:
+            return ["external_literature_search_not_requested"]
+        missing = []
+        for status in external_statuses:
+            if status == "completed":
+                continue
+            if status == "disabled":
+                missing.append("external_literature_search_disabled")
+            elif status.startswith("partial:"):
+                missing.append("external_literature_search_partial")
+            elif status.startswith("rate_limited:"):
+                missing.append("external_literature_search_rate_limited")
+            elif status.startswith("failed:"):
+                missing.append("external_literature_search_failed")
+            else:
+                missing.append("external_literature_search_not_completed")
+        return _unique(missing)
 
     def _load_review_package(self, idea_id: str, review_package_id: str) -> ResearchBrief | None:
         if not review_package_id:
@@ -432,6 +627,50 @@ class SotaReviewPackageService:
             lines.extend(["", "## Notes", "", summary["notes"]])
         return "\n".join(lines).strip() + "\n"
 
+    def _render_external_search_markdown(
+        self,
+        idea: Idea,
+        summary: dict[str, Any],
+    ) -> str:
+        lines = [
+            "# SOTA External Search Evidence",
+            "",
+            f"- Idea: `{idea.title}`",
+            f"- Search Status: `{summary['search_status']}`",
+            f"- Ready For Signoff: `{summary['ready_for_signoff']}`",
+            f"- Review Package: `{summary['review_package_id'] or 'none'}`",
+            f"- Query Count: {summary['query_count']}",
+            f"- Result Count: {summary['result_count']}",
+            f"- External Result Count: {summary['external_result_count']}",
+            "",
+            "## Queries",
+            "",
+        ]
+        lines.extend(f"- {query}" for query in summary.get("queries") or [])
+        if summary.get("missing_searches"):
+            lines.extend(["", "## Missing Searches", ""])
+            lines.extend(f"- `{item}`" for item in summary["missing_searches"])
+        lines.extend(["", "## Results", ""])
+        for search in summary.get("searches") or []:
+            lines.append(
+                f"### {search.get('query', 'query')}\n\n"
+                f"- External Status: `{search.get('external_status', '')}`\n"
+                f"- Local Status: `{search.get('local_status', '')}`"
+            )
+            items = search.get("items") or []
+            if not items:
+                lines.append("- No results recorded.")
+                continue
+            for item in items[:8]:
+                lines.append(
+                    "- "
+                    f"`{item.get('provider', '')}` "
+                    f"{item.get('title', 'Untitled')} "
+                    f"({item.get('year', 'year unknown')}) "
+                    f"score={item.get('score', 0.0)}"
+                )
+        return "\n".join(lines).strip() + "\n"
+
 
 def _compact_query(query: str, limit: int = 360) -> str:
     return " ".join((query or "").split())[:limit]
@@ -463,3 +702,18 @@ def _compact_mapping(row: dict[str, Any]) -> dict[str, Any]:
         else:
             compact[str(key)] = value
     return compact
+
+
+def _literature_item_payload(item: Any) -> dict[str, Any]:
+    return {
+        "provider": item.provider,
+        "source_id": item.source_id,
+        "title": item.title,
+        "authors": item.authors,
+        "year": item.year,
+        "venue": item.venue,
+        "url": item.url,
+        "abstract": item.abstract[:800],
+        "score": item.score,
+        "metadata": item.metadata,
+    }

@@ -56,6 +56,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Novelty/collision checks against existing evidence, gaps, ideas, and literature search results.
 - Persisted related-work matrices that compare an idea with local evidence, gaps, nearby ideas, and literature search rows.
 - Manual SOTA review packages that combine novelty screening, related-work rows, missing searches, review queries, and Markdown checklists before claiming novelty.
+- SOTA external-search evidence packages that persist review queries, local/external provider statuses, result summaries, missing searches, and signoff readiness.
 - Manual SOTA signoff records that capture reviewer decision, external-search completion, nearest work, evidence links, linked benchmark runs, final novelty claim, limitations, and remaining blockers.
 - Persisted proposal drafts that bundle an idea, related-work positioning, experiment plan, risks, milestones, and evidence IDs.
 - Proposal readiness reviews with advisor-style scores, concerns, required revisions, and missing evidence.

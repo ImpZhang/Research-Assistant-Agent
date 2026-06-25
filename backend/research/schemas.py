@@ -1505,6 +1505,14 @@ class SotaReviewPackageCreate(BaseModel):
     created_by: str = "researcher"
 
 
+class SotaExternalSearchEvidenceCreate(BaseModel):
+    review_package_id: str = ""
+    queries: list[str] = Field(default_factory=list)
+    include_external: bool = True
+    limit: int = Field(default=8, ge=1, le=20)
+    created_by: str = "researcher"
+
+
 class SotaSignoffCreate(BaseModel):
     review_package_id: str = ""
     decision: Literal[

@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from backend.app import create_app
 from backend.research.db import SessionLocal
 from backend.research.models import Evidence, ExperimentPlan, Idea, Paper, ResearchGap
+from backend.research.schemas import LiteratureSearchItem, LiteratureSearchResponse
+from backend.research.services.literature_search_service import LiteratureSearchService
 
 
 def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:
@@ -162,3 +164,84 @@ def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:
     assert detail.json()["summary"]["decision"] == "confirmed_novel"
     assert markdown.status_code == 200
     assert "Ready For SOTA Claim: `True`" in markdown.text
+
+
+def test_sota_external_search_evidence_records_provider_completion(monkeypatch) -> None:
+    marker = f"sota-search-{uuid4().hex}"
+    idea_id = f"{marker}-idea"
+
+    with SessionLocal() as session:
+        session.add(
+            Idea(
+                id=idea_id,
+                title="Geo-localization External SOTA Evidence",
+                research_question="Can external search close the nearest-work review?",
+                core_hypothesis="External search evidence improves SOTA signoff confidence.",
+                method_sketch="Compare generated idea against current external literature.",
+                novelty_argument="Requires live nearest-work review.",
+                datasets_json=["GWS15k"],
+                metrics_json=["country_accuracy"],
+            )
+        )
+        session.commit()
+
+    def fake_search(
+        self: LiteratureSearchService,
+        query: str,
+        limit: int = 8,
+        include_external: bool = False,
+    ) -> LiteratureSearchResponse:
+        return LiteratureSearchResponse(
+            query=query,
+            local_status="completed",
+            external_status="completed",
+            items=[
+                LiteratureSearchItem(
+                    provider="semantic_scholar",
+                    source_id="paper-1",
+                    title="Current Geo-localization Nearest Work",
+                    authors=["A. Reviewer"],
+                    year=2026,
+                    venue="SOTA Conf",
+                    url="https://example.test/paper",
+                    abstract="Nearest external work for geolocalization SOTA review.",
+                    score=0.93,
+                )
+            ],
+            message="Returned mocked external search results.",
+        )
+
+    monkeypatch.setattr(LiteratureSearchService, "search", fake_search)
+
+    client = TestClient(create_app())
+    response = client.post(
+        f"/research/ideas/{idea_id}/sota-external-search-evidence",
+        json={
+            "queries": ["geo-localization external nearest work"],
+            "include_external": True,
+            "limit": 5,
+            "created_by": "pytest",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["scope"] == "sota_external_search_evidence"
+    assert body["summary"]["search_status"] == "external_completed"
+    assert body["summary"]["ready_for_signoff"] is True
+    assert body["summary"]["external_result_count"] == 1
+    assert body["summary"]["missing_searches"] == []
+    assert "# SOTA External Search Evidence" in body["markdown_export"]
+
+    listed = client.get(f"/research/ideas/{idea_id}/sota-external-search-evidence")
+    detail = client.get(f"/research/ideas/{idea_id}/sota-external-search-evidence/{body['id']}")
+    markdown = client.get(
+        f"/research/ideas/{idea_id}/sota-external-search-evidence/{body['id']}/export/markdown"
+    )
+
+    assert listed.status_code == 200
+    assert listed.json()[0]["id"] == body["id"]
+    assert detail.status_code == 200
+    assert detail.json()["summary"]["searches"][0]["external_status"] == "completed"
+    assert markdown.status_code == 200
+    assert "Ready For Signoff: `True`" in markdown.text

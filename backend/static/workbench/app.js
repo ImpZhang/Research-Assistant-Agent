@@ -15,6 +15,7 @@ const state = {
   latestProposalRevisionId: "",
   latestNoveltyCheckId: "",
   latestSotaReviewPackageId: "",
+  latestSotaExternalSearchEvidenceId: "",
   latestSotaSignoffId: "",
   latestDecisionMemoId: "",
   latestAssumptionAuditId: "",
@@ -1414,6 +1415,37 @@ async function createSotaReviewPackage() {
     renderResult(
       "workflowResult",
       `Created SOTA package <code>${escapeHtml(body.id)}</code> with status <code>${escapeHtml(summary.review_status || "manual_sota_review_required")}</code>. Missing searches: ${(summary.missing_searches || []).length}.`,
+    );
+  } catch (error) {
+    renderWorkbenchError("workflowResult", error);
+  }
+}
+
+async function createSotaExternalSearchEvidence() {
+  if (!state.latestIdeaId) {
+    renderWorkbenchEmpty("workflowResult", "Run a workflow first so an idea id is available.");
+    return;
+  }
+  renderResult("workflowResult", "Creating SOTA external search evidence...", "warn");
+  try {
+    const includeExternal = Boolean($("includeExternal")?.checked);
+    const body = await api(`/research/ideas/${state.latestIdeaId}/sota-external-search-evidence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        review_package_id: state.latestSotaReviewPackageId,
+        queries: [],
+        include_external: includeExternal,
+        limit: 8,
+        created_by: "workbench",
+      }),
+    });
+    state.latestSotaExternalSearchEvidenceId = body.id;
+    $("dossierPreview").textContent = body.markdown_export;
+    const summary = body.summary || {};
+    renderResult(
+      "workflowResult",
+      `Created SOTA search evidence <code>${escapeHtml(body.id)}</code> with status <code>${escapeHtml(summary.search_status || "unknown")}</code>. Results: ${summary.result_count || 0}.`,
     );
   } catch (error) {
     renderWorkbenchError("workflowResult", error);
@@ -3723,6 +3755,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("refineIdeaButton").addEventListener("click", refineLatestIdea);
   $("noveltyRefreshButton").addEventListener("click", refreshNoveltySearch);
   $("sotaReviewPackageButton").addEventListener("click", createSotaReviewPackage);
+  $("sotaExternalSearchButton").addEventListener("click", createSotaExternalSearchEvidence);
   $("sotaSignoffButton").addEventListener("click", createSotaSignoff);
   $("noveltyTasksButton").addEventListener("click", createNoveltyTasks);
   $("relatedWorkButton").addEventListener("click", createRelatedWorkMatrix);

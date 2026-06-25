@@ -205,6 +205,7 @@ from backend.research.schemas import (
     ScoredEvidenceRead,
     ScoredIdeaRead,
     ScoredResearchGapRead,
+    SotaExternalSearchEvidenceCreate,
     SotaReviewPackageCreate,
     SotaSignoffCreate,
     TaskBoardSnapshotCreate,
@@ -424,6 +425,7 @@ def status() -> ProjectStatus:
             "real_paper_evaluation_reports",
             "real_provider_evaluation_smoke",
             "manual_sota_review_packages",
+            "sota_external_search_evidence_packages",
             "manual_sota_signoff_records",
             "lexical_context_retrieval",
             "graph_rag_lite_schema",
@@ -1255,6 +1257,19 @@ def tool_manifest() -> ToolManifestResponse:
             method="POST",
             path="/research/ideas/{idea_id}/sota-review-package",
             input_model="SotaReviewPackageCreate",
+            output_model="ResearchBriefDetail",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="create_sota_external_search_evidence",
+            description=(
+                "Run the review queries through local and optional external literature search, "
+                "then persist result summaries, provider statuses, missing searches, and "
+                "signoff readiness."
+            ),
+            method="POST",
+            path="/research/ideas/{idea_id}/sota-external-search-evidence",
+            input_model="SotaExternalSearchEvidenceCreate",
             output_model="ResearchBriefDetail",
             side_effect=True,
         ),
@@ -5308,6 +5323,78 @@ def export_sota_review_package_markdown(
     brief = SotaReviewPackageService(session).get_package(idea_id, brief_id)
     if brief is None:
         raise HTTPException(status_code=404, detail="SOTA review package not found")
+    return PlainTextResponse(brief.markdown_export or "", media_type="text/markdown")
+
+
+@router.post(
+    "/ideas/{idea_id}/sota-external-search-evidence",
+    response_model=ResearchBriefDetail,
+)
+def create_sota_external_search_evidence(
+    idea_id: str,
+    payload: SotaExternalSearchEvidenceCreate,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    try:
+        brief = SotaReviewPackageService(session).create_external_search_evidence(
+            idea_id,
+            review_package_id=payload.review_package_id,
+            queries=payload.queries,
+            include_external=payload.include_external,
+            limit=payload.limit,
+            created_by=payload.created_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get(
+    "/ideas/{idea_id}/sota-external-search-evidence",
+    response_model=list[ResearchBriefRead],
+)
+def list_sota_external_search_evidence(
+    idea_id: str,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+) -> list[ResearchBriefRead]:
+    try:
+        briefs = SotaReviewPackageService(session).list_external_search_evidence(
+            idea_id,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [_serialize_research_brief(brief) for brief in briefs]
+
+
+@router.get(
+    "/ideas/{idea_id}/sota-external-search-evidence/{brief_id}",
+    response_model=ResearchBriefDetail,
+)
+def get_sota_external_search_evidence(
+    idea_id: str,
+    brief_id: str,
+    session: Session = Depends(get_session),
+) -> ResearchBriefDetail:
+    brief = SotaReviewPackageService(session).get_external_search_evidence(idea_id, brief_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="SOTA external search evidence not found")
+    return _serialize_research_brief(brief, include_markdown=True)
+
+
+@router.get(
+    "/ideas/{idea_id}/sota-external-search-evidence/{brief_id}/export/markdown",
+    response_class=PlainTextResponse,
+)
+def export_sota_external_search_evidence_markdown(
+    idea_id: str,
+    brief_id: str,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    brief = SotaReviewPackageService(session).get_external_search_evidence(idea_id, brief_id)
+    if brief is None:
+        raise HTTPException(status_code=404, detail="SOTA external search evidence not found")
     return PlainTextResponse(brief.markdown_export or "", media_type="text/markdown")
 
 
