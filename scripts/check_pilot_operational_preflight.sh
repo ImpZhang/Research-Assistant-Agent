@@ -248,5 +248,8 @@ if notes:
     for note in notes:
         print(f"- {note}")
 if not STRICT_GIT:
-    print("Set PILOT_PREFLIGHT_STRICT_GIT=true before sharing a packaged local release.")
+    print(
+        "Set LOCAL_PREFLIGHT_STRICT_GIT=true before sharing a packaged local release "
+        "(historical PILOT_PREFLIGHT_STRICT_GIT=true is still supported)."
+    )
 PYIN

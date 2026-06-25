@@ -51,6 +51,7 @@ Implementation completed:
 - Added `scripts/check_local_operational_preflight.sh` as the preferred local wrapper around the historical operational preflight.
 - Added `LOCAL_PREFLIGHT_STRICT_GIT` as a local-name alias for strict git checks while preserving `PILOT_PREFLIGHT_STRICT_GIT` compatibility.
 - Added `scripts/check_local_safe_suite.sh` as the preferred local wrapper around the historical safe focused suite.
+- Updated the historical operational preflight completion hint so it points new users to `LOCAL_PREFLIGHT_STRICT_GIT` first while preserving the old variable.
 - Updated README, development process, documentation index, local distribution flow, suite contracts, and deployment contract tests to prefer the `check_local_*` entrypoints while keeping old script names available for compatibility.
 
 Verification completed:
