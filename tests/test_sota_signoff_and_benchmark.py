@@ -440,6 +440,34 @@ def test_benchmark_run_comparison_persists_brief() -> None:
     assert readiness_body["latest_comparison_brief_id"] == body["brief_id"]
     assert "Benchmark Evidence Readiness" in readiness_body["markdown_export"]
 
+    signoff = client.post(
+        f"/research/ideas/{idea_id}/sota-signoffs",
+        json={
+            "decision": "confirmed_novel",
+            "reviewer": "pytest reviewer",
+            "external_searches_completed": True,
+            "nearest_work": [
+                {
+                    "title": "Baseline benchmark run",
+                    "year": 2026,
+                    "relationship": "nearest recorded benchmark baseline",
+                }
+            ],
+            "benchmark_run_ids": [candidate.json()["id"]],
+            "final_novelty_claim": "Candidate benchmark evidence improves over the baseline run.",
+            "created_by": "pytest",
+        },
+    )
+
+    assert signoff.status_code == 200
+    signoff_body = signoff.json()
+    assert signoff_body["summary"]["signoff_status"] == "sota_confirmed"
+    assert signoff_body["summary"]["manual_gate_summary"]["ready_for_sota_claim"] is True
+    assert (
+        "benchmark_evidence_not_ready"
+        not in signoff_body["summary"]["manual_gate_summary"]["blockers"]
+    )
+
 
 def test_benchmark_evidence_readiness_creates_follow_up_tasks() -> None:
     marker = f"benchmark-tasks-{uuid4().hex}"
@@ -631,7 +659,8 @@ def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:
     body = signoff.json()
     assert body["scope"] == "sota_signoff_record"
     assert body["summary"]["signoff_status"] == "sota_confirmed"
-    assert body["summary"]["manual_gate_summary"]["ready_for_sota_claim"] is True
+    assert body["summary"]["manual_gate_summary"]["ready_for_sota_claim"] is False
+    assert "benchmark_evidence_not_ready" in body["summary"]["manual_gate_summary"]["blockers"]
     assert (
         body["summary"]["manual_gate_summary"]["benchmark_evidence_ready_for_sota_review"] is False
     )
@@ -652,7 +681,8 @@ def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:
     assert detail.status_code == 200
     assert detail.json()["summary"]["decision"] == "confirmed_novel"
     assert markdown.status_code == 200
-    assert "Ready For SOTA Claim: `True`" in markdown.text
+    assert "Ready For SOTA Claim: `False`" in markdown.text
+    assert "Blocker: `benchmark_evidence_not_ready`" in markdown.text
 
 
 def test_sota_external_search_evidence_records_provider_completion(monkeypatch) -> None:
@@ -763,3 +793,7 @@ def test_sota_external_search_evidence_records_provider_completion(monkeypatch) 
     assert signoff_body["summary"]["effective_external_search_completed"] is True
     assert signoff_body["summary"]["external_search_status"] == "external_completed"
     assert signoff_body["summary"]["signoff_status"] == "sota_confirmed"
+    assert signoff_body["summary"]["manual_gate_summary"]["ready_for_sota_claim"] is False
+    assert (
+        "benchmark_evidence_not_ready" in signoff_body["summary"]["manual_gate_summary"]["blockers"]
+    )

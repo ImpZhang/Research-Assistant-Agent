@@ -2,6 +2,24 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-26 - Benchmark Readiness Blocks SOTA Claim Readiness
+
+Implementation completed:
+
+- Tightened SOTA signoff manual gates so `confirmed_novel` records with incomplete benchmark evidence add `benchmark_evidence_not_ready`.
+- `ready_for_sota_claim` now requires both `signoff_status == "sota_confirmed"` and no manual-gate blockers, so a human signoff can be saved while publication-grade claim readiness remains blocked until benchmark readiness has a completed run and comparison brief.
+- Added regression coverage for both sides: complete benchmark comparison evidence keeps ready-for-claim true, while missing comparison evidence blocks ready-for-claim.
+- Updated README and the technical design note for the stricter SOTA claim boundary.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_sota_signoff_and_benchmark.py::test_benchmark_run_comparison_persists_brief tests/test_sota_signoff_and_benchmark.py::test_benchmark_run_packet_can_anchor_sota_signoff tests/test_sota_signoff_and_benchmark.py::test_sota_external_search_evidence_records_provider_completion` passed: `3 passed`.
+- `bash scripts/check_context_search_evaluations.sh` passed: `41 passed in 9.97s`.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `git diff --check` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment/local doctor contracts `8 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `41 passed`.
+
 ## 2026-06-26 - Local Doctor Entrypoint
 
 Implementation completed:
@@ -206,7 +224,7 @@ Implementation completed:
 
 Production boundary:
 
-- Benchmark readiness is currently advisory inside signoff; it does not automatically reject an otherwise confirmed signoff.
+- Superseded on 2026-06-26: benchmark readiness now blocks `ready_for_sota_claim` through the manual gate when evidence is incomplete, while still saving the human signoff record.
 - Publication-grade claims should still link completed benchmark runs, comparison briefs, external SOTA evidence, and reviewer notes explicitly.
 
 ## 2026-06-25 - Benchmark Evidence Readiness Gate

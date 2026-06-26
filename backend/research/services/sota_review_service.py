@@ -543,8 +543,12 @@ class SotaReviewPackageService:
             blockers.append("nearest_work_not_recorded")
         if any(run.status not in {"completed", "inconclusive"} for run in benchmark_runs):
             blockers.append("benchmark_run_not_final")
+        if decision == "confirmed_novel" and not bool(
+            (benchmark_readiness or {}).get("ready_for_sota_review", False)
+        ):
+            blockers.append("benchmark_evidence_not_ready")
         return {
-            "ready_for_sota_claim": signoff_status == "sota_confirmed",
+            "ready_for_sota_claim": signoff_status == "sota_confirmed" and not blockers,
             "requires_human_review": signoff_status != "sota_confirmed",
             "blockers": blockers,
             "nearest_work_count": len(nearest_work),
