@@ -233,6 +233,7 @@ Start future development from:
 - `docs/local_agent_distribution.md` for the personal local-agent distribution target.
 - `docs/local_isolation.md` for Mac-local dependency, cache, data, model, output, and cleanup rules.
 - `docs/model_provider_strategy.md` for chat, embedding, rerank, and provider configuration.
+- `docs/vector_store_strategy.md` for the current SQLite vector-row baseline and Milvus/Qdrant/pgvector migration triggers.
 
 ## Quick Start
 

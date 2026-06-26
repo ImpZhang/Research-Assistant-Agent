@@ -2,6 +2,20 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-26 - Vector Store Strategy
+
+Documentation completed:
+
+- Added `docs/vector_store_strategy.md` to clarify that the current personal local-agent target does not require Milvus, Qdrant, pgvector, or another external vector database.
+- Documented the current SQLite `ResearchEmbedding.vector_json` baseline, deterministic local hash embeddings, optional external embedding provider, optional rerank provider, and migration triggers for a dedicated vector store.
+- Updated README, documentation index, model-provider strategy, and local distribution docs so future work does not accidentally treat Milvus as a required clone-to-run dependency.
+
+Verification completed:
+
+- `bash scripts/check_handoff_docs.sh` passed.
+- `git diff --check` passed.
+- `bash scripts/check_local_agent_readiness.sh` passed.
+
 ## 2026-06-26 - Benchmark Readiness Blocks SOTA Claim Readiness
 
 Implementation completed:

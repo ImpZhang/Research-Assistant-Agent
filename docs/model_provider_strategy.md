@@ -2,6 +2,8 @@
 
 This project uses OpenAI-compatible model-provider settings so local, DashScope, OpenAI-compatible, or self-hosted endpoints can be swapped through environment variables.
 
+Vector-store boundaries and Milvus/Qdrant/pgvector migration triggers are documented separately in `docs/vector_store_strategy.md`.
+
 ## Current Local Provider
 
 The current local `.env` is intentionally untracked and should not be committed. It is configured for a DashScope-style OpenAI-compatible endpoint:

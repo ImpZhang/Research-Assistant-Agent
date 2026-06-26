@@ -40,6 +40,7 @@ This document is the starting point for future development. Use it to find the r
 | --- | --- |
 | `docs/deployment.md` | Runtime contract, environment variables, local deployment, optional Docker, backup/restore, MCP bridge, and Workbench access. |
 | `docs/model_provider_strategy.md` | Model-role wiring, provider modes, real-provider smoke policy, and retrieval-provider expectations. |
+| `docs/vector_store_strategy.md` | Current SQLite vector-row baseline, optional provider embeddings/rerank, and migration triggers for Milvus/Qdrant/pgvector. |
 | `docs/database_migration_strategy.md` | Current `create_all` behavior, migration policy, and future Alembic direction. |
 | `docs/admin_authorization_policy.md` | Admin-only authorization policy for sensitive audit operations. |
 | `docs/write_audit_retention_policy.md` | Write-audit retention and export rules. |
@@ -99,5 +100,4 @@ The project currently does not use `.doc` or `.docx` files for specifications. M
 
 Potential future docs:
 
-- `docs/vector_store_strategy.md` for local hash vectors, SQLite JSON vectors, Milvus/Qdrant/pgvector options, and migration triggers.
 - `docs/multi_agent_architecture.md` if the project evolves from service modules plus MCP bridge into true multi-agent orchestration.

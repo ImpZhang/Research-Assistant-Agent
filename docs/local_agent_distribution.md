@@ -71,6 +71,7 @@ The project is already more than a basic RAG demo:
 - It includes a local geolocalization benchmark smoke so clone users can verify the JSONL metric path before adding real benchmark datasets and predictions.
 - It includes a local geolocalization benchmark preparation helper for ignored example files, profile manifests, and runnable checks.
 - It has Workbench and MCP bridge surfaces for local agent-style operation.
+- It does not require Milvus or another vector database by default; current vector storage and migration triggers are documented in `docs/vector_store_strategy.md`.
 
 It is not yet a finished polished local product. The remaining local-agent work is mostly packaging, preflight quality, real-data evaluation, better local prediction pipelines, and user-facing simplification rather than SaaS multi-user engineering.
 
