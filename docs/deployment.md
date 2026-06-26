@@ -92,6 +92,13 @@ MODEL_PROVIDER_TIMEOUT_SECONDS=60
 
 See `docs/model_provider_strategy.md` for wiring status, provider modes, and test-safety rules.
 
+To check whether the current shell has the expected model-provider variables without printing secrets or calling providers:
+
+```bash
+python3 scripts/check_model_provider_config.py
+python3 scripts/check_model_provider_config.py --require-real
+```
+
 To verify real providers manually, run the opt-in smoke script from a configured local environment:
 
 ```bash

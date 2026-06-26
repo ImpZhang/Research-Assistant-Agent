@@ -2,6 +2,25 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-26 - Model Provider Config Doctor
+
+Implementation completed:
+
+- Added `scripts/check_model_provider_config.py` as a no-network model-provider readiness doctor for the current shell environment.
+- The doctor checks main, extraction, judge, embedding, and rerank roles by variable presence only, reports variable names and missing groups, supports `--require-real`, and does not print API key values.
+- Wired the doctor into deployment contract checks and local readiness documentation.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_model_provider_config.py` passed: `3 passed`.
+- `python3 scripts/check_model_provider_config.py --json` passed and reported fallback-ready status without printing key values.
+- `bash scripts/check_deployment_contracts.sh` passed: `6 passed in 0.80s`.
+- `bash scripts/check_local_agent_readiness.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_secret_file_guard.sh` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment contracts `6 passed`, backup/restore contracts, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `40 passed`.
+
 ## 2026-06-26 - Local Geolocalization Benchmark Smoke
 
 Implementation completed:

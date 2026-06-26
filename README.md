@@ -215,6 +215,7 @@ scripts/
   check_tool_bridge_contracts.sh
   check_workflow_job_controls.sh
   check_write_audit_guardrails.sh
+  check_model_provider_config.py
   prepare_local_geoloc_benchmark.py
   smoke_api.py
 tests/
@@ -293,6 +294,13 @@ OPENALEX_BASE_URL=https://api.openalex.org
 ```
 
 If `EXTRACTION_*` is empty, paper card extraction falls back to the heuristic extractor. If `MAIN_*` is empty, idea generation falls back to the deterministic idea generator. Retrieval can run without provider credentials through the local hash index; external embedding and rerank providers are used only when configured.
+
+Check the current shell's model-provider readiness without printing secrets or calling real providers:
+
+```bash
+python3 scripts/check_model_provider_config.py
+python3 scripts/check_model_provider_config.py --require-real
+```
 
 ## Verification
 

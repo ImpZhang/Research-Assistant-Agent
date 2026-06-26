@@ -67,6 +67,7 @@ required_files = [
     "scripts/clean.sh",
     "scripts/deep-clean.sh",
     "scripts/docker-clean.sh",
+    "scripts/check_model_provider_config.py",
 ]
 for path in required_files:
     require_file(path)
@@ -183,6 +184,7 @@ require_tokens(
         "Current Distribution Target",
         "docs/local_agent_distribution.md",
         "scripts/check_local_agent_readiness.sh",
+        "scripts/check_model_provider_config.py",
         "./scripts/setup-local.sh",
         "./scripts/run-local.sh",
     ],

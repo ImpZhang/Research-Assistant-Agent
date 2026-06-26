@@ -72,6 +72,8 @@ Use visual/document-image embedding later when the workflow needs:
 2. Add retrieval evaluation fixtures comparing local hash, external embedding, and rerank modes.
 3. Review real-paper evaluation reports from `scripts/evaluate_real_papers.py` or the Workbench Real Eval panel and turn recurring quality gaps into focused prompt/retrieval tasks.
 
+Run `python3 scripts/check_model_provider_config.py` to inspect whether the current shell has each model role configured without printing secret values or calling providers. Add `--require-real` when you want the command to fail unless main, extraction, judge, embedding, and rerank roles are all configured.
+
 An explicit real-provider smoke script is available at `scripts/smoke_model_providers.py`. It refuses to call providers unless `ALLOW_REAL_MODEL_PROVIDER_SMOKE=1` is set. Batch embedding is implemented for rebuilds so multiple pending texts can share one provider request.
 
 The real-paper evaluator at `scripts/evaluate_real_papers.py` refuses to run unless `ALLOW_REAL_PAPER_EVAL=1` is set. Its default report includes a retrieval-mode comparison between the configured provider path and a local hash/no-rerank baseline for the same context queries. Local report summaries can be loaded through `/research/evaluations/real-paper/reports` and the Workbench Real Eval panel.

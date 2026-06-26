@@ -18,6 +18,7 @@ This document is the starting point for future development. Use it to find the r
 | `scripts/check_local_operational_preflight.sh` | Local deployment preflight wrapper with local strict-git alias. | Before packaging or sharing a local deployment. |
 | `scripts/check_local_runtime_smoke.sh` | Transient localhost runtime smoke for health, readiness, and Workbench. | Before claiming the app starts successfully on the current machine. |
 | `scripts/check_local_safe_suite.sh` | Default local focused verification suite. | Before pushing a completed implementation round. |
+| `scripts/check_model_provider_config.py` | No-network model-provider environment readiness check that does not print secrets. | Before running the opt-in real-provider smoke or diagnosing local model setup. |
 
 ## Product And Architecture
 
@@ -36,6 +37,7 @@ This document is the starting point for future development. Use it to find the r
 | Document | Purpose |
 | --- | --- |
 | `docs/deployment.md` | Runtime contract, environment variables, local deployment, optional Docker, backup/restore, MCP bridge, and Workbench access. |
+| `docs/model_provider_strategy.md` | Model-role wiring, provider modes, real-provider smoke policy, and retrieval-provider expectations. |
 | `docs/database_migration_strategy.md` | Current `create_all` behavior, migration policy, and future Alembic direction. |
 | `docs/admin_authorization_policy.md` | Admin-only authorization policy for sensitive audit operations. |
 | `docs/write_audit_retention_policy.md` | Write-audit retention and export rules. |
