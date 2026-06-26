@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.research.adapters.retrieval_provider_adapter import OpenAICompatibleEmbeddingClient
 from backend.research.config import settings
-from backend.research.models import Evidence, Idea, ResearchEmbedding, ResearchGap
+from backend.research.models import Chunk, Evidence, Idea, ResearchEmbedding, ResearchGap
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_\-]{2,}")
@@ -23,6 +23,7 @@ class EmbeddingRebuildStats:
     model: str
     dimension: int
     indexed_count: int
+    chunk_count: int
     evidence_count: int
     gap_count: int
     idea_count: int
@@ -79,12 +80,15 @@ class EmbeddingService:
         paper_ids: list[str] | None = None,
         limit: int = 500,
     ) -> EmbeddingRebuildStats:
-        owner_types = owner_types or ["evidence", "gap", "idea"]
+        owner_types = owner_types or ["chunk", "evidence", "gap", "idea"]
         limit = max(1, min(limit, 2000))
 
+        chunk_count = 0
         evidence_count = 0
         gap_count = 0
         idea_count = 0
+        if "chunk" in owner_types:
+            chunk_count = self._index_chunks(paper_ids or [], limit)
         if "evidence" in owner_types:
             evidence_count = self._index_evidences(paper_ids or [], limit)
         if "gap" in owner_types:
@@ -93,11 +97,12 @@ class EmbeddingService:
             idea_count = self._index_ideas(paper_ids or [], limit)
 
         self.session.commit()
-        indexed_count = evidence_count + gap_count + idea_count
+        indexed_count = chunk_count + evidence_count + gap_count + idea_count
         return EmbeddingRebuildStats(
             model=self._last_embedding_model,
             dimension=self._last_embedding_dimension,
             indexed_count=indexed_count,
+            chunk_count=chunk_count,
             evidence_count=evidence_count,
             gap_count=gap_count,
             idea_count=idea_count,
@@ -116,7 +121,7 @@ class EmbeddingService:
         paper_ids: list[str] | None = None,
     ) -> list[VectorHit]:
         query_embedding = self.embed_text_result(query)
-        owner_types = owner_types or ["evidence", "gap", "idea"]
+        owner_types = owner_types or ["chunk", "evidence", "gap", "idea"]
         paper_ids = paper_ids or []
         rows = (
             self.session.query(ResearchEmbedding)
@@ -152,6 +157,8 @@ class EmbeddingService:
 
     def _matches_paper_filter(self, row: ResearchEmbedding, paper_ids: list[str]) -> bool:
         payload = row.payload_json or {}
+        if row.owner_type == "chunk":
+            return payload.get("paper_id") in paper_ids
         if row.owner_type == "evidence":
             return payload.get("paper_id") in paper_ids
         if row.owner_type == "gap":
@@ -217,6 +224,32 @@ class EmbeddingService:
             return 0.0
         width = min(len(left), len(right))
         return sum(left[idx] * right[idx] for idx in range(width))
+
+    def _index_chunks(self, paper_ids: list[str], limit: int) -> int:
+        query = self.session.query(Chunk).order_by(Chunk.updated_at.desc())
+        if paper_ids:
+            query = query.filter(Chunk.paper_id.in_(paper_ids))
+        inputs = []
+        for chunk in query.limit(limit).all():
+            if not (chunk.text or "").strip():
+                continue
+            inputs.append(
+                EmbeddingInput(
+                    owner_type="chunk",
+                    owner_id=chunk.id,
+                    text=" ".join([chunk.chunk_id, chunk.text]),
+                    payload={
+                        "paper_id": chunk.paper_id,
+                        "section_id": chunk.section_id,
+                        "chunk_id": chunk.chunk_id,
+                        "page_number": chunk.page_number,
+                        "chunk_idx": chunk.chunk_idx,
+                        "chunk_level": chunk.chunk_level,
+                    },
+                )
+            )
+        self._upsert_embeddings(inputs)
+        return len(inputs)
 
     def _index_evidences(self, paper_ids: list[str], limit: int) -> int:
         query = self.session.query(Evidence).order_by(Evidence.updated_at.desc())

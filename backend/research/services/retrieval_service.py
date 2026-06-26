@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.research.adapters.retrieval_provider_adapter import OpenAICompatibleRerankClient
 from backend.research.config import settings
-from backend.research.models import Evidence, Idea, ResearchEdge, ResearchGap, ResearchNode
+from backend.research.models import Chunk, Evidence, Idea, ResearchEdge, ResearchGap, ResearchNode
 from backend.research.services.embedding_service import EmbeddingService, VectorHit
 
 
@@ -24,6 +24,7 @@ class ScoredItem:
 
 @dataclass
 class ContextSearchResult:
+    chunks: list[ScoredItem]
     evidences: list[ScoredItem]
     gaps: list[ScoredItem]
     ideas: list[ScoredItem]
@@ -71,14 +72,17 @@ class RetrievalService:
         embedding.ensure_indexed(paper_ids or [], 800)
         vector_hits = embedding.search(query, limit=limit * 6, paper_ids=paper_ids or [])
 
+        chunks = self._score_chunks(terms, paper_ids or [], limit)
         evidences = self._score_evidences(terms, paper_ids or [], limit)
         gaps = self._score_gaps(terms, paper_ids or [], limit)
         ideas = self._score_ideas(terms, paper_ids or [], limit)
+        chunks = self._merge_vector_hits("chunk", chunks, vector_hits, paper_ids or [], limit)
         evidences = self._merge_vector_hits(
             "evidence", evidences, vector_hits, paper_ids or [], limit
         )
         gaps = self._merge_vector_hits("gap", gaps, vector_hits, paper_ids or [], limit)
         ideas = self._merge_vector_hits("idea", ideas, vector_hits, paper_ids or [], limit)
+        chunks = self._rerank_scored_items("chunk", query, chunks, limit)
         evidences = self._rerank_scored_items("evidence", query, evidences, limit)
         gaps = self._rerank_scored_items("gap", query, gaps, limit)
         ideas = self._rerank_scored_items("idea", query, ideas, limit)
@@ -95,13 +99,35 @@ class RetrievalService:
             )
 
         return ContextSearchResult(
+            chunks=chunks,
             evidences=evidences,
             gaps=gaps,
             ideas=ideas,
             graph_nodes=graph_nodes,
             graph_edges=graph_edges,
-            answer_brief=self._build_answer_brief(query, evidences, gaps, ideas),
+            answer_brief=self._build_answer_brief(query, chunks, evidences, gaps, ideas),
         )
+
+    def _score_chunks(
+        self,
+        terms: list[str],
+        paper_ids: list[str],
+        limit: int,
+    ) -> list[ScoredItem]:
+        query = self.session.query(Chunk).order_by(Chunk.created_at.desc())
+        if paper_ids:
+            query = query.filter(Chunk.paper_id.in_(paper_ids))
+
+        candidates = query.limit(500).all()
+        scored = [
+            self._score_item(
+                chunk,
+                terms,
+                self._document_text("chunk", chunk),
+            )
+            for chunk in candidates
+        ]
+        return self._top(scored, limit)
 
     def _score_evidences(
         self,
@@ -274,7 +300,7 @@ class RetrievalService:
         limit: int,
     ) -> list[ScoredItem]:
         by_id = {item.item.id: item for item in scored}
-        model_by_type = {"evidence": Evidence, "gap": ResearchGap, "idea": Idea}
+        model_by_type = {"chunk": Chunk, "evidence": Evidence, "gap": ResearchGap, "idea": Idea}
         model = model_by_type[owner_type]
 
         for hit in vector_hits:
@@ -380,6 +406,8 @@ class RetrievalService:
     def _matches_paper_filter(self, owner_type: str, item: Any, paper_ids: list[str]) -> bool:
         if not paper_ids:
             return True
+        if owner_type == "chunk":
+            return item.paper_id in paper_ids
         if owner_type == "evidence":
             return item.paper_id in paper_ids
         if owner_type == "gap":
@@ -431,6 +459,8 @@ class RetrievalService:
         )
 
     def _document_text(self, owner_type: str, item: Any) -> str:
+        if owner_type == "chunk":
+            return " ".join([item.chunk_id, item.text])
         if owner_type == "evidence":
             return " ".join([item.evidence_type, item.text, item.summary, item.supports])
         if owner_type == "gap":
@@ -481,18 +511,23 @@ class RetrievalService:
     def _build_answer_brief(
         self,
         query: str,
+        chunks: list[ScoredItem],
         evidences: list[ScoredItem],
         gaps: list[ScoredItem],
         ideas: list[ScoredItem],
     ) -> str:
-        if not evidences and not gaps and not ideas:
+        if not chunks and not evidences and not gaps and not ideas:
             return f"No context matched the query: {query}"
 
         parts = [
-            f"Matched {len(evidences)} evidence records",
+            f"Matched {len(chunks)} source chunks",
+            f"{len(evidences)} evidence records",
             f"{len(gaps)} gaps",
             f"and {len(ideas)} ideas",
         ]
+        if chunks:
+            top = chunks[0].item
+            parts.append(f"Top chunk: {top.chunk_id}")
         if evidences:
             top = evidences[0].item
             parts.append(f"Top evidence type: {top.evidence_type}")

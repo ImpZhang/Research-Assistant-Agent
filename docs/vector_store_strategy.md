@@ -9,12 +9,12 @@ The project does not require Milvus, Qdrant, pgvector, or another external vecto
 Current retrieval storage is:
 
 - relational SQLite for source artifacts and metadata;
-- `ResearchEmbedding.vector_json` rows for evidence, gap, and idea vectors;
+- `ResearchEmbedding.vector_json` rows for source chunk, evidence, gap, and idea vectors;
 - deterministic `local_hash_embedding_v0` vectors when no external embedding provider is configured;
 - optional external embedding vectors when `RETRIEVAL_EMBEDDING_PROVIDER=auto` or `external` and `EMBEDDER`, `EMBEDDER_BASE_URL`, and `EMBEDDER_API_KEY` are configured;
 - optional learned rerank when `RETRIEVAL_RERANK_PROVIDER=auto` or `external` and rerank settings are configured.
 
-This keeps clone-to-run setup simple: a user can run the agent with only SQLite and still get lexical/vector/GraphRAG-lite retrieval. Learned embedding and rerank providers improve quality without adding a local vector database service.
+This keeps clone-to-run setup simple: a user can run the agent with only SQLite and still get chunk-level RAG coverage plus lexical/vector/GraphRAG-lite retrieval over higher-level research artifacts. Learned embedding and rerank providers improve quality without adding a local vector database service.
 
 ## Why Not Milvus By Default
 
@@ -40,7 +40,7 @@ Introduce Milvus, Qdrant, pgvector, or another dedicated vector store only after
 - filtered vector search needs database-native ANN indexes rather than application-side scoring;
 - local backup/restore requirements can cover the vector service volume safely.
 
-Before migration, add a retrieval evaluation fixture that compares current SQLite vector rows against the proposed vector store on hit@k, MRR, latency, and backup complexity.
+Before migration, add a retrieval evaluation fixture that compares current SQLite vector rows against the proposed vector store on chunk hit@k, artifact hit@k, MRR, latency, and backup complexity.
 
 ## Migration Shape
 

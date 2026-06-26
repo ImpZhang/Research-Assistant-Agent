@@ -2,6 +2,24 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-26 - Hybrid Chunk And Artifact Retrieval
+
+Implementation completed:
+
+- Combining traditional chunk-level RAG with the existing artifact-level research retrieval contract.
+- Extending the local SQLite `ResearchEmbedding.vector_json` baseline so source chunks, evidence, gaps, and ideas share the same clone-to-run embedding path.
+- Adding context-search API results for source chunks while keeping evidence, gap, idea, and GraphRAG-lite response fields backward compatible.
+- Adding deterministic chunk vector-rescue and paper-filter checks to the focused context-search evaluation suite.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_app.py::test_context_search_chunk_vector_hit_rescues_lexical_miss tests/test_app.py::test_context_search_paper_filter_evaluation_fixture tests/test_app.py::test_context_search_graph_context_respects_paper_filter tests/test_app.py::test_context_search_returns_evidence_and_graph_context` passed: `4 passed`.
+- `bash scripts/check_context_search_evaluations.sh` passed: `42 passed`.
+- `git diff --check` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment/local doctor contracts `8 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-26 - Vector Store Strategy
 
 Documentation completed:

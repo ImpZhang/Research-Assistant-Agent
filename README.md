@@ -158,12 +158,12 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Local literature search with optional OpenAlex, arXiv, and Semantic Scholar external-search adapters.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.
-- Local hashed embedding index for evidence, gaps, and ideas, with optional external embedding provider vectors.
+- Local hashed embedding index for source chunks, evidence, gaps, and ideas, with optional external embedding provider vectors.
 - Markdown export for paper cards and idea dossiers.
 - Robust sparse-heading paper ingestion and gap-mining fallback for PDFs that expose Roman numeral headings, compact headings such as `RELATEDWORK`, or only a clean References heading.
 - GraphRAG-lite node and edge persistence with same source/target/type edge reuse.
 - Read-only GraphRAG-lite stats for node/edge type counts, orphan edge counts, and duplicate edge group counts.
-- Query-time lexical/vector/rerank context retrieval over evidence, gaps, ideas, and optionally filtered graph neighborhoods, with stable ranking tie-breaks and score breakdowns.
+- Query-time lexical/vector/rerank context retrieval over source chunks, evidence, gaps, ideas, and optionally filtered graph neighborhoods, with stable ranking tie-breaks and score breakdowns.
 - Synchronous workflow job trace with input, output, status, progress, and errors.
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
 - Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.

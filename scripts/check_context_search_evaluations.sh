@@ -68,6 +68,7 @@ bash scripts/check_local_geoloc_benchmark_smoke.sh
   tests/test_app.py::test_context_search_evidence_confidence_bonus_breakdown \
   tests/test_app.py::test_context_search_exact_phrase_bonus_breakdown \
   tests/test_app.py::test_context_search_vector_hit_rescues_lexical_miss \
+  tests/test_app.py::test_context_search_chunk_vector_hit_rescues_lexical_miss \
   tests/test_app.py::test_context_search_deduplicates_repeated_query_terms \
   tests/test_app.py::test_context_search_clamps_non_positive_limit \
   tests/test_app.py::test_context_search_clamps_large_limit \

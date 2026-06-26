@@ -15,6 +15,7 @@ import backend.research.services.structured_extraction_service as structured_ext
 from backend.app import create_app
 from backend.research.db import SessionLocal
 from backend.research.models import (
+    Chunk,
     Evidence,
     RelatedWorkMatrix,
     ProposalReview,
@@ -8931,6 +8932,14 @@ def _evidence_paper_filter_leak_rate(items: list[dict], allowed_paper_ids: set[s
     return round(len(leaked) / len(items), 4)
 
 
+def _chunk_paper_filter_leak_rate(items: list[dict], allowed_paper_ids: set[str]) -> float:
+    if not items:
+        return 0.0
+
+    leaked = [item for item in items if item["chunk"]["paper_id"] not in allowed_paper_ids]
+    return round(len(leaked) / len(items), 4)
+
+
 def _gap_paper_filter_leak_rate(items: list[dict], allowed_paper_ids: set[str]) -> float:
     if not items:
         return 0.0
@@ -9020,6 +9029,7 @@ def test_context_search_no_match_fixture() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["retrieval_method"] == "lexical_vector_graph_rag_lite_v0"
+    assert body["chunks"] == []
     assert body["evidences"] == []
     assert body["gaps"] == []
     assert body["ideas"] == []
@@ -9327,6 +9337,63 @@ def test_context_search_vector_hit_rescues_lexical_miss() -> None:
     assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
 
 
+def test_context_search_chunk_vector_hit_rescues_lexical_miss() -> None:
+    client = TestClient(create_app())
+    query_token = f"chunksemanticmiss{time.time_ns()}"
+    vector_token = _find_hash_vector_collision(query_token)
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            title=f"Context Search Chunk Vector Miss Paper {query_token}",
+            filename="context_chunk_vector_miss.txt",
+            source_type="pytest",
+            status="indexed",
+        )
+        session.add(paper)
+        session.flush()
+        chunk = Chunk(
+            paper_id=paper.id,
+            chunk_id=vector_token,
+            chunk_idx=0,
+            chunk_level=1,
+            text=vector_token,
+            token_count=1,
+        )
+        session.add(chunk)
+        session.commit()
+        paper_id = paper.id
+        chunk_id = chunk.id
+    finally:
+        session.close()
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": query_token,
+            "paper_ids": [paper_id],
+            "limit": 3,
+            "include_graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["chunks"]
+    assert body["graph_nodes"] == []
+    assert body["graph_edges"] == []
+    top_chunk = body["chunks"][0]
+    assert top_chunk["chunk"]["id"] == chunk_id
+    assert top_chunk["matched_terms"] == ["vector"]
+    assert top_chunk["score_breakdown"] == {
+        "lexical": 0.0,
+        "bonus": 0.0,
+        "phrase": 0.0,
+        "vector": 3.0,
+    }
+    assert _score_breakdown_total_match_rate(body["chunks"]) == 1.0
+
+
 def test_context_search_deduplicates_repeated_query_terms() -> None:
     client = TestClient(create_app())
     marker = f"dedupterm{time.time_ns()}"
@@ -9555,7 +9622,9 @@ Future work should add scoped gap and idea filters for metric retrieval.
     filtered_body = filtered.json()
     assert filtered_body["evidences"]
     assert filtered_body["gaps"] or filtered_body["ideas"]
+    assert filtered_body["chunks"]
     assert paper_a_id not in {item["evidence"]["paper_id"] for item in filtered_body["evidences"]}
+    assert _chunk_paper_filter_leak_rate(filtered_body["chunks"], {paper_b_id}) == 0.0
     assert _evidence_paper_filter_leak_rate(filtered_body["evidences"], {paper_b_id}) == 0.0
     assert _gap_paper_filter_leak_rate(filtered_body["gaps"], {paper_b_id}) == 0.0
     assert _idea_paper_filter_leak_rate(filtered_body["ideas"], {paper_b_id}) == 0.0
@@ -9620,6 +9689,9 @@ Graph context for {title_marker} should stay inside its selected paper scope.
 
     assert response.status_code == 200
     body = response.json()
+    assert body["chunks"]
+    assert {item["chunk"]["paper_id"] for item in body["chunks"]} == {paper_b_id}
+    assert _chunk_paper_filter_leak_rate(body["chunks"], {paper_b_id}) == 0.0
     assert body["evidences"]
     assert {item["evidence"]["paper_id"] for item in body["evidences"]} == {paper_b_id}
     assert _evidence_paper_filter_leak_rate(body["evidences"], {paper_b_id}) == 0.0
@@ -9878,7 +9950,7 @@ Future work should make GraphRAG context retrieval stronger.
         "/research/embeddings/rebuild",
         json={
             "paper_ids": [paper_id],
-            "owner_types": ["evidence", "gap", "idea"],
+            "owner_types": ["chunk", "evidence", "gap", "idea"],
             "limit": 50,
         },
     )
@@ -9894,6 +9966,7 @@ Future work should make GraphRAG context retrieval stronger.
     assert expected_evidence_ids
     assert embedding_body["model"] == "local_hash_embedding_v0"
     assert embedding_body["dimension"] == 128
+    assert embedding_body["chunk_count"] >= 1
     assert embedding_body["evidence_count"] >= 1
     assert embedding_body["gap_count"] >= 1
     assert embedding_body["idea_count"] >= 1
@@ -9910,6 +9983,7 @@ Future work should make GraphRAG context retrieval stronger.
     assert response.status_code == 200
     body = response.json()
     assert body["retrieval_method"] == "lexical_vector_graph_rag_lite_v0"
+    assert body["chunks"]
     assert body["evidences"]
     assert body["gaps"] or body["ideas"]
     vector_evidence = next(item for item in body["evidences"] if "vector" in item["matched_terms"])
@@ -9937,7 +10011,7 @@ Future work should make GraphRAG context retrieval stronger.
         "hit_at_5": 1.0,
         "mrr": 1.0,
     }
-    context_items = [*body["evidences"], *body["gaps"], *body["ideas"]]
+    context_items = [*body["chunks"], *body["evidences"], *body["gaps"], *body["ideas"]]
     assert _score_breakdown_coverage(context_items) == 1.0
     assert _score_breakdown_total_match_rate(context_items) == 1.0
     assert _graph_edge_hit_rate(body["graph_edges"], {"paper_has_evidence"}) == 1.0

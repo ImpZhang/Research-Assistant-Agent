@@ -90,6 +90,22 @@ class PaperUploadResponse(BaseModel):
     message: str
 
 
+class ChunkRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    paper_id: str
+    section_id: str | None = None
+    chunk_id: str
+    parent_chunk_id: str = ""
+    root_chunk_id: str = ""
+    chunk_level: int = 1
+    chunk_idx: int = 0
+    page_number: int | None = None
+    text: str = ""
+    token_count: int | None = None
+
+
 class EvidenceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -1889,10 +1905,18 @@ class ScoredIdeaRead(BaseModel):
     score_breakdown: dict[str, float] = Field(default_factory=dict)
 
 
+class ScoredChunkRead(BaseModel):
+    chunk: ChunkRead
+    score: float
+    matched_terms: list[str] = Field(default_factory=list)
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
+
+
 class ContextSearchResponse(BaseModel):
     query: str
     retrieval_method: str
     answer_brief: str
+    chunks: list[ScoredChunkRead] = Field(default_factory=list)
     evidences: list[ScoredEvidenceRead]
     gaps: list[ScoredResearchGapRead]
     ideas: list[ScoredIdeaRead]
@@ -1977,7 +2001,7 @@ class LiteratureSearchResponse(BaseModel):
 
 
 class EmbeddingRebuildRequest(BaseModel):
-    owner_types: list[str] = Field(default_factory=lambda: ["evidence", "gap", "idea"])
+    owner_types: list[str] = Field(default_factory=lambda: ["chunk", "evidence", "gap", "idea"])
     paper_ids: list[str] = Field(default_factory=list)
     limit: int = 500
 
@@ -1986,6 +2010,7 @@ class EmbeddingRebuildResponse(BaseModel):
     model: str
     dimension: int
     indexed_count: int
+    chunk_count: int
     evidence_count: int
     gap_count: int
     idea_count: int

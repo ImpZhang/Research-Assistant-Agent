@@ -4,7 +4,7 @@ This document defines how to evaluate and calibrate context search before introd
 
 ## Purpose
 
-Context search now combines lexical scoring, local hash-vector hits, optional GraphRAG-lite neighbor expansion, edge-type filters, stable ranking tie-breaks, and per-result score breakdowns. The next improvement should be evidence-led calibration, not arbitrary weight changes.
+Context search now combines chunk-level source retrieval, artifact-level lexical scoring, local hash-vector hits, optional GraphRAG-lite neighbor expansion, edge-type filters, stable ranking tie-breaks, and per-result score breakdowns. The next improvement should be evidence-led calibration, not arbitrary weight changes.
 
 This plan defines the minimum evaluation harness needed to decide whether scoring changes improve research usefulness.
 
@@ -13,6 +13,7 @@ This plan defines the minimum evaluation harness needed to decide whether scorin
 `POST /research/search/context` returns:
 
 - matched evidence records;
+- matched source chunks;
 - matched research gaps;
 - matched ideas;
 - GraphRAG-lite nodes and edges when `include_graph=true`;
@@ -27,6 +28,7 @@ The public retrieval method remains `lexical_vector_graph_rag_lite_v0`.
 Evaluate changes against these questions:
 
 - Does the top evidence actually support the query?
+- Do top source chunks preserve the raw-paper context behind the retrieved artifacts?
 - Do top gaps and ideas connect to the same research intent as the query?
 - Does graph expansion add useful lineage instead of unrelated graph noise?
 - Do vector hits rescue relevant items that lexical matching misses?
@@ -37,8 +39,8 @@ Evaluate changes against these questions:
 
 Use small, committed, non-sensitive fixtures first:
 
-- synthetic papers with known evidence/gap/idea targets;
-- query strings with expected evidence ids, gap ids, idea ids, or edge types;
+- synthetic papers with known chunk/evidence/gap/idea targets;
+- query strings with expected chunk ids, evidence ids, gap ids, idea ids, or edge types;
 - negative queries that should return little or no context;
 - graph-heavy queries where graph neighbor expansion is expected to help;
 - lexical-miss/vector-hit cases.
@@ -49,14 +51,14 @@ Do not use private customer data, `.env` values, API keys, cookies, private note
 
 Start with deterministic ranking metrics:
 
-- `hit_at_1` for expected evidence/gap/idea ids;
+- `hit_at_1` for expected chunk/evidence/gap/idea ids;
 - `hit_at_3` and `hit_at_5` for broader context relevance;
 - `mrr` for expected primary artifacts;
 - `graph_edge_hit_rate` for expected edge types;
 - `graph_noise_rate` for unrelated or unknown edge types returned with filters;
 - `score_breakdown_coverage` to ensure each result exposes lexical/bonus/phrase/vector keys;
 - `score_breakdown_total_match_rate` to ensure per-result score breakdown totals match visible scores within rounding tolerance;
-- `paper_filter_leak_rate` to ensure scoped context searches do not return evidence, gaps, or ideas from excluded papers;
+- `paper_filter_leak_rate` to ensure scoped context searches do not return chunks, evidence, gaps, or ideas from excluded papers;
 - `empty_query_guard_rate` for invalid or too-short queries.
 
 Later, if model-backed judging is introduced, it must be optional and secret-safe.
@@ -79,12 +81,12 @@ A first implementation should be a local test or script that:
 
 1. Loads synthetic fixture papers through the existing API or service layer.
 2. Runs the literature-to-ideas workflow with deterministic fallbacks.
-3. Rebuilds local hash embeddings for fixture artifacts.
+3. Rebuilds local hash embeddings for fixture chunks and artifacts.
 4. Runs configured context-search queries.
 5. Compares returned ids, edge types, and score breakdowns against expected fixtures.
 6. Prints aggregate metrics and fails on regressions.
 
-Prefer pytest fixtures for small deterministic checks. Add a script only if metric output becomes too large for unit tests. Committed fixtures now cover evidence hit@k, MRR, graph edge hit/noise checks, blank/duplicate/whitespace filter normalization, multi-edge-type filter checks, score breakdown coverage, idea overall-score bonus scoring, gap feasibility bonus scoring, evidence confidence bonus scoring, exact phrase bonus scoring, score breakdown total consistency, paper-filter leak checks, graph paper-filter leak checks, graph expansion recall under recent-edge noise, no-match scoped queries, lexical-miss/vector-hit rescue, and `empty_query_guard_rate` for empty, too-short, and punctuation-only queries. Run `bash scripts/check_context_search_evaluations.sh` as the focused remote check before changing scoring or graph-expansion behavior.
+Prefer pytest fixtures for small deterministic checks. Add a script only if metric output becomes too large for unit tests. Committed fixtures now cover source chunk vector rescue, evidence hit@k, MRR, graph edge hit/noise checks, blank/duplicate/whitespace filter normalization, multi-edge-type filter checks, score breakdown coverage, idea overall-score bonus scoring, gap feasibility bonus scoring, evidence confidence bonus scoring, exact phrase bonus scoring, score breakdown total consistency, paper-filter leak checks, graph paper-filter leak checks, graph expansion recall under recent-edge noise, no-match scoped queries, lexical-miss/vector-hit rescue, and `empty_query_guard_rate` for empty, too-short, and punctuation-only queries. Run `bash scripts/check_context_search_evaluations.sh` as the focused remote check before changing scoring or graph-expansion behavior.
 
 ## Operational Guardrails
 

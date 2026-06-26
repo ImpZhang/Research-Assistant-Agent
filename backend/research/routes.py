@@ -60,6 +60,7 @@ from backend.research.schemas import (
     ClaimValidationQueueResponse,
     ClaimValidationQueueTaskGenerateRequest,
     ClaimValidationResultCreate,
+    ChunkRead,
     ContextSearchRequest,
     ContextSearchResponse,
     BenchmarkRunCreate,
@@ -207,6 +208,7 @@ from backend.research.schemas import (
     ResearchTaskRead,
     ResearchTaskUpdate,
     ReviewRead,
+    ScoredChunkRead,
     ScoredEvidenceRead,
     ScoredIdeaRead,
     ScoredResearchGapRead,
@@ -2993,6 +2995,15 @@ def _advisor_chat_context_response(
         query=search_query,
         retrieval_method="advisor_chat_lexical_vector_graph_rag_lite_v0",
         answer_brief=result.answer_brief,
+        chunks=[
+            ScoredChunkRead(
+                chunk=_serialize_chunk(scored.item),
+                score=scored.score,
+                matched_terms=scored.matched_terms,
+                score_breakdown=scored.score_breakdown,
+            )
+            for scored in result.chunks
+        ],
         evidences=[
             ScoredEvidenceRead(
                 evidence=_serialize_evidence(scored.item),
@@ -5953,6 +5964,7 @@ def rebuild_embeddings(
         model=stats.model,
         dimension=stats.dimension,
         indexed_count=stats.indexed_count,
+        chunk_count=stats.chunk_count,
         evidence_count=stats.evidence_count,
         gap_count=stats.gap_count,
         idea_count=stats.idea_count,
@@ -15555,6 +15567,15 @@ def search_research_context(
         query=payload.query,
         retrieval_method="lexical_vector_graph_rag_lite_v0",
         answer_brief=result.answer_brief,
+        chunks=[
+            ScoredChunkRead(
+                chunk=_serialize_chunk(scored.item),
+                score=scored.score,
+                matched_terms=scored.matched_terms,
+                score_breakdown=scored.score_breakdown,
+            )
+            for scored in result.chunks
+        ],
         evidences=[
             ScoredEvidenceRead(
                 evidence=_serialize_evidence(scored.item),
@@ -15584,6 +15605,22 @@ def search_research_context(
         ],
         graph_nodes=[_serialize_node(node) for node in result.graph_nodes],
         graph_edges=[_serialize_edge(edge) for edge in result.graph_edges],
+    )
+
+
+def _serialize_chunk(chunk: Chunk) -> ChunkRead:
+    return ChunkRead(
+        id=chunk.id,
+        paper_id=chunk.paper_id,
+        section_id=chunk.section_id,
+        chunk_id=chunk.chunk_id,
+        parent_chunk_id=chunk.parent_chunk_id,
+        root_chunk_id=chunk.root_chunk_id,
+        chunk_level=chunk.chunk_level,
+        chunk_idx=chunk.chunk_idx,
+        page_number=chunk.page_number,
+        text=chunk.text,
+        token_count=chunk.token_count,
     )
 
 
