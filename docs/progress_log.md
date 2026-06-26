@@ -2,6 +2,26 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-26 - Local Backup Manifest
+
+Implementation completed:
+
+- Added `scripts/build_local_backup_manifest.py` as a read-only aggregate manifest builder for local backup planning.
+- The manifest covers `data/research`, `data/papers`, `data/audit`, `data/benchmarks`, `outputs`, and `configs/benchmark_profiles.json`; it reports file counts and byte totals without listing private paper filenames or reading file contents.
+- The manifest detects secret-like files such as `.env` and reports that they are excluded, without reading or printing secret values.
+- Wired the helper into backup/restore contracts, local readiness documentation, deployment notes, local isolation, and the local distribution flow.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_local_backup_manifest.py` passed: `3 passed`.
+- `python3 scripts/build_local_backup_manifest.py --json` passed on the local checkout and reported aggregate counts only.
+- `bash scripts/check_backup_restore_contracts.sh` passed: manifest tests `3 passed` plus backup/restore contract validation.
+- `bash scripts/check_local_agent_readiness.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_generated_file_guard.sh` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment contracts `6 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `40 passed`.
+
 ## 2026-06-26 - Model Provider Config Doctor
 
 Implementation completed:

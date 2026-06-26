@@ -38,6 +38,7 @@ Current product target: personal local deployment. A user should be able to clon
 - Add Alembic-style migrations.
 - Harden local queue/worker execution for long-running workflows and benchmark runs.
 - Add local backup/export/import rehearsal and optional single-user Docker deployment checks.
+- Keep backup planning grounded in `scripts/build_local_backup_manifest.py` before adding any data-copying or restore automation.
 - Improve page/figure/table-aware PDF evidence extraction.
 
 ## P3 - Needs Explicit Operator Approval

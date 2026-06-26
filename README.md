@@ -188,6 +188,7 @@ backend/
     services/      Research workflow services
 docs/
 scripts/
+  build_local_backup_manifest.py
   check_backup_restore_contracts.sh
   check_context_search_evaluations.sh
   check_deployment_contracts.sh
@@ -374,6 +375,13 @@ Run backup/restore contract checks to keep persistent data volume, cold-backup, 
 
 ```bash
 bash scripts/check_backup_restore_contracts.sh
+```
+
+Build a read-only aggregate manifest before backing up local data. This reports counts and sizes for backup sets without listing private paper filenames or reading `.env` values:
+
+```bash
+python3 scripts/build_local_backup_manifest.py
+python3 scripts/build_local_backup_manifest.py --write-json outputs/backups/local-backup-manifest.json
 ```
 
 Run focused context-search evaluation checks on the local `.venv`:

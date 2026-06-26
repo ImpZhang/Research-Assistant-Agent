@@ -3,6 +3,10 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+.venv/bin/ruff check scripts/build_local_backup_manifest.py tests/test_local_backup_manifest.py
+.venv/bin/ruff format --check scripts/build_local_backup_manifest.py tests/test_local_backup_manifest.py
+.venv/bin/pytest -q tests/test_local_backup_manifest.py
+
 python3 - <<'PYIN'
 from pathlib import Path
 import sys
@@ -36,6 +40,8 @@ require_tokens(
     "docs/deployment.md",
     [
         "Backup And Restore Notes",
+        "python3 scripts/build_local_backup_manifest.py",
+        "The manifest is read-only and aggregate-only",
         "Back up this data before rebuilds, host moves, database migrations, or destructive maintenance.",
         "Keep `.env`, API keys, cookies, private keys, and provider credentials in a separate secret manager or operator vault.",
         "Cold backup is the preferred local path",

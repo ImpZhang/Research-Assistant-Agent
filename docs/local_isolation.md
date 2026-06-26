@@ -66,6 +66,14 @@ For production-like compose runs, create an untracked `.env` with a long `API_KE
 
 ## Cleanup
 
+Before backing up or moving local data, build an aggregate manifest:
+
+```bash
+python3 scripts/build_local_backup_manifest.py
+```
+
+The manifest is read-only. It reports backup-set counts and sizes without listing private paper filenames or including `.env` secrets.
+
 ```bash
 ./scripts/clean.sh
 ```

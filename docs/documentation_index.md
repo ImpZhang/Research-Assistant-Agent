@@ -19,6 +19,7 @@ This document is the starting point for future development. Use it to find the r
 | `scripts/check_local_runtime_smoke.sh` | Transient localhost runtime smoke for health, readiness, and Workbench. | Before claiming the app starts successfully on the current machine. |
 | `scripts/check_local_safe_suite.sh` | Default local focused verification suite. | Before pushing a completed implementation round. |
 | `scripts/check_model_provider_config.py` | No-network model-provider environment readiness check that does not print secrets. | Before running the opt-in real-provider smoke or diagnosing local model setup. |
+| `scripts/build_local_backup_manifest.py` | Read-only aggregate manifest for local data backup scope, counts, sizes, and excluded secret files. | Before backing up or moving a local checkout's data. |
 
 ## Product And Architecture
 

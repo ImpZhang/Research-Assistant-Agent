@@ -165,6 +165,15 @@ The compose file mounts a named volume at `/app/data`, so SQLite data, uploaded 
 
 ## Backup And Restore Notes
 
+Before copying local data, build an aggregate manifest:
+
+```bash
+python3 scripts/build_local_backup_manifest.py
+python3 scripts/build_local_backup_manifest.py --write-json outputs/backups/local-backup-manifest.json
+```
+
+The manifest is read-only and aggregate-only: it counts files and bytes for `data/research`, `data/papers`, `data/audit`, `data/benchmarks`, `outputs`, and the ignored local benchmark profile manifest without listing private paper filenames, reading file contents, or including `.env` secrets.
+
 The compose file declares a `research_assistant_data` volume mounted at `/app/data`. Docker Compose usually creates an engine volume named `<compose-project>_research_assistant_data`, so confirm the actual volume name before backing up or restoring.
 
 Back up this data before rebuilds, host moves, database migrations, or destructive maintenance. A backup should include:
