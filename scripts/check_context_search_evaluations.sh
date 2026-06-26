@@ -26,7 +26,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   backend/research/services/retrieval_service.py \
   backend/research/services/embedding_service.py \
   scripts/evaluate_real_papers.py \
-  scripts/benchmark_geoloc_predictions.py
+  scripts/benchmark_geoloc_predictions.py \
+  scripts/prepare_local_geoloc_benchmark.py
 .venv/bin/ruff format --check \
   tests/test_app.py \
   tests/test_evaluation_reports.py \
@@ -50,7 +51,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   backend/research/services/retrieval_service.py \
   backend/research/services/embedding_service.py \
   scripts/evaluate_real_papers.py \
-  scripts/benchmark_geoloc_predictions.py
+  scripts/benchmark_geoloc_predictions.py \
+  scripts/prepare_local_geoloc_benchmark.py
 bash scripts/check_local_geoloc_benchmark_smoke.sh
 .venv/bin/pytest -q \
   tests/test_evaluation_reports.py \

@@ -206,6 +206,78 @@ def test_local_geoloc_benchmark_smoke_script_exercises_harness() -> None:
     assert payload["summary"]["missing_prediction_ids"] == ["sample-3"]
 
 
+def test_prepare_local_geoloc_benchmark_writes_example_profile(tmp_path) -> None:
+    script = Path("scripts/prepare_local_geoloc_benchmark.py")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--project-root",
+            str(tmp_path),
+            "--write-example",
+            "--write-profile-manifest",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    payload = json.loads(completed.stdout)
+
+    assert payload["runnable"] is True
+    assert payload["profile_manifest_exists"] is True
+    assert payload["record_counts"]["ground_truth"] == 2
+    assert payload["record_counts"]["matched_predictions"] == 2
+    assert payload["paths"]["ground_truth"] == "data/benchmarks/geoloc/validation.jsonl"
+    assert payload["paths"]["predictions"] == "outputs/predictions/geoloc/validation.jsonl"
+    assert "configs/benchmark_profiles.json" in payload["created"]
+
+    manifest = json.loads((tmp_path / "configs/benchmark_profiles.json").read_text())
+    profile = manifest["profiles"][0]
+    assert profile["id"] == "local-geoloc-validation"
+    assert "data/benchmarks/geoloc/validation.jsonl" in profile["required_paths"]
+    assert "outputs/predictions/geoloc/validation.jsonl" in profile["required_paths"]
+
+    require_runnable = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--project-root",
+            str(tmp_path),
+            "--require-runnable",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert json.loads(require_runnable.stdout)["runnable"] is True
+
+
+def test_prepare_local_geoloc_benchmark_reports_missing_files(tmp_path) -> None:
+    script = Path("scripts/prepare_local_geoloc_benchmark.py")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--project-root",
+            str(tmp_path),
+            "--require-runnable",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 1
+    payload = json.loads(completed.stdout)
+    assert payload["runnable"] is False
+    assert payload["missing_paths"] == [
+        "data/benchmarks/geoloc/validation.jsonl",
+        "outputs/predictions/geoloc/validation.jsonl",
+    ]
+
+
 def test_benchmark_command_runner_is_disabled_by_default(monkeypatch) -> None:
     marker = f"benchmark-disabled-{uuid4().hex}"
     idea_id = f"{marker}-idea"

@@ -7,9 +7,10 @@ This log records local-first maintenance and implementation progress for Researc
 Implementation completed:
 
 - Added `scripts/check_local_geoloc_benchmark_smoke.sh` as a standalone local benchmark smoke for the geolocalization JSONL scoring harness.
+- Added `scripts/prepare_local_geoloc_benchmark.py` to prepare project-local benchmark directories, optionally write ignored example JSONL files and `configs/benchmark_profiles.json`, validate record schema, and report runnable state without reading `.env`.
 - The smoke writes temporary ground-truth and prediction JSONL fixtures under project-local `outputs/`, runs `scripts/benchmark_geoloc_predictions.py`, verifies country accuracy, baseline improvement, missing-prediction accounting, and mean/median geodesic-distance metrics, then removes its temporary fixture directory.
 - Wired the smoke into `scripts/check_context_search_evaluations.sh` so benchmark scoring regressions are covered by the focused evaluation suite.
-- Documented the smoke in README, TODO, development process, documentation index, and local personal-agent distribution flow.
+- Documented the smoke and preparation helper in README, TODO, development process, documentation index, and local personal-agent distribution flow.
 
 Verification completed:
 
@@ -17,8 +18,9 @@ Verification completed:
 - `bash scripts/check_local_geoloc_benchmark_smoke.sh` passed.
 - `bash scripts/check_script_catalog.sh` passed.
 - `bash scripts/check_focused_test_coverage.sh` passed.
-- `bash scripts/check_context_search_evaluations.sh` passed: `38 passed in 10.60s`.
-- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment contracts `3 passed`, backup/restore contracts, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `38 passed`.
+- `.venv/bin/pytest -q tests/test_sota_signoff_and_benchmark.py::test_prepare_local_geoloc_benchmark_writes_example_profile tests/test_sota_signoff_and_benchmark.py::test_prepare_local_geoloc_benchmark_reports_missing_files` passed: `2 passed`.
+- `bash scripts/check_context_search_evaluations.sh` passed: `40 passed in 9.07s`.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment contracts `3 passed`, backup/restore contracts, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `40 passed`.
 
 ## 2026-06-26 - Local Agent Readiness Preflight
 

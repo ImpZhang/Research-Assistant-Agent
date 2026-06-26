@@ -27,7 +27,8 @@ This target does not require a central system access key, centralized user accou
 9. Open `http://127.0.0.1:8000/workbench`.
 10. Optionally run `bash scripts/check_local_runtime_smoke.sh` for a transient health/readiness/Workbench check.
 11. Optionally run `bash scripts/check_local_geoloc_benchmark_smoke.sh` to verify the project-local geolocalization JSONL benchmark path with temporary fixtures.
-12. Run `bash scripts/check_local_safe_suite.sh` before sharing changes.
+12. Optionally run `python3 scripts/prepare_local_geoloc_benchmark.py --write-example --write-profile-manifest` to create ignored local benchmark example files and a machine-local profile manifest.
+13. Run `bash scripts/check_local_safe_suite.sh` before sharing changes.
 
 ## Required Local Artifacts
 
@@ -61,6 +62,7 @@ The project is already more than a basic RAG demo:
 - It stores research artifacts, task boards, graph links, evidence ledgers, decisions, and exportable dossiers.
 - It supports model-provider configuration, deterministic fallbacks, local benchmark profiles, benchmark execution, comparison briefs, and SOTA signoff readiness.
 - It includes a local geolocalization benchmark smoke so clone users can verify the JSONL metric path before adding real benchmark datasets and predictions.
+- It includes a local geolocalization benchmark preparation helper for ignored example files, profile manifests, and runnable checks.
 - It has Workbench and MCP bridge surfaces for local agent-style operation.
 
 It is not yet a finished polished local product. The remaining local-agent work is mostly packaging, preflight quality, real-data evaluation, better local prediction pipelines, and user-facing simplification rather than SaaS multi-user engineering.

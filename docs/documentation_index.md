@@ -52,6 +52,7 @@ This document is the starting point for future development. Use it to find the r
 | `docs/geolocalization_manual_sota_review.md` | Manual SOTA screening for geolocalization sources. |
 | `docs/geolocalization_benchmark_sota_table.md` | Exact benchmark boundary table for geolocalization claims. |
 | `configs/benchmark_profiles.example.json` | Template for ignored local benchmark profile overrides. |
+| `scripts/prepare_local_geoloc_benchmark.py` | Local helper for benchmark directories, example JSONL files, ignored profile manifests, and readiness checks. |
 | `scripts/benchmark_geoloc_predictions.py` | Project-local geolocalization JSONL benchmark harness. |
 | `scripts/check_local_geoloc_benchmark_smoke.sh` | One-command local smoke for the geolocalization JSONL benchmark path. |
 | `/research/ideas/{idea_id}/sota-review-package` | Runtime API that turns an idea into a persisted manual SOTA review checklist and collision package. |

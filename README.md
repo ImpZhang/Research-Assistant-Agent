@@ -74,7 +74,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Experiment run tracking that links an experiment plan to task events, metrics, conclusions, artifacts, and Markdown run reports.
 - Benchmark run packets that structure dataset, split, nearest baseline, primary metric, metric direction, command, dry-run flag, artifacts, and reproducibility notes as first-class experiment runs.
 - Guarded local benchmark command runner that is disabled by default, executes command-argument lists without a shell when enabled, captures stdout/stderr/metrics under `outputs/benchmark-runs/`, and saves the result as an experiment run.
-- Benchmark profile registry and a project-local geolocalization JSONL harness so Workbench/API clients can discover runnable benchmark profiles, see missing data/prediction paths, execute profile-backed commands, and parse country-accuracy/geodesic-distance metrics.
+- Benchmark profile registry, local preparation helper, and project-local geolocalization JSONL harness so Workbench/API clients can discover runnable benchmark profiles, see missing data/prediction paths, execute profile-backed commands, and parse country-accuracy/geodesic-distance metrics.
 - Benchmark run comparison records that compute metric deltas between two experiment runs and persist the result as an auditable Markdown research brief.
 - Benchmark evidence readiness gate and task generation that summarize completed runs, comparison briefs, missing evidence, warnings, and turn follow-up actions into task-board items before manual SOTA signoff.
 - Experiment result analysis that turns run metrics into a decision, concerns, next actions, task events, and Markdown analysis reports.
@@ -215,6 +215,7 @@ scripts/
   check_tool_bridge_contracts.sh
   check_workflow_job_controls.sh
   check_write_audit_guardrails.sh
+  prepare_local_geoloc_benchmark.py
   smoke_api.py
 tests/
 ```
@@ -377,6 +378,13 @@ Run the standalone local geolocalization benchmark smoke to verify the JSONL sco
 
 ```bash
 bash scripts/check_local_geoloc_benchmark_smoke.sh
+```
+
+Prepare local geolocalization benchmark directories, optional example files, and an ignored machine-local benchmark profile manifest:
+
+```bash
+python3 scripts/prepare_local_geoloc_benchmark.py --write-example --write-profile-manifest
+python3 scripts/prepare_local_geoloc_benchmark.py --require-runnable
 ```
 
 Run an opt-in real-provider smoke and real-paper PDF evaluation from a configured local environment:

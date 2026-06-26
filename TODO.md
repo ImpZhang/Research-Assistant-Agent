@@ -32,7 +32,7 @@ Current product target: personal local deployment. A user should be able to clon
 
 - Polish clone-to-run setup, local preflight, and `.env.example` so first-time users can configure model API keys without reading internal docs. Current baseline: `scripts/check_local_agent_readiness.sh` validates the local readiness contract without reading `.env`.
 - Enable live external-search providers for local real-provider settings and require completed SOTA external-search evidence packages before final signoff.
-- Add practical local benchmark recipes and prediction-generation pipelines on top of the guarded benchmark runner. Current baseline: `scripts/check_local_geoloc_benchmark_smoke.sh` verifies the local JSONL metric path with temporary fixtures.
+- Add practical local benchmark recipes and prediction-generation pipelines on top of the guarded benchmark runner. Current baseline: `scripts/check_local_geoloc_benchmark_smoke.sh` verifies the local JSONL metric path with temporary fixtures, and `scripts/prepare_local_geoloc_benchmark.py` prepares ignored local files/profile manifests.
 - Keep real multi-project/user isolation deferred; the current product is single-operator local deployment with a default project.
 - Add Alembic-style migrations.
 - Harden local queue/worker execution for long-running workflows and benchmark runs.
