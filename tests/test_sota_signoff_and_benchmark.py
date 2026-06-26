@@ -189,6 +189,23 @@ def test_geoloc_prediction_benchmark_harness_outputs_metrics(tmp_path) -> None:
     assert payload["summary"]["matched_predictions"] == 2
 
 
+def test_local_geoloc_benchmark_smoke_script_exercises_harness() -> None:
+    completed = subprocess.run(
+        ["bash", "scripts/check_local_geoloc_benchmark_smoke.sh"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    lines = [line for line in completed.stdout.splitlines() if line.strip()]
+    payload = json.loads(lines[-1])
+
+    assert "Local geolocalization benchmark smoke passed." in completed.stdout
+    assert payload["metrics"]["country_accuracy"]["value"] == 0.333333
+    assert payload["metrics"]["country_accuracy"]["improved"] is True
+    assert payload["summary"]["matched_predictions"] == 2
+    assert payload["summary"]["missing_prediction_ids"] == ["sample-3"]
+
+
 def test_benchmark_command_runner_is_disabled_by_default(monkeypatch) -> None:
     marker = f"benchmark-disabled-{uuid4().hex}"
     idea_id = f"{marker}-idea"

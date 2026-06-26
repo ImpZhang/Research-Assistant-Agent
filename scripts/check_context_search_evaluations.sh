@@ -51,6 +51,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   backend/research/services/embedding_service.py \
   scripts/evaluate_real_papers.py \
   scripts/benchmark_geoloc_predictions.py
+bash scripts/check_local_geoloc_benchmark_smoke.sh
 .venv/bin/pytest -q \
   tests/test_evaluation_reports.py \
   tests/test_retrieval_provider_adapter.py \

@@ -14,6 +14,7 @@ This document is the starting point for future development. Use it to find the r
 | `docs/local_isolation.md` | Mac-local environment, cache, data, cleanup, and run commands. | Before running locally or installing dependencies. |
 | `docs/progress_log.md` | Durable history of nontrivial work and verification. | After completing meaningful changes. |
 | `scripts/check_local_agent_readiness.sh` | Read-only local-agent clone-to-run readiness check. | Before claiming a local checkout is ready to run. |
+| `scripts/check_local_geoloc_benchmark_smoke.sh` | Temporary-fixture geolocalization benchmark smoke for the local JSONL scoring harness. | Before claiming the benchmark harness works in a fresh local checkout. |
 | `scripts/check_local_operational_preflight.sh` | Local deployment preflight wrapper with local strict-git alias. | Before packaging or sharing a local deployment. |
 | `scripts/check_local_runtime_smoke.sh` | Transient localhost runtime smoke for health, readiness, and Workbench. | Before claiming the app starts successfully on the current machine. |
 | `scripts/check_local_safe_suite.sh` | Default local focused verification suite. | Before pushing a completed implementation round. |
@@ -52,6 +53,7 @@ This document is the starting point for future development. Use it to find the r
 | `docs/geolocalization_benchmark_sota_table.md` | Exact benchmark boundary table for geolocalization claims. |
 | `configs/benchmark_profiles.example.json` | Template for ignored local benchmark profile overrides. |
 | `scripts/benchmark_geoloc_predictions.py` | Project-local geolocalization JSONL benchmark harness. |
+| `scripts/check_local_geoloc_benchmark_smoke.sh` | One-command local smoke for the geolocalization JSONL benchmark path. |
 | `/research/ideas/{idea_id}/sota-review-package` | Runtime API that turns an idea into a persisted manual SOTA review checklist and collision package. |
 | `/research/ideas/{idea_id}/sota-external-search-evidence` | Runtime API that persists local/external literature search statuses, result summaries, and signoff readiness for SOTA review queries. |
 | `/research/ideas/{idea_id}/sota-signoffs` | Runtime API that records the human novelty/SOTA decision, nearest work, evidence links, benchmark links, and blockers. |

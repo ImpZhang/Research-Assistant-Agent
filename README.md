@@ -196,6 +196,7 @@ scripts/
   check_graph_rag_lite.sh
   check_handoff_docs.sh
   check_local_agent_readiness.sh
+  check_local_geoloc_benchmark_smoke.sh
   check_local_operational_preflight.sh
   check_local_runtime_smoke.sh
   check_local_safe_suite.sh
@@ -370,6 +371,12 @@ Run focused context-search evaluation checks on the local `.venv`:
 
 ```bash
 bash scripts/check_context_search_evaluations.sh
+```
+
+Run the standalone local geolocalization benchmark smoke to verify the JSONL scoring harness, baseline delta parsing, missing-prediction accounting, and geodesic-distance metrics with temporary project-local fixtures:
+
+```bash
+bash scripts/check_local_geoloc_benchmark_smoke.sh
 ```
 
 Run an opt-in real-provider smoke and real-paper PDF evaluation from a configured local environment:

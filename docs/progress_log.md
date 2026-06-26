@@ -2,6 +2,24 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-26 - Local Geolocalization Benchmark Smoke
+
+Implementation completed:
+
+- Added `scripts/check_local_geoloc_benchmark_smoke.sh` as a standalone local benchmark smoke for the geolocalization JSONL scoring harness.
+- The smoke writes temporary ground-truth and prediction JSONL fixtures under project-local `outputs/`, runs `scripts/benchmark_geoloc_predictions.py`, verifies country accuracy, baseline improvement, missing-prediction accounting, and mean/median geodesic-distance metrics, then removes its temporary fixture directory.
+- Wired the smoke into `scripts/check_context_search_evaluations.sh` so benchmark scoring regressions are covered by the focused evaluation suite.
+- Documented the smoke in README, TODO, development process, documentation index, and local personal-agent distribution flow.
+
+Verification completed:
+
+- `bash -n scripts/check_local_geoloc_benchmark_smoke.sh scripts/check_context_search_evaluations.sh` passed.
+- `bash scripts/check_local_geoloc_benchmark_smoke.sh` passed.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_context_search_evaluations.sh` passed: `38 passed in 10.60s`.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment contracts `3 passed`, backup/restore contracts, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `38 passed`.
+
 ## 2026-06-26 - Local Agent Readiness Preflight
 
 Implementation completed:

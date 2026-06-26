@@ -87,6 +87,7 @@ bash scripts/check_project_delivery_loop.sh
 bash scripts/check_tool_bridge_contracts.sh
 bash scripts/check_graph_rag_lite.sh
 bash scripts/check_context_search_evaluations.sh
+bash scripts/check_local_geoloc_benchmark_smoke.sh
 ```
 
 ### Broad local preflight
