@@ -2,6 +2,28 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-26 - Local Doctor Entrypoint
+
+Implementation completed:
+
+- Added `scripts/check_local_doctor.sh` as a combined local diagnostics entrypoint.
+- The doctor runs local readiness, model-provider config, aggregate backup manifest, and geolocalization benchmark readiness checks without starting a service or printing secrets.
+- Added `--inspect-only` to `scripts/prepare_local_geoloc_benchmark.py` so read-only diagnostics can inspect missing benchmark files without creating directories.
+- Wired the doctor into README, documentation index, development process, local distribution flow, local readiness contracts, and focused deployment checks.
+
+Verification completed:
+
+- `bash -n scripts/check_local_doctor.sh scripts/check_deployment_contracts.sh` passed.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_deployment_contracts.sh` passed: `8 passed in 0.88s`.
+- `.venv/bin/pytest -q tests/test_sota_signoff_and_benchmark.py::test_prepare_local_geoloc_benchmark_inspect_only_does_not_create_dirs` passed.
+- `bash scripts/check_context_search_evaluations.sh` passed: `41 passed in 9.96s`.
+- `bash scripts/check_local_agent_readiness.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_generated_file_guard.sh` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment/local doctor contracts `8 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `3 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `41 passed`.
+
 ## 2026-06-26 - Local Backup Manifest
 
 Implementation completed:

@@ -23,14 +23,15 @@ This target does not require a central system access key, centralized user accou
 5. Run `./scripts/setup-local.sh` with a local Python 3.12+ interpreter.
 6. Run `source scripts/env.sh`.
 7. Run `bash scripts/check_local_agent_readiness.sh`.
-8. Run `python3 scripts/check_model_provider_config.py` to inspect model-provider readiness without printing secrets.
-9. Start the app with `./scripts/run-local.sh`.
-10. Open `http://127.0.0.1:8000/workbench`.
-11. Optionally run `bash scripts/check_local_runtime_smoke.sh` for a transient health/readiness/Workbench check.
-12. Optionally run `python3 scripts/build_local_backup_manifest.py` before backing up or moving local data.
-13. Optionally run `bash scripts/check_local_geoloc_benchmark_smoke.sh` to verify the project-local geolocalization JSONL benchmark path with temporary fixtures.
-14. Optionally run `python3 scripts/prepare_local_geoloc_benchmark.py --write-example --write-profile-manifest` to create ignored local benchmark example files and a machine-local profile manifest.
-15. Run `bash scripts/check_local_safe_suite.sh` before sharing changes.
+8. Run `bash scripts/check_local_doctor.sh` for combined local diagnostics without printing secrets.
+9. Run `python3 scripts/check_model_provider_config.py` to inspect model-provider readiness without printing secrets.
+10. Start the app with `./scripts/run-local.sh`.
+11. Open `http://127.0.0.1:8000/workbench`.
+12. Optionally run `bash scripts/check_local_runtime_smoke.sh` for a transient health/readiness/Workbench check.
+13. Optionally run `python3 scripts/build_local_backup_manifest.py` before backing up or moving local data.
+14. Optionally run `bash scripts/check_local_geoloc_benchmark_smoke.sh` to verify the project-local geolocalization JSONL benchmark path with temporary fixtures.
+15. Optionally run `python3 scripts/prepare_local_geoloc_benchmark.py --write-example --write-profile-manifest` to create ignored local benchmark example files and a machine-local profile manifest.
+16. Run `bash scripts/check_local_safe_suite.sh` before sharing changes.
 
 ## Required Local Artifacts
 
@@ -66,6 +67,7 @@ The project is already more than a basic RAG demo:
 - It stores research artifacts, task boards, graph links, evidence ledgers, decisions, and exportable dossiers.
 - It supports model-provider configuration, deterministic fallbacks, local benchmark profiles, benchmark execution, comparison briefs, and SOTA signoff readiness.
 - It includes a read-only local backup manifest helper so single-operator data moves can be planned without exposing private filenames or secrets.
+- It includes a combined local doctor entrypoint for setup diagnostics across readiness, model-provider config, backup scope, and benchmark file status.
 - It includes a local geolocalization benchmark smoke so clone users can verify the JSONL metric path before adding real benchmark datasets and predictions.
 - It includes a local geolocalization benchmark preparation helper for ignored example files, profile manifests, and runnable checks.
 - It has Workbench and MCP bridge surfaces for local agent-style operation.

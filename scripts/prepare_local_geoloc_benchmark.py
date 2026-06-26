@@ -43,7 +43,7 @@ def main() -> int:
             created=created,
             skipped=skipped,
         )
-    else:
+    elif not args.inspect_only:
         ground_truth.parent.mkdir(parents=True, exist_ok=True)
         predictions.parent.mkdir(parents=True, exist_ok=True)
 
@@ -56,7 +56,7 @@ def main() -> int:
             created=created,
             skipped=skipped,
         )
-    else:
+    elif not args.inspect_only:
         profile_manifest.parent.mkdir(parents=True, exist_ok=True)
 
     summary = benchmark_readiness_summary(
@@ -98,6 +98,11 @@ def parse_args() -> argparse.Namespace:
         "--write-profile-manifest",
         action="store_true",
         help="Write an ignored configs/benchmark_profiles.json profile when absent.",
+    )
+    parser.add_argument(
+        "--inspect-only",
+        action="store_true",
+        help="Inspect paths without creating directories or files.",
     )
     parser.add_argument(
         "--require-runnable",

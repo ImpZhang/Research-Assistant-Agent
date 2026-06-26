@@ -197,6 +197,7 @@ scripts/
   check_graph_rag_lite.sh
   check_handoff_docs.sh
   check_local_agent_readiness.sh
+  check_local_doctor.sh
   check_local_geoloc_benchmark_smoke.sh
   check_local_operational_preflight.sh
   check_local_runtime_smoke.sh
@@ -345,6 +346,12 @@ Run the local-agent readiness check to verify the clone-to-run contract, project
 
 ```bash
 bash scripts/check_local_agent_readiness.sh
+```
+
+Run the local doctor to collect readiness, model-provider, backup-manifest, and geolocalization benchmark diagnostics without starting a service or printing secrets:
+
+```bash
+bash scripts/check_local_doctor.sh
 ```
 
 Run the local operational preflight to confirm docs, runtime artifacts, environment template keys, compose persistence, and safe-suite hooks before a packaged local deployment. Use `LOCAL_PREFLIGHT_STRICT_GIT=true` before sharing a release to require a clean `main` checkout aligned with `origin/main`:

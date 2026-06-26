@@ -278,6 +278,33 @@ def test_prepare_local_geoloc_benchmark_reports_missing_files(tmp_path) -> None:
     ]
 
 
+def test_prepare_local_geoloc_benchmark_inspect_only_does_not_create_dirs(tmp_path) -> None:
+    script = Path("scripts/prepare_local_geoloc_benchmark.py")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--project-root",
+            str(tmp_path),
+            "--inspect-only",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    payload = json.loads(completed.stdout)
+
+    assert payload["runnable"] is False
+    assert payload["missing_paths"] == [
+        "data/benchmarks/geoloc/validation.jsonl",
+        "outputs/predictions/geoloc/validation.jsonl",
+    ]
+    assert not (tmp_path / "data").exists()
+    assert not (tmp_path / "outputs").exists()
+    assert not (tmp_path / "configs").exists()
+
+
 def test_benchmark_command_runner_is_disabled_by_default(monkeypatch) -> None:
     marker = f"benchmark-disabled-{uuid4().hex}"
     idea_id = f"{marker}-idea"
