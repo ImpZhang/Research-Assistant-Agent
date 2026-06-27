@@ -21,6 +21,7 @@ Opt-in live replay is available for bounded local executors:
 - The citation-audit executor checks observed `cited_evidence_ids` against local `Evidence` rows, optional `paper_ids`, and optional required citation terms.
 - `--live-executors` also supports `sota_readiness`, `sota_readiness_false_positive`, and `sota_signoff_audit` replay cases.
 - The SOTA-readiness executor audits local `sota_signoff_record` briefs for signoff status, manual gate readiness, external-search completion, nearest-work count, benchmark-run count, benchmark evidence readiness, and blockers.
+- SOTA signoff creation automatically captures a `sota_readiness_false_positive` replay case when `signoff_status=sota_confirmed` but the manual gate is not ready for a SOTA claim.
 - It does not call model providers, but it can refresh local `research_embeddings` rows in the selected SQLite database.
 - Full Advisor and SOTA-review workflow re-execution remain deferred until their replay policies are narrow enough to be deterministic and safe.
 
@@ -103,6 +104,6 @@ These are engineering regression metrics. They do not certify scientific SOTA, m
 
 ## Next Steps
 
-- Add replay case creators for missing citations and SOTA-readiness false positives.
+- Add replay case creators for missing citations and other evidence-link mistakes.
 - Extend live replay executors beyond context search/citation/SOTA audit after bounded Advisor policies exist.
 - Add automatic replay report scheduling only after local operator policy exists.

@@ -672,6 +672,17 @@ def test_benchmark_run_packet_can_anchor_sota_signoff() -> None:
     assert "# SOTA Signoff Record" in body["markdown_export"]
     assert "Benchmark Evidence Ready" in body["markdown_export"]
 
+    replay_cases = client.get(
+        "/research/agent/replay-cases?case_type=sota_readiness_false_positive"
+    )
+    assert replay_cases.status_code == 200
+    assert any(
+        item["expected"]["sota_signoff_id"] == body["id"]
+        and item["expected"]["require_ready_for_sota_claim"] is True
+        and item["observed"]["ready_for_sota_claim"] is False
+        for item in replay_cases.json()
+    )
+
     listed = client.get(f"/research/ideas/{idea_id}/sota-signoffs")
     detail = client.get(f"/research/ideas/{idea_id}/sota-signoffs/{body['id']}")
     markdown = client.get(f"/research/ideas/{idea_id}/sota-signoffs/{body['id']}/export/markdown")

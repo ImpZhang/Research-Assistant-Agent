@@ -5,6 +5,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from backend.research.models import ExperimentRun, Idea, ResearchBrief
+from backend.research.schemas import ReplayCaseCreate
+from backend.research.services.agent_trace_service import AgentTraceService
 from backend.research.services.benchmark_evidence_service import BenchmarkEvidenceService
 from backend.research.services.literature_search_service import LiteratureSearchService
 from backend.research.services.novelty_service import NoveltyService
@@ -285,6 +287,7 @@ class SotaReviewPackageService:
         self.session.add(brief)
         self.session.commit()
         self.session.refresh(brief)
+        self._capture_sota_false_positive_replay_case(idea, brief, summary)
         return brief
 
     def list_signoffs_for_idea(self, idea_id: str, limit: int = 20) -> list[ResearchBrief]:
@@ -309,6 +312,60 @@ class SotaReviewPackageService:
         ):
             return None
         return brief
+
+    def _capture_sota_false_positive_replay_case(
+        self,
+        idea: Idea,
+        signoff: ResearchBrief,
+        summary: dict[str, Any],
+    ) -> None:
+        manual_gate = summary.get("manual_gate_summary") or {}
+        if summary.get("signoff_status") != "sota_confirmed":
+            return
+        if bool(manual_gate.get("ready_for_sota_claim", False)):
+            return
+
+        AgentTraceService(self.session).create_replay_case(
+            ReplayCaseCreate(
+                case_type="sota_readiness_false_positive",
+                query=(
+                    "SOTA signoff was confirmed while manual readiness gates were not closed: "
+                    f"{idea.title}"
+                ),
+                expected={
+                    "idea_id": idea.id,
+                    "sota_signoff_id": signoff.id,
+                    "signoff_status": "sota_confirmed",
+                    "require_ready_for_sota_claim": True,
+                    "require_effective_external_search_completed": True,
+                    "require_benchmark_evidence_ready": True,
+                    "min_nearest_work_count": 1,
+                    "min_benchmark_run_count": 1,
+                    "max_sota_blocker_count": 0,
+                    "live_status": "completed",
+                },
+                observed={
+                    "signoff_status": summary.get("signoff_status", ""),
+                    "ready_for_sota_claim": bool(manual_gate.get("ready_for_sota_claim", False)),
+                    "effective_external_search_completed": bool(
+                        summary.get("effective_external_search_completed", False)
+                    ),
+                    "benchmark_evidence_ready": bool(
+                        manual_gate.get("benchmark_evidence_ready_for_sota_review", False)
+                    ),
+                    "sota_blockers": manual_gate.get("blockers") or [],
+                    "nearest_work_count": len(summary.get("nearest_work") or []),
+                    "benchmark_run_count": len(summary.get("benchmark_run_ids") or []),
+                },
+                verdict="needs_review",
+                notes="Automatically captured from SOTA signoff manual gate mismatch.",
+                metadata={
+                    "source": "sota_signoff_record",
+                    "sota_signoff_id": signoff.id,
+                    "idea_id": idea.id,
+                },
+            )
+        )
 
     def _review_queries(self, idea: Idea, base_query: str) -> list[str]:
         candidates = [
