@@ -46,8 +46,8 @@ Current product target: personal local deployment. A user should be able to clon
 
 ## P2 - Agent Interview Strengthening Follow-Ups
 
-- Extend Advisor trace wiring into bounded read-first tool selection, failed-tool capture, and replay workflow generation.
-- Convert Advisor from deterministic read composition into a bounded, traceable, read-first tool-calling agent while preserving the existing response contract and deterministic fallback.
+- Extend the bounded Advisor read-tool plan with model-ranked selection, failed-tool capture, and replay workflow generation.
+- Add stricter tool schema validation/error branches for Advisor tool selection while preserving the existing response contract and deterministic fallback.
 - Extend the project-local skill registry beyond the current `paper-ingestion`, `hybrid-context-search`, `literature-to-ideas`, `sota-review`, `benchmark-evaluation`, and `advisor-action-session` docs as new agent workflows are added.
 - Extend the initial bad-case replay script with live replay executors for context-search misses, citation mistakes, and readiness false positives once tool-calling selection is bounded.
 - Extend the isolated LangGraph advisor/deep-review workflow with live replay hooks, optional human/write nodes, and richer verification after bounded tool selection matures; keep the current `WorkflowService` path intact.

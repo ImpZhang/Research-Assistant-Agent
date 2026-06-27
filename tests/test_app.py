@@ -1427,7 +1427,15 @@ Future work should replay bad cases from stored agent traces.
     assert advisor_chat.status_code == 200
     advisor_chat_body = advisor_chat.json()
     assert advisor_chat_body["agent_run_id"]
-    assert advisor_chat_body["source_summaries"]["agent_trace"]["tool_call_count"] == 2
+    assert advisor_chat_body["source_summaries"]["agent_trace"]["tool_call_count"] == 3
+    assert advisor_chat_body["source_summaries"]["tool_plan"]["selected_tools"] == [
+        "get_project_cockpit",
+        "search_research_context",
+        "get_idea_progress",
+    ]
+    assert advisor_chat_body["source_summaries"]["tool_plan"]["skipped_tools"] == [
+        "get_idea_lineage"
+    ]
 
     advisor_run = client.get(f"/research/agent/runs/{advisor_chat_body['agent_run_id']}")
     assert advisor_run.status_code == 200
@@ -1435,7 +1443,7 @@ Future work should replay bad cases from stored agent traces.
     assert advisor_run_body["run_type"] == "advisor_chat"
     assert advisor_run_body["status"] == "completed"
     assert advisor_run_body["created_by"] == "pytest"
-    assert advisor_run_body["output"]["tool_call_count"] == 2
+    assert advisor_run_body["output"]["tool_call_count"] == 3
 
     advisor_tool_calls = client.get(
         f"/research/agent/runs/{advisor_chat_body['agent_run_id']}/tool-calls"
@@ -1443,7 +1451,9 @@ Future work should replay bad cases from stored agent traces.
     assert advisor_tool_calls.status_code == 200
     advisor_tool_call_body = advisor_tool_calls.json()
     advisor_tool_names = {tool_call["tool_name"] for tool_call in advisor_tool_call_body}
-    assert {"get_project_cockpit", "search_research_context"}.issubset(advisor_tool_names)
+    assert {"get_project_cockpit", "search_research_context", "get_idea_progress"}.issubset(
+        advisor_tool_names
+    )
     assert all(tool_call["status"] == "completed" for tool_call in advisor_tool_call_body)
 
     deep_review = client.post(

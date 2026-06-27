@@ -112,7 +112,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Task generation from pilot report snapshots so saved customer updates can drive follow-up work and GraphRAG-lite traceability.
 - Project cockpit dashboard that compresses setup state, workflow stages, metrics, readiness, quality gates, opportunity radar, risks, highlights, quick actions, and Markdown export into one customer-facing entry point.
 - Task generation from project cockpit primary action, next actions, risks, and highlights so the customer-facing entry point can drive the task board directly.
-- Advisor chat endpoint that answers project-level questions from cockpit state, retrieved evidence, gaps, ideas, and GraphRAG-lite context, with Markdown output, citations, recommended actions, tool suggestions, and persisted agent-run/tool-call trace records.
+- Advisor chat endpoint that answers project-level questions through a bounded read-first tool plan over cockpit, context search, idea progress, lineage, and task-list tools, with Markdown output, citations, recommended actions, tool suggestions, and persisted agent-run/tool-call trace records.
 - Task generation from advisor chat answers so recommendations, risks, and optional tool suggestions enter the task board and graph trace.
 - Advisor action sessions that turn one advisor question into a grounded answer, follow-up tasks, a task-board snapshot, progress summary, and Markdown execution report.
 - Opt-in LangGraph advisor deep-review workflow that runs load/retrieve/verify/compose nodes, records agent trace/tool calls, returns evidence verification flags, and leaves the stable service workflow unchanged.

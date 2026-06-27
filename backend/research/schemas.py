@@ -1931,6 +1931,7 @@ class AdvisorChatRequest(BaseModel):
     include_cockpit: bool = True
     include_context: bool = True
     context_limit: int = Field(default=5, ge=1, le=15)
+    max_tool_calls: int = Field(default=3, ge=1, le=5)
     created_by: str = "researcher"
 
 
@@ -1953,7 +1954,6 @@ class AdvisorChatResponse(BaseModel):
 
 
 class AdvisorDeepReviewRequest(AdvisorChatRequest):
-    max_tool_calls: int = Field(default=3, ge=1, le=5)
     verify_evidence: bool = True
 
 

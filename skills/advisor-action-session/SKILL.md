@@ -28,7 +28,7 @@ Use the Advisor as a local project operator surface: answer one grounded questio
 
 ## Safety Boundaries
 
-- Current Advisor behavior is deterministic read composition plus trace logging, not open-ended autonomous tool execution.
+- Current Advisor behavior uses a bounded read-first tool plan plus trace logging, not open-ended autonomous tool execution.
 - Treat task creation as a side effect; use it only when the user wants work added to the task board.
 - Do not hide weak evidence; surface cited gaps, risks, and missing actions.
 

@@ -2772,6 +2772,75 @@ def create_tasks_from_project_cockpit(
     )
 
 
+def _advisor_read_tool_candidates(payload: AdvisorChatRequest, question: str) -> list[str]:
+    normalized = question.lower()
+    candidates: list[str] = []
+    if payload.include_cockpit:
+        candidates.append("get_project_cockpit")
+    if payload.include_context:
+        candidates.append("search_research_context")
+    if payload.idea_id and any(
+        keyword in normalized
+        for keyword in (
+            "next",
+            "progress",
+            "status",
+            "risk",
+            "blocker",
+            "readiness",
+            "task",
+            "action",
+        )
+    ):
+        candidates.append("get_idea_progress")
+    if payload.idea_id and any(
+        keyword in normalized
+        for keyword in ("lineage", "trace", "source", "artifact", "evidence", "why")
+    ):
+        candidates.append("get_idea_lineage")
+    if any(keyword in normalized for keyword in ("task", "todo", "blocked", "action")):
+        candidates.append("list_research_tasks")
+
+    deduped: list[str] = []
+    for candidate in candidates:
+        if candidate not in deduped:
+            deduped.append(candidate)
+    return deduped
+
+
+def _advisor_read_tool_plan(payload: AdvisorChatRequest, question: str) -> dict[str, Any]:
+    candidates = _advisor_read_tool_candidates(payload, question)
+    max_tool_calls = max(1, min(getattr(payload, "max_tool_calls", 3), 5))
+    return {
+        "candidate_tools": candidates,
+        "selected_tools": candidates[:max_tool_calls],
+        "skipped_tools": candidates[max_tool_calls:],
+        "max_tool_calls": max_tool_calls,
+    }
+
+
+def _record_advisor_tool_call(
+    trace_service: AgentTraceService,
+    agent_run_id: str,
+    *,
+    tool_name: str,
+    tool_arguments: dict[str, Any],
+    tool_result_summary: str,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    trace_service.create_tool_call(
+        agent_run_id,
+        ToolCallRecordCreate(
+            tool_name=tool_name,
+            tool_arguments=tool_arguments,
+            tool_result_summary=tool_result_summary,
+            status="completed",
+            side_effect=False,
+            metadata=metadata or {},
+        ),
+    )
+
+
 @router.post("/advisor/chat", response_model=AdvisorChatResponse)
 def ask_project_advisor(
     payload: AdvisorChatRequest,
@@ -2800,53 +2869,146 @@ def ask_project_advisor(
                 "paper_ids": payload.paper_ids,
                 "include_cockpit": payload.include_cockpit,
                 "include_context": payload.include_context,
+                "max_tool_calls": payload.max_tool_calls,
             },
         )
     )
     tool_call_count = 0
     try:
+        tool_plan = _advisor_read_tool_plan(payload, question)
+        selected_tools = set(tool_plan["selected_tools"])
+        tool_observations: list[dict[str, Any]] = []
         cockpit = None
-        if payload.include_cockpit:
+        if "get_project_cockpit" in selected_tools:
             cockpit = get_project_cockpit(idea_limit=50, opportunity_limit=5, session=session)
-            trace_service.create_tool_call(
+            _record_advisor_tool_call(
+                trace_service,
                 agent_run.id,
-                ToolCallRecordCreate(
-                    tool_name="get_project_cockpit",
-                    tool_arguments={"idea_limit": 50, "opportunity_limit": 5},
-                    tool_result_summary=(
-                        f"phase={cockpit.phase}; readiness={cockpit.readiness_level}; "
-                        f"risks={len(cockpit.risk_alerts)}"
-                    ),
-                    status="completed",
-                    side_effect=False,
+                tool_name="get_project_cockpit",
+                tool_arguments={"idea_limit": 50, "opportunity_limit": 5},
+                tool_result_summary=(
+                    f"phase={cockpit.phase}; readiness={cockpit.readiness_level}; "
+                    f"risks={len(cockpit.risk_alerts)}"
                 ),
+            )
+            tool_observations.append(
+                {
+                    "tool_name": "get_project_cockpit",
+                    "summary": {
+                        "phase": cockpit.phase,
+                        "readiness_level": cockpit.readiness_level,
+                        "risk_alert_count": len(cockpit.risk_alerts),
+                    },
+                }
             )
             tool_call_count += 1
 
         context = None
-        if payload.include_context:
+        if "search_research_context" in selected_tools:
             context = _advisor_chat_context_response(payload, selected_idea, session)
-            trace_service.create_tool_call(
+            _record_advisor_tool_call(
+                trace_service,
                 agent_run.id,
-                ToolCallRecordCreate(
-                    tool_name="search_research_context",
-                    tool_arguments={
-                        "body": {
-                            "query": context.query,
-                            "paper_ids": payload.paper_ids,
-                            "limit": payload.context_limit,
-                            "include_graph": True,
-                        }
-                    },
-                    tool_result_summary=(
-                        f"chunks={len(context.chunks)}; evidences={len(context.evidences)}; "
-                        f"gaps={len(context.gaps)}; ideas={len(context.ideas)}; "
-                        f"graph_nodes={len(context.graph_nodes)}; "
-                        f"graph_edges={len(context.graph_edges)}"
-                    ),
-                    status="completed",
-                    side_effect=False,
+                tool_name="search_research_context",
+                tool_arguments={
+                    "body": {
+                        "query": context.query,
+                        "paper_ids": payload.paper_ids,
+                        "limit": payload.context_limit,
+                        "include_graph": True,
+                    }
+                },
+                tool_result_summary=(
+                    f"chunks={len(context.chunks)}; evidences={len(context.evidences)}; "
+                    f"gaps={len(context.gaps)}; ideas={len(context.ideas)}; "
+                    f"graph_nodes={len(context.graph_nodes)}; "
+                    f"graph_edges={len(context.graph_edges)}"
                 ),
+            )
+            tool_observations.append(
+                {
+                    "tool_name": "search_research_context",
+                    "summary": {
+                        "chunk_count": len(context.chunks),
+                        "evidence_count": len(context.evidences),
+                        "gap_count": len(context.gaps),
+                        "idea_count": len(context.ideas),
+                        "graph_node_count": len(context.graph_nodes),
+                        "graph_edge_count": len(context.graph_edges),
+                    },
+                }
+            )
+            tool_call_count += 1
+
+        if payload.idea_id and "get_idea_progress" in selected_tools:
+            progress = get_idea_progress(payload.idea_id, session=session)
+            blocker_count = len(progress.blockers)
+            open_task_count = progress.task_summary.get("open_task_count", 0)
+            _record_advisor_tool_call(
+                trace_service,
+                agent_run.id,
+                tool_name="get_idea_progress",
+                tool_arguments={"idea_id": payload.idea_id},
+                tool_result_summary=(
+                    f"open_tasks={open_task_count}; blockers={blocker_count}; "
+                    f"next_step={progress.recommended_next_step[:160]}"
+                ),
+            )
+            tool_observations.append(
+                {
+                    "tool_name": "get_idea_progress",
+                    "summary": {
+                        "open_task_count": open_task_count,
+                        "blocker_count": blocker_count,
+                        "recommended_next_step": progress.recommended_next_step,
+                    },
+                }
+            )
+            tool_call_count += 1
+
+        if payload.idea_id and "get_idea_lineage" in selected_tools:
+            lineage = get_idea_lineage(payload.idea_id, session=session)
+            graph_edge_count = sum(lineage.graph_edge_summary.values())
+            _record_advisor_tool_call(
+                trace_service,
+                agent_run.id,
+                tool_name="get_idea_lineage",
+                tool_arguments={"idea_id": payload.idea_id},
+                tool_result_summary=(
+                    f"plans={len(lineage.research_plans)}; tasks={len(lineage.research_tasks)}; "
+                    f"graph_edges={graph_edge_count}"
+                ),
+            )
+            tool_observations.append(
+                {
+                    "tool_name": "get_idea_lineage",
+                    "summary": {
+                        "research_plan_count": len(lineage.research_plans),
+                        "task_count": len(lineage.research_tasks),
+                        "graph_edge_count": graph_edge_count,
+                    },
+                }
+            )
+            tool_call_count += 1
+
+        if "list_research_tasks" in selected_tools:
+            tasks = list_research_tasks(idea_id=payload.idea_id, limit=20, session=session)
+            status_counts = Counter(task.status for task in tasks)
+            _record_advisor_tool_call(
+                trace_service,
+                agent_run.id,
+                tool_name="list_research_tasks",
+                tool_arguments={"idea_id": payload.idea_id or "", "limit": 20},
+                tool_result_summary=f"tasks={len(tasks)}; status_counts={dict(status_counts)}",
+            )
+            tool_observations.append(
+                {
+                    "tool_name": "list_research_tasks",
+                    "summary": {
+                        "task_count": len(tasks),
+                        "status_counts": dict(status_counts),
+                    },
+                }
             )
             tool_call_count += 1
 
@@ -2859,6 +3021,10 @@ def ask_project_advisor(
             "agent_run_id": agent_run.id,
             "tool_call_count": tool_call_count,
             "trace_status": "completed",
+        }
+        source_summaries["tool_plan"] = {
+            **tool_plan,
+            "observations": tool_observations,
         }
         answer_markdown = _render_advisor_chat_markdown(
             question=question,

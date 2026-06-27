@@ -2,6 +2,26 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Bounded Advisor Read Tool Plan
+
+Implementation completed:
+
+- Added `max_tool_calls` to Advisor chat requests and implemented a bounded deterministic read-tool planner.
+- The Advisor now selects from approved read tools: `get_project_cockpit`, `search_research_context`, `get_idea_progress`, `get_idea_lineage`, and `list_research_tasks`.
+- Added selected/skipped tool plan metadata and compact observations to `source_summaries.tool_plan`.
+- Preserved the existing Advisor response contract while expanding traceable tool calls beyond cockpit/context reads.
+- Updated README, TODO, technical design, project skill docs, and the agent-engineering strengthening plan to mark bounded read-first tool calling as the current baseline.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_app.py::test_advisor_chat_records_agent_trace_tool_calls tests/test_app.py::test_tool_manifest_lists_mcp_ready_research_tools tests/test_app.py::test_research_status` passed: `3 passed`.
+- `bash scripts/check_workflow_job_controls.sh` passed: `5 passed`.
+- `bash scripts/check_project_skills.sh` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `git diff --check` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `1 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `8 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `5 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - LangGraph Advisor Deep Review
 
 Implementation completed:

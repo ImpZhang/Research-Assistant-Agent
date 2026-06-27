@@ -20,7 +20,7 @@ The project is not yet a full autonomous agent runtime:
 
 - The production workflow is service-layer orchestration; the LangGraph path is an isolated opt-in Advisor deep-review example, not the default runtime.
 - The MCP surface is a lightweight bridge over FastAPI, not a full MCP SDK server with resources and prompts.
-- Advisor responses are still mostly deterministic composition over existing services, not an LLM-driven tool-calling loop.
+- Advisor responses now use a bounded deterministic read-tool plan over approved tools; they are not yet an LLM-ranked tool-calling loop.
 - Replay and LangGraph flows do not yet write trace records automatically.
 - The project-local skill registry now covers core workflows under `skills/*/SKILL.md` and is validated by `scripts/check_project_skills.sh`.
 
@@ -69,7 +69,7 @@ Interview framing:
 
 Convert Advisor into the first real tool-calling agent surface while preserving existing advisor response contracts.
 
-Initial status: Advisor chat now records the deterministic `get_project_cockpit` and `search_research_context` read calls into `ToolCallRecord`. It is observable and replay-ready, but it is not yet doing bounded LLM-driven tool selection.
+Initial status: Advisor chat now uses a bounded read-first plan over `get_project_cockpit`, `search_research_context`, `get_idea_progress`, `get_idea_lineage`, and `list_research_tasks`. Tool calls are trace-recorded, selected/skipped tools are returned in `source_summaries.tool_plan`, and model-ranked selection remains a future extension.
 
 Initial tool set:
 
@@ -313,7 +313,7 @@ The personal local target should remain simple: clone, configure `.env`, run loc
 
 1. Completed: add `AgentRun`, `ToolCallRecord`, and `ReplayCase` models plus read APIs.
 2. Completed: add Advisor trace creation without changing answer behavior.
-3. Add bounded read-only Advisor tool calling.
+3. Completed: add bounded read-only Advisor tool calling.
 4. Completed: add project-local skill docs for the core workflows.
 5. Completed: add replay script and deterministic replay fixtures.
 6. Completed: add one isolated LangGraph advisor deep-review workflow.
