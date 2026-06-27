@@ -395,6 +395,13 @@ Run focused deployment artifact and local runtime contract checks without starti
 bash scripts/check_deployment_contracts.sh
 ```
 
+Run the single-user Docker deployment static check without starting Docker or reading `.env` values:
+
+```bash
+python3 scripts/check_single_user_docker_deployment.py
+python3 scripts/check_single_user_docker_deployment.py --markdown --write-markdown outputs/docker/static-check.md
+```
+
 Run the opt-in local runtime smoke to start a temporary localhost server, verify `/health`, `/health/ready`, and Workbench HTML, then stop the server automatically:
 
 ```bash

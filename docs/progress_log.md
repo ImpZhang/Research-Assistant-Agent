@@ -2,6 +2,21 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Single User Docker Static Check
+
+Implementation completed:
+
+- Added `scripts/check_single_user_docker_deployment.py` as a no-Docker-start static contract check for Dockerfile, docker-compose, dockerignore, `.env.example`, and deployment documentation.
+- Added regression tests for the passing repository contract, missing-token failure reporting, and project-local JSON/Markdown report output.
+- Wired the check into deployment focused contracts and documented it in README, local isolation, deployment notes, documentation index, and TODO.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_single_user_docker_deployment.py` passed: `3 passed`.
+- `python3 scripts/check_single_user_docker_deployment.py --json` passed on the local checkout with all 5 static contract checks passing.
+- `bash scripts/check_deployment_contracts.sh` passed: `15 passed`.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `1 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `15 passed`, backup/restore manifest/rehearsal tests `6 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `5 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Synthetic Backup Restore Rehearsal
 
 Implementation completed:

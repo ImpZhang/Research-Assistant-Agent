@@ -40,7 +40,7 @@ Current product target: personal local deployment. A user should be able to clon
 - Keep real multi-project/user isolation deferred; the current product is single-operator local deployment with a default project.
 - Add Alembic-style migrations.
 - Harden local queue/worker execution for long-running workflows and benchmark runs.
-- Add optional single-user Docker deployment checks.
+- Keep optional single-user Docker deployment checks static unless the operator explicitly approves Docker startup. Current baseline: `scripts/check_single_user_docker_deployment.py` validates Dockerfile, compose, dockerignore, env-template, and deployment-doc contracts without starting Docker or reading `.env`.
 - Keep backup planning grounded in `scripts/build_local_backup_manifest.py` before adding any real data-copying or restore automation. Current baseline: `scripts/rehearse_local_backup_restore.py` runs a synthetic-only archive/restore/manifest comparison and secret-exclusion rehearsal without copying live local data.
 - Improve page/figure/table-aware PDF evidence extraction.
 

@@ -64,6 +64,12 @@ docker compose up --build
 
 For production-like compose runs, create an untracked `.env` with a long `API_KEY`.
 
+Before changing optional Docker packaging, run the static contract check. It reads committed templates and docs only; it does not start Docker or read `.env` values:
+
+```bash
+python3 scripts/check_single_user_docker_deployment.py
+```
+
 ## Cleanup
 
 Before backing up or moving local data, build an aggregate manifest:

@@ -158,6 +158,13 @@ The preflight checks required runtime files, Workbench assets, remote-safe verif
 
 ## Docker Compose
 
+Before changing optional Docker packaging, run the static single-user deployment check. It validates Dockerfile, compose, dockerignore, env-template, and deployment-doc contracts without starting Docker, rebuilding images, reading `.env`, or touching local data:
+
+```bash
+python3 scripts/check_single_user_docker_deployment.py
+python3 scripts/check_single_user_docker_deployment.py --markdown --write-markdown outputs/docker/static-check.md
+```
+
 ```bash
 docker compose up --build
 ```
