@@ -154,6 +154,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Deterministic bad-case replay script for saved `ReplayCase` rows, source agent runs, and tool-call records, with JSON/Markdown reports and focused local validation.
 - Agent observability metrics endpoint and Markdown export for run status/type counts, tool-call success rate, replay verdict distribution, average latency, and recent failures.
 - Project-local skill registry under `skills/*/SKILL.md` for paper ingestion, hybrid context search, literature-to-ideas, SOTA review, benchmark evaluation, and Advisor action sessions, with `scripts/check_project_skills.sh` validation.
+- Read-only SQLite maintenance report for local database size, sidecar files, table counts, vector-index counts, trace counts, integrity check status, and safe operator recommendations.
 - Research idea portfolio ranking with profile-aware weighting, lineage deduplication, claim validation result adjustments, and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.
@@ -358,7 +359,7 @@ Run the local-agent readiness check to verify the clone-to-run contract, project
 bash scripts/check_local_agent_readiness.sh
 ```
 
-Run the local doctor to collect readiness, model-provider, backup-manifest, and geolocalization benchmark diagnostics without starting a service or printing secrets:
+Run the local doctor to collect readiness, model-provider, backup-manifest, SQLite-maintenance, and geolocalization benchmark diagnostics without starting a service or printing secrets:
 
 ```bash
 bash scripts/check_local_doctor.sh
@@ -411,6 +412,13 @@ Build a read-only aggregate manifest before backing up local data. This reports 
 ```bash
 python3 scripts/build_local_backup_manifest.py
 python3 scripts/build_local_backup_manifest.py --write-json outputs/backups/local-backup-manifest.json
+```
+
+Build a read-only SQLite maintenance report before database maintenance or troubleshooting. This reports aggregate table, vector-index, trace, storage, sidecar, and quick-check status without reading `.env` or private paper content:
+
+```bash
+python3 scripts/check_sqlite_maintenance.py
+python3 scripts/check_sqlite_maintenance.py --markdown --write-markdown outputs/maintenance/sqlite-report.md
 ```
 
 Run focused context-search evaluation checks on the local `.venv`:

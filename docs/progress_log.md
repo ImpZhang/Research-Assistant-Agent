@@ -2,6 +2,21 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - SQLite Maintenance Report
+
+Implementation completed:
+
+- Added `scripts/check_sqlite_maintenance.py` as a read-only aggregate SQLite maintenance report for database size, WAL/SHM sidecars, table counts, `research_embeddings` owner/model counts, agent trace counts, and `PRAGMA quick_check`.
+- Guarded the script so databases outside the project root are not inspected unless the operator explicitly passes `--allow-outside-project`.
+- Wired the report into `scripts/check_local_doctor.sh`, deployment-focused tests, README, local isolation, deployment notes, vector-store strategy, documentation index, and TODO.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_sqlite_maintenance.py tests/test_local_doctor.py` passed: `6 passed`.
+- `python3 scripts/check_sqlite_maintenance.py --json` passed on the local checkout with quick-check `ok`, project-local SQLite storage, and aggregate-only output.
+- `bash scripts/check_local_doctor.sh` passed with the new SQLite maintenance section and without printing `.env` values.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `1 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `12 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `5 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Agent Observability Markdown Export
 
 Implementation completed:

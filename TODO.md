@@ -34,7 +34,7 @@ Current product target: personal local deployment. A user should be able to clon
 - Current trace baseline: `AgentRun`, `ToolCallRecord`, and `ReplayCase` persistence exists, and Advisor chat writes an `advisor_chat` run plus cockpit/context read tool-call records.
 - Polish clone-to-run setup, local preflight, and `.env.example` so first-time users can configure model API keys without reading internal docs. Current baseline: `scripts/check_local_agent_readiness.sh` validates the local readiness contract without reading `.env`.
 - Keep model-provider setup diagnosable through `scripts/check_model_provider_config.py` before running explicit real-provider smokes.
-- Keep clone diagnostics consolidated through `scripts/check_local_doctor.sh` as setup, backup, and benchmark checks grow.
+- Keep clone diagnostics consolidated through `scripts/check_local_doctor.sh` as setup, backup, SQLite-maintenance, and benchmark checks grow. Current baseline: `scripts/check_sqlite_maintenance.py` reports aggregate SQLite storage, table, vector-index, trace, sidecar, and quick-check status without reading secrets or private paper content.
 - Enable live external-search providers for local real-provider settings and require completed SOTA external-search evidence packages before final signoff.
 - Add practical local benchmark recipes and prediction-generation pipelines on top of the guarded benchmark runner. Current baseline: `scripts/check_local_geoloc_benchmark_smoke.sh` verifies the local JSONL metric path with temporary fixtures, and `scripts/prepare_local_geoloc_benchmark.py` prepares ignored local files/profile manifests.
 - Keep real multi-project/user isolation deferred; the current product is single-operator local deployment with a default project.
@@ -51,7 +51,7 @@ Current product target: personal local deployment. A user should be able to clon
 - Extend the project-local skill registry beyond the current `paper-ingestion`, `hybrid-context-search`, `literature-to-ideas`, `sota-review`, `benchmark-evaluation`, and `advisor-action-session` docs as new agent workflows are added.
 - Extend the initial bad-case replay script with live replay executors for context-search misses, citation mistakes, and readiness false positives once tool-calling selection is bounded.
 - Extend the isolated LangGraph advisor/deep-review workflow with live replay hooks, optional human/write nodes, and richer verification after bounded tool selection matures; keep the current `WorkflowService` path intact.
-- Strengthen local deployment polish around `.env.example`, doctor diagnostics, SQLite maintenance, backup/restore rehearsal, cleanup safety, and first-run demo runbooks.
+- Strengthen local deployment polish around `.env.example`, backup/restore rehearsal, cleanup safety, first-run demo runbooks, and future approved SQLite maintenance actions. Current baseline: doctor diagnostics include the read-only SQLite maintenance report.
 
 ## P3 - Needs Explicit Operator Approval
 

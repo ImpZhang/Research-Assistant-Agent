@@ -128,6 +128,7 @@ Before starting or upgrading a local personal-agent service:
 - [ ] For localhost-only use, API-key auth may stay disabled; for Docker or non-local access, set `API_KEY_AUTH_ENABLED=true` and use a long random `API_KEY` for browser, MCP, and scripted access.
 - [ ] Confirm `RESEARCH_DB_URL` and `PAPER_UPLOAD_DIR` point at persistent storage, not an ephemeral build directory.
 - [ ] Back up `/app/data` or the equivalent data volume before rebuilds, migrations, or host moves.
+- [ ] Run `python3 scripts/check_sqlite_maintenance.py` for a read-only local database health report before approved SQLite maintenance or troubleshooting.
 - [ ] If SQLAlchemy models changed, review `docs/database_migration_strategy.md` and confirm no implicit startup migration is being relied on.
 - [ ] Start or rebuild Docker only after explicit operator approval.
 - [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`; confirm the health payload build commit matches the intended deployment commit; confirm the response includes `X-Request-ID` or the configured request-id header; confirm `request_id_header.ok=true`; confirm `database_storage.ok=true` for SQLite persistence; confirm `workbench_assets.ok=true` for the browser entrypoint; review `model_provider_configuration.roles` for fallback versus external-model mode; if API-key auth is enabled, confirm `api_key_auth.ok=true` and `api_key_auth.configured=true`; if write audit is enabled, confirm the readiness payload includes an enabled, writable `write_audit_dir` check, and if external literature search is enabled, confirm `external_literature_search.ok=true`.
@@ -173,6 +174,15 @@ python3 scripts/build_local_backup_manifest.py --write-json outputs/backups/loca
 ```
 
 The manifest is read-only and aggregate-only: it counts files and bytes for `data/research`, `data/papers`, `data/audit`, `data/benchmarks`, `outputs`, and the ignored local benchmark profile manifest without listing private paper filenames, reading file contents, or including `.env` secrets.
+
+Before SQLite troubleshooting or approved maintenance, build a read-only database report:
+
+```bash
+python3 scripts/check_sqlite_maintenance.py
+python3 scripts/check_sqlite_maintenance.py --markdown --write-markdown outputs/maintenance/sqlite-report.md
+```
+
+The report includes database size, WAL/SHM sidecar sizes, important table counts, `research_embeddings` owner/model counts, agent trace counts, and `PRAGMA quick_check` status. It does not read `.env`, API keys, provider credentials, private paper content, or perform cleanup. `VACUUM`, checkpoints, migrations, restore, or data rewrites remain explicit-approval maintenance actions.
 
 The compose file declares a `research_assistant_data` volume mounted at `/app/data`. Docker Compose usually creates an engine volume named `<compose-project>_research_assistant_data`, so confirm the actual volume name before backing up or restoring.
 

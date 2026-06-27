@@ -74,6 +74,15 @@ python3 scripts/build_local_backup_manifest.py
 
 The manifest is read-only. It reports backup-set counts and sizes without listing private paper filenames or including `.env` secrets.
 
+Before SQLite troubleshooting or approved maintenance, build a read-only maintenance report:
+
+```bash
+python3 scripts/check_sqlite_maintenance.py
+python3 scripts/check_sqlite_maintenance.py --markdown --write-markdown outputs/maintenance/sqlite-report.md
+```
+
+The report inspects only aggregate database metadata: storage size, sidecars, table counts, vector-index counts, trace counts, and `PRAGMA quick_check`. It does not read `.env`, API keys, provider credentials, private paper content, or run cleanup actions. By default, it refuses to inspect a database outside the project root.
+
 ```bash
 ./scripts/clean.sh
 ```

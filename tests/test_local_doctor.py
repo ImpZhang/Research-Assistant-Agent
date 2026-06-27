@@ -13,6 +13,7 @@ def test_local_doctor_runs_read_only_diagnostics() -> None:
     assert "== Local agent readiness ==" in completed.stdout
     assert "== Model provider configuration ==" in completed.stdout
     assert "== Local backup manifest ==" in completed.stdout
+    assert "== SQLite maintenance report ==" in completed.stdout
     assert "== Geolocalization benchmark readiness ==" in completed.stdout
     assert "Local doctor completed." in completed.stdout
     assert "API_KEY=" not in completed.stdout
@@ -25,3 +26,4 @@ def test_local_doctor_uses_inspect_only_geoloc_check() -> None:
     assert "scripts/check_local_agent_readiness.sh" in script
     assert "scripts/check_model_provider_config.py" in script
     assert "scripts/build_local_backup_manifest.py" in script
+    assert "scripts/check_sqlite_maintenance.py" in script

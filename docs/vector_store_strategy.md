@@ -68,6 +68,14 @@ Check provider readiness without printing secrets:
 python3 scripts/check_model_provider_config.py
 ```
 
+Check the local SQLite vector-row baseline without printing paper content:
+
+```bash
+python3 scripts/check_sqlite_maintenance.py --markdown
+```
+
+The report shows `research_embeddings` row counts by owner type and model/dimension, plus related table counts. It is an operational diagnostic, not a retrieval-quality benchmark.
+
 Run retrieval and context-search focused checks before changing vector scoring, embedding behavior, or rerank behavior:
 
 ```bash

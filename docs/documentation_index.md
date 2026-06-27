@@ -14,13 +14,14 @@ This document is the starting point for future development. Use it to find the r
 | `docs/local_isolation.md` | Mac-local environment, cache, data, cleanup, and run commands. | Before running locally or installing dependencies. |
 | `docs/progress_log.md` | Durable history of nontrivial work and verification. | After completing meaningful changes. |
 | `scripts/check_local_agent_readiness.sh` | Read-only local-agent clone-to-run readiness check. | Before claiming a local checkout is ready to run. |
-| `scripts/check_local_doctor.sh` | Combined local diagnostics for readiness, model-provider config, backup manifest, and geoloc benchmark readiness. | After clone/setup or before asking for help with local setup. |
+| `scripts/check_local_doctor.sh` | Combined local diagnostics for readiness, model-provider config, backup manifest, SQLite maintenance, and geoloc benchmark readiness. | After clone/setup or before asking for help with local setup. |
 | `scripts/check_local_geoloc_benchmark_smoke.sh` | Temporary-fixture geolocalization benchmark smoke for the local JSONL scoring harness. | Before claiming the benchmark harness works in a fresh local checkout. |
 | `scripts/check_local_operational_preflight.sh` | Local deployment preflight wrapper with local strict-git alias. | Before packaging or sharing a local deployment. |
 | `scripts/check_local_runtime_smoke.sh` | Transient localhost runtime smoke for health, readiness, and Workbench. | Before claiming the app starts successfully on the current machine. |
 | `scripts/check_local_safe_suite.sh` | Default local focused verification suite. | Before pushing a completed implementation round. |
 | `scripts/check_model_provider_config.py` | No-network model-provider environment readiness check that does not print secrets. | Before running the opt-in real-provider smoke or diagnosing local model setup. |
 | `scripts/build_local_backup_manifest.py` | Read-only aggregate manifest for local data backup scope, counts, sizes, and excluded secret files. | Before backing up or moving a local checkout's data. |
+| `scripts/check_sqlite_maintenance.py` | Read-only SQLite maintenance report for database size, sidecars, table counts, vector-index counts, trace counts, and safe recommendations. | Before SQLite troubleshooting, approved maintenance, or local handoff. |
 
 ## Product And Architecture
 

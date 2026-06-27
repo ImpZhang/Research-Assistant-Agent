@@ -15,6 +15,10 @@ echo "== Local backup manifest =="
 python3 scripts/build_local_backup_manifest.py
 
 echo
+echo "== SQLite maintenance report =="
+python3 scripts/check_sqlite_maintenance.py
+
+echo
 echo "== Geolocalization benchmark readiness =="
 python3 scripts/prepare_local_geoloc_benchmark.py --inspect-only
 
