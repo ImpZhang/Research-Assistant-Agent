@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.research.db import SessionLocal
-from backend.research.models import AgentRun, ReplayCase, ToolCallRecord
+from backend.research.models import AgentRun, Evidence, ReplayCase, ToolCallRecord
 from backend.research.schemas import AgentRunCreate, ToolCallRecordCreate
 from backend.research.services.agent_trace_service import AgentTraceService
 from backend.research.services.embedding_service import EmbeddingService
@@ -210,6 +210,7 @@ def _record_replay_tool_calls(
             continue
         live_status = str(evaluation.observed.get("live_status") or "")
         context_counts = evaluation.observed.get("context_counts") or {}
+        citation_counts = evaluation.observed.get("citation_counts") or {}
         trace_service.create_tool_call(
             run_id,
             ToolCallRecordCreate(
@@ -222,7 +223,11 @@ def _record_replay_tool_calls(
                     "limit": evaluation.expected.get("limit", ""),
                     "include_graph": evaluation.expected.get("include_graph", False),
                 },
-                tool_result_summary=_replay_tool_summary(live_status, context_counts),
+                tool_result_summary=_replay_tool_summary(
+                    live_status,
+                    context_counts,
+                    citation_counts,
+                ),
                 status=_tool_status_from_live_status(live_status),
                 error=str(evaluation.observed.get("live_error") or ""),
                 side_effect=False,
@@ -258,7 +263,20 @@ def _replay_input(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def _replay_tool_summary(live_status: str, context_counts: dict[str, Any]) -> str:
+def _replay_tool_summary(
+    live_status: str,
+    context_counts: dict[str, Any],
+    citation_counts: dict[str, Any],
+) -> str:
+    if citation_counts:
+        return (
+            f"live_status={live_status or 'unknown'} "
+            f"cited={citation_counts.get('cited', 0)} "
+            f"found={citation_counts.get('found', 0)} "
+            f"missing={citation_counts.get('missing', 0)} "
+            f"wrong_paper={citation_counts.get('wrong_paper', 0)} "
+            f"term_miss={citation_counts.get('term_miss', 0)}"
+        )
     return (
         f"live_status={live_status or 'unknown'} "
         f"chunks={context_counts.get('chunks', 0)} "
@@ -298,7 +316,9 @@ def _evaluate_case(
     expected = replay_case.expected_json or {}
     observed = replay_case.observed_json or {}
     derived = _derived_observed(source_run, tool_calls)
-    live_observed = _execute_live_replay(session, replay_case, expected) if live_executors else {}
+    live_observed = (
+        _execute_live_replay(session, replay_case, expected, observed) if live_executors else {}
+    )
     observed_for_eval = _merge_observed(derived, observed, live_observed)
     reasons = _evaluate_expectations(expected, observed_for_eval, derived, tool_calls)
     replay_verdict = _verdict_from_reasons(expected, reasons)
@@ -346,9 +366,12 @@ def _execute_live_replay(
     session,
     replay_case: ReplayCase,
     expected: dict[str, Any],
+    observed: dict[str, Any],
 ) -> dict[str, Any]:
     if replay_case.case_type in {"context_search", "context_search_miss"}:
         return _execute_context_search_replay(session, replay_case, expected)
+    if replay_case.case_type in {"citation_audit", "citation_mismatch", "missing_citation"}:
+        return _execute_citation_audit_replay(session, replay_case, expected, observed)
     return {}
 
 
@@ -434,6 +457,95 @@ def _execute_context_search_replay(
     }
 
 
+def _execute_citation_audit_replay(
+    session,
+    replay_case: ReplayCase,
+    expected: dict[str, Any],
+    observed: dict[str, Any],
+) -> dict[str, Any]:
+    metadata = replay_case.metadata_json or {}
+    cited_evidence_ids = _clean_str_list(
+        observed.get("cited_evidence_ids")
+        or observed.get("evidence_ids")
+        or expected.get("cited_evidence_ids")
+        or metadata.get("cited_evidence_ids")
+    )
+    paper_ids = _clean_str_list(expected.get("paper_ids") or metadata.get("paper_ids"))
+    required_terms = _clean_str_list(
+        expected.get("required_citation_terms") or metadata.get("required_citation_terms")
+    )
+
+    if not cited_evidence_ids:
+        return {
+            "live_executor": "citation_audit",
+            "live_status": "completed",
+            "cited_evidence_ids": [],
+            "evidence_ids": [],
+            "missing_citation_ids": [],
+            "wrong_paper_citation_ids": [],
+            "citation_term_misses": {},
+            "citation_counts": {
+                "cited": 0,
+                "found": 0,
+                "missing": 0,
+                "wrong_paper": 0,
+                "term_miss": 0,
+            },
+        }
+
+    rows = (
+        session.query(Evidence)
+        .filter(Evidence.id.in_(cited_evidence_ids))
+        .order_by(Evidence.created_at.asc())
+        .limit(200)
+        .all()
+    )
+    by_id = {row.id: row for row in rows}
+    found_ids = [evidence_id for evidence_id in cited_evidence_ids if evidence_id in by_id]
+    missing_ids = [evidence_id for evidence_id in cited_evidence_ids if evidence_id not in by_id]
+    wrong_paper_ids = [
+        evidence_id
+        for evidence_id in found_ids
+        if paper_ids and by_id[evidence_id].paper_id not in paper_ids
+    ]
+    term_misses: dict[str, list[str]] = {}
+    for evidence_id in found_ids:
+        missing_terms = _missing_citation_terms(by_id[evidence_id], required_terms)
+        if missing_terms:
+            term_misses[evidence_id] = missing_terms
+
+    return {
+        "live_executor": "citation_audit",
+        "live_status": "completed",
+        "cited_evidence_ids": cited_evidence_ids,
+        "evidence_ids": found_ids,
+        "missing_citation_ids": missing_ids,
+        "wrong_paper_citation_ids": wrong_paper_ids,
+        "citation_term_misses": term_misses,
+        "citation_counts": {
+            "cited": len(cited_evidence_ids),
+            "found": len(found_ids),
+            "missing": len(missing_ids),
+            "wrong_paper": len(wrong_paper_ids),
+            "term_miss": len(term_misses),
+        },
+    }
+
+
+def _missing_citation_terms(evidence: Evidence, required_terms: list[str]) -> list[str]:
+    if not required_terms:
+        return []
+    text = " ".join(
+        [
+            evidence.evidence_type,
+            evidence.text,
+            evidence.summary,
+            evidence.supports,
+        ]
+    ).lower()
+    return [term for term in required_terms if term.lower() not in text]
+
+
 def _evaluate_expectations(
     expected: dict[str, Any],
     observed: dict[str, Any],
@@ -501,8 +613,21 @@ def _evaluate_expectations(
         expected.get("required_idea_ids"),
         observed.get("idea_ids"),
     )
+    _append_missing_ids(
+        failures,
+        "cited evidence",
+        expected.get("required_cited_evidence_ids"),
+        observed.get("cited_evidence_ids"),
+    )
+    _append_forbidden_ids(
+        failures,
+        "cited evidence",
+        expected.get("forbidden_cited_evidence_ids"),
+        observed.get("cited_evidence_ids"),
+    )
 
     context_counts = observed.get("context_counts") or {}
+    citation_counts = observed.get("citation_counts") or {}
     _append_min_count_failure(
         failures,
         "chunk",
@@ -526,6 +651,33 @@ def _evaluate_expectations(
         "idea",
         expected.get("min_idea_count"),
         context_counts.get("ideas", len(_as_list(observed.get("idea_ids")))),
+    )
+    _append_min_count_failure(
+        failures,
+        "citation",
+        expected.get("min_citation_count"),
+        citation_counts.get("cited", len(_as_list(observed.get("cited_evidence_ids")))),
+    )
+    _append_max_count_failure(
+        failures,
+        "missing citation",
+        expected.get("max_missing_citation_count"),
+        citation_counts.get("missing", len(_as_list(observed.get("missing_citation_ids")))),
+    )
+    _append_max_count_failure(
+        failures,
+        "wrong-paper citation",
+        expected.get("max_wrong_paper_citation_count"),
+        citation_counts.get(
+            "wrong_paper",
+            len(_as_list(observed.get("wrong_paper_citation_ids"))),
+        ),
+    )
+    _append_max_count_failure(
+        failures,
+        "citation term miss",
+        expected.get("max_citation_term_miss_count"),
+        citation_counts.get("term_miss", len(observed.get("citation_term_misses") or {})),
     )
 
     for required_text in _as_list(expected.get("must_contain")):
@@ -559,10 +711,18 @@ def _evaluate_expectations(
         "required_evidence_ids",
         "required_gap_ids",
         "required_idea_ids",
+        "required_cited_evidence_ids",
+        "forbidden_cited_evidence_ids",
+        "cited_evidence_ids",
+        "required_citation_terms",
         "min_chunk_count",
         "min_evidence_count",
         "min_gap_count",
         "min_idea_count",
+        "min_citation_count",
+        "max_missing_citation_count",
+        "max_wrong_paper_citation_count",
+        "max_citation_term_miss_count",
     }
     for key, expected_value in expected.items():
         if key in special_keys:
@@ -591,6 +751,21 @@ def _append_missing_ids(
         failures.append(f"Missing required {label} ids: {', '.join(missing)}.")
 
 
+def _append_forbidden_ids(
+    failures: list[str],
+    label: str,
+    forbidden_ids: Any,
+    observed_ids: Any,
+) -> None:
+    forbidden = {str(item) for item in _as_list(forbidden_ids)}
+    if not forbidden:
+        return
+    observed = {str(item) for item in _as_list(observed_ids)}
+    used = sorted(forbidden & observed)
+    if used:
+        failures.append(f"Forbidden {label} ids were observed: {', '.join(used)}.")
+
+
 def _append_min_count_failure(
     failures: list[str],
     label: str,
@@ -606,6 +781,23 @@ def _append_min_count_failure(
         observed_int = 0
     if observed_int < minimum:
         failures.append(f"Expected at least {minimum} {label} results but observed {observed_int}.")
+
+
+def _append_max_count_failure(
+    failures: list[str],
+    label: str,
+    expected_count: Any,
+    observed_count: Any,
+) -> None:
+    if expected_count is None:
+        return
+    maximum = _bounded_int(expected_count, default=0, max_value=10_000, min_value=0)
+    try:
+        observed_int = int(observed_count)
+    except (TypeError, ValueError):
+        observed_int = 0
+    if observed_int > maximum:
+        failures.append(f"Expected at most {maximum} {label} results but observed {observed_int}.")
 
 
 def _verdict_from_reasons(expected: dict[str, Any], reasons: list[str]) -> str:
@@ -693,6 +885,10 @@ def _as_list(value: Any) -> list[Any]:
     if isinstance(value, list):
         return value
     return [value]
+
+
+def _clean_str_list(value: Any) -> list[str]:
+    return [str(item).strip() for item in _as_list(value) if str(item).strip()]
 
 
 def _as_bool(value: Any) -> bool:

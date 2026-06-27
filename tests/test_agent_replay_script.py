@@ -251,3 +251,146 @@ with SessionLocal() as session:
     assert trace_payload["tool_names"] == ["replay.context_search"]
     assert trace_payload["tool_statuses"] == ["completed"]
     assert trace_payload["side_effects"] == [False]
+
+
+def test_replay_agent_case_live_citation_audit_executor(tmp_path: Path) -> None:
+    database_path = tmp_path / "replay-citation.db"
+    env = {
+        **os.environ,
+        "RESEARCH_DB_URL": f"sqlite:///{database_path}",
+        "PYTHONPATH": str(Path.cwd()),
+    }
+    fixture = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+from backend.research.db import SessionLocal, init_db
+from backend.research.models import Evidence, Paper
+from backend.research.schemas import ReplayCaseCreate
+from backend.research.services.agent_trace_service import AgentTraceService
+
+init_db()
+with SessionLocal() as session:
+    paper = Paper(
+        title="Citation audit fixture",
+        authors_json=["Pytest"],
+        year=2026,
+        domain="image geolocalization",
+        task="citation audit",
+        status="parsed",
+    )
+    session.add(paper)
+    session.flush()
+    evidence = Evidence(
+        paper_id=paper.id,
+        evidence_type="claim",
+        text="Geo-localization benchmark evidence supports citation-faithful replay.",
+        summary="Citation-faithful geolocalization evidence.",
+        supports="citation audit replay",
+        confidence=0.95,
+    )
+    session.add(evidence)
+    session.flush()
+    replay_case = AgentTraceService(session).create_replay_case(
+        ReplayCaseCreate(
+            case_type="citation_audit",
+            query="Does the answer cite the right geolocalization evidence?",
+            expected={
+                "paper_ids": [paper.id],
+                "required_cited_evidence_ids": [evidence.id],
+                "required_citation_terms": ["geolocalization", "citation-faithful"],
+                "min_citation_count": 1,
+                "max_missing_citation_count": 0,
+                "max_wrong_paper_citation_count": 0,
+                "max_citation_term_miss_count": 0,
+                "live_status": "completed",
+            },
+            observed={"cited_evidence_ids": [evidence.id]},
+            verdict="needs_review",
+        )
+    )
+    print(replay_case.id)
+""",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    case_id = fixture.stdout.strip()
+
+    replay = subprocess.run(
+        [
+            sys.executable,
+            "scripts/replay_agent_case.py",
+            "--case-id",
+            case_id,
+            "--live-executors",
+            "--record-run",
+            "--json",
+            "--fail-on-regression",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    payload = json.loads(replay.stdout)
+    case = payload["cases"][0]
+
+    assert payload["summary"]["case_count"] == 1
+    assert payload["summary"]["passed"] == 1
+    assert payload["summary"]["failed"] == 0
+    assert case["replay_verdict"] == "pass"
+    assert case["observed"]["live_executor"] == "citation_audit"
+    assert case["observed"]["citation_counts"]["cited"] == 1
+    assert case["observed"]["citation_counts"]["missing"] == 0
+    assert case["observed"]["citation_counts"]["wrong_paper"] == 0
+    assert case["observed"]["citation_counts"]["term_miss"] == 0
+
+    trace_probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import json
+
+from backend.research.db import SessionLocal
+from backend.research.models import AgentRun, ToolCallRecord
+
+with SessionLocal() as session:
+    run = (
+        session.query(AgentRun)
+        .filter(AgentRun.run_type == "agent_replay")
+        .order_by(AgentRun.created_at.desc())
+        .first()
+    )
+    records = (
+        session.query(ToolCallRecord)
+        .filter(ToolCallRecord.agent_run_id == run.id)
+        .order_by(ToolCallRecord.created_at.asc())
+        .all()
+    )
+    print(
+        json.dumps(
+            {
+                "run_status": run.status,
+                "tool_names": [record.tool_name for record in records],
+                "tool_summaries": [record.tool_result_summary for record in records],
+            },
+            sort_keys=True,
+        )
+    )
+""",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    trace_payload = json.loads(trace_probe.stdout)
+
+    assert trace_payload["run_status"] == "completed"
+    assert trace_payload["tool_names"] == ["replay.citation_audit"]
+    assert "cited=1" in trace_payload["tool_summaries"][0]

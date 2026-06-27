@@ -2,6 +2,28 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Citation Audit Live Replay Executor
+
+Implementation completed:
+
+- Added a local `citation_audit` live replay executor for `citation_audit`, `citation_mismatch`, and `missing_citation` replay cases.
+- Audited observed `cited_evidence_ids` against local `Evidence` rows, optional expected `paper_ids`, and optional `required_citation_terms`.
+- Added expectations for required/forbidden cited evidence ids, minimum citation count, maximum missing citation count, maximum wrong-paper citation count, and maximum citation term misses.
+- Updated `--record-run` tool summaries so `replay.citation_audit` records cited/found/missing/wrong-paper/term-miss counts.
+- Added a fixture-backed regression test that persists paper/evidence/replay rows, runs citation audit with trace recording, and verifies replay pass plus `replay.citation_audit` trace output.
+- Updated replay documentation, the agent strengthening plan, TODO, and README to describe citation live replay.
+
+Verification completed:
+
+- `.venv/bin/ruff check scripts/replay_agent_case.py tests/test_agent_replay_script.py` passed.
+- `.venv/bin/ruff format --check scripts/replay_agent_case.py tests/test_agent_replay_script.py` passed.
+- `.venv/bin/pytest -q tests/test_agent_replay_script.py` passed: `3 passed`.
+- `bash scripts/check_agent_replay.sh` passed: `3 passed`.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_context_search_evaluations.sh` passed: `42 passed`.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `3 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `15 passed`, backup/restore manifest/rehearsal tests `6 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `7 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Replay Run Trace Recording
 
 Implementation completed:

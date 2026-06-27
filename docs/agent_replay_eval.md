@@ -17,6 +17,8 @@ Opt-in live replay is available for bounded local executors:
 
 - `--live-executors` currently supports `context_search` and `context_search_miss` replay cases.
 - The context-search executor re-runs `RetrievalService.search_context` with forced local hash embedding and disabled external rerank.
+- `--live-executors` also supports `citation_audit`, `citation_mismatch`, and `missing_citation` replay cases.
+- The citation-audit executor checks observed `cited_evidence_ids` against local `Evidence` rows, optional `paper_ids`, and optional required citation terms.
 - It does not call model providers, but it can refresh local `research_embeddings` rows in the selected SQLite database.
 - Advisor and SOTA-review workflow re-execution remain deferred until their replay policies are narrow enough to be deterministic and safe.
 
@@ -34,6 +36,7 @@ python3 scripts/replay_agent_case.py --case-id <replay_case_id> --write-markdown
 python3 scripts/replay_agent_case.py --verdict needs_review --fail-on-regression
 python3 scripts/replay_agent_case.py --case-type context_search_miss --live-executors --json
 python3 scripts/replay_agent_case.py --case-type context_search_miss --live-executors --record-run --json
+python3 scripts/replay_agent_case.py --case-type citation_audit --live-executors --record-run --json
 ```
 
 Focused verification:
@@ -56,6 +59,11 @@ bash scripts/check_agent_replay.sh
 - `query`, `paper_ids`, `include_graph`, `graph_edge_types`, `limit`: parameters consumed by the live context-search executor.
 - `required_chunk_ids`, `required_evidence_ids`, `required_gap_ids`, `required_idea_ids`: ids that must be returned by live context search.
 - `min_chunk_count`, `min_evidence_count`, `min_gap_count`, `min_idea_count`: minimum result counts for live context search.
+- `required_cited_evidence_ids`: cited evidence ids that must appear in observed citation data.
+- `forbidden_cited_evidence_ids`: cited evidence ids that must not appear.
+- `cited_evidence_ids`: evidence ids to audit when not supplied by `observed_json`.
+- `required_citation_terms`: terms that must appear in each audited evidence record.
+- `min_citation_count`, `max_missing_citation_count`, `max_wrong_paper_citation_count`, `max_citation_term_miss_count`: citation-audit thresholds.
 - Other simple key/value pairs: compared directly against observed or derived fields.
 
 If `expected_json` is empty, the replay verdict is `needs_review`.
@@ -88,5 +96,5 @@ These are engineering regression metrics. They do not certify scientific SOTA, m
 ## Next Steps
 
 - Add replay case creators for missing citations and SOTA-readiness false positives.
-- Extend live replay executors beyond context search after bounded Advisor/SOTA policies exist.
+- Extend live replay executors beyond context search/citation audit after bounded Advisor/SOTA policies exist.
 - Add aggregate replay metrics to the local observability report.
