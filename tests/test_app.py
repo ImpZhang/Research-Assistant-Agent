@@ -1211,6 +1211,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "list_agent_run_tool_calls" in names
     assert "list_replay_cases" in names
     assert "get_agent_observability_metrics" in names
+    assert "export_agent_observability_metrics_markdown" in names
     assert "get_idea_research_packet" in names
     assert "get_idea_timeline" in names
     assert "export_idea_bundle" in names
@@ -1387,6 +1388,13 @@ def test_agent_trace_records_run_tool_call_and_replay_case() -> None:
     assert metrics["tool_success_rate"] > 0
     assert metrics["replay_case_count"] >= 1
     assert metrics["replay_verdict_counts"]["needs_review"] >= 1
+
+    metrics_markdown = client.get("/research/agent/metrics/export/markdown")
+    assert metrics_markdown.status_code == 200
+    assert metrics_markdown.headers["content-type"].startswith("text/markdown")
+    assert "# Agent Observability Metrics" in metrics_markdown.text
+    assert "## Tool Calls" in metrics_markdown.text
+    assert "Tool success rate" in metrics_markdown.text
 
 
 def test_advisor_chat_records_agent_trace_tool_calls() -> None:

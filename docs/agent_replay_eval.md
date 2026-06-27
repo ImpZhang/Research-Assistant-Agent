@@ -52,7 +52,7 @@ The script reports:
 - `needs_review`
 - `pass_rate`
 
-The API endpoint `GET /research/agent/metrics` additionally summarizes replay verdict distribution alongside agent-run and tool-call metrics.
+The API endpoint `GET /research/agent/metrics` additionally summarizes replay verdict distribution alongside agent-run and tool-call metrics. Use `GET /research/agent/metrics/export/markdown` when a local handoff or interview demo needs a readable report.
 
 These are engineering regression metrics. They do not certify scientific SOTA, model quality, or benchmark superiority.
 

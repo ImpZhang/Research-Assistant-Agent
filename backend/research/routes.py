@@ -640,6 +640,13 @@ def tool_manifest() -> ToolManifestResponse:
             output_model="AgentObservabilityMetricsResponse",
         ),
         ToolManifestItem(
+            name="export_agent_observability_metrics_markdown",
+            description="Export local agent observability metrics as text/markdown.",
+            method="GET",
+            path="/research/agent/metrics/export/markdown",
+            output_model="text/markdown",
+        ),
+        ToolManifestItem(
             name="run_literature_to_ideas_workflow",
             description="Run the full literature-to-ideas workflow for an ingested paper.",
             method="POST",
@@ -6576,6 +6583,68 @@ def get_agent_observability_metrics(
         recent_failures=recent_failures[:10],
         message="Summarized local agent trace, tool-call, and replay observability metrics.",
     )
+
+
+@router.get("/agent/metrics/export/markdown", response_class=PlainTextResponse)
+def export_agent_observability_metrics_markdown(
+    limit: int = 500,
+    session: Session = Depends(get_session),
+) -> PlainTextResponse:
+    metrics = get_agent_observability_metrics(limit=limit, session=session)
+    return PlainTextResponse(
+        _render_agent_observability_metrics_markdown(metrics),
+        media_type="text/markdown",
+    )
+
+
+def _render_agent_observability_metrics_markdown(
+    metrics: AgentObservabilityMetricsResponse,
+) -> str:
+    lines = [
+        "# Agent Observability Metrics",
+        "",
+        "## Summary",
+        "",
+        f"- Agent runs: {metrics.run_count}",
+        f"- Average run latency ms: {metrics.average_run_latency_ms}",
+        f"- Tool calls: {metrics.tool_call_count}",
+        f"- Tool success rate: {metrics.tool_success_rate}",
+        f"- Replay cases: {metrics.replay_case_count}",
+        f"- Replay pass rate: {metrics.replay_pass_rate}",
+        "",
+        "## Agent Runs",
+        "",
+        "### Status Counts",
+        "",
+    ]
+    lines.extend(_render_markdown_counts(metrics.run_status_counts))
+    lines.extend(["", "### Run Type Counts", ""])
+    lines.extend(_render_markdown_counts(metrics.run_type_counts))
+    lines.extend(["", "## Tool Calls", "", "### Status Counts", ""])
+    lines.extend(_render_markdown_counts(metrics.tool_status_counts))
+    lines.extend(["", "### Tool Name Counts", ""])
+    lines.extend(_render_markdown_counts(metrics.tool_name_counts))
+    lines.extend(["", "## Replay Cases", "", "### Verdict Counts", ""])
+    lines.extend(_render_markdown_counts(metrics.replay_verdict_counts))
+    lines.extend(["", "## Recent Failures", ""])
+    if metrics.recent_failures:
+        for failure in metrics.recent_failures:
+            label = failure.get("run_type") or failure.get("tool_name") or failure.get("type", "")
+            lines.append(
+                f"- `{failure.get('type', '')}` `{failure.get('id', '')}` "
+                f"({failure.get('status', '')}, {label}): "
+                f"{str(failure.get('error', '')).replace('|', '\\|')}"
+            )
+    else:
+        lines.append("- None")
+    lines.extend(["", metrics.message, ""])
+    return "\n".join(lines)
+
+
+def _render_markdown_counts(counts: dict[str, int]) -> list[str]:
+    if not counts:
+        return ["- None"]
+    return [f"- {key}: {counts[key]}" for key in sorted(counts)]
 
 
 @router.post("/agent/replay-cases", response_model=ReplayCaseRead)

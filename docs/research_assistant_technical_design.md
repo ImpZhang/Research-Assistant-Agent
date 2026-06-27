@@ -771,7 +771,7 @@ updated_at
 
 当前这些表是 trace foundation：先用于显式创建和只读查询，后续 Advisor tool-calling、bad-case replay 脚本和独立 LangGraph workflow 都应复用这些表。写入 trace 时必须做 secret redaction，不保存原始 API key、token、cookie、`.env` 值或私有凭证。
 
-`/agent/metrics` 在这些 trace 表之上提供本地 observability 汇总：run_count、run_status_counts、run_type_counts、average_run_latency_ms、tool_call_count、tool_status_counts、tool_name_counts、tool_success_rate、replay_case_count、replay_verdict_counts、replay_pass_rate 和 recent_failures。它面向本地 operator、面试演示和后续 replay/guardrail 报告，是轻量指标层，不替代 LangSmith、Langfuse 或 OpenTelemetry 等外部观测系统。
+`/agent/metrics` 在这些 trace 表之上提供本地 observability 汇总：run_count、run_status_counts、run_type_counts、average_run_latency_ms、tool_call_count、tool_status_counts、tool_name_counts、tool_success_rate、replay_case_count、replay_verdict_counts、replay_pass_rate 和 recent_failures。`/agent/metrics/export/markdown` 返回同一份指标的 Markdown 报告，方便本地 operator、面试演示、排障记录和后续 replay/guardrail 报告使用。这是轻量指标层，不替代 LangSmith、Langfuse 或 OpenTelemetry 等外部观测系统。
 
 ## 8. 向量索引设计
 
