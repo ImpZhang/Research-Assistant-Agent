@@ -2,6 +2,19 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Agent Engineering Strengthening Plan
+
+Documentation completed:
+
+- Added `docs/agent_engineering_strengthening_plan.md` as the roadmap for trace tables, Advisor tool calling, project-local skills, bad-case replay, one isolated LangGraph workflow, guardrails, case memory, observability, and personal local deployment polish.
+- Documented that the stable FastAPI/service-layer workflow should remain intact while LangGraph is introduced only for an opt-in workflow that benefits from explicit DAG state.
+- Updated README, documentation index, and TODO so future work can start from the agent-engineering strengthening plan instead of chat history.
+
+Verification completed:
+
+- `bash scripts/check_handoff_docs.sh` passed.
+- `git diff --check` passed.
+
 ## 2026-06-26 - Hybrid Chunk And Artifact Retrieval
 
 Implementation completed:

@@ -28,6 +28,7 @@ This document is the starting point for future development. Use it to find the r
 | --- | --- |
 | `docs/research_assistant_requirements.md` | Product requirements and user workflows. |
 | `docs/research_assistant_technical_design.md` | Architecture, component design, API design, and technical direction. |
+| `docs/agent_engineering_strengthening_plan.md` | Agent trace, tool calling, skills, replay, LangGraph, and local-deployment strengthening roadmap. |
 | `docs/user_project_scoping_design.md` | Deferred user/project scoping design and default-project compatibility boundaries. |
 | `docs/workflow_queue_design.md` | Queue, job, and workflow execution design. |
 | `docs/graphrag_langgraph_deerflow_evaluation.md` | GraphRAG, LangGraph, DeerFlow comparison and integration evaluation. |
