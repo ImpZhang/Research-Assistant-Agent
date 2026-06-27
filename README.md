@@ -151,7 +151,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Lightweight stdio MCP-to-HTTP bridge script for exposing the stable HTTP tools to MCP clients without extra SDK dependencies.
 - MCP bridge policy controls for read-only mode, allow/deny tool filters, API-key forwarding, project-scope header forwarding, request-id error correlation, and deployment health checks.
 - Agent trace foundation with persisted agent runs, tool-call records, replay cases, secret redaction, read-only tool-manifest access for trace inspection, and Advisor chat trace wiring for cockpit/context read calls.
-- Deterministic bad-case replay script for saved `ReplayCase` rows, source agent runs, and tool-call records, with JSON/Markdown reports and focused local validation.
+- Deterministic bad-case replay script for saved `ReplayCase` rows, source agent runs, and tool-call records, plus opt-in local context-search live replay for retrieval misses, with JSON/Markdown reports and focused local validation.
 - Agent observability metrics endpoint and Markdown export for run status/type counts, tool-call success rate, replay verdict distribution, average latency, and recent failures.
 - Project-local skill registry under `skills/*/SKILL.md` for paper ingestion, hybrid context search, literature-to-ideas, SOTA review, benchmark evaluation, and Advisor action sessions, with `scripts/check_project_skills.sh` validation.
 - Read-only SQLite maintenance report for local database size, sidecar files, table counts, vector-index counts, trace counts, integrity check status, and safe operator recommendations.

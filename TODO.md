@@ -46,10 +46,10 @@ Current product target: personal local deployment. A user should be able to clon
 
 ## P2 - Agent Interview Strengthening Follow-Ups
 
-- Extend the bounded Advisor read-tool plan with replay workflow generation and richer live replay executors. Current baseline: opt-in model-ranked read-tool selection is candidate-validated with deterministic fallback, and failed Advisor read tools are captured as failed `ToolCallRecord` rows plus `advisor_tool_failure` replay cases.
+- Extend the bounded Advisor read-tool plan with replay workflow generation and richer live replay executors. Current baseline: opt-in model-ranked read-tool selection is candidate-validated with deterministic fallback, failed Advisor read tools are captured as failed `ToolCallRecord` rows plus `advisor_tool_failure` replay cases, and `context_search_miss` cases can opt into local live retrieval replay without external model calls.
 - Add stricter tool schema validation/error branches for Advisor tool selection while preserving the existing response contract and deterministic fallback.
 - Extend the project-local skill registry beyond the current `paper-ingestion`, `hybrid-context-search`, `literature-to-ideas`, `sota-review`, `benchmark-evaluation`, and `advisor-action-session` docs as new agent workflows are added.
-- Extend the initial bad-case replay script with live replay executors for context-search misses, citation mistakes, and readiness false positives once tool-calling selection is bounded.
+- Extend the initial bad-case replay script with live replay executors for citation mistakes and readiness false positives once those policies are bounded. Current baseline: context-search miss replay can execute local retrieval and validate required chunk/evidence/gap/idea ids plus minimum result counts.
 - Extend the isolated LangGraph advisor/deep-review workflow with live replay hooks, optional human/write nodes, and richer verification after bounded tool selection matures; keep the current `WorkflowService` path intact.
 - Strengthen local deployment polish around `.env.example`, backup/restore rehearsal, cleanup safety, first-run demo runbooks, and future approved SQLite maintenance actions. Current baseline: doctor diagnostics include the read-only SQLite maintenance report.
 

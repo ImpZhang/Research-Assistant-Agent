@@ -2,6 +2,27 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Context Search Live Replay Executor
+
+Implementation completed:
+
+- Added an opt-in `--live-executors` mode to `scripts/replay_agent_case.py`.
+- Implemented a bounded local executor for `context_search` and `context_search_miss` replay cases that calls `RetrievalService.search_context` with forced local hash embedding and disabled external rerank.
+- Added live replay expectations for required chunk/evidence/gap/idea ids, minimum result counts, and `live_status`.
+- Preserved deterministic log-only replay as the default path and kept JSON/Markdown report generation intact.
+- Added a fixture-backed regression test that creates temporary paper/chunk/evidence rows, replays a context-search miss, and verifies the expected local retrieval results without model-provider calls.
+- Updated replay documentation, the agent strengthening plan, TODO, and README to describe the new boundary.
+
+Verification completed:
+
+- `.venv/bin/ruff check scripts/replay_agent_case.py tests/test_agent_replay_script.py` passed.
+- `.venv/bin/pytest -q tests/test_agent_replay_script.py` passed: `2 passed`.
+- `bash scripts/check_agent_replay.sh` passed: `2 passed`.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_context_search_evaluations.sh` passed: `42 passed`.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `2 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `15 passed`, backup/restore manifest/rehearsal tests `6 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `7 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Advisor Model Ranked Tool Selection
 
 Implementation completed:

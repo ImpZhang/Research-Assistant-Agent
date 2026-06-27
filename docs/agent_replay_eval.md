@@ -4,7 +4,7 @@ This document defines the first local bad-case replay path for the Research Assi
 
 ## Scope
 
-The current replay path is deterministic and read-only:
+The default replay path is deterministic and log-based:
 
 - It reads saved `ReplayCase` rows from the local SQLite database.
 - It optionally joins the source `AgentRun` and `ToolCallRecord` rows.
@@ -12,7 +12,12 @@ The current replay path is deterministic and read-only:
 - It can write JSON or Markdown reports.
 - It does not call model providers, execute tools, or read secret files.
 
-Live re-execution of Advisor, context search, or SOTA-review workflows is intentionally deferred until bounded tool selection and replay policies are stable.
+Opt-in live replay is available for bounded local executors:
+
+- `--live-executors` currently supports `context_search` and `context_search_miss` replay cases.
+- The context-search executor re-runs `RetrievalService.search_context` with forced local hash embedding and disabled external rerank.
+- It does not call model providers, but it can refresh local `research_embeddings` rows in the selected SQLite database.
+- Advisor and SOTA-review workflow re-execution remain deferred until their replay policies are narrow enough to be deterministic and safe.
 
 ## Command
 
@@ -20,6 +25,7 @@ Live re-execution of Advisor, context search, or SOTA-review workflows is intent
 python3 scripts/replay_agent_case.py --case-type bad_tool_selection --json
 python3 scripts/replay_agent_case.py --case-id <replay_case_id> --write-markdown outputs/replay/agent-replay.md
 python3 scripts/replay_agent_case.py --verdict needs_review --fail-on-regression
+python3 scripts/replay_agent_case.py --case-type context_search_miss --live-executors --json
 ```
 
 Focused verification:
@@ -36,8 +42,12 @@ bash scripts/check_agent_replay.sh
 - `required_tool_names`: every listed tool must appear in source tool calls or observed data.
 - `forbidden_tool_names`: none of these tools may appear.
 - `status` or `run_status`: expected run/observed status.
+- `live_status`: expected status from a live local executor, such as `completed`.
 - `must_contain`: required text in observed data, source output, or tool summaries.
 - `must_not_contain` / `forbidden_terms`: text that must be absent.
+- `query`, `paper_ids`, `include_graph`, `graph_edge_types`, `limit`: parameters consumed by the live context-search executor.
+- `required_chunk_ids`, `required_evidence_ids`, `required_gap_ids`, `required_idea_ids`: ids that must be returned by live context search.
+- `min_chunk_count`, `min_evidence_count`, `min_gap_count`, `min_idea_count`: minimum result counts for live context search.
 - Other simple key/value pairs: compared directly against observed or derived fields.
 
 If `expected_json` is empty, the replay verdict is `needs_review`.
@@ -62,9 +72,10 @@ These are engineering regression metrics. They do not certify scientific SOTA, m
 - Keep replay fixtures small and non-sensitive.
 - Prefer ids, counts, summaries, and redacted snippets over full documents.
 - Use `--fail-on-regression` in checks only when the fixture has deterministic expectations.
+- Treat `--live-executors` as a local integration check: it should run against fixtures or safe local data and can update local embedding-cache rows.
 
 ## Next Steps
 
-- Add replay case creators for context-search misses, missing citations, and SOTA-readiness false positives.
-- Add live replay executors after bounded Advisor tool selection exists.
+- Add replay case creators for missing citations and SOTA-readiness false positives.
+- Extend live replay executors beyond context search after bounded Advisor/SOTA policies exist.
 - Add aggregate replay metrics to the local observability report.
