@@ -6837,6 +6837,14 @@ def get_agent_observability_metrics(
     tool_status_counts = Counter(tool_call.status for tool_call in tool_calls)
     tool_name_counts = Counter(tool_call.tool_name for tool_call in tool_calls)
     replay_verdict_counts = Counter(replay_case.verdict for replay_case in replay_cases)
+    replay_case_type_counts = Counter(replay_case.case_type for replay_case in replay_cases)
+    replay_runs = [run for run in runs if run.run_type == "agent_replay"]
+    replay_run_status_counts = Counter(run.status for run in replay_runs)
+    replay_live_executor_counts = Counter(
+        tool_call.tool_name.replace("replay.", "", 1)
+        for tool_call in tool_calls
+        if tool_call.tool_name.startswith("replay.")
+    )
     completed_tool_calls = tool_status_counts.get("completed", 0)
     passed_replays = replay_verdict_counts.get("pass", 0)
     evaluated_replays = passed_replays + replay_verdict_counts.get("fail", 0)
@@ -6879,7 +6887,11 @@ def get_agent_observability_metrics(
         tool_success_rate=round(completed_tool_calls / len(tool_calls), 4) if tool_calls else 0.0,
         replay_case_count=len(replay_cases),
         replay_verdict_counts=dict(replay_verdict_counts),
+        replay_case_type_counts=dict(replay_case_type_counts),
+        replay_run_status_counts=dict(replay_run_status_counts),
+        replay_live_executor_counts=dict(replay_live_executor_counts),
         replay_pass_rate=round(passed_replays / evaluated_replays, 4) if evaluated_replays else 0.0,
+        replay_failed_run_count=replay_run_status_counts.get("failed", 0),
         recent_failures=recent_failures[:10],
         message="Summarized local agent trace, tool-call, and replay observability metrics.",
     )
@@ -6911,6 +6923,7 @@ def _render_agent_observability_metrics_markdown(
         f"- Tool success rate: {metrics.tool_success_rate}",
         f"- Replay cases: {metrics.replay_case_count}",
         f"- Replay pass rate: {metrics.replay_pass_rate}",
+        f"- Failed replay runs: {metrics.replay_failed_run_count}",
         "",
         "## Agent Runs",
         "",
@@ -6926,6 +6939,12 @@ def _render_agent_observability_metrics_markdown(
     lines.extend(_render_markdown_counts(metrics.tool_name_counts))
     lines.extend(["", "## Replay Cases", "", "### Verdict Counts", ""])
     lines.extend(_render_markdown_counts(metrics.replay_verdict_counts))
+    lines.extend(["", "### Case Type Counts", ""])
+    lines.extend(_render_markdown_counts(metrics.replay_case_type_counts))
+    lines.extend(["", "### Replay Run Status Counts", ""])
+    lines.extend(_render_markdown_counts(metrics.replay_run_status_counts))
+    lines.extend(["", "### Live Executor Counts", ""])
+    lines.extend(_render_markdown_counts(metrics.replay_live_executor_counts))
     lines.extend(["", "## Recent Failures", ""])
     if metrics.recent_failures:
         for failure in metrics.recent_failures:

@@ -2,6 +2,25 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Replay Observability Metrics
+
+Implementation completed:
+
+- Extended `GET /research/agent/metrics` with replay-specific observability fields: case-type counts, `agent_replay` run status counts, live executor usage counts, and failed replay-run count.
+- Updated the Markdown export to include replay case type counts, replay run status counts, and live executor counts.
+- Added regression coverage that creates an `agent_replay` failed run plus `replay.sota_readiness_audit` tool call and verifies both JSON metrics and Markdown output.
+- Updated replay documentation, TODO, and the technical design to describe the aggregate replay analytics boundary.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_agent_trace_records_run_tool_call_and_replay_case` passed: `1 passed`.
+- `bash scripts/check_workflow_job_controls.sh` passed: `7 passed`.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `4 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `15 passed`, backup/restore manifest/rehearsal tests `6 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `7 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - SOTA Readiness Live Replay Executor
 
 Implementation completed:

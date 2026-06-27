@@ -2164,7 +2164,11 @@ class AgentObservabilityMetricsResponse(BaseModel):
     tool_success_rate: float = 0.0
     replay_case_count: int = 0
     replay_verdict_counts: dict[str, int] = Field(default_factory=dict)
+    replay_case_type_counts: dict[str, int] = Field(default_factory=dict)
+    replay_run_status_counts: dict[str, int] = Field(default_factory=dict)
+    replay_live_executor_counts: dict[str, int] = Field(default_factory=dict)
     replay_pass_rate: float = 0.0
+    replay_failed_run_count: int = 0
     recent_failures: list[dict[str, Any]] = Field(default_factory=list)
     message: str = ""
 

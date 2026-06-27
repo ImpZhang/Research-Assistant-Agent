@@ -86,7 +86,7 @@ The script reports:
 - `needs_review`
 - `pass_rate`
 
-The API endpoint `GET /research/agent/metrics` additionally summarizes replay verdict distribution alongside agent-run and tool-call metrics. Use `GET /research/agent/metrics/export/markdown` when a local handoff or interview demo needs a readable report.
+The API endpoint `GET /research/agent/metrics` additionally summarizes replay verdict distribution, replay case-type distribution, `agent_replay` run status distribution, failed replay-run count, and live replay executor usage alongside agent-run and tool-call metrics. Use `GET /research/agent/metrics/export/markdown` when a local handoff or interview demo needs a readable report.
 
 When `--record-run` is used, replay executions also contribute to `AgentRun` and `ToolCallRecord` observability. A replay run with any failed case is marked `failed`; a replay run with only pass or needs-review cases is marked `completed`.
 
@@ -105,4 +105,4 @@ These are engineering regression metrics. They do not certify scientific SOTA, m
 
 - Add replay case creators for missing citations and SOTA-readiness false positives.
 - Extend live replay executors beyond context search/citation/SOTA audit after bounded Advisor policies exist.
-- Add aggregate replay metrics to the local observability report.
+- Add automatic replay report scheduling only after local operator policy exists.

@@ -1377,6 +1377,31 @@ def test_agent_trace_records_run_tool_call_and_replay_case() -> None:
     assert tool_calls.json()[0]["id"] == tool_call["id"]
     assert any(item["id"] == replay_case["id"] for item in replay_cases.json())
 
+    replay_run_response = client.post(
+        "/research/agent/runs",
+        json={
+            "run_type": "agent_replay",
+            "status": "failed",
+            "question": "Replay SOTA readiness false positive.",
+            "output": {"summary": {"failed": 1}},
+            "latency_ms": 17,
+            "created_by": "pytest",
+        },
+    )
+    assert replay_run_response.status_code == 200
+    replay_run = replay_run_response.json()
+    replay_tool_response = client.post(
+        f"/research/agent/runs/{replay_run['id']}/tool-calls",
+        json={
+            "tool_name": "replay.sota_readiness_audit",
+            "tool_arguments": {"case_type": "sota_readiness_false_positive"},
+            "tool_result_summary": "ready=False blockers=1",
+            "status": "completed",
+            "side_effect": False,
+        },
+    )
+    assert replay_tool_response.status_code == 200
+
     metrics_response = client.get("/research/agent/metrics")
     assert metrics_response.status_code == 200
     metrics = metrics_response.json()
@@ -1389,6 +1414,10 @@ def test_agent_trace_records_run_tool_call_and_replay_case() -> None:
     assert metrics["tool_success_rate"] > 0
     assert metrics["replay_case_count"] >= 1
     assert metrics["replay_verdict_counts"]["needs_review"] >= 1
+    assert metrics["replay_case_type_counts"]["bad_tool_selection"] >= 1
+    assert metrics["replay_run_status_counts"]["failed"] >= 1
+    assert metrics["replay_live_executor_counts"]["sota_readiness_audit"] >= 1
+    assert metrics["replay_failed_run_count"] >= 1
 
     metrics_markdown = client.get("/research/agent/metrics/export/markdown")
     assert metrics_markdown.status_code == 200
@@ -1396,6 +1425,8 @@ def test_agent_trace_records_run_tool_call_and_replay_case() -> None:
     assert "# Agent Observability Metrics" in metrics_markdown.text
     assert "## Tool Calls" in metrics_markdown.text
     assert "Tool success rate" in metrics_markdown.text
+    assert "Live Executor Counts" in metrics_markdown.text
+    assert "sota_readiness_audit" in metrics_markdown.text
 
 
 def test_advisor_chat_records_agent_trace_tool_calls() -> None:
