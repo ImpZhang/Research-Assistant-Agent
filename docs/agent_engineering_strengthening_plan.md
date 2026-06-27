@@ -11,6 +11,7 @@ The project is already beyond a basic RAG chatbot:
 - Hybrid retrieval covers source chunks, evidence, research gaps, and ideas.
 - SQLite persists papers, chunks, embeddings, evidence, gaps, ideas, jobs, tasks, reviews, experiments, graph nodes, and graph edges.
 - GraphRAG-lite records lineage through `ResearchNode` and `ResearchEdge`.
+- The initial agent trace foundation persists `AgentRun`, `ToolCallRecord`, and `ReplayCase` rows with secret redaction and read-only trace inspection tools.
 - The Workbench, HTTP API, local scripts, and optional stdio MCP-to-HTTP bridge expose the system locally.
 - Focused checks cover context-search metrics, graph behavior, tool bridge contracts, workflow primitives, backup manifests, and local readiness.
 
@@ -19,7 +20,7 @@ The project is not yet a full autonomous agent runtime:
 - The production workflow is service-layer orchestration, not a LangGraph runtime graph.
 - The MCP surface is a lightweight bridge over FastAPI, not a full MCP SDK server with resources and prompts.
 - Advisor responses are mostly deterministic composition over existing services, not an LLM-driven tool-calling loop.
-- There is no unified `agent_runs`, `tool_call_records`, or `replay_cases` trace model yet.
+- Advisor and LangGraph flows do not yet write trace records automatically.
 - There is no formal project-local skill registry such as `skills/*/SKILL.md`.
 
 This is an intentional boundary. The current stable workflow should stay intact while the new agent layer is added incrementally.
@@ -37,6 +38,8 @@ This is an intentional boundary. The current stable workflow should stay intact 
 ### 1. Agent Run And Tool Call Trace
 
 Add durable trace tables before changing agent behavior.
+
+Initial status: the tables, service, create/read API, secret redaction, and read-only tool-manifest entries are implemented. The next step is wiring Advisor and replay workflows into these records.
 
 Proposed artifacts:
 

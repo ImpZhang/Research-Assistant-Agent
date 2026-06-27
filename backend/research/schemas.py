@@ -2052,6 +2052,90 @@ class JobRead(BaseModel):
     error: str = ""
 
 
+class AgentRunCreate(BaseModel):
+    run_type: str = "advisor"
+    status: Literal["pending", "running", "completed", "failed", "canceled"] = "running"
+    question: str = ""
+    input: dict[str, Any] = Field(default_factory=dict)
+    output: dict[str, Any] = Field(default_factory=dict)
+    error: str = ""
+    model_name: str = ""
+    latency_ms: int = 0
+    token_usage: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_by: str = "system"
+
+
+class AgentRunRead(BaseModel):
+    id: str
+    run_type: str
+    status: str
+    question: str = ""
+    input: dict[str, Any] = Field(default_factory=dict)
+    output: dict[str, Any] = Field(default_factory=dict)
+    error: str = ""
+    model_name: str = ""
+    latency_ms: int = 0
+    token_usage: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_by: str = "system"
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ToolCallRecordCreate(BaseModel):
+    tool_name: str
+    tool_arguments: dict[str, Any] = Field(default_factory=dict)
+    tool_result_summary: str = ""
+    status: Literal["pending", "running", "completed", "failed", "blocked"] = "completed"
+    error: str = ""
+    latency_ms: int = 0
+    side_effect: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolCallRecordRead(BaseModel):
+    id: str
+    agent_run_id: str
+    tool_name: str
+    tool_arguments: dict[str, Any] = Field(default_factory=dict)
+    tool_result_summary: str = ""
+    status: str
+    error: str = ""
+    latency_ms: int = 0
+    side_effect: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReplayCaseCreate(BaseModel):
+    source_agent_run_id: str | None = None
+    case_type: str = "agent_run"
+    query: str = ""
+    expected: dict[str, Any] = Field(default_factory=dict)
+    observed: dict[str, Any] = Field(default_factory=dict)
+    verdict: Literal["unreviewed", "pass", "fail", "needs_review"] = "unreviewed"
+    notes: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReplayCaseRead(BaseModel):
+    id: str
+    source_agent_run_id: str | None = None
+    case_type: str
+    query: str = ""
+    expected: dict[str, Any] = Field(default_factory=dict)
+    observed: dict[str, Any] = Field(default_factory=dict)
+    verdict: str = "unreviewed"
+    notes: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
 class JobArtifactsResponse(BaseModel):
     job: JobRead
     paper: PaperRead | None = None

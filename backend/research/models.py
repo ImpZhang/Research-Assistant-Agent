@@ -550,6 +550,62 @@ class ResearchEmbedding(Base, TimestampMixin):
     payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class AgentRun(Base, TimestampMixin):
+    __tablename__ = "agent_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    run_type: Mapped[str] = mapped_column(String(128), default="advisor", index=True)
+    status: Mapped[str] = mapped_column(String(64), default="running", index=True)
+    question: Mapped[str] = mapped_column(Text, default="")
+    input_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    output_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    model_name: Mapped[str] = mapped_column(String(255), default="")
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    token_usage_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[str] = mapped_column(String(128), default="system")
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=True,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ToolCallRecord(Base, TimestampMixin):
+    __tablename__ = "tool_call_records"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    agent_run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id"), index=True)
+    tool_name: Mapped[str] = mapped_column(String(255), index=True)
+    tool_arguments_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    tool_result_summary: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(64), default="completed", index=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    side_effect: Mapped[bool] = mapped_column(default=False, index=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ReplayCase(Base, TimestampMixin):
+    __tablename__ = "replay_cases"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    source_agent_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agent_runs.id"),
+        nullable=True,
+        index=True,
+    )
+    case_type: Mapped[str] = mapped_column(String(128), default="agent_run", index=True)
+    query: Mapped[str] = mapped_column(Text, default="")
+    expected_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    observed_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    verdict: Mapped[str] = mapped_column(String(64), default="unreviewed", index=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
 class Job(Base, TimestampMixin):
     __tablename__ = "jobs"
 

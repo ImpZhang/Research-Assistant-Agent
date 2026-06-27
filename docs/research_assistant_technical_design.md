@@ -718,6 +718,59 @@ experiment_design
 external_search
 ```
 
+### agent_runs / tool_call_records / replay_cases
+
+用于 Agent 工程可观测性、工具调用审计和 bad-case replay：
+
+```text
+agent_runs:
+id
+run_type
+status
+question
+input_json
+output_json
+error
+model_name
+latency_ms
+token_usage_json
+metadata_json
+created_by
+started_at
+finished_at
+created_at
+updated_at
+
+tool_call_records:
+id
+agent_run_id
+tool_name
+tool_arguments_json
+tool_result_summary
+status
+error
+latency_ms
+side_effect
+metadata_json
+created_at
+updated_at
+
+replay_cases:
+id
+source_agent_run_id
+case_type
+query
+expected_json
+observed_json
+verdict
+notes
+metadata_json
+created_at
+updated_at
+```
+
+当前这些表是 trace foundation：先用于显式创建和只读查询，后续 Advisor tool-calling、bad-case replay 脚本和独立 LangGraph workflow 都应复用这些表。写入 trace 时必须做 secret redaction，不保存原始 API key、token、cookie、`.env` 值或私有凭证。
+
 ## 8. 向量索引设计
 
 当前 Milvus collection 存储 chunk。后续需要两类向量对象：

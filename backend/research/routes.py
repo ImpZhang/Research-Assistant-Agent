@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from backend.research.config import settings
 from backend.research.db import get_session
 from backend.research.models import (
+    AgentRun,
     Chunk,
     Evidence,
     ExperimentAnalysis,
@@ -43,9 +44,13 @@ from backend.research.models import (
     Review,
     ResearchTask,
     ResearchTaskEvent,
+    ReplayCase,
     TaskBoardSnapshot,
+    ToolCallRecord,
 )
 from backend.research.schemas import (
+    AgentRunCreate,
+    AgentRunRead,
     AdvisorActionSessionRequest,
     AdvisorActionSessionResponse,
     AdvisorChatRequest,
@@ -207,6 +212,8 @@ from backend.research.schemas import (
     ResearchTaskEventRead,
     ResearchTaskRead,
     ResearchTaskUpdate,
+    ReplayCaseCreate,
+    ReplayCaseRead,
     ReviewRead,
     ScoredChunkRead,
     ScoredEvidenceRead,
@@ -219,9 +226,12 @@ from backend.research.schemas import (
     TaskBoardSnapshotDetail,
     TaskBoardSnapshotRead,
     ToolBridgeSpecResponse,
+    ToolCallRecordCreate,
+    ToolCallRecordRead,
     ToolManifestItem,
     ToolManifestResponse,
 )
+from backend.research.services.agent_trace_service import AgentTraceService
 from backend.research.services.artifact_graph_service import ArtifactGraphService
 from backend.research.services.benchmark_comparison_service import BenchmarkRunComparisonService
 from backend.research.services.benchmark_evidence_service import BenchmarkEvidenceService
@@ -394,6 +404,9 @@ def status() -> ProjectStatus:
             "mcp_stdio_http_bridge",
             "mcp_bridge_policy_controls",
             "mcp_bridge_project_scope_forwarding",
+            "agent_run_trace_foundation",
+            "agent_tool_call_records",
+            "agent_replay_cases",
             "workbench_project_scope_forwarding",
             "write_operation_audit_jsonl",
             "write_operation_audit_admin_summary",
@@ -580,6 +593,34 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/tools/mcp-spec",
             output_model="ToolBridgeSpecResponse",
+        ),
+        ToolManifestItem(
+            name="list_agent_runs",
+            description="List recent agent runs for trace inspection and replay triage.",
+            method="GET",
+            path="/research/agent/runs",
+            output_model="list[AgentRunRead]",
+        ),
+        ToolManifestItem(
+            name="get_agent_run",
+            description="Read one agent run trace by id.",
+            method="GET",
+            path="/research/agent/runs/{run_id}",
+            output_model="AgentRunRead",
+        ),
+        ToolManifestItem(
+            name="list_agent_run_tool_calls",
+            description="List tool-call records for one agent run.",
+            method="GET",
+            path="/research/agent/runs/{run_id}/tool-calls",
+            output_model="list[ToolCallRecordRead]",
+        ),
+        ToolManifestItem(
+            name="list_replay_cases",
+            description="List saved bad-case replay records for local evaluation.",
+            method="GET",
+            path="/research/agent/replay-cases",
+            output_model="list[ReplayCaseRead]",
         ),
         ToolManifestItem(
             name="run_literature_to_ideas_workflow",
@@ -5813,6 +5854,60 @@ def _serialize_job(job: Job) -> JobRead:
     )
 
 
+def _serialize_agent_run(run: AgentRun) -> AgentRunRead:
+    return AgentRunRead(
+        id=run.id,
+        run_type=run.run_type,
+        status=run.status,
+        question=run.question,
+        input=run.input_json or {},
+        output=run.output_json or {},
+        error=run.error,
+        model_name=run.model_name,
+        latency_ms=run.latency_ms,
+        token_usage=run.token_usage_json or {},
+        metadata=run.metadata_json or {},
+        created_by=run.created_by,
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+        created_at=run.created_at,
+        updated_at=run.updated_at,
+    )
+
+
+def _serialize_tool_call_record(record: ToolCallRecord) -> ToolCallRecordRead:
+    return ToolCallRecordRead(
+        id=record.id,
+        agent_run_id=record.agent_run_id,
+        tool_name=record.tool_name,
+        tool_arguments=record.tool_arguments_json or {},
+        tool_result_summary=record.tool_result_summary,
+        status=record.status,
+        error=record.error,
+        latency_ms=record.latency_ms,
+        side_effect=record.side_effect,
+        metadata=record.metadata_json or {},
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _serialize_replay_case(replay_case: ReplayCase) -> ReplayCaseRead:
+    return ReplayCaseRead(
+        id=replay_case.id,
+        source_agent_run_id=replay_case.source_agent_run_id,
+        case_type=replay_case.case_type,
+        query=replay_case.query,
+        expected=replay_case.expected_json or {},
+        observed=replay_case.observed_json or {},
+        verdict=replay_case.verdict,
+        notes=replay_case.notes,
+        metadata=replay_case.metadata_json or {},
+        created_at=replay_case.created_at,
+        updated_at=replay_case.updated_at,
+    )
+
+
 def _serialize_paper(paper: Paper) -> PaperRead:
     return PaperRead(
         id=paper.id,
@@ -5859,6 +5954,97 @@ def get_job(job_id: str, session: Session = Depends(get_session)) -> JobRead:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return _serialize_job(job)
+
+
+@router.post("/agent/runs", response_model=AgentRunRead)
+def create_agent_run(
+    payload: AgentRunCreate,
+    session: Session = Depends(get_session),
+) -> AgentRunRead:
+    return _serialize_agent_run(AgentTraceService(session).create_run(payload))
+
+
+@router.get("/agent/runs", response_model=list[AgentRunRead])
+def list_agent_runs(
+    limit: int = 50,
+    run_type: str | None = None,
+    status: str | None = None,
+    session: Session = Depends(get_session),
+) -> list[AgentRunRead]:
+    runs = AgentTraceService(session).list_runs(limit=limit, run_type=run_type, status=status)
+    return [_serialize_agent_run(run) for run in runs]
+
+
+@router.get("/agent/runs/{run_id}", response_model=AgentRunRead)
+def get_agent_run(run_id: str, session: Session = Depends(get_session)) -> AgentRunRead:
+    run = AgentTraceService(session).get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Agent run not found")
+    return _serialize_agent_run(run)
+
+
+@router.post("/agent/runs/{run_id}/tool-calls", response_model=ToolCallRecordRead)
+def create_agent_tool_call_record(
+    run_id: str,
+    payload: ToolCallRecordCreate,
+    session: Session = Depends(get_session),
+) -> ToolCallRecordRead:
+    try:
+        record = AgentTraceService(session).create_tool_call(run_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_tool_call_record(record)
+
+
+@router.get("/agent/runs/{run_id}/tool-calls", response_model=list[ToolCallRecordRead])
+def list_agent_tool_call_records(
+    run_id: str,
+    limit: int = 100,
+    session: Session = Depends(get_session),
+) -> list[ToolCallRecordRead]:
+    service = AgentTraceService(session)
+    if service.get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="Agent run not found")
+    records = service.list_tool_calls(run_id, limit=limit)
+    return [_serialize_tool_call_record(record) for record in records]
+
+
+@router.post("/agent/replay-cases", response_model=ReplayCaseRead)
+def create_agent_replay_case(
+    payload: ReplayCaseCreate,
+    session: Session = Depends(get_session),
+) -> ReplayCaseRead:
+    try:
+        replay_case = AgentTraceService(session).create_replay_case(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _serialize_replay_case(replay_case)
+
+
+@router.get("/agent/replay-cases", response_model=list[ReplayCaseRead])
+def list_agent_replay_cases(
+    limit: int = 50,
+    case_type: str | None = None,
+    verdict: str | None = None,
+    session: Session = Depends(get_session),
+) -> list[ReplayCaseRead]:
+    replay_cases = AgentTraceService(session).list_replay_cases(
+        limit=limit,
+        case_type=case_type,
+        verdict=verdict,
+    )
+    return [_serialize_replay_case(replay_case) for replay_case in replay_cases]
+
+
+@router.get("/agent/replay-cases/{case_id}", response_model=ReplayCaseRead)
+def get_agent_replay_case(
+    case_id: str,
+    session: Session = Depends(get_session),
+) -> ReplayCaseRead:
+    replay_case = AgentTraceService(session).get_replay_case(case_id)
+    if replay_case is None:
+        raise HTTPException(status_code=404, detail="Replay case not found")
+    return _serialize_replay_case(replay_case)
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=JobRead)

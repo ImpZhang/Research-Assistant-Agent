@@ -2,6 +2,27 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Agent Trace Foundation
+
+Implementation completed:
+
+- Added `AgentRun`, `ToolCallRecord`, and `ReplayCase` persistence models as the trace foundation for future Advisor tool calling, replay, and LangGraph workflows.
+- Added `AgentTraceService` with bounded listing, run/tool/replay creation, and secret redaction for sensitive keys and provider-token-shaped values.
+- Added create/read APIs under `/research/agent/runs`, `/research/agent/runs/{run_id}/tool-calls`, and `/research/agent/replay-cases`.
+- Exposed read-only trace inspection tools through the tool manifest and MCP bridge spec while keeping trace creation out of the MCP tool manifest for now.
+- Updated README, TODO, and the agent engineering strengthening plan to mark trace persistence as the first completed roadmap slice.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_app.py::test_agent_trace_records_run_tool_call_and_replay_case tests/test_app.py::test_tool_manifest_lists_mcp_ready_research_tools tests/test_app.py::test_tool_bridge_spec_maps_manifest_to_http_tool_schemas tests/test_app.py::test_job_cancel_and_retry_controls` passed: `4 passed`.
+- `bash scripts/check_workflow_job_controls.sh` passed: `4 passed`.
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `12 passed`.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_deployment_contracts.sh` passed: `8 passed`.
+- `git diff --check` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment/local doctor contracts `8 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `4 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Agent Engineering Strengthening Plan
 
 Documentation completed:

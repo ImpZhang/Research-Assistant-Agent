@@ -45,7 +45,7 @@ Current product target: personal local deployment. A user should be able to clon
 
 ## P2 - Agent Interview Strengthening Follow-Ups
 
-- Add `AgentRun`, `ToolCallRecord`, and `ReplayCase` persistence before changing agent behavior.
+- Extend the initial `AgentRun`, `ToolCallRecord`, and `ReplayCase` persistence into Advisor and replay workflows.
 - Convert Advisor into a bounded, traceable, read-first tool-calling agent while preserving the existing response contract and deterministic fallback.
 - Add project-local `skills/*/SKILL.md` docs for `paper_ingestion`, `hybrid_context_search`, `literature_to_ideas`, `sota_review`, `benchmark_evaluation`, and `advisor_action_session`.
 - Add a local bad-case replay script and deterministic replay fixtures for context-search misses, bad tool selection, citation mistakes, and readiness false positives.

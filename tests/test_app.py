@@ -1203,6 +1203,10 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_project_triage_snapshot" in names
     assert "export_project_triage_snapshot_markdown" in names
     assert "get_mcp_tool_spec" in names
+    assert "list_agent_runs" in names
+    assert "get_agent_run" in names
+    assert "list_agent_run_tool_calls" in names
+    assert "list_replay_cases" in names
     assert "get_idea_research_packet" in names
     assert "get_idea_timeline" in names
     assert "export_idea_bundle" in names
@@ -1292,6 +1296,82 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert any(tool["side_effect"] for tool in body["tools"])
 
 
+def test_agent_trace_records_run_tool_call_and_replay_case() -> None:
+    client = TestClient(create_app())
+
+    run_response = client.post(
+        "/research/agent/runs",
+        json={
+            "run_type": "pytest_agent_trace",
+            "status": "completed",
+            "question": "Why did the advisor call context search?",
+            "input": {
+                "query": "hybrid retrieval",
+                "api_key": "sk-test-secret-value",
+            },
+            "output": {"answer": "Use source chunks and evidence."},
+            "metadata": {"authorization": "Bearer local-secret-token"},
+            "latency_ms": 42,
+            "created_by": "pytest",
+        },
+    )
+    assert run_response.status_code == 200
+    run = run_response.json()
+    assert run["run_type"] == "pytest_agent_trace"
+    assert run["status"] == "completed"
+    assert run["input"]["api_key"] == "[redacted]"
+    assert run["metadata"]["authorization"] == "[redacted]"
+    assert run["finished_at"]
+
+    tool_response = client.post(
+        f"/research/agent/runs/{run['id']}/tool-calls",
+        json={
+            "tool_name": "search_research_context",
+            "tool_arguments": {
+                "body": {"query": "hybrid retrieval"},
+                "token": "tool-secret",
+            },
+            "tool_result_summary": "Returned context without exposing sk-hidden-secret",
+            "status": "completed",
+            "latency_ms": 9,
+            "side_effect": False,
+        },
+    )
+    assert tool_response.status_code == 200
+    tool_call = tool_response.json()
+    assert tool_call["agent_run_id"] == run["id"]
+    assert tool_call["tool_name"] == "search_research_context"
+    assert tool_call["tool_arguments"]["token"] == "[redacted]"
+    assert "[redacted]" in tool_call["tool_result_summary"]
+
+    replay_response = client.post(
+        "/research/agent/replay-cases",
+        json={
+            "source_agent_run_id": run["id"],
+            "case_type": "bad_tool_selection",
+            "query": "Why was the wrong tool selected?",
+            "expected": {"tool": "search_research_context"},
+            "observed": {"tool": "list_research_tasks", "password": "hidden"},
+            "verdict": "needs_review",
+            "notes": "Replay this after Advisor tool selection changes.",
+        },
+    )
+    assert replay_response.status_code == 200
+    replay_case = replay_response.json()
+    assert replay_case["source_agent_run_id"] == run["id"]
+    assert replay_case["observed"]["password"] == "[redacted]"
+    assert replay_case["verdict"] == "needs_review"
+
+    run_detail = client.get(f"/research/agent/runs/{run['id']}")
+    tool_calls = client.get(f"/research/agent/runs/{run['id']}/tool-calls")
+    replay_cases = client.get("/research/agent/replay-cases?case_type=bad_tool_selection")
+    assert run_detail.status_code == 200
+    assert tool_calls.status_code == 200
+    assert replay_cases.status_code == 200
+    assert tool_calls.json()[0]["id"] == tool_call["id"]
+    assert any(item["id"] == replay_case["id"] for item in replay_cases.json())
+
+
 def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     client = TestClient(create_app())
     response = client.get("/research/tools/mcp-spec")
@@ -1316,6 +1396,15 @@ def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     assert project_bundle_readiness["http"]["method"] == "GET"
     assert project_bundle_readiness["http"]["path"] == "/research/export/project-bundle/readiness"
     assert project_bundle_readiness["annotations"]["readOnlyHint"] is True
+
+    agent_runs = tools["list_agent_runs"]
+    assert agent_runs["http"]["method"] == "GET"
+    assert agent_runs["http"]["path"] == "/research/agent/runs"
+    assert agent_runs["annotations"]["readOnlyHint"] is True
+
+    agent_tool_calls = tools["list_agent_run_tool_calls"]
+    assert agent_tool_calls["input_schema"]["required"] == ["run_id"]
+    assert agent_tool_calls["annotations"]["readOnlyHint"] is True
 
     project_bundle_release = tools["create_project_bundle_release_note"]
     assert project_bundle_release["http"]["method"] == "POST"

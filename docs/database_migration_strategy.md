@@ -36,6 +36,10 @@ Expected shape:
 
 User/project scoping should follow `docs/user_project_scoping_design.md`: create default user/project rows, backfill project-scoped tables, add `project_id` indexes, then enforce route-level isolation before tightening nullability. This should happen only after migration tooling and auth identity are explicit.
 
+## Recent Additive Tables
+
+The agent trace foundation adds `agent_runs`, `tool_call_records`, and `replay_cases` as additive tables. Fresh local checkouts receive these tables through `Base.metadata.create_all()`. Existing local databases need operator-aware upgrade handling until Alembic is introduced: back up the local data directory, start the app so missing tables are created, then verify `/health/ready` and `/research/agent/runs`.
+
 ## Pre-Migration Checklist
 
 Before applying any migration to an existing local database:
