@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from datetime import datetime, timezone
 import json
 import mimetypes
 import os
 from pathlib import Path
+import signal
 import sys
 from typing import Any
 
@@ -18,7 +20,9 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from backend.app import create_app  # noqa: E402
 from backend.research.db import SessionLocal  # noqa: E402
+from backend.research.models import Job  # noqa: E402
 from backend.research.services.embedding_service import EmbeddingService  # noqa: E402
+from backend.research.services.related_work_service import RelatedWorkService  # noqa: E402
 from backend.research.services.retrieval_service import RetrievalService  # noqa: E402
 
 
@@ -27,6 +31,10 @@ DEFAULT_CONTEXT_QUERIES = [
     "large vision language model reasoning image geolocation",
     "hierarchical geolocalization coordinate prediction dataset evaluation",
 ]
+
+
+class WorkflowTimeoutError(TimeoutError):
+    pass
 
 
 def main() -> int:
@@ -39,6 +47,26 @@ def main() -> int:
     parser.add_argument("--max-gaps", type=int, default=3)
     parser.add_argument("--max-ideas-per-gap", type=int, default=1)
     parser.add_argument("--context-limit", type=int, default=5)
+    parser.add_argument(
+        "--workflow-timeout-seconds",
+        type=int,
+        default=180,
+        help="Abort the in-process workflow call after this many seconds and recover job artifacts.",
+    )
+    parser.add_argument(
+        "--deep-step-timeout-seconds",
+        type=int,
+        default=45,
+        help="Abort each deep quality-loop API call after this many seconds and keep partial results.",
+    )
+    parser.add_argument(
+        "--run-workflow-novelty-check",
+        action="store_true",
+        help=(
+            "Run the workflow's built-in novelty check. Disabled by default because it may call "
+            "external literature providers and can dominate real-paper evaluation time."
+        ),
+    )
     parser.add_argument(
         "--skip-deep-quality-loop",
         action="store_true",
@@ -68,6 +96,16 @@ def main() -> int:
     report = {
         "started_at": started_at.isoformat(),
         "project_root": str(PROJECT_ROOT),
+        "config": {
+            "max_gaps": args.max_gaps,
+            "max_ideas_per_gap": args.max_ideas_per_gap,
+            "context_limit": args.context_limit,
+            "workflow_timeout_seconds": args.workflow_timeout_seconds,
+            "deep_step_timeout_seconds": args.deep_step_timeout_seconds,
+            "run_workflow_novelty_check": args.run_workflow_novelty_check,
+            "run_deep_quality_loop": not args.skip_deep_quality_loop,
+            "compare_retrieval_modes": not args.skip_retrieval_mode_comparison,
+        },
         "health": _require_ok(client.get("/health"), "health"),
         "readiness": _require_ok(client.get("/health/ready"), "readiness"),
         "papers": [],
@@ -81,6 +119,9 @@ def main() -> int:
                 max_gaps=args.max_gaps,
                 max_ideas_per_gap=args.max_ideas_per_gap,
                 context_limit=args.context_limit,
+                workflow_timeout_seconds=args.workflow_timeout_seconds,
+                deep_step_timeout_seconds=args.deep_step_timeout_seconds,
+                run_workflow_novelty_check=args.run_workflow_novelty_check,
                 run_deep_quality_loop=not args.skip_deep_quality_loop,
                 compare_retrieval_modes=not args.skip_retrieval_mode_comparison,
             )
@@ -108,6 +149,9 @@ def _evaluate_one_paper(
     max_gaps: int,
     max_ideas_per_gap: int,
     context_limit: int,
+    workflow_timeout_seconds: int,
+    deep_step_timeout_seconds: int,
+    run_workflow_novelty_check: bool,
     run_deep_quality_loop: bool,
     compare_retrieval_modes: bool,
 ) -> dict[str, Any]:
@@ -147,20 +191,19 @@ def _evaluate_one_paper(
         result["steps"]["paper_detail"] = "ok"
 
         print(f"- workflow: {path.name}", flush=True)
-        workflow = _require_ok(
-            client.post(
-                "/research/workflows/literature-to-ideas",
-                json={
-                    "paper_id": paper_id,
-                    "max_gaps": max_gaps,
-                    "max_ideas_per_gap": max_ideas_per_gap,
-                    "include_markdown_export": True,
-                },
-            ),
-            f"workflow {path.name}",
+        workflow = _run_workflow_with_recovery(
+            client,
+            paper_id=paper_id,
+            path=path,
+            max_gaps=max_gaps,
+            max_ideas_per_gap=max_ideas_per_gap,
+            run_workflow_novelty_check=run_workflow_novelty_check,
+            workflow_timeout_seconds=workflow_timeout_seconds,
         )
         result["workflow"] = _summarize_workflow(workflow)
-        result["steps"]["workflow"] = "ok"
+        result["steps"]["workflow"] = (
+            "recovered" if workflow.get("_recovered_from_job_artifacts") else "ok"
+        )
 
         print(f"- embeddings: {path.name}", flush=True)
         embeddings = _require_ok(
@@ -215,6 +258,7 @@ def _evaluate_one_paper(
                     idea_id=idea_id,
                     workflow=workflow,
                     path=path,
+                    step_timeout_seconds=deep_step_timeout_seconds,
                 )
                 result["steps"]["deep_quality_loop"] = "ok"
             print(f"- readiness/quality/advisor: {path.name}", flush=True)
@@ -254,140 +298,387 @@ def _evaluate_one_paper(
     return result
 
 
+def _run_workflow_with_recovery(
+    client: TestClient,
+    *,
+    paper_id: str,
+    path: Path,
+    max_gaps: int,
+    max_ideas_per_gap: int,
+    run_workflow_novelty_check: bool,
+    workflow_timeout_seconds: int,
+) -> dict[str, Any]:
+    payload = {
+        "paper_id": paper_id,
+        "max_gaps": max_gaps,
+        "max_ideas_per_gap": max_ideas_per_gap,
+        "run_novelty_check": run_workflow_novelty_check,
+        "run_review": True,
+        "run_experiment_plan": True,
+        "include_markdown_export": True,
+    }
+    try:
+        response = _call_with_timeout(
+            lambda: client.post("/research/workflows/literature-to-ideas", json=payload),
+            timeout_seconds=workflow_timeout_seconds,
+            label=f"workflow {path.name}",
+        )
+        workflow = _require_ok(response, f"workflow {path.name}")
+        workflow["_workflow_execution_mode"] = "sync_endpoint"
+        return workflow
+    except Exception as exc:
+        recovered = _recover_latest_workflow_artifacts(client, paper_id=paper_id)
+        if recovered is None:
+            raise
+        recovered["_workflow_execution_mode"] = "recovered_from_job_artifacts"
+        recovered["_workflow_warning"] = f"{exc.__class__.__name__}: {str(exc)[:240]}"
+        return recovered
+
+
+def _call_with_timeout(
+    callback: Callable[[], Any],
+    *,
+    timeout_seconds: int,
+    label: str,
+) -> Any:
+    if timeout_seconds <= 0 or not hasattr(signal, "SIGALRM"):
+        return callback()
+
+    def _raise_timeout(_signum, _frame) -> None:
+        raise WorkflowTimeoutError(f"{label} timed out after {timeout_seconds} seconds")
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, _raise_timeout)
+    signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
+    try:
+        return callback()
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+
+
+def _recover_latest_workflow_artifacts(
+    client: TestClient,
+    *,
+    paper_id: str,
+) -> dict[str, Any] | None:
+    session = SessionLocal()
+    try:
+        jobs = (
+            session.query(Job)
+            .filter(Job.job_type == "literature_to_ideas_workflow")
+            .order_by(Job.created_at.desc())
+            .limit(50)
+            .all()
+        )
+        candidate = next(
+            (
+                job
+                for job in jobs
+                if (job.input_json or {}).get("paper_id") == paper_id
+                and (job.output_json or {}).get("idea_ids")
+            ),
+            None,
+        )
+    finally:
+        session.close()
+    if candidate is None:
+        return None
+
+    artifacts = _require_ok(
+        client.get(f"/research/jobs/{candidate.id}/artifacts"),
+        f"workflow artifact recovery {candidate.id}",
+    )
+    return _workflow_from_artifacts(artifacts)
+
+
+def _workflow_from_artifacts(artifacts: dict[str, Any]) -> dict[str, Any]:
+    job = artifacts.get("job") or {}
+    return {
+        "job_id": job.get("id", ""),
+        "paper": artifacts.get("paper") or {},
+        "card": artifacts.get("card") or {},
+        "gaps": artifacts.get("gaps", []),
+        "ideas": artifacts.get("ideas", []),
+        "novelty_checks": artifacts.get("novelty_checks", []),
+        "reviews": artifacts.get("reviews", []),
+        "experiment_plans": artifacts.get("experiment_plans", []),
+        "markdown_export": artifacts.get("markdown_export", ""),
+        "message": artifacts.get("message", ""),
+        "_job_status": job.get("status", ""),
+        "_job_progress": job.get("progress", 0.0),
+        "_recovered_from_job_artifacts": True,
+    }
+
+
 def _run_deep_quality_loop(
     client: TestClient,
     *,
     idea_id: str,
     workflow: dict[str, Any],
     path: Path,
+    step_timeout_seconds: int,
 ) -> dict[str, Any]:
-    related_work = _require_ok(
-        client.post(
-            f"/research/ideas/{idea_id}/related-work-matrix",
-            json={
-                "include_external": False,
-                "limit": 6,
-                "created_by": "real_paper_eval",
-            },
-        ),
-        f"related work matrix {path.name}",
+    result: dict[str, Any] = {
+        "related_work_matrix_id": "",
+        "related_work_items": 0,
+        "proposal_draft_id": "",
+        "proposal_review_id": "",
+        "proposal_review_decision": "",
+        "proposal_review_score": 0.0,
+        "experiment_run_id": "",
+        "experiment_analysis_id": "",
+        "experiment_analysis_decision": "",
+        "decision_memo_id": "",
+        "decision": "",
+        "assumption_audit_id": "",
+        "assumption_count": 0,
+        "steps": {},
+        "warnings": [],
+    }
+
+    print(f"  - related work matrix: {path.name}", flush=True)
+    related_work = _create_local_related_work_matrix_step(
+        idea_id=idea_id,
+        path=path,
+        timeout_seconds=step_timeout_seconds,
+        result=result,
     )
+    if related_work is None:
+        return result
+    result["related_work_matrix_id"] = related_work["id"]
+    result["related_work_items"] = len(related_work.get("items", []))
+
     experiment_plan_id = ""
     if workflow.get("experiment_plans"):
         experiment_plan_id = workflow["experiment_plans"][0]["id"]
     if not experiment_plan_id:
-        experiment_plan = _require_ok(
-            client.post(f"/research/ideas/{idea_id}/experiment-plan"),
-            f"experiment plan {path.name}",
+        print(f"  - experiment plan: {path.name}", flush=True)
+        experiment_plan = _post_json_step(
+            client,
+            f"/research/ideas/{idea_id}/experiment-plan",
+            json_payload=None,
+            label=f"experiment plan {path.name}",
+            step_key="experiment_plan",
+            timeout_seconds=step_timeout_seconds,
+            result=result,
         )
+        if not experiment_plan:
+            return result
         experiment_plan_id = experiment_plan["id"]
 
-    proposal = _require_ok(
-        client.post(
-            f"/research/ideas/{idea_id}/proposal-draft",
-            json={
-                "related_work_matrix_id": related_work["id"],
-                "experiment_plan_id": experiment_plan_id,
-                "created_by": "real_paper_eval",
+    print(f"  - proposal draft: {path.name}", flush=True)
+    proposal = _post_json_step(
+        client,
+        f"/research/ideas/{idea_id}/proposal-draft",
+        json_payload={
+            "related_work_matrix_id": related_work["id"],
+            "experiment_plan_id": experiment_plan_id,
+            "created_by": "real_paper_eval",
+        },
+        label=f"proposal draft {path.name}",
+        step_key="proposal_draft",
+        timeout_seconds=step_timeout_seconds,
+        result=result,
+    )
+    if not proposal:
+        return result
+    result["proposal_draft_id"] = proposal["id"]
+
+    print(f"  - proposal review: {path.name}", flush=True)
+    proposal_review = _post_json_step(
+        client,
+        f"/research/ideas/{idea_id}/proposal-drafts/{proposal['id']}/review",
+        json_payload={"reviewer_type": "advisor", "created_by": "real_paper_eval"},
+        label=f"proposal review {path.name}",
+        step_key="proposal_review",
+        timeout_seconds=step_timeout_seconds,
+        result=result,
+    )
+    if proposal_review:
+        result["proposal_review_id"] = proposal_review["id"]
+        result["proposal_review_decision"] = proposal_review.get("decision", "")
+        result["proposal_review_score"] = proposal_review.get("readiness_score", 0.0)
+
+    print(f"  - experiment run: {path.name}", flush=True)
+    experiment_run = _post_json_step(
+        client,
+        f"/research/experiment-plans/{experiment_plan_id}/runs",
+        json_payload={
+            "title": "Real-paper evaluation dry run",
+            "status": "completed",
+            "dataset_snapshot": "Synthetic planning checkpoint from real-paper evaluation",
+            "parameters": {"mode": "planning_eval", "source": "real_paper_eval"},
+            "metric_results": {
+                "planning_completeness": 0.72,
+                "evidence_alignment": 0.68,
+                "novelty_risk_remaining": 0.42,
             },
-        ),
-        f"proposal draft {path.name}",
+            "conclusion": (
+                "Planning checkpoint completed; use real benchmark execution before final claims."
+            ),
+            "notes": "Generated by local real-paper evaluation to exercise the quality gate loop.",
+            "created_by": "real_paper_eval",
+        },
+        label=f"experiment run {path.name}",
+        step_key="experiment_run",
+        timeout_seconds=step_timeout_seconds,
+        result=result,
     )
-    proposal_review = _require_ok(
-        client.post(
-            f"/research/ideas/{idea_id}/proposal-drafts/{proposal['id']}/review",
-            json={"reviewer_type": "advisor", "created_by": "real_paper_eval"},
-        ),
-        f"proposal review {path.name}",
+    if not experiment_run:
+        return result
+    result["experiment_run_id"] = experiment_run["id"]
+
+    print(f"  - experiment analysis: {path.name}", flush=True)
+    experiment_analysis = _post_json_step(
+        client,
+        f"/research/experiment-runs/{experiment_run['id']}/analysis",
+        json_payload={"created_by": "real_paper_eval"},
+        label=f"experiment analysis {path.name}",
+        step_key="experiment_analysis",
+        timeout_seconds=step_timeout_seconds,
+        result=result,
     )
-    experiment_run = _require_ok(
-        client.post(
-            f"/research/experiment-plans/{experiment_plan_id}/runs",
-            json={
-                "title": "Real-paper evaluation dry run",
-                "status": "completed",
-                "dataset_snapshot": "Synthetic planning checkpoint from real-paper evaluation",
-                "parameters": {"mode": "planning_eval", "source": "real_paper_eval"},
-                "metric_results": {
-                    "planning_completeness": 0.72,
-                    "evidence_alignment": 0.68,
-                    "novelty_risk_remaining": 0.42,
+    if experiment_analysis:
+        result["experiment_analysis_id"] = experiment_analysis["id"]
+        result["experiment_analysis_decision"] = experiment_analysis.get("decision", "")
+
+    print(f"  - decision memo: {path.name}", flush=True)
+    decision_memo = _post_json_step(
+        client,
+        f"/research/ideas/{idea_id}/decision-memo",
+        json_payload={
+            "decision": "revise",
+            "rationale": [
+                "Real-paper evaluation completed the initial evidence, retrieval, proposal, and planning loop.",
+                "Novelty and benchmark execution still need manual SOTA collision review before pursuit.",
+            ],
+            "evidence_ids": _workflow_evidence_ids(workflow),
+            "risks": [
+                "Generated idea may overlap with recent geolocalization baselines.",
+                "Planning metrics are dry-run signals, not executed benchmark results.",
+            ],
+            "next_commitments": [
+                "Run manual SOTA collision review.",
+                "Execute one benchmark slice before upgrading decision to pursue.",
+            ],
+            "created_by": "real_paper_eval",
+        },
+        label=f"decision memo {path.name}",
+        step_key="decision_memo",
+        timeout_seconds=step_timeout_seconds,
+        result=result,
+    )
+    if decision_memo:
+        result["decision_memo_id"] = decision_memo["id"]
+        result["decision"] = decision_memo.get("decision", "")
+
+    print(f"  - assumption audit: {path.name}", flush=True)
+    assumption_audit = _post_json_step(
+        client,
+        f"/research/ideas/{idea_id}/assumption-audit",
+        json_payload={
+            "assumptions": [
+                {
+                    "assumption": "The selected benchmark slice exposes a real geolocalization failure mode.",
+                    "risk_level": "medium",
+                    "falsification_test": "Compare against the source-paper baseline and one recent VLM baseline.",
                 },
-                "conclusion": (
-                    "Planning checkpoint completed; use real benchmark execution before final claims."
-                ),
-                "notes": "Generated by local real-paper evaluation to exercise the quality gate loop.",
-                "created_by": "real_paper_eval",
-            },
-        ),
-        f"experiment run {path.name}",
+                {
+                    "assumption": "The proposed intervention is not already covered by the nearest SOTA method.",
+                    "risk_level": "high",
+                    "falsification_test": "Run manual SOTA review and external literature search.",
+                },
+            ],
+            "created_by": "real_paper_eval",
+        },
+        label=f"assumption audit {path.name}",
+        step_key="assumption_audit",
+        timeout_seconds=step_timeout_seconds,
+        result=result,
     )
-    experiment_analysis = _require_ok(
-        client.post(
-            f"/research/experiment-runs/{experiment_run['id']}/analysis",
-            json={"created_by": "real_paper_eval"},
-        ),
-        f"experiment analysis {path.name}",
-    )
-    decision_memo = _require_ok(
-        client.post(
-            f"/research/ideas/{idea_id}/decision-memo",
-            json={
-                "decision": "revise",
-                "rationale": [
-                    "Real-paper evaluation completed the initial evidence, retrieval, proposal, and planning loop.",
-                    "Novelty and benchmark execution still need manual SOTA collision review before pursuit.",
-                ],
-                "evidence_ids": _workflow_evidence_ids(workflow),
-                "risks": [
-                    "Generated idea may overlap with recent geolocalization baselines.",
-                    "Planning metrics are dry-run signals, not executed benchmark results.",
-                ],
-                "next_commitments": [
-                    "Run manual SOTA collision review.",
-                    "Execute one benchmark slice before upgrading decision to pursue.",
-                ],
-                "created_by": "real_paper_eval",
-            },
-        ),
-        f"decision memo {path.name}",
-    )
-    assumption_audit = _require_ok(
-        client.post(
-            f"/research/ideas/{idea_id}/assumption-audit",
-            json={
-                "assumptions": [
-                    {
-                        "assumption": "The selected benchmark slice exposes a real geolocalization failure mode.",
-                        "risk_level": "medium",
-                        "falsification_test": "Compare against the source-paper baseline and one recent VLM baseline.",
-                    },
-                    {
-                        "assumption": "The proposed intervention is not already covered by the nearest SOTA method.",
-                        "risk_level": "high",
-                        "falsification_test": "Run manual SOTA review and external literature search.",
-                    },
-                ],
-                "created_by": "real_paper_eval",
-            },
-        ),
-        f"assumption audit {path.name}",
-    )
-    return {
-        "related_work_matrix_id": related_work["id"],
-        "related_work_items": len(related_work.get("items", [])),
-        "proposal_draft_id": proposal["id"],
-        "proposal_review_id": proposal_review["id"],
-        "proposal_review_decision": proposal_review.get("decision", ""),
-        "proposal_review_score": proposal_review.get("readiness_score", 0.0),
-        "experiment_run_id": experiment_run["id"],
-        "experiment_analysis_id": experiment_analysis["id"],
-        "experiment_analysis_decision": experiment_analysis.get("decision", ""),
-        "decision_memo_id": decision_memo["id"],
-        "decision": decision_memo.get("decision", ""),
-        "assumption_audit_id": assumption_audit["id"],
-        "assumption_count": len(assumption_audit.get("assumptions", [])),
-    }
+    if assumption_audit:
+        result["assumption_audit_id"] = assumption_audit["id"]
+        result["assumption_count"] = len(assumption_audit.get("assumptions", []))
+    return result
+
+
+def _create_local_related_work_matrix_step(
+    *,
+    idea_id: str,
+    path: Path,
+    timeout_seconds: int,
+    result: dict[str, Any],
+) -> dict[str, Any] | None:
+    label = f"related work matrix {path.name}"
+    try:
+        matrix = _call_with_timeout(
+            lambda: _create_local_related_work_matrix(idea_id),
+            timeout_seconds=timeout_seconds,
+            label=label,
+        )
+        result["steps"]["related_work_matrix"] = "ok"
+        return matrix
+    except Exception as exc:
+        result["steps"]["related_work_matrix"] = "failed"
+        result["warnings"].append(f"{label}: {exc.__class__.__name__}: {str(exc)[:240]}")
+        return None
+
+
+def _create_local_related_work_matrix(idea_id: str) -> dict[str, Any]:
+    session = SessionLocal()
+    try:
+        embedding_service = EmbeddingService(session, embedding_provider_mode="local")
+        retrieval_service = RetrievalService(
+            session,
+            embedding_service=embedding_service,
+            rerank_provider_mode="disabled",
+        )
+        matrix = RelatedWorkService(
+            session,
+            retrieval_service=retrieval_service,
+        ).create_matrix(
+            idea_id,
+            include_external=False,
+            limit=6,
+            created_by="real_paper_eval",
+        )
+        return {
+            "id": matrix.id,
+            "items": matrix.items_json or [],
+            "summary": matrix.summary,
+            "checked_sources": matrix.checked_sources_json or [],
+        }
+    finally:
+        session.close()
+
+
+def _post_json_step(
+    client: TestClient,
+    path: str,
+    *,
+    json_payload: dict[str, Any] | None,
+    label: str,
+    step_key: str,
+    timeout_seconds: int,
+    result: dict[str, Any],
+) -> dict[str, Any] | None:
+    try:
+        response = _call_with_timeout(
+            lambda: (
+                client.post(path, json=json_payload)
+                if json_payload is not None
+                else client.post(path)
+            ),
+            timeout_seconds=timeout_seconds,
+            label=label,
+        )
+        result["steps"][step_key] = "ok"
+        return _require_ok(response, label)
+    except Exception as exc:
+        result["steps"][step_key] = "failed"
+        result["warnings"].append(f"{label}: {exc.__class__.__name__}: {str(exc)[:240]}")
+        return None
 
 
 def _workflow_evidence_ids(workflow: dict[str, Any]) -> list[str]:
@@ -416,6 +707,11 @@ def _decode_response(response) -> Any:
 def _summarize_workflow(workflow: dict[str, Any]) -> dict[str, Any]:
     return {
         "job_id": workflow.get("job_id"),
+        "job_status": workflow.get("_job_status", "completed"),
+        "job_progress": workflow.get("_job_progress", 1.0),
+        "execution_mode": workflow.get("_workflow_execution_mode", "sync_endpoint"),
+        "recovered_from_job_artifacts": bool(workflow.get("_recovered_from_job_artifacts")),
+        "warning": workflow.get("_workflow_warning", ""),
         "card_id": (workflow.get("card") or {}).get("id"),
         "gap_count": len(workflow.get("gaps", [])),
         "idea_count": len(workflow.get("ideas", [])),
@@ -601,6 +897,7 @@ def _paper_metrics(result: dict[str, Any]) -> dict[str, Any]:
         "experiment_analysis_decision": deep.get("experiment_analysis_decision", ""),
         "decision_memo": deep.get("decision", ""),
         "assumption_count": deep.get("assumption_count", 0),
+        "deep_quality_warning_count": len(deep.get("warnings", [])),
     }
 
 
@@ -673,6 +970,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
                 f"- Quality gate: `{metrics.get('quality_decision', '')}` score `{metrics.get('quality_score', 0.0)}`",
                 f"- Proposal review: `{metrics.get('proposal_review_decision', '')}` score `{metrics.get('proposal_review_score', 0.0)}`",
                 f"- Experiment/decision/assumptions: `{metrics.get('experiment_analysis_decision', '')}` / `{metrics.get('decision_memo', '')}` / `{metrics.get('assumption_count', 0)}`",
+                f"- Deep quality warnings: `{metrics.get('deep_quality_warning_count', 0)}`",
             ]
         )
         if paper.get("errors"):

@@ -2,6 +2,42 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Real Paper Evaluation Runner Hardening
+
+Implementation completed:
+
+- Hardened `scripts/evaluate_real_papers.py` for real-PDF, real-provider evaluation by adding workflow timeout configuration, job-artifact recovery, step-level deep-quality progress logging, and deep-quality warning metrics.
+- Disabled workflow-internal novelty checks by default for the real evaluator so uncontrolled external literature calls do not block the core literature-to-ideas run; the operator can still opt in with `--run-workflow-novelty-check`.
+- Switched the real evaluator's related-work matrix step to a local service path with local hash embedding and disabled rerank, preserving persisted matrix artifacts while avoiding long model-provider calls in the deep quality loop.
+- Added dependency injection to `RelatedWorkService` so production routes retain default retrieval behavior while scripts/tests can pass bounded retrieval services.
+- Added structured idea title post-processing for model-generated ideas: generic or duplicate titles are rewritten from gap evidence, and geolocalization ideas now prefer distinct mechanisms across a workflow batch.
+- Added regression coverage for recovered workflow-artifact summaries and duplicate/generic geolocalization title rewriting.
+
+Real evaluation completed:
+
+- Ran a full three-paper geolocalization evaluation on the local machine using the configured real provider stack.
+- Final report: `outputs/evaluations/real_paper_eval_20260627_150056.json`.
+- Final Markdown report: `outputs/evaluations/real_paper_eval_20260627_150056.md`.
+- Completed papers: `3 / 3`.
+- Generated gaps/ideas: `9 / 9`.
+- Embedding model: `qwen3-vl-embedding`.
+- Indexed evaluation objects: `42`.
+- Context searches with evidence: `3 / 3` papers.
+- Retrieval comparison coverage: `6 / 9` top-evidence overlap against the local hash/no-rerank baseline.
+- Deep quality warnings: `0` across all three papers.
+- Idea title diversity improved to `3 / 3` unique titles and `3 / 3` unique mechanisms for each evaluated paper.
+- Two papers hit the 120-second workflow boundary and recovered from completed job artifacts, validating the recovery path without losing downstream quality-loop artifacts.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/research/services/structured_idea_service.py tests/test_structured_idea_service.py` passed.
+- `.venv/bin/ruff check backend/research/services/structured_idea_service.py tests/test_structured_idea_service.py backend/research/services/related_work_service.py scripts/evaluate_real_papers.py tests/test_evaluation_reports.py` passed.
+- `.venv/bin/ruff format --check backend/research/services/related_work_service.py backend/research/services/structured_idea_service.py scripts/evaluate_real_papers.py tests/test_evaluation_reports.py tests/test_structured_idea_service.py` passed.
+- `.venv/bin/python -m pytest tests/test_structured_idea_service.py` passed: `2 passed`.
+- `.venv/bin/python -m pytest tests/test_structured_idea_service.py tests/test_evaluation_reports.py` passed: `7 passed`.
+- `.venv/bin/python -m pytest tests/test_evaluation_reports.py tests/test_app.py::test_literature_to_ideas_workflow_runs_full_pipeline tests/test_app.py::test_async_literature_to_ideas_workflow_completes_job_trace tests/test_app.py::test_job_cancel_and_retry_controls` passed: `8 passed`.
+- `.venv/bin/python -m pytest tests/test_structured_idea_service.py tests/test_evaluation_reports.py tests/test_app.py::test_literature_to_ideas_workflow_runs_full_pipeline tests/test_app.py::test_async_literature_to_ideas_workflow_completes_job_trace tests/test_app.py::test_job_cancel_and_retry_controls` passed: `10 passed`.
+
 ## 2026-06-27 - Automatic Advisor Context-Miss Replay Capture
 
 Implementation completed:

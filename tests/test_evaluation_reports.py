@@ -126,6 +126,36 @@ def test_real_paper_evaluator_renders_retrieval_comparison_summary() -> None:
     assert "Retrieval comparison: `2` / `3` top evidence overlap" in markdown
 
 
+def test_real_paper_evaluator_summarizes_recovered_workflow_artifacts() -> None:
+    workflow = evaluate_real_papers._workflow_from_artifacts(
+        {
+            "job": {"id": "job-1", "status": "running", "progress": 0.55},
+            "paper": {"id": "paper-1"},
+            "card": {"id": "card-1"},
+            "gaps": [{"id": "gap-1", "title": "Recovered gap"}],
+            "ideas": [{"id": "idea-1", "title": "Recovered idea"}],
+            "reviews": [],
+            "novelty_checks": [],
+            "experiment_plans": [],
+            "markdown_export": "# Recovered",
+            "message": "Recovered artifacts.",
+        }
+    )
+    workflow["_workflow_execution_mode"] = "recovered_from_job_artifacts"
+    workflow["_workflow_warning"] = "WorkflowTimeoutError: timed out"
+
+    summary = evaluate_real_papers._summarize_workflow(workflow)
+
+    assert summary["job_id"] == "job-1"
+    assert summary["job_status"] == "running"
+    assert summary["job_progress"] == 0.55
+    assert summary["execution_mode"] == "recovered_from_job_artifacts"
+    assert summary["recovered_from_job_artifacts"] is True
+    assert summary["gap_count"] == 1
+    assert summary["idea_count"] == 1
+    assert summary["warning"].startswith("WorkflowTimeoutError")
+
+
 def _write_report(
     tmp_path,
     report_id: str,

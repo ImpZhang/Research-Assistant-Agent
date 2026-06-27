@@ -13,8 +13,16 @@ TOKEN_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_\-]{2,}")
 
 
 class RelatedWorkService:
-    def __init__(self, session: Session):
+    def __init__(
+        self,
+        session: Session,
+        *,
+        retrieval_service: RetrievalService | None = None,
+        literature_search_service: LiteratureSearchService | None = None,
+    ):
         self.session = session
+        self.retrieval_service = retrieval_service
+        self.literature_search_service = literature_search_service
 
     def create_matrix(
         self,
@@ -30,13 +38,17 @@ class RelatedWorkService:
 
         limit = max(1, min(limit, 25))
         query = self._build_query(idea)
-        context = RetrievalService(self.session).search_context(
+        retrieval_service = self.retrieval_service or RetrievalService(self.session)
+        literature_search_service = self.literature_search_service or LiteratureSearchService(
+            self.session
+        )
+        context = retrieval_service.search_context(
             query=query,
             paper_ids=[],
             limit=limit,
             include_graph=False,
         )
-        literature = LiteratureSearchService(self.session).search(
+        literature = literature_search_service.search(
             query=query,
             limit=limit,
             include_external=include_external,
