@@ -2,6 +2,25 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Agent Observability Metrics
+
+Implementation completed:
+
+- Added `GET /research/agent/metrics` to summarize local `AgentRun`, `ToolCallRecord`, and `ReplayCase` observability state.
+- Metrics include run counts by status/type, average run latency, tool-call counts by status/name, tool success rate, replay verdict distribution, replay pass rate, and recent failed run/tool summaries.
+- Exposed `get_agent_observability_metrics` in the tool manifest and `agent_observability_metrics` in runtime status capabilities.
+- Added regression coverage to the agent trace test and updated README, replay docs, technical design, and the agent-engineering strengthening plan.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_app.py::test_agent_trace_records_run_tool_call_and_replay_case tests/test_app.py::test_tool_manifest_lists_mcp_ready_research_tools tests/test_app.py::test_research_status` passed: `3 passed`.
+- `bash scripts/check_workflow_job_controls.sh` passed: `5 passed`.
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `12 passed`.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `git diff --check` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `1 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `8 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `5 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Bounded Advisor Read Tool Plan
 
 Implementation completed:

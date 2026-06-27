@@ -2152,6 +2152,22 @@ class ReplayCaseRead(BaseModel):
     updated_at: datetime
 
 
+class AgentObservabilityMetricsResponse(BaseModel):
+    run_count: int = 0
+    run_status_counts: dict[str, int] = Field(default_factory=dict)
+    run_type_counts: dict[str, int] = Field(default_factory=dict)
+    average_run_latency_ms: float = 0.0
+    tool_call_count: int = 0
+    tool_status_counts: dict[str, int] = Field(default_factory=dict)
+    tool_name_counts: dict[str, int] = Field(default_factory=dict)
+    tool_success_rate: float = 0.0
+    replay_case_count: int = 0
+    replay_verdict_counts: dict[str, int] = Field(default_factory=dict)
+    replay_pass_rate: float = 0.0
+    recent_failures: list[dict[str, Any]] = Field(default_factory=list)
+    message: str = ""
+
+
 class JobArtifactsResponse(BaseModel):
     job: JobRead
     paper: PaperRead | None = None

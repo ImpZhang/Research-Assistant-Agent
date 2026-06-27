@@ -52,6 +52,7 @@ from backend.research.models import (
 )
 from backend.research.schemas import (
     AgentRunCreate,
+    AgentObservabilityMetricsResponse,
     AgentRunRead,
     AdvisorActionSessionRequest,
     AdvisorActionSessionResponse,
@@ -411,6 +412,7 @@ def status() -> ProjectStatus:
             "agent_run_trace_foundation",
             "agent_tool_call_records",
             "agent_replay_cases",
+            "agent_observability_metrics",
             "langgraph_advisor_deep_review",
             "workbench_project_scope_forwarding",
             "write_operation_audit_jsonl",
@@ -626,6 +628,16 @@ def tool_manifest() -> ToolManifestResponse:
             method="GET",
             path="/research/agent/replay-cases",
             output_model="list[ReplayCaseRead]",
+        ),
+        ToolManifestItem(
+            name="get_agent_observability_metrics",
+            description=(
+                "Summarize local agent runs, tool calls, replay cases, success rates, "
+                "latency, and recent failures."
+            ),
+            method="GET",
+            path="/research/agent/metrics",
+            output_model="AgentObservabilityMetricsResponse",
         ),
         ToolManifestItem(
             name="run_literature_to_ideas_workflow",
@@ -6497,6 +6509,73 @@ def list_agent_tool_call_records(
         raise HTTPException(status_code=404, detail="Agent run not found")
     records = service.list_tool_calls(run_id, limit=limit)
     return [_serialize_tool_call_record(record) for record in records]
+
+
+@router.get("/agent/metrics", response_model=AgentObservabilityMetricsResponse)
+def get_agent_observability_metrics(
+    limit: int = 500,
+    session: Session = Depends(get_session),
+) -> AgentObservabilityMetricsResponse:
+    limit = max(1, min(limit, 5000))
+    runs = session.query(AgentRun).order_by(AgentRun.created_at.desc()).limit(limit).all()
+    tool_calls = (
+        session.query(ToolCallRecord).order_by(ToolCallRecord.created_at.desc()).limit(limit).all()
+    )
+    replay_cases = (
+        session.query(ReplayCase).order_by(ReplayCase.created_at.desc()).limit(limit).all()
+    )
+
+    run_status_counts = Counter(run.status for run in runs)
+    run_type_counts = Counter(run.run_type for run in runs)
+    tool_status_counts = Counter(tool_call.status for tool_call in tool_calls)
+    tool_name_counts = Counter(tool_call.tool_name for tool_call in tool_calls)
+    replay_verdict_counts = Counter(replay_case.verdict for replay_case in replay_cases)
+    completed_tool_calls = tool_status_counts.get("completed", 0)
+    passed_replays = replay_verdict_counts.get("pass", 0)
+    evaluated_replays = passed_replays + replay_verdict_counts.get("fail", 0)
+    latency_values = [run.latency_ms for run in runs if run.latency_ms > 0]
+    recent_failures = [
+        {
+            "type": "agent_run",
+            "id": run.id,
+            "status": run.status,
+            "run_type": run.run_type,
+            "error": run.error[:240],
+        }
+        for run in runs
+        if run.status == "failed"
+    ][:10]
+    recent_failures.extend(
+        [
+            {
+                "type": "tool_call",
+                "id": tool_call.id,
+                "status": tool_call.status,
+                "tool_name": tool_call.tool_name,
+                "error": tool_call.error[:240],
+            }
+            for tool_call in tool_calls
+            if tool_call.status == "failed"
+        ][:10]
+    )
+
+    return AgentObservabilityMetricsResponse(
+        run_count=len(runs),
+        run_status_counts=dict(run_status_counts),
+        run_type_counts=dict(run_type_counts),
+        average_run_latency_ms=(
+            round(sum(latency_values) / len(latency_values), 2) if latency_values else 0.0
+        ),
+        tool_call_count=len(tool_calls),
+        tool_status_counts=dict(tool_status_counts),
+        tool_name_counts=dict(tool_name_counts),
+        tool_success_rate=round(completed_tool_calls / len(tool_calls), 4) if tool_calls else 0.0,
+        replay_case_count=len(replay_cases),
+        replay_verdict_counts=dict(replay_verdict_counts),
+        replay_pass_rate=round(passed_replays / evaluated_replays, 4) if evaluated_replays else 0.0,
+        recent_failures=recent_failures[:10],
+        message="Summarized local agent trace, tool-call, and replay observability metrics.",
+    )
 
 
 @router.post("/agent/replay-cases", response_model=ReplayCaseRead)

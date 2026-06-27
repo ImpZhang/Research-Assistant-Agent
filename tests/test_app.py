@@ -1091,6 +1091,7 @@ def test_research_status() -> None:
     assert "project_advisor_chat" in body["implemented_capabilities"]
     assert "project_advisor_chat_task_generation" in body["implemented_capabilities"]
     assert "project_advisor_action_sessions" in body["implemented_capabilities"]
+    assert "agent_observability_metrics" in body["implemented_capabilities"]
     assert "langgraph_advisor_deep_review" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
@@ -1209,6 +1210,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "get_agent_run" in names
     assert "list_agent_run_tool_calls" in names
     assert "list_replay_cases" in names
+    assert "get_agent_observability_metrics" in names
     assert "get_idea_research_packet" in names
     assert "get_idea_timeline" in names
     assert "export_idea_bundle" in names
@@ -1372,6 +1374,19 @@ def test_agent_trace_records_run_tool_call_and_replay_case() -> None:
     assert replay_cases.status_code == 200
     assert tool_calls.json()[0]["id"] == tool_call["id"]
     assert any(item["id"] == replay_case["id"] for item in replay_cases.json())
+
+    metrics_response = client.get("/research/agent/metrics")
+    assert metrics_response.status_code == 200
+    metrics = metrics_response.json()
+    assert metrics["run_count"] >= 1
+    assert metrics["run_status_counts"]["completed"] >= 1
+    assert metrics["run_type_counts"]["pytest_agent_trace"] >= 1
+    assert metrics["tool_call_count"] >= 1
+    assert metrics["tool_status_counts"]["completed"] >= 1
+    assert metrics["tool_name_counts"]["search_research_context"] >= 1
+    assert metrics["tool_success_rate"] > 0
+    assert metrics["replay_case_count"] >= 1
+    assert metrics["replay_verdict_counts"]["needs_review"] >= 1
 
 
 def test_advisor_chat_records_agent_trace_tool_calls() -> None:

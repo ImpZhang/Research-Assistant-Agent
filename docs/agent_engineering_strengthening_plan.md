@@ -274,6 +274,8 @@ Keep MCP optional, but improve the bridge:
 
 Add aggregate metrics after trace tables exist:
 
+Initial status: `/research/agent/metrics` summarizes run status/type counts, tool-call success rate, replay verdict distribution, average latency, tool usage, and recent failures.
+
 - agent run count by status
 - tool success/failure rate
 - average tool calls per run

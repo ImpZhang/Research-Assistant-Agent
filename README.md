@@ -152,6 +152,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - MCP bridge policy controls for read-only mode, allow/deny tool filters, API-key forwarding, project-scope header forwarding, request-id error correlation, and deployment health checks.
 - Agent trace foundation with persisted agent runs, tool-call records, replay cases, secret redaction, read-only tool-manifest access for trace inspection, and Advisor chat trace wiring for cockpit/context read calls.
 - Deterministic bad-case replay script for saved `ReplayCase` rows, source agent runs, and tool-call records, with JSON/Markdown reports and focused local validation.
+- Agent observability metrics endpoint for run status/type counts, tool-call success rate, replay verdict distribution, average latency, and recent failures.
 - Project-local skill registry under `skills/*/SKILL.md` for paper ingestion, hybrid context search, literature-to-ideas, SOTA review, benchmark evaluation, and Advisor action sessions, with `scripts/check_project_skills.sh` validation.
 - Research idea portfolio ranking with profile-aware weighting, lineage deduplication, claim validation result adjustments, and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
