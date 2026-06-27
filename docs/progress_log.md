@@ -2,6 +2,26 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Agent Replay Evaluation
+
+Implementation completed:
+
+- Added `scripts/replay_agent_case.py` as the first deterministic local bad-case replay evaluator over saved `ReplayCase`, `AgentRun`, and `ToolCallRecord` rows.
+- Added JSON and Markdown report output with pass/fail/needs-review counts, pass rate, reasons, source run ids, and observed tool names.
+- Added secret-shaped value redaction to replay output and kept the first replay path read-only: no model calls, no tool execution, and no live workflow mutation.
+- Added `tests/test_agent_replay_script.py` with a temporary SQLite fixture that creates an agent run, tool call, replay case, and Markdown report.
+- Added `scripts/check_agent_replay.sh` and wired it into the default safe suite contract.
+- Added `docs/agent_replay_eval.md` and updated README, TODO, documentation index, and the agent-engineering strengthening plan.
+
+Verification completed:
+
+- `bash scripts/check_agent_replay.sh` passed.
+- `bash scripts/check_suite_contracts.sh` passed.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `git diff --check` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `1 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `8 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `5 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Project Skill Registry
 
 Implementation completed:

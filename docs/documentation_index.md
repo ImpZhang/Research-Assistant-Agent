@@ -54,6 +54,7 @@ This document is the starting point for future development. Use it to find the r
 | --- | --- |
 | `docs/product_effect_report.md` | Current product-effect scorecard and demo readiness. |
 | `docs/context_search_evaluation_plan.md` | Context-search evaluation fixtures and metrics. |
+| `docs/agent_replay_eval.md` | Bad-case replay script, metrics, report shape, and deterministic local evaluation policy. |
 | `docs/demo_runbook.md` | Workbench-first demo flow and validation notes. |
 | `docs/representative_paper_review.md` | Representative-paper human review protocol and records. |
 | `docs/geolocalization_manual_sota_review.md` | Manual SOTA screening for geolocalization sources. |

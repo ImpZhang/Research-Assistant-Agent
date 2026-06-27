@@ -150,6 +150,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Lightweight stdio MCP-to-HTTP bridge script for exposing the stable HTTP tools to MCP clients without extra SDK dependencies.
 - MCP bridge policy controls for read-only mode, allow/deny tool filters, API-key forwarding, project-scope header forwarding, request-id error correlation, and deployment health checks.
 - Agent trace foundation with persisted agent runs, tool-call records, replay cases, secret redaction, read-only tool-manifest access for trace inspection, and Advisor chat trace wiring for cockpit/context read calls.
+- Deterministic bad-case replay script for saved `ReplayCase` rows, source agent runs, and tool-call records, with JSON/Markdown reports and focused local validation.
 - Project-local skill registry under `skills/*/SKILL.md` for paper ingestion, hybrid context search, literature-to-ideas, SOTA review, benchmark evaluation, and Advisor action sessions, with `scripts/check_project_skills.sh` validation.
 - Research idea portfolio ranking with profile-aware weighting, lineage deduplication, claim validation result adjustments, and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
@@ -191,6 +192,7 @@ backend/
 docs/
 scripts/
   build_local_backup_manifest.py
+  check_agent_replay.sh
   check_backup_restore_contracts.sh
   check_context_search_evaluations.sh
   check_deployment_contracts.sh
@@ -222,6 +224,7 @@ scripts/
   check_write_audit_guardrails.sh
   check_model_provider_config.py
   prepare_local_geoloc_benchmark.py
+  replay_agent_case.py
   smoke_api.py
 tests/
 ```
@@ -357,6 +360,12 @@ Run the local doctor to collect readiness, model-provider, backup-manifest, and 
 
 ```bash
 bash scripts/check_local_doctor.sh
+```
+
+Run the bad-case replay check for saved `ReplayCase` fixtures and deterministic report generation:
+
+```bash
+bash scripts/check_agent_replay.sh
 ```
 
 Run the local operational preflight to confirm docs, runtime artifacts, environment template keys, compose persistence, and safe-suite hooks before a packaged local deployment. Use `LOCAL_PREFLIGHT_STRICT_GIT=true` before sharing a release to require a clean `main` checkout aligned with `origin/main`:

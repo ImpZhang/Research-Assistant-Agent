@@ -141,10 +141,13 @@ Interview framing:
 
 Add replay support on top of trace data.
 
-Proposed artifacts:
+Initial status: the deterministic replay path is implemented and documented.
+
+Completed artifacts:
 
 - `scripts/replay_agent_case.py`
 - `docs/agent_replay_eval.md`
+- `scripts/check_agent_replay.sh`
 - API endpoints for listing and replaying saved cases can come later.
 
 Replay case types:
@@ -310,7 +313,7 @@ The personal local target should remain simple: clone, configure `.env`, run loc
 2. Completed: add Advisor trace creation without changing answer behavior.
 3. Add bounded read-only Advisor tool calling.
 4. Completed: add project-local skill docs for the core workflows.
-5. Add replay script and deterministic replay fixtures.
+5. Completed: add replay script and deterministic replay fixtures.
 6. Add one isolated LangGraph advisor deep-review workflow.
 7. Expand case memory, guardrails, and aggregate observability metrics.
 
