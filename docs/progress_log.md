@@ -2,6 +2,27 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - LangGraph Advisor Deep Review
+
+Implementation completed:
+
+- Added `POST /research/agent/advisor-deep-review` as an opt-in LangGraph workflow with `load_state`, `retrieve_context`, `verify_evidence`, and `compose_answer` nodes.
+- The workflow creates an `advisor_deep_review` `AgentRun`, records cockpit/context read calls as `ToolCallRecord` rows, and returns an Advisor-compatible answer plus verification flags.
+- Added `AdvisorDeepReviewRequest` and `AdvisorDeepReviewResponse` schemas without changing the existing Advisor chat or literature-to-ideas response contracts.
+- Exposed `run_advisor_deep_review` in the tool manifest and `langgraph_advisor_deep_review` in runtime status capabilities.
+- Extended focused Advisor trace coverage to verify LangGraph nodes, trace output, tool-call records, and source-run status.
+- Updated README, TODO, the technical design, and the agent-engineering strengthening plan to make the LangGraph workflow boundary explicit.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_app.py::test_research_status tests/test_app.py::test_tool_manifest_lists_mcp_ready_research_tools tests/test_app.py::test_advisor_chat_records_agent_trace_tool_calls` passed: `3 passed`.
+- `bash scripts/check_workflow_job_controls.sh` passed: `5 passed`.
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `12 passed`.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `git diff --check` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `1 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `8 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `5 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Agent Replay Evaluation
 
 Implementation completed:

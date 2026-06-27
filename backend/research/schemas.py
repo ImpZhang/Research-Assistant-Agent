@@ -1952,6 +1952,21 @@ class AdvisorChatResponse(BaseModel):
     message: str
 
 
+class AdvisorDeepReviewRequest(AdvisorChatRequest):
+    max_tool_calls: int = Field(default=3, ge=1, le=5)
+    verify_evidence: bool = True
+
+
+class AdvisorDeepReviewResponse(BaseModel):
+    agent_run_id: str
+    question: str
+    workflow_engine: str = "langgraph"
+    nodes_executed: list[str] = Field(default_factory=list)
+    answer: AdvisorChatResponse
+    verification: dict[str, Any] = Field(default_factory=dict)
+    message: str
+
+
 class AdvisorChatTaskGenerateRequest(AdvisorChatRequest):
     limit: int = Field(default=8, ge=1, le=20)
     include_recommendations: bool = True

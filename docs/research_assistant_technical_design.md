@@ -1245,6 +1245,8 @@ Proposal/workbench artifacts 会同步写入 GraphRAG-lite：`idea_has_proposal_
 
 `/advisor/action-session` 将 advisor chat、advisor task generation 和 task board snapshot 串成一个执行会话。请求复用 `AdvisorChatTaskGenerateRequest`，并增加 snapshot title、snapshot status filter 和 include_snapshot；响应包含 `chat`、`tasks`、只覆盖本轮任务的 `snapshot`、`progress_summary` 和 Markdown report。它不引入新的 session table，而是复用 `ResearchTask`、`TaskBoardSnapshot`、`project_advisor_chat_creates_task` 与 `task_board_snapshot_tracks_task`，先让自然语言项目入口具备可追踪执行闭环。
 
+`/agent/advisor-deep-review` 是独立的 LangGraph 示例 workflow，不替换 `/workflows/literature-to-ideas` 或 `/advisor/chat`。它创建 `advisor_deep_review` AgentRun，然后按 `load_state -> retrieve_context -> verify_evidence -> compose_answer` 节点执行；retrieve 节点复用 cockpit/context read calls 并写入 `ToolCallRecord`，verify 节点输出 cited_context_count、risk_alert_count、tool_call_count 和 requires_manual_review，compose 节点返回兼容 `AdvisorChatResponse` 的 answer。这个 endpoint 用于展示 traceable LangGraph DAG state、node boundaries 和 verification flags，后续可扩展 human/write nodes。
+
 `/triage/brief` 组合 `/progress/overview`、`/readiness/overview`、`/quality/overview` 和 `/opportunities/radar`，输出 recommended focus、risk focus、next actions 与 Markdown brief。它是更高层的“科研驾驶舱”入口：外部 agent 不需要自己拼多个 endpoint，就能拿到今天该推进什么、卡在哪里、下一步怎么做的压缩上下文。
 
 `/triage/brief/export/markdown` 返回同一份 project triage brief 的 `text/markdown` 表示，方便导师会、纯文本备份和只消费 Markdown 的 MCP/agent 工具使用。

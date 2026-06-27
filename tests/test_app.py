@@ -1091,6 +1091,7 @@ def test_research_status() -> None:
     assert "project_advisor_chat" in body["implemented_capabilities"]
     assert "project_advisor_chat_task_generation" in body["implemented_capabilities"]
     assert "project_advisor_action_sessions" in body["implemented_capabilities"]
+    assert "langgraph_advisor_deep_review" in body["implemented_capabilities"]
     assert "advisor_brief_evidence_context" in body["implemented_capabilities"]
     assert "advisor_brief_claim_validation_context" in body["implemented_capabilities"]
     assert "project_triage_brief" in body["implemented_capabilities"]
@@ -1192,6 +1193,7 @@ def test_tool_manifest_lists_mcp_ready_research_tools() -> None:
     assert "ask_project_advisor" in names
     assert "create_tasks_from_project_advisor_chat" in names
     assert "run_project_advisor_action_session" in names
+    assert "run_advisor_deep_review" in names
     assert "get_project_triage_brief" in names
     assert "export_project_triage_brief_markdown" in names
     assert "create_tasks_from_project_triage_brief" in names
@@ -1443,6 +1445,48 @@ Future work should replay bad cases from stored agent traces.
     advisor_tool_names = {tool_call["tool_name"] for tool_call in advisor_tool_call_body}
     assert {"get_project_cockpit", "search_research_context"}.issubset(advisor_tool_names)
     assert all(tool_call["status"] == "completed" for tool_call in advisor_tool_call_body)
+
+    deep_review = client.post(
+        "/research/agent/advisor-deep-review",
+        json={
+            "question": "Deep review the evidence risk and next action.",
+            "idea_id": idea_id,
+            "paper_ids": [paper_id],
+            "include_cockpit": True,
+            "include_context": True,
+            "context_limit": 5,
+            "max_tool_calls": 3,
+            "verify_evidence": True,
+            "created_by": "pytest",
+        },
+    )
+    assert deep_review.status_code == 200
+    deep_review_body = deep_review.json()
+    assert deep_review_body["workflow_engine"] == "langgraph"
+    assert deep_review_body["agent_run_id"]
+    assert deep_review_body["answer"]["agent_run_id"] == deep_review_body["agent_run_id"]
+    assert deep_review_body["nodes_executed"] == [
+        "load_state",
+        "retrieve_context",
+        "verify_evidence",
+        "compose_answer",
+    ]
+    assert deep_review_body["verification"]["tool_call_count"] == 2
+    assert deep_review_body["verification"]["has_cited_context"] is True
+
+    deep_review_run = client.get(f"/research/agent/runs/{deep_review_body['agent_run_id']}")
+    assert deep_review_run.status_code == 200
+    deep_review_run_body = deep_review_run.json()
+    assert deep_review_run_body["run_type"] == "advisor_deep_review"
+    assert deep_review_run_body["status"] == "completed"
+    assert deep_review_run_body["output"]["nodes_executed"] == deep_review_body["nodes_executed"]
+
+    deep_review_tool_calls = client.get(
+        f"/research/agent/runs/{deep_review_body['agent_run_id']}/tool-calls"
+    )
+    assert deep_review_tool_calls.status_code == 200
+    deep_review_tool_names = {tool_call["tool_name"] for tool_call in deep_review_tool_calls.json()}
+    assert {"get_project_cockpit", "search_research_context"}.issubset(deep_review_tool_names)
 
 
 def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:

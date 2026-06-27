@@ -115,6 +115,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Advisor chat endpoint that answers project-level questions from cockpit state, retrieved evidence, gaps, ideas, and GraphRAG-lite context, with Markdown output, citations, recommended actions, tool suggestions, and persisted agent-run/tool-call trace records.
 - Task generation from advisor chat answers so recommendations, risks, and optional tool suggestions enter the task board and graph trace.
 - Advisor action sessions that turn one advisor question into a grounded answer, follow-up tasks, a task-board snapshot, progress summary, and Markdown execution report.
+- Opt-in LangGraph advisor deep-review workflow that runs load/retrieve/verify/compose nodes, records agent trace/tool calls, returns evidence verification flags, and leaves the stable service workflow unchanged.
 - Project triage brief that combines progress, readiness, quality gates, and opportunity radar into one daily decision view.
 - Task generation from project triage brief next actions and risks for daily execution.
 - Persisted project triage snapshots that freeze daily decision state, source task ids, and Markdown exports for later review.

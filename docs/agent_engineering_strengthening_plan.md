@@ -18,7 +18,7 @@ The project is already beyond a basic RAG chatbot:
 
 The project is not yet a full autonomous agent runtime:
 
-- The production workflow is service-layer orchestration, not a LangGraph runtime graph.
+- The production workflow is service-layer orchestration; the LangGraph path is an isolated opt-in Advisor deep-review example, not the default runtime.
 - The MCP surface is a lightweight bridge over FastAPI, not a full MCP SDK server with resources and prompts.
 - Advisor responses are still mostly deterministic composition over existing services, not an LLM-driven tool-calling loop.
 - Replay and LangGraph flows do not yet write trace records automatically.
@@ -190,6 +190,8 @@ Recommended first workflow:
 /research/agent/advisor-deep-review
 ```
 
+Initial status: `/research/agent/advisor-deep-review` is implemented as an opt-in LangGraph workflow with `load_state`, `retrieve_context`, `verify_evidence`, and `compose_answer` nodes. It writes an `advisor_deep_review` agent run and read-tool call records, then returns an Advisor-compatible answer plus verification flags.
+
 Candidate LangGraph nodes:
 
 ```text
@@ -314,7 +316,7 @@ The personal local target should remain simple: clone, configure `.env`, run loc
 3. Add bounded read-only Advisor tool calling.
 4. Completed: add project-local skill docs for the core workflows.
 5. Completed: add replay script and deterministic replay fixtures.
-6. Add one isolated LangGraph advisor deep-review workflow.
+6. Completed: add one isolated LangGraph advisor deep-review workflow.
 7. Expand case memory, guardrails, and aggregate observability metrics.
 
 This order keeps the current product usable while making each new agent capability observable and testable.

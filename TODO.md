@@ -50,7 +50,7 @@ Current product target: personal local deployment. A user should be able to clon
 - Convert Advisor from deterministic read composition into a bounded, traceable, read-first tool-calling agent while preserving the existing response contract and deterministic fallback.
 - Extend the project-local skill registry beyond the current `paper-ingestion`, `hybrid-context-search`, `literature-to-ideas`, `sota-review`, `benchmark-evaluation`, and `advisor-action-session` docs as new agent workflows are added.
 - Extend the initial bad-case replay script with live replay executors for context-search misses, citation mistakes, and readiness false positives once tool-calling selection is bounded.
-- Add one isolated LangGraph advisor/deep-review workflow only after trace and tool-call contracts exist; keep the current `WorkflowService` path intact.
+- Extend the isolated LangGraph advisor/deep-review workflow with live replay hooks, optional human/write nodes, and richer verification after bounded tool selection matures; keep the current `WorkflowService` path intact.
 - Strengthen local deployment polish around `.env.example`, doctor diagnostics, SQLite maintenance, backup/restore rehearsal, cleanup safety, and first-run demo runbooks.
 
 ## P3 - Needs Explicit Operator Approval

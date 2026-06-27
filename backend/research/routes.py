@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import PlainTextResponse, Response
+from langgraph.graph import END, StateGraph
 from sqlalchemy.orm import Session
 
 from backend.research.config import settings
@@ -57,6 +58,8 @@ from backend.research.schemas import (
     AdvisorChatRequest,
     AdvisorChatResponse,
     AdvisorChatTaskGenerateRequest,
+    AdvisorDeepReviewRequest,
+    AdvisorDeepReviewResponse,
     BenchmarkEvidenceReadinessResponse,
     BenchmarkExecutionCreate,
     BenchmarkProfileListResponse,
@@ -408,6 +411,7 @@ def status() -> ProjectStatus:
             "agent_run_trace_foundation",
             "agent_tool_call_records",
             "agent_replay_cases",
+            "langgraph_advisor_deep_review",
             "workbench_project_scope_forwarding",
             "write_operation_audit_jsonl",
             "write_operation_audit_admin_summary",
@@ -1544,6 +1548,18 @@ def tool_manifest() -> ToolManifestResponse:
             path="/research/advisor/action-session",
             input_model="AdvisorActionSessionRequest",
             output_model="AdvisorActionSessionResponse",
+            side_effect=True,
+        ),
+        ToolManifestItem(
+            name="run_advisor_deep_review",
+            description=(
+                "Run an opt-in LangGraph advisor deep-review workflow with trace logging, "
+                "retrieved context, evidence verification flags, and a grounded answer."
+            ),
+            method="POST",
+            path="/research/agent/advisor-deep-review",
+            input_model="AdvisorDeepReviewRequest",
+            output_model="AdvisorDeepReviewResponse",
             side_effect=True,
         ),
         ToolManifestItem(
@@ -2901,6 +2917,230 @@ def ask_project_advisor(
             error=str(exc),
             latency_ms=int((time.perf_counter() - started) * 1000),
             metadata={"tool_call_count": tool_call_count},
+        )
+        raise
+
+
+@router.post("/agent/advisor-deep-review", response_model=AdvisorDeepReviewResponse)
+def run_advisor_deep_review(
+    payload: AdvisorDeepReviewRequest,
+    session: Session = Depends(get_session),
+) -> AdvisorDeepReviewResponse:
+    question = " ".join(payload.question.split())
+    if not question:
+        raise HTTPException(status_code=400, detail="Question must not be empty")
+    selected_idea = None
+    if payload.idea_id:
+        selected_idea = session.get(Idea, payload.idea_id)
+        if selected_idea is None:
+            raise HTTPException(status_code=404, detail="Idea not found")
+
+    trace_service = AgentTraceService(session)
+    started = time.perf_counter()
+    agent_run = trace_service.create_run(
+        AgentRunCreate(
+            run_type="advisor_deep_review",
+            status="running",
+            question=question,
+            input=payload.model_dump(mode="json"),
+            created_by=payload.created_by,
+            metadata={
+                "workflow_engine": "langgraph",
+                "max_tool_calls": payload.max_tool_calls,
+                "verify_evidence": payload.verify_evidence,
+            },
+        )
+    )
+
+    def load_state(state: dict[str, Any]) -> dict[str, Any]:
+        next_state = dict(state)
+        next_state["nodes_executed"] = [*next_state.get("nodes_executed", []), "load_state"]
+        return next_state
+
+    def retrieve_context(state: dict[str, Any]) -> dict[str, Any]:
+        next_state = dict(state)
+        next_state["nodes_executed"] = [
+            *next_state.get("nodes_executed", []),
+            "retrieve_context",
+        ]
+        tool_call_count = int(next_state.get("tool_call_count", 0))
+        if payload.include_cockpit and tool_call_count < payload.max_tool_calls:
+            cockpit = get_project_cockpit(idea_limit=50, opportunity_limit=5, session=session)
+            next_state["cockpit"] = cockpit
+            trace_service.create_tool_call(
+                agent_run.id,
+                ToolCallRecordCreate(
+                    tool_name="get_project_cockpit",
+                    tool_arguments={"idea_limit": 50, "opportunity_limit": 5},
+                    tool_result_summary=(
+                        f"phase={cockpit.phase}; readiness={cockpit.readiness_level}; "
+                        f"risks={len(cockpit.risk_alerts)}"
+                    ),
+                    status="completed",
+                    side_effect=False,
+                    metadata={"langgraph_node": "retrieve_context"},
+                ),
+            )
+            tool_call_count += 1
+        if payload.include_context and tool_call_count < payload.max_tool_calls:
+            context = _advisor_chat_context_response(payload, selected_idea, session)
+            next_state["context"] = context
+            trace_service.create_tool_call(
+                agent_run.id,
+                ToolCallRecordCreate(
+                    tool_name="search_research_context",
+                    tool_arguments={
+                        "body": {
+                            "query": context.query,
+                            "paper_ids": payload.paper_ids,
+                            "limit": payload.context_limit,
+                            "include_graph": True,
+                        }
+                    },
+                    tool_result_summary=(
+                        f"chunks={len(context.chunks)}; evidences={len(context.evidences)}; "
+                        f"gaps={len(context.gaps)}; ideas={len(context.ideas)}; "
+                        f"graph_nodes={len(context.graph_nodes)}; "
+                        f"graph_edges={len(context.graph_edges)}"
+                    ),
+                    status="completed",
+                    side_effect=False,
+                    metadata={"langgraph_node": "retrieve_context"},
+                ),
+            )
+            tool_call_count += 1
+        next_state["tool_call_count"] = tool_call_count
+        return next_state
+
+    def verify_evidence(state: dict[str, Any]) -> dict[str, Any]:
+        next_state = dict(state)
+        next_state["nodes_executed"] = [
+            *next_state.get("nodes_executed", []),
+            "verify_evidence",
+        ]
+        context = next_state.get("context")
+        cockpit = next_state.get("cockpit")
+        cited_context_count = (
+            len(context.evidences) + len(context.gaps) + len(context.ideas) if context else 0
+        )
+        verification = {
+            "enabled": payload.verify_evidence,
+            "cited_context_count": cited_context_count,
+            "has_cited_context": cited_context_count > 0,
+            "risk_alert_count": len(cockpit.risk_alerts) if cockpit else 0,
+            "tool_call_count": int(next_state.get("tool_call_count", 0)),
+            "requires_manual_review": cited_context_count == 0,
+        }
+        next_state["verification"] = verification
+        return next_state
+
+    def compose_answer(state: dict[str, Any]) -> dict[str, Any]:
+        next_state = dict(state)
+        next_state["nodes_executed"] = [
+            *next_state.get("nodes_executed", []),
+            "compose_answer",
+        ]
+        cockpit = next_state.get("cockpit")
+        context = next_state.get("context")
+        intent = _advisor_chat_intent(question)
+        recommended_actions = _advisor_chat_recommended_actions(intent, cockpit, context)
+        risk_alerts = (cockpit.risk_alerts if cockpit else [])[:10]
+        tool_suggestions = _advisor_chat_tool_suggestions(intent, cockpit, selected_idea)
+        source_summaries = _advisor_chat_source_summaries(cockpit, context, selected_idea)
+        source_summaries["agent_trace"] = {
+            "agent_run_id": agent_run.id,
+            "tool_call_count": int(next_state.get("tool_call_count", 0)),
+            "trace_status": "completed",
+        }
+        source_summaries["langgraph"] = {
+            "workflow": "advisor_deep_review",
+            "nodes_executed": next_state.get("nodes_executed", []),
+        }
+        answer_markdown = _render_advisor_chat_markdown(
+            question=question,
+            intent=intent,
+            cockpit=cockpit,
+            context=context,
+            selected_idea=selected_idea,
+            recommended_actions=recommended_actions,
+            risk_alerts=risk_alerts,
+            tool_suggestions=tool_suggestions,
+        )
+        answer = _advisor_chat_plain_answer(
+            intent=intent,
+            cockpit=cockpit,
+            recommended_actions=recommended_actions,
+            risk_alerts=risk_alerts,
+        )
+        next_state["answer"] = AdvisorChatResponse(
+            agent_run_id=agent_run.id,
+            question=question,
+            intent=intent,
+            answer=answer,
+            answer_markdown=answer_markdown,
+            cockpit_phase=cockpit.phase if cockpit else "",
+            readiness_level=cockpit.readiness_level if cockpit else "",
+            recommended_actions=recommended_actions,
+            risk_alerts=risk_alerts,
+            tool_suggestions=tool_suggestions,
+            cited_evidences=context.evidences if context else [],
+            cited_gaps=context.gaps if context else [],
+            cited_ideas=context.ideas if context else [],
+            source_summaries=source_summaries,
+            message=("Answered advisor deep-review question through an opt-in LangGraph workflow."),
+        )
+        return next_state
+
+    workflow = StateGraph(dict)
+    workflow.add_node("load_state", load_state)
+    workflow.add_node("retrieve_context", retrieve_context)
+    workflow.add_node("verify_evidence", verify_evidence)
+    workflow.add_node("compose_answer", compose_answer)
+    workflow.set_entry_point("load_state")
+    workflow.add_edge("load_state", "retrieve_context")
+    workflow.add_edge("retrieve_context", "verify_evidence")
+    workflow.add_edge("verify_evidence", "compose_answer")
+    workflow.add_edge("compose_answer", END)
+
+    try:
+        final_state = workflow.compile().invoke({})
+        answer_response = final_state["answer"]
+        verification = final_state.get("verification", {})
+        nodes_executed = final_state.get("nodes_executed", [])
+        trace_service.finish_run(
+            agent_run.id,
+            status="completed",
+            output={
+                "intent": answer_response.intent,
+                "answer": answer_response.answer,
+                "recommended_action_count": len(answer_response.recommended_actions),
+                "risk_alert_count": len(answer_response.risk_alerts),
+                "tool_call_count": int(final_state.get("tool_call_count", 0)),
+                "nodes_executed": nodes_executed,
+                "verification": verification,
+            },
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            metadata={"workflow_engine": "langgraph", "response_type": "AdvisorDeepReviewResponse"},
+        )
+        return AdvisorDeepReviewResponse(
+            agent_run_id=agent_run.id,
+            question=question,
+            workflow_engine="langgraph",
+            nodes_executed=nodes_executed,
+            answer=answer_response,
+            verification=verification,
+            message=(
+                "Ran opt-in LangGraph advisor deep-review workflow without changing "
+                "the stable Advisor or literature-to-ideas routes."
+            ),
+        )
+    except Exception as exc:
+        trace_service.finish_run(
+            agent_run.id,
+            status="failed",
+            error=str(exc),
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            metadata={"workflow_engine": "langgraph"},
         )
         raise
 
