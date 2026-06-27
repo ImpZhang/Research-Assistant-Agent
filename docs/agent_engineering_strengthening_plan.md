@@ -40,7 +40,7 @@ This is an intentional boundary. The current stable workflow should stay intact 
 
 Add durable trace tables before changing agent behavior.
 
-Initial status: the tables, service, create/read API, secret redaction, read-only tool-manifest entries, Advisor chat trace wiring, failed Advisor read-tool replay capture, opt-in replay-run trace recording, local context-search live replay, local citation-audit replay, local SOTA-readiness audit replay, and automatic SOTA false-positive replay capture are implemented. The next step is adding automatic replay-case creators for citation/evidence-link mistakes.
+Initial status: the tables, service, create/read API, secret redaction, read-only tool-manifest entries, Advisor chat trace wiring, failed Advisor read-tool replay capture, automatic Advisor context-miss replay capture, opt-in replay-run trace recording, local context-search live replay, local citation-audit replay, local SOTA-readiness audit replay, and automatic SOTA false-positive replay capture are implemented. The next step is adding automatic replay-case creators for wrong citation/evidence-link mistakes.
 
 Proposed artifacts:
 
@@ -60,6 +60,7 @@ Acceptance criteria:
 - Every Advisor read-tool invocation records arguments, result summary, status, latency, and error state.
 - Failed Advisor read tools automatically create `advisor_tool_failure` replay cases with expected/observed tool state.
 - Context-search replay cases can opt into local live execution and assert required chunk/evidence/gap/idea ids without calling external model providers.
+- Advisor chat automatically captures context-search misses when an evidence-seeking question executes context retrieval but returns no evidence.
 - Citation replay cases can opt into local live execution and assert cited evidence existence, paper ownership, and required evidence terms without calling external model providers.
 - SOTA readiness replay cases can opt into local live execution and assert signoff status, manual gate readiness, external-search completion, nearest-work count, benchmark evidence readiness, and blockers.
 - SOTA signoff creation automatically captures `sota_readiness_false_positive` replay cases when a confirmed signoff still has manual gate blockers.

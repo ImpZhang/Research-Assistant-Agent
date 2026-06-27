@@ -3380,6 +3380,16 @@ def ask_project_advisor(
                 "and deterministic research workflow signals."
             ),
         )
+        _capture_advisor_context_miss_replay_case(
+            trace_service=trace_service,
+            agent_run_id=agent_run.id,
+            payload=payload,
+            question=question,
+            context=context,
+            selected_tools=selected_tools,
+            tool_plan=tool_plan,
+            run_metadata=run_metadata,
+        )
         trace_service.finish_run(
             agent_run.id,
             status="completed",
@@ -3404,6 +3414,79 @@ def ask_project_advisor(
             metadata={"tool_call_count": max(tool_call_count, recorded_tool_call_count)},
         )
         raise
+
+
+def _capture_advisor_context_miss_replay_case(
+    *,
+    trace_service: AgentTraceService,
+    agent_run_id: str,
+    payload: AdvisorChatRequest,
+    question: str,
+    context: ContextSearchResponse | None,
+    selected_tools: set[str],
+    tool_plan: dict[str, Any],
+    run_metadata: dict[str, Any],
+) -> None:
+    if "search_research_context" not in selected_tools:
+        return
+    if not _advisor_question_requires_evidence(question):
+        return
+
+    evidence_count = len(context.evidences) if context else 0
+    if evidence_count > 0:
+        return
+
+    query = context.query if context else _advisor_chat_search_query(question, None)
+    trace_service.create_replay_case(
+        ReplayCaseCreate(
+            source_agent_run_id=agent_run_id,
+            case_type="context_search_miss",
+            query=question,
+            expected={
+                "query": query,
+                "paper_ids": payload.paper_ids,
+                "required_tool_names": ["search_research_context"],
+                "min_evidence_count": 1,
+                "live_status": "completed",
+            },
+            observed={
+                "tool_names": ["search_research_context"],
+                "status": "completed",
+                "query": query,
+                "paper_ids": payload.paper_ids,
+                "evidence_count": evidence_count,
+                "cited_evidence_ids": [],
+            },
+            verdict="needs_review",
+            notes=(
+                "Advisor context search returned no evidence for an evidence-seeking question; "
+                "captured automatically for local replay."
+            ),
+            metadata={
+                "agent_run_id": agent_run_id,
+                "source": "advisor_chat",
+                "tool_plan": tool_plan,
+                "run_metadata": run_metadata,
+            },
+        )
+    )
+
+
+def _advisor_question_requires_evidence(question: str) -> bool:
+    normalized = question.lower()
+    return any(
+        keyword in normalized
+        for keyword in (
+            "benchmark",
+            "citation",
+            "cite",
+            "evidence",
+            "paper",
+            "source",
+            "support",
+            "sota",
+        )
+    )
 
 
 @router.post("/agent/advisor-deep-review", response_model=AdvisorDeepReviewResponse)

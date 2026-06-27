@@ -17,6 +17,7 @@ Opt-in live replay is available for bounded local executors:
 
 - `--live-executors` currently supports `context_search` and `context_search_miss` replay cases.
 - The context-search executor re-runs `RetrievalService.search_context` with forced local hash embedding and disabled external rerank.
+- Advisor chat automatically captures a `context_search_miss` replay case when an evidence-seeking question runs `search_research_context` but returns no evidence.
 - `--live-executors` also supports `citation_audit`, `citation_mismatch`, and `missing_citation` replay cases.
 - The citation-audit executor checks observed `cited_evidence_ids` against local `Evidence` rows, optional `paper_ids`, and optional required citation terms.
 - `--live-executors` also supports `sota_readiness`, `sota_readiness_false_positive`, and `sota_signoff_audit` replay cases.
@@ -104,6 +105,6 @@ These are engineering regression metrics. They do not certify scientific SOTA, m
 
 ## Next Steps
 
-- Add replay case creators for missing citations and other evidence-link mistakes.
+- Add replay case creators for wrong citations and other evidence-link mistakes.
 - Extend live replay executors beyond context search/citation/SOTA audit after bounded Advisor policies exist.
 - Add automatic replay report scheduling only after local operator policy exists.

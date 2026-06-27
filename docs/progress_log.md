@@ -2,6 +2,27 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Automatic Advisor Context-Miss Replay Capture
+
+Implementation completed:
+
+- Added automatic `context_search_miss` replay-case capture for Advisor chat when an evidence-seeking question executes `search_research_context` but returns no evidence.
+- Stored the Advisor source run, retrieval query, paper filter, expected minimum evidence count, observed zero-evidence result, tool plan, and run metadata for replay.
+- Added regression coverage with an intentionally unmatched paper filter to prove Advisor creates the replay case without failing the chat response.
+- Wired the new test into `scripts/check_workflow_job_controls.sh`.
+- Updated replay documentation, the agent strengthening plan, and TODO to describe the new automatic capture boundary.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/research/routes.py tests/test_app.py` passed.
+- `.venv/bin/ruff format --check backend/research/routes.py tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_advisor_chat_captures_context_search_miss_replay_case` passed: `1 passed`.
+- `bash scripts/check_workflow_job_controls.sh` passed: `8 passed`.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `4 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `15 passed`, backup/restore manifest/rehearsal tests `6 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `8 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Automatic SOTA False-Positive Replay Capture
 
 Implementation completed:

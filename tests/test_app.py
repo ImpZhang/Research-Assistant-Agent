@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import time
 from types import SimpleNamespace
+from uuid import uuid4
 import zipfile
 from xml.etree import ElementTree
 
@@ -1552,6 +1553,39 @@ Future work should replay bad cases from stored agent traces.
     assert deep_review_tool_calls.status_code == 200
     deep_review_tool_names = {tool_call["tool_name"] for tool_call in deep_review_tool_calls.json()}
     assert {"get_project_cockpit", "search_research_context"}.issubset(deep_review_tool_names)
+
+
+def test_advisor_chat_captures_context_search_miss_replay_case() -> None:
+    client = TestClient(create_app())
+    marker = f"missing-context-{uuid4().hex}"
+    advisor_chat = client.post(
+        "/research/advisor/chat",
+        json={
+            "question": "Which evidence supports the benchmark claim?",
+            "paper_ids": [marker],
+            "include_cockpit": False,
+            "include_context": True,
+            "context_limit": 3,
+            "max_tool_calls": 1,
+            "created_by": "pytest",
+        },
+    )
+
+    assert advisor_chat.status_code == 200
+    body = advisor_chat.json()
+    assert body["agent_run_id"]
+    assert body["cited_evidences"] == []
+    assert body["source_summaries"]["agent_trace"]["tool_call_count"] == 1
+
+    replay_cases = client.get("/research/agent/replay-cases?case_type=context_search_miss")
+    assert replay_cases.status_code == 200
+    assert any(
+        item["source_agent_run_id"] == body["agent_run_id"]
+        and item["expected"]["min_evidence_count"] == 1
+        and item["expected"]["paper_ids"] == [marker]
+        and item["observed"]["evidence_count"] == 0
+        for item in replay_cases.json()
+    )
 
 
 def test_advisor_chat_records_failed_tool_call_and_replay_case(monkeypatch) -> None:
