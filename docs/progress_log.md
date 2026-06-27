@@ -2,6 +2,23 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Advisor Failed Tool Replay Capture
+
+Implementation completed:
+
+- Wrapped Advisor read-tool execution so failed tools are recorded as failed `ToolCallRecord` rows with arguments, error, latency, selected/skipped tool-plan context, and no side effects.
+- Added automatic `advisor_tool_failure` replay-case creation with expected/observed tool state whenever an Advisor read tool fails.
+- Preserved existing Advisor response behavior for successful calls and kept failed requests marked as failed `AgentRun` rows with actual recorded tool-call count.
+- Updated the agent strengthening plan and TODO to reflect that failed-tool capture is now implemented; model-ranked tool selection and richer replay executors remain future work.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_app.py::test_advisor_chat_records_agent_trace_tool_calls tests/test_app.py::test_advisor_chat_records_failed_tool_call_and_replay_case` passed: `2 passed`.
+- `bash scripts/check_workflow_job_controls.sh` passed: `6 passed`.
+- `bash scripts/check_agent_replay.sh` passed: `1 passed`.
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `12 passed`.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `1 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `15 passed`, backup/restore manifest/rehearsal tests `6 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `6 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Single User Docker Static Check
 
 Implementation completed:

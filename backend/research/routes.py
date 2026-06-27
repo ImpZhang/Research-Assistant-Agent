@@ -2846,6 +2846,7 @@ def _record_advisor_tool_call(
     tool_arguments: dict[str, Any],
     tool_result_summary: str,
     metadata: dict[str, Any] | None = None,
+    latency_ms: int = 0,
 ) -> None:
     trace_service.create_tool_call(
         agent_run_id,
@@ -2854,10 +2855,78 @@ def _record_advisor_tool_call(
             tool_arguments=tool_arguments,
             tool_result_summary=tool_result_summary,
             status="completed",
+            latency_ms=latency_ms,
             side_effect=False,
             metadata=metadata or {},
         ),
     )
+
+
+def _run_advisor_read_tool(
+    trace_service: AgentTraceService,
+    agent_run_id: str,
+    *,
+    tool_name: str,
+    tool_arguments: dict[str, Any],
+    question: str,
+    tool_plan: dict[str, Any],
+    run_metadata: dict[str, Any],
+    execute,
+):
+    tool_started = time.perf_counter()
+    try:
+        result = execute()
+    except Exception as exc:
+        latency_ms = int((time.perf_counter() - tool_started) * 1000)
+        error = str(exc)
+        trace_service.create_tool_call(
+            agent_run_id,
+            ToolCallRecordCreate(
+                tool_name=tool_name,
+                tool_arguments=tool_arguments,
+                tool_result_summary="Tool failed before returning an advisor observation.",
+                status="failed",
+                error=error,
+                latency_ms=latency_ms,
+                side_effect=False,
+                metadata={
+                    "failure_stage": "advisor_read_tool",
+                    "selected_tools": tool_plan.get("selected_tools", []),
+                    "skipped_tools": tool_plan.get("skipped_tools", []),
+                },
+            ),
+        )
+        trace_service.create_replay_case(
+            ReplayCaseCreate(
+                source_agent_run_id=agent_run_id,
+                case_type="advisor_tool_failure",
+                query=question,
+                expected={
+                    "tool_name": tool_name,
+                    "status": "completed",
+                    "side_effect": False,
+                },
+                observed={
+                    "tool_name": tool_name,
+                    "status": "failed",
+                    "error": error,
+                    "tool_arguments": tool_arguments,
+                },
+                verdict="needs_review",
+                notes=(
+                    "Advisor read-tool failure captured automatically for local replay "
+                    "and production-style incident review."
+                ),
+                metadata={
+                    "agent_run_id": agent_run_id,
+                    "failure_stage": "advisor_read_tool",
+                    "latency_ms": latency_ms,
+                    "run_metadata": run_metadata,
+                },
+            )
+        )
+        raise
+    return result, int((time.perf_counter() - tool_started) * 1000)
 
 
 @router.post("/advisor/chat", response_model=AdvisorChatResponse)
@@ -2896,10 +2965,30 @@ def ask_project_advisor(
     try:
         tool_plan = _advisor_read_tool_plan(payload, question)
         selected_tools = set(tool_plan["selected_tools"])
+        run_metadata = {
+            "idea_id": payload.idea_id or "",
+            "paper_ids": payload.paper_ids,
+            "include_cockpit": payload.include_cockpit,
+            "include_context": payload.include_context,
+            "max_tool_calls": payload.max_tool_calls,
+        }
         tool_observations: list[dict[str, Any]] = []
         cockpit = None
         if "get_project_cockpit" in selected_tools:
-            cockpit = get_project_cockpit(idea_limit=50, opportunity_limit=5, session=session)
+            cockpit, tool_latency_ms = _run_advisor_read_tool(
+                trace_service,
+                agent_run.id,
+                tool_name="get_project_cockpit",
+                tool_arguments={"idea_limit": 50, "opportunity_limit": 5},
+                question=question,
+                tool_plan=tool_plan,
+                run_metadata=run_metadata,
+                execute=lambda: get_project_cockpit(
+                    idea_limit=50,
+                    opportunity_limit=5,
+                    session=session,
+                ),
+            )
             _record_advisor_tool_call(
                 trace_service,
                 agent_run.id,
@@ -2909,6 +2998,7 @@ def ask_project_advisor(
                     f"phase={cockpit.phase}; readiness={cockpit.readiness_level}; "
                     f"risks={len(cockpit.risk_alerts)}"
                 ),
+                latency_ms=tool_latency_ms,
             )
             tool_observations.append(
                 {
@@ -2924,7 +3014,22 @@ def ask_project_advisor(
 
         context = None
         if "search_research_context" in selected_tools:
-            context = _advisor_chat_context_response(payload, selected_idea, session)
+            context, tool_latency_ms = _run_advisor_read_tool(
+                trace_service,
+                agent_run.id,
+                tool_name="search_research_context",
+                tool_arguments={
+                    "body": {
+                        "paper_ids": payload.paper_ids,
+                        "limit": payload.context_limit,
+                        "include_graph": True,
+                    }
+                },
+                question=question,
+                tool_plan=tool_plan,
+                run_metadata=run_metadata,
+                execute=lambda: _advisor_chat_context_response(payload, selected_idea, session),
+            )
             _record_advisor_tool_call(
                 trace_service,
                 agent_run.id,
@@ -2943,6 +3048,7 @@ def ask_project_advisor(
                     f"graph_nodes={len(context.graph_nodes)}; "
                     f"graph_edges={len(context.graph_edges)}"
                 ),
+                latency_ms=tool_latency_ms,
             )
             tool_observations.append(
                 {
@@ -2960,7 +3066,16 @@ def ask_project_advisor(
             tool_call_count += 1
 
         if payload.idea_id and "get_idea_progress" in selected_tools:
-            progress = get_idea_progress(payload.idea_id, session=session)
+            progress, tool_latency_ms = _run_advisor_read_tool(
+                trace_service,
+                agent_run.id,
+                tool_name="get_idea_progress",
+                tool_arguments={"idea_id": payload.idea_id},
+                question=question,
+                tool_plan=tool_plan,
+                run_metadata=run_metadata,
+                execute=lambda: get_idea_progress(payload.idea_id, session=session),
+            )
             blocker_count = len(progress.blockers)
             open_task_count = progress.task_summary.get("open_task_count", 0)
             _record_advisor_tool_call(
@@ -2972,6 +3087,7 @@ def ask_project_advisor(
                     f"open_tasks={open_task_count}; blockers={blocker_count}; "
                     f"next_step={progress.recommended_next_step[:160]}"
                 ),
+                latency_ms=tool_latency_ms,
             )
             tool_observations.append(
                 {
@@ -2986,7 +3102,16 @@ def ask_project_advisor(
             tool_call_count += 1
 
         if payload.idea_id and "get_idea_lineage" in selected_tools:
-            lineage = get_idea_lineage(payload.idea_id, session=session)
+            lineage, tool_latency_ms = _run_advisor_read_tool(
+                trace_service,
+                agent_run.id,
+                tool_name="get_idea_lineage",
+                tool_arguments={"idea_id": payload.idea_id},
+                question=question,
+                tool_plan=tool_plan,
+                run_metadata=run_metadata,
+                execute=lambda: get_idea_lineage(payload.idea_id, session=session),
+            )
             graph_edge_count = sum(lineage.graph_edge_summary.values())
             _record_advisor_tool_call(
                 trace_service,
@@ -2997,6 +3122,7 @@ def ask_project_advisor(
                     f"plans={len(lineage.research_plans)}; tasks={len(lineage.research_tasks)}; "
                     f"graph_edges={graph_edge_count}"
                 ),
+                latency_ms=tool_latency_ms,
             )
             tool_observations.append(
                 {
@@ -3011,7 +3137,18 @@ def ask_project_advisor(
             tool_call_count += 1
 
         if "list_research_tasks" in selected_tools:
-            tasks = list_research_tasks(idea_id=payload.idea_id, limit=20, session=session)
+            tasks, tool_latency_ms = _run_advisor_read_tool(
+                trace_service,
+                agent_run.id,
+                tool_name="list_research_tasks",
+                tool_arguments={"idea_id": payload.idea_id or "", "limit": 20},
+                question=question,
+                tool_plan=tool_plan,
+                run_metadata=run_metadata,
+                execute=lambda: list_research_tasks(
+                    idea_id=payload.idea_id, limit=20, session=session
+                ),
+            )
             status_counts = Counter(task.status for task in tasks)
             _record_advisor_tool_call(
                 trace_service,
@@ -3019,6 +3156,7 @@ def ask_project_advisor(
                 tool_name="list_research_tasks",
                 tool_arguments={"idea_id": payload.idea_id or "", "limit": 20},
                 tool_result_summary=f"tasks={len(tasks)}; status_counts={dict(status_counts)}",
+                latency_ms=tool_latency_ms,
             )
             tool_observations.append(
                 {
@@ -3096,12 +3234,13 @@ def ask_project_advisor(
         )
         return response
     except Exception as exc:
+        recorded_tool_call_count = len(trace_service.list_tool_calls(agent_run.id, limit=500))
         trace_service.finish_run(
             agent_run.id,
             status="failed",
             error=str(exc),
             latency_ms=int((time.perf_counter() - started) * 1000),
-            metadata={"tool_call_count": tool_call_count},
+            metadata={"tool_call_count": max(tool_call_count, recorded_tool_call_count)},
         )
         raise
 

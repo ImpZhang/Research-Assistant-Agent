@@ -11,6 +11,7 @@ from xml.etree import ElementTree
 from fastapi.testclient import TestClient
 
 import backend.app as app_module
+import backend.research.routes as research_routes_module
 import backend.research.services.structured_extraction_service as structured_extraction_module
 from backend.app import create_app
 from backend.research.db import SessionLocal
@@ -1520,6 +1521,68 @@ Future work should replay bad cases from stored agent traces.
     assert deep_review_tool_calls.status_code == 200
     deep_review_tool_names = {tool_call["tool_name"] for tool_call in deep_review_tool_calls.json()}
     assert {"get_project_cockpit", "search_research_context"}.issubset(deep_review_tool_names)
+
+
+def test_advisor_chat_records_failed_tool_call_and_replay_case(monkeypatch) -> None:
+    question = "pytest advisor tool failure trace should preserve replay"
+
+    def fail_context_tool(*args, **kwargs):
+        raise RuntimeError("pytest context retrieval outage")
+
+    monkeypatch.setattr(
+        research_routes_module,
+        "_advisor_chat_context_response",
+        fail_context_tool,
+    )
+    client = TestClient(create_app(), raise_server_exceptions=False)
+
+    response = client.post(
+        "/research/advisor/chat",
+        json={
+            "question": question,
+            "include_cockpit": False,
+            "include_context": True,
+            "context_limit": 5,
+            "max_tool_calls": 1,
+            "created_by": "pytest",
+        },
+    )
+
+    assert response.status_code == 500
+
+    runs = client.get(
+        "/research/agent/runs",
+        params={"run_type": "advisor_chat", "status": "failed", "limit": 10},
+    )
+    assert runs.status_code == 200
+    failed_run = next(run for run in runs.json() if run["question"] == question)
+    assert failed_run["error"] == "pytest context retrieval outage"
+    assert failed_run["metadata"]["tool_call_count"] == 1
+
+    tool_calls = client.get(f"/research/agent/runs/{failed_run['id']}/tool-calls")
+    assert tool_calls.status_code == 200
+    tool_call_body = tool_calls.json()
+    assert len(tool_call_body) == 1
+    failed_tool = tool_call_body[0]
+    assert failed_tool["tool_name"] == "search_research_context"
+    assert failed_tool["status"] == "failed"
+    assert failed_tool["side_effect"] is False
+    assert failed_tool["error"] == "pytest context retrieval outage"
+    assert failed_tool["metadata"]["failure_stage"] == "advisor_read_tool"
+
+    replay_cases = client.get(
+        "/research/agent/replay-cases",
+        params={"case_type": "advisor_tool_failure", "verdict": "needs_review", "limit": 10},
+    )
+    assert replay_cases.status_code == 200
+    replay_case = next(
+        case for case in replay_cases.json() if case["source_agent_run_id"] == failed_run["id"]
+    )
+    assert replay_case["query"] == question
+    assert replay_case["expected"]["tool_name"] == "search_research_context"
+    assert replay_case["observed"]["status"] == "failed"
+    assert replay_case["observed"]["error"] == "pytest context retrieval outage"
+    assert replay_case["metadata"]["failure_stage"] == "advisor_read_tool"
 
 
 def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:

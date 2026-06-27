@@ -40,7 +40,7 @@ This is an intentional boundary. The current stable workflow should stay intact 
 
 Add durable trace tables before changing agent behavior.
 
-Initial status: the tables, service, create/read API, secret redaction, read-only tool-manifest entries, and Advisor chat trace wiring are implemented. The next step is extending trace capture to failed tool calls, replay workflows, and the isolated LangGraph workflow.
+Initial status: the tables, service, create/read API, secret redaction, read-only tool-manifest entries, Advisor chat trace wiring, and failed Advisor read-tool replay capture are implemented. The next step is extending replay workflow run creation and adding richer live replay executors for retrieval/citation/SOTA cases.
 
 Proposed artifacts:
 
@@ -57,7 +57,8 @@ Suggested fields:
 Acceptance criteria:
 
 - Advisor chat can create an `AgentRun`; replay flows still need first-class run creation.
-- Every tool invocation records arguments, result summary, status, latency, and error state.
+- Every Advisor read-tool invocation records arguments, result summary, status, latency, and error state.
+- Failed Advisor read tools automatically create `advisor_tool_failure` replay cases with expected/observed tool state.
 - Trace records never store secrets or raw provider credentials.
 - Tests prove failed tool calls are captured without breaking the whole request.
 
@@ -69,7 +70,7 @@ Interview framing:
 
 Convert Advisor into the first real tool-calling agent surface while preserving existing advisor response contracts.
 
-Initial status: Advisor chat now uses a bounded read-first plan over `get_project_cockpit`, `search_research_context`, `get_idea_progress`, `get_idea_lineage`, and `list_research_tasks`. Tool calls are trace-recorded, selected/skipped tools are returned in `source_summaries.tool_plan`, and model-ranked selection remains a future extension.
+Initial status: Advisor chat now uses a bounded read-first plan over `get_project_cockpit`, `search_research_context`, `get_idea_progress`, `get_idea_lineage`, and `list_research_tasks`. Tool calls are trace-recorded, failed read tools produce replay cases, selected/skipped tools are returned in `source_summaries.tool_plan`, and model-ranked selection remains a future extension.
 
 Initial tool set:
 
@@ -91,7 +92,7 @@ Acceptance criteria:
 
 - Advisor can answer project questions by selecting read tools.
 - Tool calls appear in `ToolCallRecord`.
-- Unknown tools, invalid parameters, timeouts, and empty results produce traceable fallback behavior.
+- Unknown tools, invalid parameters, timeouts, and empty results produce traceable fallback behavior. Failed read tools now persist failed `ToolCallRecord` rows and `advisor_tool_failure` replay cases.
 - The old advisor route remains compatible for Workbench and MCP bridge clients.
 
 Interview framing:
