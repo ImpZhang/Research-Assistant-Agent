@@ -64,6 +64,31 @@ class AgentTraceService:
     def get_run(self, run_id: str) -> AgentRun | None:
         return self.session.get(AgentRun, run_id)
 
+    def finish_run(
+        self,
+        run_id: str,
+        *,
+        status: str,
+        output: dict[str, Any] | None = None,
+        error: str = "",
+        latency_ms: int = 0,
+        token_usage: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> AgentRun:
+        run = self.get_run(run_id)
+        if run is None:
+            raise ValueError("Agent run not found")
+        run.status = status
+        run.output_json = _redact_json(output or {})
+        run.error = _redact_text(error)
+        run.latency_ms = max(0, latency_ms)
+        run.token_usage_json = _redact_json(token_usage or {})
+        run.metadata_json = _redact_json(metadata or {})
+        run.finished_at = utc_now()
+        self.session.commit()
+        self.session.refresh(run)
+        return run
+
     def create_tool_call(self, agent_run_id: str, payload: ToolCallRecordCreate) -> ToolCallRecord:
         run = self.get_run(agent_run_id)
         if run is None:

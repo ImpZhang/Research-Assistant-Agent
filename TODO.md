@@ -31,6 +31,7 @@ Current product target: personal local deployment. A user should be able to clon
 ## P2 - Personal Local Agent Follow-Ups
 
 - Follow `docs/agent_engineering_strengthening_plan.md` for the next agent-engineering upgrades: trace tables, bounded Advisor tool calling, project-local skills, bad-case replay, and one isolated LangGraph workflow without replacing the stable service-layer workflow.
+- Current trace baseline: `AgentRun`, `ToolCallRecord`, and `ReplayCase` persistence exists, and Advisor chat writes an `advisor_chat` run plus cockpit/context read tool-call records.
 - Polish clone-to-run setup, local preflight, and `.env.example` so first-time users can configure model API keys without reading internal docs. Current baseline: `scripts/check_local_agent_readiness.sh` validates the local readiness contract without reading `.env`.
 - Keep model-provider setup diagnosable through `scripts/check_model_provider_config.py` before running explicit real-provider smokes.
 - Keep clone diagnostics consolidated through `scripts/check_local_doctor.sh` as setup, backup, and benchmark checks grow.
@@ -45,8 +46,8 @@ Current product target: personal local deployment. A user should be able to clon
 
 ## P2 - Agent Interview Strengthening Follow-Ups
 
-- Extend the initial `AgentRun`, `ToolCallRecord`, and `ReplayCase` persistence into Advisor and replay workflows.
-- Convert Advisor into a bounded, traceable, read-first tool-calling agent while preserving the existing response contract and deterministic fallback.
+- Extend Advisor trace wiring into bounded read-first tool selection, failed-tool capture, and replay workflow generation.
+- Convert Advisor from deterministic read composition into a bounded, traceable, read-first tool-calling agent while preserving the existing response contract and deterministic fallback.
 - Add project-local `skills/*/SKILL.md` docs for `paper_ingestion`, `hybrid_context_search`, `literature_to_ideas`, `sota_review`, `benchmark_evaluation`, and `advisor_action_session`.
 - Add a local bad-case replay script and deterministic replay fixtures for context-search misses, bad tool selection, citation mistakes, and readiness false positives.
 - Add one isolated LangGraph advisor/deep-review workflow only after trace and tool-call contracts exist; keep the current `WorkflowService` path intact.

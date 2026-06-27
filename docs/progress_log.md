@@ -2,6 +2,30 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Advisor Chat Trace Wiring
+
+Implementation completed:
+
+- Wired `/research/advisor/chat` into `AgentTraceService` so each successful Advisor chat creates an `advisor_chat` `AgentRun`.
+- Recorded the deterministic cockpit read and context-search read as `ToolCallRecord` rows, including bounded argument summaries, result summaries, status, side-effect policy, and trace metadata.
+- Added `agent_run_id` to `AdvisorChatResponse` so Workbench, API clients, replay tooling, and MCP bridge consumers can inspect the exact trace behind an answer.
+- Added `AgentTraceService.finish_run` so agent runs can transition from `running` to `completed` or `failed` with redacted output/error metadata.
+- Added focused regression coverage for Advisor trace creation without coupling the new trace behavior to the long delivery-loop test.
+- Updated README, TODO, and the agent-engineering strengthening plan to mark Advisor trace wiring as implemented while keeping bounded LLM tool selection as the next step.
+
+Verification completed:
+
+- `.venv/bin/ruff check tests/test_app.py backend/research/schemas.py backend/research/services/agent_trace_service.py backend/research/routes.py` passed.
+- `.venv/bin/ruff format --check tests/test_app.py backend/research/schemas.py backend/research/services/agent_trace_service.py backend/research/routes.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_agent_trace_records_run_tool_call_and_replay_case tests/test_app.py::test_advisor_chat_records_agent_trace_tool_calls` passed: `2 passed`.
+- `bash scripts/check_workflow_job_controls.sh` passed: `5 passed`.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `12 passed`.
+- `bash scripts/check_research_planning_contracts.sh` passed: `3 passed`.
+- `git diff --check` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including local readiness, deployment/local doctor contracts `8 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `5 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Agent Trace Foundation
 
 Implementation completed:

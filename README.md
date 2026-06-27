@@ -112,7 +112,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Task generation from pilot report snapshots so saved customer updates can drive follow-up work and GraphRAG-lite traceability.
 - Project cockpit dashboard that compresses setup state, workflow stages, metrics, readiness, quality gates, opportunity radar, risks, highlights, quick actions, and Markdown export into one customer-facing entry point.
 - Task generation from project cockpit primary action, next actions, risks, and highlights so the customer-facing entry point can drive the task board directly.
-- Advisor chat endpoint that answers project-level questions from cockpit state, retrieved evidence, gaps, ideas, and GraphRAG-lite context, with Markdown output, citations, recommended actions, and tool suggestions.
+- Advisor chat endpoint that answers project-level questions from cockpit state, retrieved evidence, gaps, ideas, and GraphRAG-lite context, with Markdown output, citations, recommended actions, tool suggestions, and persisted agent-run/tool-call trace records.
 - Task generation from advisor chat answers so recommendations, risks, and optional tool suggestions enter the task board and graph trace.
 - Advisor action sessions that turn one advisor question into a grounded answer, follow-up tasks, a task-board snapshot, progress summary, and Markdown execution report.
 - Project triage brief that combines progress, readiness, quality gates, and opportunity radar into one daily decision view.
@@ -149,7 +149,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - MCP-ready HTTP tool bridge spec generated from the stable tool manifest.
 - Lightweight stdio MCP-to-HTTP bridge script for exposing the stable HTTP tools to MCP clients without extra SDK dependencies.
 - MCP bridge policy controls for read-only mode, allow/deny tool filters, API-key forwarding, project-scope header forwarding, request-id error correlation, and deployment health checks.
-- Agent trace foundation with persisted agent runs, tool-call records, replay cases, secret redaction, and read-only tool-manifest access for trace inspection.
+- Agent trace foundation with persisted agent runs, tool-call records, replay cases, secret redaction, read-only tool-manifest access for trace inspection, and Advisor chat trace wiring for cockpit/context read calls.
 - Research idea portfolio ranking with profile-aware weighting, lineage deduplication, claim validation result adjustments, and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.

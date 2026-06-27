@@ -12,6 +12,7 @@ The project is already beyond a basic RAG chatbot:
 - SQLite persists papers, chunks, embeddings, evidence, gaps, ideas, jobs, tasks, reviews, experiments, graph nodes, and graph edges.
 - GraphRAG-lite records lineage through `ResearchNode` and `ResearchEdge`.
 - The initial agent trace foundation persists `AgentRun`, `ToolCallRecord`, and `ReplayCase` rows with secret redaction and read-only trace inspection tools.
+- Advisor chat now creates an `advisor_chat` run and records its cockpit/context read calls as `ToolCallRecord` rows without changing the existing response contract.
 - The Workbench, HTTP API, local scripts, and optional stdio MCP-to-HTTP bridge expose the system locally.
 - Focused checks cover context-search metrics, graph behavior, tool bridge contracts, workflow primitives, backup manifests, and local readiness.
 
@@ -19,8 +20,8 @@ The project is not yet a full autonomous agent runtime:
 
 - The production workflow is service-layer orchestration, not a LangGraph runtime graph.
 - The MCP surface is a lightweight bridge over FastAPI, not a full MCP SDK server with resources and prompts.
-- Advisor responses are mostly deterministic composition over existing services, not an LLM-driven tool-calling loop.
-- Advisor and LangGraph flows do not yet write trace records automatically.
+- Advisor responses are still mostly deterministic composition over existing services, not an LLM-driven tool-calling loop.
+- Replay and LangGraph flows do not yet write trace records automatically.
 - There is no formal project-local skill registry such as `skills/*/SKILL.md`.
 
 This is an intentional boundary. The current stable workflow should stay intact while the new agent layer is added incrementally.
@@ -39,7 +40,7 @@ This is an intentional boundary. The current stable workflow should stay intact 
 
 Add durable trace tables before changing agent behavior.
 
-Initial status: the tables, service, create/read API, secret redaction, and read-only tool-manifest entries are implemented. The next step is wiring Advisor and replay workflows into these records.
+Initial status: the tables, service, create/read API, secret redaction, read-only tool-manifest entries, and Advisor chat trace wiring are implemented. The next step is extending trace capture to failed tool calls, replay workflows, and the isolated LangGraph workflow.
 
 Proposed artifacts:
 
@@ -55,7 +56,7 @@ Suggested fields:
 
 Acceptance criteria:
 
-- Advisor and replay flows can create an `AgentRun`.
+- Advisor chat can create an `AgentRun`; replay flows still need first-class run creation.
 - Every tool invocation records arguments, result summary, status, latency, and error state.
 - Trace records never store secrets or raw provider credentials.
 - Tests prove failed tool calls are captured without breaking the whole request.
@@ -67,6 +68,8 @@ Interview framing:
 ### 2. Advisor Tool-Calling Agent
 
 Convert Advisor into the first real tool-calling agent surface while preserving existing advisor response contracts.
+
+Initial status: Advisor chat now records the deterministic `get_project_cockpit` and `search_research_context` read calls into `ToolCallRecord`. It is observable and replay-ready, but it is not yet doing bounded LLM-driven tool selection.
 
 Initial tool set:
 
@@ -301,8 +304,8 @@ The personal local target should remain simple: clone, configure `.env`, run loc
 
 ## Recommended Implementation Order
 
-1. Add `AgentRun`, `ToolCallRecord`, and `ReplayCase` models plus read APIs.
-2. Add advisor trace creation without changing answer behavior.
+1. Completed: add `AgentRun`, `ToolCallRecord`, and `ReplayCase` models plus read APIs.
+2. Completed: add Advisor trace creation without changing answer behavior.
 3. Add bounded read-only Advisor tool calling.
 4. Add project-local skill docs for the core workflows.
 5. Add replay script and deterministic replay fixtures.

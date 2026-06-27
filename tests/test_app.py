@@ -1372,6 +1372,79 @@ def test_agent_trace_records_run_tool_call_and_replay_case() -> None:
     assert any(item["id"] == replay_case["id"] for item in replay_cases.json())
 
 
+def test_advisor_chat_records_agent_trace_tool_calls() -> None:
+    client = TestClient(create_app())
+    content = b"""Advisor Trace Test Paper
+
+Abstract
+This paper checks whether advisor chat can cite retrieved context and record tool traces.
+
+Introduction
+Research assistants need observable tool calling for local replay and audit.
+
+Method
+The workflow extracts paper chunks, mines gaps, generates ideas, and then asks the project advisor.
+
+Limitations
+The advisor is deterministic in the local MVP and still needs bounded model-driven tool selection.
+
+Conclusion
+Future work should replay bad cases from stored agent traces.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("advisor_trace_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    workflow = client.post(
+        "/research/workflows/literature-to-ideas",
+        json={
+            "paper_id": paper_id,
+            "max_gaps": 1,
+            "max_ideas_per_gap": 1,
+            "include_markdown_export": False,
+        },
+    )
+    assert workflow.status_code == 200
+    idea_id = workflow.json()["ideas"][0]["id"]
+
+    advisor_chat = client.post(
+        "/research/advisor/chat",
+        json={
+            "question": "What should I do next, and which evidence risk matters most?",
+            "idea_id": idea_id,
+            "paper_ids": [paper_id],
+            "include_cockpit": True,
+            "include_context": True,
+            "context_limit": 5,
+            "created_by": "pytest",
+        },
+    )
+    assert advisor_chat.status_code == 200
+    advisor_chat_body = advisor_chat.json()
+    assert advisor_chat_body["agent_run_id"]
+    assert advisor_chat_body["source_summaries"]["agent_trace"]["tool_call_count"] == 2
+
+    advisor_run = client.get(f"/research/agent/runs/{advisor_chat_body['agent_run_id']}")
+    assert advisor_run.status_code == 200
+    advisor_run_body = advisor_run.json()
+    assert advisor_run_body["run_type"] == "advisor_chat"
+    assert advisor_run_body["status"] == "completed"
+    assert advisor_run_body["created_by"] == "pytest"
+    assert advisor_run_body["output"]["tool_call_count"] == 2
+
+    advisor_tool_calls = client.get(
+        f"/research/agent/runs/{advisor_chat_body['agent_run_id']}/tool-calls"
+    )
+    assert advisor_tool_calls.status_code == 200
+    advisor_tool_call_body = advisor_tool_calls.json()
+    advisor_tool_names = {tool_call["tool_name"] for tool_call in advisor_tool_call_body}
+    assert {"get_project_cockpit", "search_research_context"}.issubset(advisor_tool_names)
+    assert all(tool_call["status"] == "completed" for tool_call in advisor_tool_call_body)
+
+
 def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     client = TestClient(create_app())
     response = client.get("/research/tools/mcp-spec")

@@ -1,5 +1,6 @@
 import io
 import json
+import time
 import zipfile
 from collections import Counter
 from datetime import datetime, timezone
@@ -2769,56 +2770,139 @@ def ask_project_advisor(
         if selected_idea is None:
             raise HTTPException(status_code=404, detail="Idea not found")
 
-    cockpit = (
-        get_project_cockpit(idea_limit=50, opportunity_limit=5, session=session)
-        if payload.include_cockpit
-        else None
+    trace_service = AgentTraceService(session)
+    started = time.perf_counter()
+    agent_run = trace_service.create_run(
+        AgentRunCreate(
+            run_type="advisor_chat",
+            status="running",
+            question=question,
+            input=payload.model_dump(mode="json"),
+            created_by=payload.created_by,
+            metadata={
+                "idea_id": payload.idea_id or "",
+                "paper_ids": payload.paper_ids,
+                "include_cockpit": payload.include_cockpit,
+                "include_context": payload.include_context,
+            },
+        )
     )
-    context = (
-        _advisor_chat_context_response(payload, selected_idea, session)
-        if payload.include_context
-        else None
-    )
-    intent = _advisor_chat_intent(question)
-    recommended_actions = _advisor_chat_recommended_actions(intent, cockpit, context)
-    risk_alerts = (cockpit.risk_alerts if cockpit else [])[:10]
-    tool_suggestions = _advisor_chat_tool_suggestions(intent, cockpit, selected_idea)
-    source_summaries = _advisor_chat_source_summaries(cockpit, context, selected_idea)
-    answer_markdown = _render_advisor_chat_markdown(
-        question=question,
-        intent=intent,
-        cockpit=cockpit,
-        context=context,
-        selected_idea=selected_idea,
-        recommended_actions=recommended_actions,
-        risk_alerts=risk_alerts,
-        tool_suggestions=tool_suggestions,
-    )
-    answer = _advisor_chat_plain_answer(
-        intent=intent,
-        cockpit=cockpit,
-        recommended_actions=recommended_actions,
-        risk_alerts=risk_alerts,
-    )
-    return AdvisorChatResponse(
-        question=question,
-        intent=intent,
-        answer=answer,
-        answer_markdown=answer_markdown,
-        cockpit_phase=cockpit.phase if cockpit else "",
-        readiness_level=cockpit.readiness_level if cockpit else "",
-        recommended_actions=recommended_actions,
-        risk_alerts=risk_alerts,
-        tool_suggestions=tool_suggestions,
-        cited_evidences=context.evidences if context else [],
-        cited_gaps=context.gaps if context else [],
-        cited_ideas=context.ideas if context else [],
-        source_summaries=source_summaries,
-        message=(
-            "Answered advisor chat question from project cockpit, retrieved context, "
-            "and deterministic research workflow signals."
-        ),
-    )
+    tool_call_count = 0
+    try:
+        cockpit = None
+        if payload.include_cockpit:
+            cockpit = get_project_cockpit(idea_limit=50, opportunity_limit=5, session=session)
+            trace_service.create_tool_call(
+                agent_run.id,
+                ToolCallRecordCreate(
+                    tool_name="get_project_cockpit",
+                    tool_arguments={"idea_limit": 50, "opportunity_limit": 5},
+                    tool_result_summary=(
+                        f"phase={cockpit.phase}; readiness={cockpit.readiness_level}; "
+                        f"risks={len(cockpit.risk_alerts)}"
+                    ),
+                    status="completed",
+                    side_effect=False,
+                ),
+            )
+            tool_call_count += 1
+
+        context = None
+        if payload.include_context:
+            context = _advisor_chat_context_response(payload, selected_idea, session)
+            trace_service.create_tool_call(
+                agent_run.id,
+                ToolCallRecordCreate(
+                    tool_name="search_research_context",
+                    tool_arguments={
+                        "body": {
+                            "query": context.query,
+                            "paper_ids": payload.paper_ids,
+                            "limit": payload.context_limit,
+                            "include_graph": True,
+                        }
+                    },
+                    tool_result_summary=(
+                        f"chunks={len(context.chunks)}; evidences={len(context.evidences)}; "
+                        f"gaps={len(context.gaps)}; ideas={len(context.ideas)}; "
+                        f"graph_nodes={len(context.graph_nodes)}; "
+                        f"graph_edges={len(context.graph_edges)}"
+                    ),
+                    status="completed",
+                    side_effect=False,
+                ),
+            )
+            tool_call_count += 1
+
+        intent = _advisor_chat_intent(question)
+        recommended_actions = _advisor_chat_recommended_actions(intent, cockpit, context)
+        risk_alerts = (cockpit.risk_alerts if cockpit else [])[:10]
+        tool_suggestions = _advisor_chat_tool_suggestions(intent, cockpit, selected_idea)
+        source_summaries = _advisor_chat_source_summaries(cockpit, context, selected_idea)
+        source_summaries["agent_trace"] = {
+            "agent_run_id": agent_run.id,
+            "tool_call_count": tool_call_count,
+            "trace_status": "completed",
+        }
+        answer_markdown = _render_advisor_chat_markdown(
+            question=question,
+            intent=intent,
+            cockpit=cockpit,
+            context=context,
+            selected_idea=selected_idea,
+            recommended_actions=recommended_actions,
+            risk_alerts=risk_alerts,
+            tool_suggestions=tool_suggestions,
+        )
+        answer = _advisor_chat_plain_answer(
+            intent=intent,
+            cockpit=cockpit,
+            recommended_actions=recommended_actions,
+            risk_alerts=risk_alerts,
+        )
+        response = AdvisorChatResponse(
+            agent_run_id=agent_run.id,
+            question=question,
+            intent=intent,
+            answer=answer,
+            answer_markdown=answer_markdown,
+            cockpit_phase=cockpit.phase if cockpit else "",
+            readiness_level=cockpit.readiness_level if cockpit else "",
+            recommended_actions=recommended_actions,
+            risk_alerts=risk_alerts,
+            tool_suggestions=tool_suggestions,
+            cited_evidences=context.evidences if context else [],
+            cited_gaps=context.gaps if context else [],
+            cited_ideas=context.ideas if context else [],
+            source_summaries=source_summaries,
+            message=(
+                "Answered advisor chat question from project cockpit, retrieved context, "
+                "and deterministic research workflow signals."
+            ),
+        )
+        trace_service.finish_run(
+            agent_run.id,
+            status="completed",
+            output={
+                "intent": intent,
+                "answer": answer,
+                "recommended_action_count": len(recommended_actions),
+                "risk_alert_count": len(risk_alerts),
+                "tool_call_count": tool_call_count,
+            },
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            metadata={"response_type": "AdvisorChatResponse"},
+        )
+        return response
+    except Exception as exc:
+        trace_service.finish_run(
+            agent_run.id,
+            status="failed",
+            error=str(exc),
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            metadata={"tool_call_count": tool_call_count},
+        )
+        raise
 
 
 @router.post("/advisor/chat/tasks", response_model=ResearchTaskGenerationResponse)

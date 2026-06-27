@@ -1935,6 +1935,7 @@ class AdvisorChatRequest(BaseModel):
 
 
 class AdvisorChatResponse(BaseModel):
+    agent_run_id: str = ""
     question: str
     intent: str = "project_status"
     answer: str
