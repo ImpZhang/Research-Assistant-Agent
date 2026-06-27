@@ -1585,6 +1585,65 @@ def test_advisor_chat_records_failed_tool_call_and_replay_case(monkeypatch) -> N
     assert replay_case["metadata"]["failure_stage"] == "advisor_read_tool"
 
 
+def test_advisor_chat_uses_model_ranked_read_tool_selection(monkeypatch) -> None:
+    class FakeToolSelectionClient:
+        model = "pytest-tool-ranker"
+        is_configured = True
+
+        def complete_json(self, *, system_prompt: str, user_prompt: str) -> dict:
+            assert "Never invent tool names" in system_prompt
+            assert "search_research_context" in user_prompt
+            return {
+                "selected_tools": [
+                    "search_research_context",
+                    "not_a_real_tool",
+                    "get_project_cockpit",
+                ],
+                "rationales": {
+                    "search_research_context": "The question asks for evidence first.",
+                    "get_project_cockpit": "Project state can be checked later.",
+                },
+            }
+
+    monkeypatch.setattr(
+        research_routes_module,
+        "_advisor_tool_selection_client",
+        lambda: FakeToolSelectionClient(),
+    )
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/research/advisor/chat",
+        json={
+            "question": "Which evidence should I review before the next experiment?",
+            "include_cockpit": True,
+            "include_context": True,
+            "context_limit": 3,
+            "max_tool_calls": 1,
+            "tool_selection_mode": "model_ranked",
+            "created_by": "pytest",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    tool_plan = body["source_summaries"]["tool_plan"]
+    assert tool_plan["selection_mode"] == "model_ranked"
+    assert tool_plan["selection_model"] == "pytest-tool-ranker"
+    assert tool_plan["selected_tools"] == ["search_research_context"]
+    assert "not_a_real_tool" not in tool_plan["selected_tools"]
+    assert tool_plan["selection_rationales"]["search_research_context"] == (
+        "The question asks for evidence first."
+    )
+    assert body["source_summaries"]["agent_trace"]["tool_call_count"] == 1
+
+    tool_calls = client.get(f"/research/agent/runs/{body['agent_run_id']}/tool-calls")
+    assert tool_calls.status_code == 200
+    assert [tool_call["tool_name"] for tool_call in tool_calls.json()] == [
+        "search_research_context"
+    ]
+
+
 def test_tool_bridge_spec_maps_manifest_to_http_tool_schemas() -> None:
     client = TestClient(create_app())
     response = client.get("/research/tools/mcp-spec")

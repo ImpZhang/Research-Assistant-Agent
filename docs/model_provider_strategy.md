@@ -47,6 +47,7 @@ DashScope compatibility notes:
 That means:
 
 - `qwen3-32b` can affect current structured model behavior immediately.
+- `qwen3-32b` can optionally rank Advisor read-tool candidates when `tool_selection_mode="model_ranked"` is set on Advisor requests; deterministic selection remains the default and fallback.
 - `qwen3-vl-embedding` can replace the local hash vectors when `RETRIEVAL_EMBEDDING_PROVIDER=auto` or `external` and the provider is fully configured.
 - `qwen3-rerank` can re-rank retrieved evidence, gaps, and ideas when `RETRIEVAL_RERANK_PROVIDER=auto` or `external` and the provider is fully configured.
 

@@ -11,4 +11,5 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_agent_trace_records_run_tool_call_and_replay_case \
   tests/test_app.py::test_advisor_chat_records_agent_trace_tool_calls \
   tests/test_app.py::test_advisor_chat_records_failed_tool_call_and_replay_case \
+  tests/test_app.py::test_advisor_chat_uses_model_ranked_read_tool_selection \
   tests/test_app.py::test_job_cancel_and_retry_controls

@@ -12,6 +12,7 @@ from fastapi.responses import PlainTextResponse, Response
 from langgraph.graph import END, StateGraph
 from sqlalchemy.orm import Session
 
+from backend.research.adapters.model_adapter import OpenAICompatibleJsonClient
 from backend.research.config import settings
 from backend.research.db import get_session
 from backend.research.models import (
@@ -2827,15 +2828,173 @@ def _advisor_read_tool_candidates(payload: AdvisorChatRequest, question: str) ->
     return deduped
 
 
+ADVISOR_READ_TOOL_DESCRIPTIONS = {
+    "get_project_cockpit": "Summarize project phase, readiness, risk alerts, highlights, and next actions.",
+    "search_research_context": "Retrieve source chunks, evidence, gaps, ideas, and graph context for the question.",
+    "get_idea_progress": "Inspect one idea's open tasks, blockers, readiness, and recommended next step.",
+    "get_idea_lineage": "Inspect one idea's source artifacts, research plans, tasks, and graph lineage.",
+    "list_research_tasks": "List local research tasks and status counts for task/action questions.",
+}
+
+
 def _advisor_read_tool_plan(payload: AdvisorChatRequest, question: str) -> dict[str, Any]:
     candidates = _advisor_read_tool_candidates(payload, question)
     max_tool_calls = max(1, min(getattr(payload, "max_tool_calls", 3), 5))
-    return {
+    deterministic_plan = {
         "candidate_tools": candidates,
         "selected_tools": candidates[:max_tool_calls],
         "skipped_tools": candidates[max_tool_calls:],
         "max_tool_calls": max_tool_calls,
+        "selection_mode": "deterministic",
+        "selection_mode_requested": payload.tool_selection_mode,
+        "selection_rationales": _advisor_deterministic_tool_rationales(candidates),
     }
+    if payload.tool_selection_mode != "model_ranked" or not candidates:
+        return deterministic_plan
+    return _advisor_model_ranked_tool_plan(
+        payload=payload,
+        question=question,
+        candidates=candidates,
+        max_tool_calls=max_tool_calls,
+        fallback_plan=deterministic_plan,
+    )
+
+
+def _advisor_deterministic_tool_rationales(candidates: list[str]) -> dict[str, str]:
+    return {
+        tool_name: f"Selected by deterministic policy: {ADVISOR_READ_TOOL_DESCRIPTIONS[tool_name]}"
+        for tool_name in candidates
+        if tool_name in ADVISOR_READ_TOOL_DESCRIPTIONS
+    }
+
+
+def _advisor_model_ranked_tool_plan(
+    *,
+    payload: AdvisorChatRequest,
+    question: str,
+    candidates: list[str],
+    max_tool_calls: int,
+    fallback_plan: dict[str, Any],
+) -> dict[str, Any]:
+    client = _advisor_tool_selection_client()
+    if not client.is_configured:
+        return {
+            **fallback_plan,
+            "selection_mode": "deterministic_fallback",
+            "selection_error": "main model provider is not configured for model-ranked selection",
+        }
+    try:
+        response = client.complete_json(
+            system_prompt=(
+                "You rank read-only research assistant tools. Return JSON only. "
+                "Never invent tool names. Never select side-effecting tools."
+            ),
+            user_prompt=_advisor_tool_selection_prompt(
+                payload=payload,
+                question=question,
+                candidates=candidates,
+                max_tool_calls=max_tool_calls,
+            ),
+        )
+        selected_tools = _validate_model_ranked_tools(
+            response.get("selected_tools"),
+            candidates,
+            max_tool_calls,
+        )
+        if not selected_tools:
+            raise ValueError("Model did not return any valid selected_tools.")
+        rationales = _validate_model_tool_rationales(response.get("rationales"), selected_tools)
+        return {
+            "candidate_tools": candidates,
+            "selected_tools": selected_tools,
+            "skipped_tools": [tool for tool in candidates if tool not in selected_tools],
+            "max_tool_calls": max_tool_calls,
+            "selection_mode": "model_ranked",
+            "selection_mode_requested": payload.tool_selection_mode,
+            "selection_model": client.model,
+            "selection_rationales": rationales,
+        }
+    except Exception as exc:
+        return {
+            **fallback_plan,
+            "selection_mode": "deterministic_fallback",
+            "selection_error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _advisor_tool_selection_client() -> OpenAICompatibleJsonClient:
+    return OpenAICompatibleJsonClient(
+        model=settings.main_model,
+        base_url=settings.main_base_url,
+        api_key=settings.main_api_key,
+        timeout=int(settings.model_provider_timeout_seconds),
+    )
+
+
+def _advisor_tool_selection_prompt(
+    *,
+    payload: AdvisorChatRequest,
+    question: str,
+    candidates: list[str],
+    max_tool_calls: int,
+) -> str:
+    tool_payload = [
+        {"name": tool_name, "description": ADVISOR_READ_TOOL_DESCRIPTIONS.get(tool_name, "")}
+        for tool_name in candidates
+    ]
+    request_context = {
+        "question": question,
+        "has_idea_id": bool(payload.idea_id),
+        "paper_id_count": len(payload.paper_ids),
+        "include_cockpit": payload.include_cockpit,
+        "include_context": payload.include_context,
+        "max_tool_calls": max_tool_calls,
+        "candidate_tools": tool_payload,
+    }
+    expected_shape = {
+        "selected_tools": ["tool_name"],
+        "rationales": {"tool_name": "short reason grounded in the question"},
+    }
+    return (
+        "Rank the best read-only tools for this advisor question.\n"
+        f"Request JSON:\n{json.dumps(request_context, ensure_ascii=False, indent=2)}\n\n"
+        f"Return JSON matching this shape:\n{json.dumps(expected_shape, ensure_ascii=False)}"
+    )
+
+
+def _validate_model_ranked_tools(
+    raw_tools: Any,
+    candidates: list[str],
+    max_tool_calls: int,
+) -> list[str]:
+    if not isinstance(raw_tools, list):
+        return []
+    allowed = set(candidates)
+    selected: list[str] = []
+    for raw_tool in raw_tools:
+        if not isinstance(raw_tool, str):
+            continue
+        tool_name = raw_tool.strip()
+        if tool_name in allowed and tool_name not in selected:
+            selected.append(tool_name)
+        if len(selected) >= max_tool_calls:
+            break
+    return selected
+
+
+def _validate_model_tool_rationales(
+    raw_rationales: Any, selected_tools: list[str]
+) -> dict[str, str]:
+    if not isinstance(raw_rationales, dict):
+        return {tool: "Selected by model-ranked read-tool policy." for tool in selected_tools}
+    rationales: dict[str, str] = {}
+    for tool_name in selected_tools:
+        rationale = raw_rationales.get(tool_name)
+        if isinstance(rationale, str) and rationale.strip():
+            rationales[tool_name] = rationale.strip()[:240]
+        else:
+            rationales[tool_name] = "Selected by model-ranked read-tool policy."
+    return rationales
 
 
 def _record_advisor_tool_call(
@@ -2958,6 +3117,7 @@ def ask_project_advisor(
                 "include_cockpit": payload.include_cockpit,
                 "include_context": payload.include_context,
                 "max_tool_calls": payload.max_tool_calls,
+                "tool_selection_mode": payload.tool_selection_mode,
             },
         )
     )
@@ -2971,6 +3131,7 @@ def ask_project_advisor(
             "include_cockpit": payload.include_cockpit,
             "include_context": payload.include_context,
             "max_tool_calls": payload.max_tool_calls,
+            "tool_selection_mode": payload.tool_selection_mode,
         }
         tool_observations: list[dict[str, Any]] = []
         cockpit = None

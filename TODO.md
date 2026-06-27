@@ -46,7 +46,7 @@ Current product target: personal local deployment. A user should be able to clon
 
 ## P2 - Agent Interview Strengthening Follow-Ups
 
-- Extend the bounded Advisor read-tool plan with model-ranked selection and replay workflow generation. Current baseline: failed Advisor read tools are captured as failed `ToolCallRecord` rows plus `advisor_tool_failure` replay cases.
+- Extend the bounded Advisor read-tool plan with replay workflow generation and richer live replay executors. Current baseline: opt-in model-ranked read-tool selection is candidate-validated with deterministic fallback, and failed Advisor read tools are captured as failed `ToolCallRecord` rows plus `advisor_tool_failure` replay cases.
 - Add stricter tool schema validation/error branches for Advisor tool selection while preserving the existing response contract and deterministic fallback.
 - Extend the project-local skill registry beyond the current `paper-ingestion`, `hybrid-context-search`, `literature-to-ideas`, `sota-review`, `benchmark-evaluation`, and `advisor-action-session` docs as new agent workflows are added.
 - Extend the initial bad-case replay script with live replay executors for context-search misses, citation mistakes, and readiness false positives once tool-calling selection is bounded.

@@ -1932,6 +1932,7 @@ class AdvisorChatRequest(BaseModel):
     include_context: bool = True
     context_limit: int = Field(default=5, ge=1, le=15)
     max_tool_calls: int = Field(default=3, ge=1, le=5)
+    tool_selection_mode: Literal["deterministic", "model_ranked"] = "deterministic"
     created_by: str = "researcher"
 
 

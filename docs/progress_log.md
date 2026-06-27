@@ -2,6 +2,24 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Advisor Model Ranked Tool Selection
+
+Implementation completed:
+
+- Added `tool_selection_mode` to Advisor requests with safe default `deterministic` and opt-in `model_ranked`.
+- Added candidate-validated main-model ranking for Advisor read tools, including model rationales, selected/skipped tool-plan output, invalid-tool filtering, max-tool-call enforcement, and deterministic fallback when the model client is unavailable or returns invalid output.
+- Kept Advisor tool execution read-only and bounded; successful and failed tool calls continue to write trace records and failed read tools still create replay cases.
+- Added a no-network test using a fake model-ranked selector and wired it into the workflow/job focused check.
+- Updated the agent strengthening plan, TODO, and model-provider strategy to describe the new boundary.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_app.py::test_advisor_chat_records_agent_trace_tool_calls tests/test_app.py::test_advisor_chat_records_failed_tool_call_and_replay_case tests/test_app.py::test_advisor_chat_uses_model_ranked_read_tool_selection` passed: `3 passed`.
+- `bash scripts/check_workflow_job_controls.sh` passed: `7 passed`.
+- `bash scripts/check_agent_replay.sh` passed: `1 passed`.
+- `bash scripts/check_tool_bridge_contracts.sh` passed: `12 passed`.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `1 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `15 passed`, backup/restore manifest/rehearsal tests `6 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `7 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Advisor Failed Tool Replay Capture
 
 Implementation completed:

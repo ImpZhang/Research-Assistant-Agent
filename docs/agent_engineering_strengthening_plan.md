@@ -70,7 +70,7 @@ Interview framing:
 
 Convert Advisor into the first real tool-calling agent surface while preserving existing advisor response contracts.
 
-Initial status: Advisor chat now uses a bounded read-first plan over `get_project_cockpit`, `search_research_context`, `get_idea_progress`, `get_idea_lineage`, and `list_research_tasks`. Tool calls are trace-recorded, failed read tools produce replay cases, selected/skipped tools are returned in `source_summaries.tool_plan`, and model-ranked selection remains a future extension.
+Initial status: Advisor chat now uses a bounded read-first plan over `get_project_cockpit`, `search_research_context`, `get_idea_progress`, `get_idea_lineage`, and `list_research_tasks`. Tool calls are trace-recorded, failed read tools produce replay cases, selected/skipped tools are returned in `source_summaries.tool_plan`, and `tool_selection_mode="model_ranked"` can opt into main-model ranked read-tool selection with deterministic fallback.
 
 Initial tool set:
 
@@ -84,7 +84,7 @@ Initial tool set:
 Implementation shape:
 
 - Keep the existing deterministic advisor composer as fallback.
-- Add a tool selection step that reads the tool manifest, validates arguments through schema, calls approved tools, summarizes observations, and records each call.
+- Add a tool selection step that reads approved read-tool candidates, validates model-selected tools against that candidate set, calls approved tools, summarizes observations, and records each call.
 - Start with bounded tool plans, such as `max_tool_calls=3`, rather than open-ended autonomous loops.
 - Treat write tools as side-effecting and require explicit policy checks before calling them.
 
@@ -92,12 +92,13 @@ Acceptance criteria:
 
 - Advisor can answer project questions by selecting read tools.
 - Tool calls appear in `ToolCallRecord`.
+- Model-ranked selection is opt-in and must never invent tool names or call side-effecting tools.
 - Unknown tools, invalid parameters, timeouts, and empty results produce traceable fallback behavior. Failed read tools now persist failed `ToolCallRecord` rows and `advisor_tool_failure` replay cases.
 - The old advisor route remains compatible for Workbench and MCP bridge clients.
 
 Interview framing:
 
-> I did not expose arbitrary tool execution. Advisor has a bounded tool-calling loop with schema validation, side-effect policy, trace logging, and deterministic fallback.
+> I did not expose arbitrary tool execution. Advisor has a bounded read-tool loop with candidate validation, opt-in model ranking, side-effect policy, trace logging, failed-tool replay capture, and deterministic fallback.
 
 ### 3. Project-Local Skills
 
