@@ -179,6 +179,7 @@ with SessionLocal() as session:
             "--case-id",
             case_id,
             "--live-executors",
+            "--record-run",
             "--json",
             "--fail-on-regression",
         ],
@@ -198,3 +199,55 @@ with SessionLocal() as session:
     assert case["observed"]["live_status"] == "completed"
     assert case["observed"]["context_counts"]["chunks"] >= 1
     assert case["observed"]["context_counts"]["evidences"] >= 1
+
+    trace_probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import json
+
+from backend.research.db import SessionLocal
+from backend.research.models import AgentRun, ToolCallRecord
+
+with SessionLocal() as session:
+    run = (
+        session.query(AgentRun)
+        .filter(AgentRun.run_type == "agent_replay")
+        .order_by(AgentRun.created_at.desc())
+        .first()
+    )
+    records = (
+        session.query(ToolCallRecord)
+        .filter(ToolCallRecord.agent_run_id == run.id)
+        .order_by(ToolCallRecord.created_at.asc())
+        .all()
+    )
+    print(
+        json.dumps(
+            {
+                "run_type": run.run_type,
+                "run_status": run.status,
+                "summary": run.output_json.get("summary"),
+                "tool_names": [record.tool_name for record in records],
+                "tool_statuses": [record.status for record in records],
+                "side_effects": [record.side_effect for record in records],
+            },
+            sort_keys=True,
+        )
+    )
+""",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    trace_payload = json.loads(trace_probe.stdout)
+
+    assert trace_payload["run_type"] == "agent_replay"
+    assert trace_payload["run_status"] == "completed"
+    assert trace_payload["summary"]["passed"] == 1
+    assert trace_payload["tool_names"] == ["replay.context_search"]
+    assert trace_payload["tool_statuses"] == ["completed"]
+    assert trace_payload["side_effects"] == [False]

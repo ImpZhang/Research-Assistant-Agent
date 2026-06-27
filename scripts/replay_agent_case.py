@@ -4,12 +4,15 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from backend.research.db import SessionLocal
 from backend.research.models import AgentRun, ReplayCase, ToolCallRecord
+from backend.research.schemas import AgentRunCreate, ToolCallRecordCreate
+from backend.research.services.agent_trace_service import AgentTraceService
 from backend.research.services.embedding_service import EmbeddingService
 from backend.research.services.retrieval_service import RetrievalService
 
@@ -84,9 +87,17 @@ def main() -> int:
             "Executors use local embedding/rerank modes and do not call model providers."
         ),
     )
+    parser.add_argument(
+        "--record-run",
+        action="store_true",
+        help="Persist this replay invocation as an agent_replay AgentRun for local audit.",
+    )
     args = parser.parse_args()
 
+    started = time.perf_counter()
     with SessionLocal() as session:
+        trace_service = AgentTraceService(session)
+        replay_run = _start_replay_run(trace_service, args) if args.record_run else None
         cases = _load_cases(
             session,
             case_id=args.case_id,
@@ -98,8 +109,11 @@ def main() -> int:
             _evaluate_case(session, replay_case, live_executors=args.live_executors)
             for replay_case in cases
         ]
+        payload = _build_report_payload(evaluations)
+        if replay_run:
+            _record_replay_tool_calls(trace_service, replay_run.id, evaluations)
+            _finish_replay_run(trace_service, replay_run.id, payload, args, started)
 
-    payload = _build_report_payload(evaluations)
     if args.write_markdown:
         Path(args.write_markdown).parent.mkdir(parents=True, exist_ok=True)
         Path(args.write_markdown).write_text(_render_markdown(payload), encoding="utf-8")
@@ -130,6 +144,136 @@ def _load_cases(
     if verdict:
         query = query.filter(ReplayCase.verdict == verdict)
     return query.limit(max(1, min(limit, 200))).all()
+
+
+def _start_replay_run(trace_service: AgentTraceService, args: argparse.Namespace) -> AgentRun:
+    return trace_service.create_run(
+        AgentRunCreate(
+            run_type="agent_replay",
+            status="running",
+            question=_replay_question(args),
+            input=_replay_input(args),
+            metadata={
+                "script": "scripts/replay_agent_case.py",
+                "live_executors": bool(args.live_executors),
+                "json": bool(args.json),
+                "write_markdown": bool(args.write_markdown),
+                "fail_on_regression": bool(args.fail_on_regression),
+            },
+            created_by="replay_script",
+        )
+    )
+
+
+def _finish_replay_run(
+    trace_service: AgentTraceService,
+    run_id: str,
+    payload: dict[str, Any],
+    args: argparse.Namespace,
+    started: float,
+) -> AgentRun:
+    summary = payload["summary"]
+    status = "failed" if summary["failed"] > 0 else "completed"
+    case_rollup = [
+        {
+            "case_id": item["case_id"],
+            "case_type": item["case_type"],
+            "replay_verdict": item["replay_verdict"],
+        }
+        for item in payload["cases"]
+    ]
+    return trace_service.finish_run(
+        run_id,
+        status=status,
+        output={
+            "summary": summary,
+            "cases": case_rollup,
+        },
+        latency_ms=int((time.perf_counter() - started) * 1000),
+        metadata={
+            "script": "scripts/replay_agent_case.py",
+            "record_run": True,
+            "live_executors": bool(args.live_executors),
+            "write_markdown": bool(args.write_markdown),
+        },
+    )
+
+
+def _record_replay_tool_calls(
+    trace_service: AgentTraceService,
+    run_id: str,
+    evaluations: list[ReplayEvaluation],
+) -> None:
+    for evaluation in evaluations:
+        live_executor = str(evaluation.observed.get("live_executor") or "")
+        if not live_executor:
+            continue
+        live_status = str(evaluation.observed.get("live_status") or "")
+        context_counts = evaluation.observed.get("context_counts") or {}
+        trace_service.create_tool_call(
+            run_id,
+            ToolCallRecordCreate(
+                tool_name=f"replay.{live_executor}",
+                tool_arguments={
+                    "case_id": evaluation.case_id,
+                    "case_type": evaluation.case_type,
+                    "query": evaluation.query,
+                    "paper_ids": evaluation.observed.get("paper_ids") or [],
+                    "limit": evaluation.expected.get("limit", ""),
+                    "include_graph": evaluation.expected.get("include_graph", False),
+                },
+                tool_result_summary=_replay_tool_summary(live_status, context_counts),
+                status=_tool_status_from_live_status(live_status),
+                error=str(evaluation.observed.get("live_error") or ""),
+                side_effect=False,
+                metadata={
+                    "replay_verdict": evaluation.replay_verdict,
+                    "stored_verdict": evaluation.stored_verdict,
+                },
+            ),
+        )
+
+
+def _replay_question(args: argparse.Namespace) -> str:
+    filters = []
+    if args.case_id:
+        filters.append(f"case_id={args.case_id}")
+    if args.case_type:
+        filters.append(f"case_type={args.case_type}")
+    if args.verdict:
+        filters.append(f"verdict={args.verdict}")
+    return "Replay agent cases" + (": " + ", ".join(filters) if filters else "")
+
+
+def _replay_input(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "case_id": args.case_id,
+        "case_type": args.case_type,
+        "verdict": args.verdict,
+        "limit": args.limit,
+        "json": bool(args.json),
+        "write_markdown": bool(args.write_markdown),
+        "fail_on_regression": bool(args.fail_on_regression),
+        "live_executors": bool(args.live_executors),
+    }
+
+
+def _replay_tool_summary(live_status: str, context_counts: dict[str, Any]) -> str:
+    return (
+        f"live_status={live_status or 'unknown'} "
+        f"chunks={context_counts.get('chunks', 0)} "
+        f"evidences={context_counts.get('evidences', 0)} "
+        f"gaps={context_counts.get('gaps', 0)} "
+        f"ideas={context_counts.get('ideas', 0)}"
+    )
+
+
+def _tool_status_from_live_status(live_status: str) -> str:
+    if live_status == "completed":
+        return "completed"
+    if live_status == "failed":
+        return "failed"
+    return "blocked"
 
 
 def _evaluate_case(

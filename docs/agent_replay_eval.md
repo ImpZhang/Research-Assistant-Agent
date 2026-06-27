@@ -11,6 +11,7 @@ The default replay path is deterministic and log-based:
 - It compares stored `expected_json` against stored or derived observed behavior.
 - It can write JSON or Markdown reports.
 - It does not call model providers, execute tools, or read secret files.
+- It only writes agent trace rows when `--record-run` is explicitly enabled.
 
 Opt-in live replay is available for bounded local executors:
 
@@ -19,6 +20,12 @@ Opt-in live replay is available for bounded local executors:
 - It does not call model providers, but it can refresh local `research_embeddings` rows in the selected SQLite database.
 - Advisor and SOTA-review workflow re-execution remain deferred until their replay policies are narrow enough to be deterministic and safe.
 
+Opt-in trace recording is also available:
+
+- `--record-run` persists the replay invocation as an `agent_replay` `AgentRun`.
+- When live executors run, each executor is recorded as a `ToolCallRecord`, such as `replay.context_search`.
+- Recorded replay runs store filter inputs, aggregate summary, per-case verdict rollups, latency, and redacted tool arguments/results.
+
 ## Command
 
 ```bash
@@ -26,6 +33,7 @@ python3 scripts/replay_agent_case.py --case-type bad_tool_selection --json
 python3 scripts/replay_agent_case.py --case-id <replay_case_id> --write-markdown outputs/replay/agent-replay.md
 python3 scripts/replay_agent_case.py --verdict needs_review --fail-on-regression
 python3 scripts/replay_agent_case.py --case-type context_search_miss --live-executors --json
+python3 scripts/replay_agent_case.py --case-type context_search_miss --live-executors --record-run --json
 ```
 
 Focused verification:
@@ -64,6 +72,8 @@ The script reports:
 
 The API endpoint `GET /research/agent/metrics` additionally summarizes replay verdict distribution alongside agent-run and tool-call metrics. Use `GET /research/agent/metrics/export/markdown` when a local handoff or interview demo needs a readable report.
 
+When `--record-run` is used, replay executions also contribute to `AgentRun` and `ToolCallRecord` observability. A replay run with any failed case is marked `failed`; a replay run with only pass or needs-review cases is marked `completed`.
+
 These are engineering regression metrics. They do not certify scientific SOTA, model quality, or benchmark superiority.
 
 ## Safety Rules
@@ -73,6 +83,7 @@ These are engineering regression metrics. They do not certify scientific SOTA, m
 - Prefer ids, counts, summaries, and redacted snippets over full documents.
 - Use `--fail-on-regression` in checks only when the fixture has deterministic expectations.
 - Treat `--live-executors` as a local integration check: it should run against fixtures or safe local data and can update local embedding-cache rows.
+- Use `--record-run` when the replay is part of an audit, release check, or regression investigation; leave it off for ad hoc dry runs.
 
 ## Next Steps
 

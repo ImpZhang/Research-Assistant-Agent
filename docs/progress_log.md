@@ -2,6 +2,27 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Replay Run Trace Recording
+
+Implementation completed:
+
+- Added opt-in `--record-run` support to `scripts/replay_agent_case.py`.
+- Persisted replay invocations as `agent_replay` `AgentRun` rows with filter inputs, aggregate summary, per-case verdict rollups, latency, and local script metadata.
+- Recorded live replay executors as `ToolCallRecord` rows, currently `replay.context_search`, including redacted arguments, result-count summaries, status, and replay verdict metadata.
+- Kept trace recording disabled by default so ad hoc deterministic replay remains report-only.
+- Extended the replay regression test to assert `agent_replay` and `replay.context_search` trace rows are created when `--record-run` is enabled.
+- Updated replay documentation, the agent strengthening plan, TODO, and README to describe the new audit path.
+
+Verification completed:
+
+- `.venv/bin/ruff check scripts/replay_agent_case.py tests/test_agent_replay_script.py` passed.
+- `.venv/bin/ruff format --check scripts/replay_agent_case.py tests/test_agent_replay_script.py` passed.
+- `.venv/bin/pytest -q tests/test_agent_replay_script.py` passed: `2 passed`.
+- `bash scripts/check_agent_replay.sh` passed: `2 passed`.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `2 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `15 passed`, backup/restore manifest/rehearsal tests `6 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `7 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Context Search Live Replay Executor
 
 Implementation completed:

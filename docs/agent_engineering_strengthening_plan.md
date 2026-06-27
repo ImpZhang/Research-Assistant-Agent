@@ -40,7 +40,7 @@ This is an intentional boundary. The current stable workflow should stay intact 
 
 Add durable trace tables before changing agent behavior.
 
-Initial status: the tables, service, create/read API, secret redaction, read-only tool-manifest entries, Advisor chat trace wiring, failed Advisor read-tool replay capture, and a local context-search live replay executor are implemented. The next step is extending replay workflow run creation and adding richer live replay executors for citation/SOTA cases.
+Initial status: the tables, service, create/read API, secret redaction, read-only tool-manifest entries, Advisor chat trace wiring, failed Advisor read-tool replay capture, opt-in replay-run trace recording, and a local context-search live replay executor are implemented. The next step is adding richer live replay executors for citation/SOTA cases.
 
 Proposed artifacts:
 
@@ -56,10 +56,11 @@ Suggested fields:
 
 Acceptance criteria:
 
-- Advisor chat can create an `AgentRun`; replay flows still need first-class run creation.
+- Advisor chat can create an `AgentRun`; replay flows can opt into first-class `agent_replay` run creation.
 - Every Advisor read-tool invocation records arguments, result summary, status, latency, and error state.
 - Failed Advisor read tools automatically create `advisor_tool_failure` replay cases with expected/observed tool state.
 - Context-search replay cases can opt into local live execution and assert required chunk/evidence/gap/idea ids without calling external model providers.
+- Live replay executors record tool-call rows under the replay run when `--record-run` is enabled.
 - Trace records never store secrets or raw provider credentials.
 - Tests prove failed tool calls are captured without breaking the whole request.
 
@@ -320,7 +321,7 @@ The personal local target should remain simple: clone, configure `.env`, run loc
 2. Completed: add Advisor trace creation without changing answer behavior.
 3. Completed: add bounded read-only Advisor tool calling.
 4. Completed: add project-local skill docs for the core workflows.
-5. Completed: add replay script, deterministic replay fixtures, and an opt-in local context-search live executor.
+5. Completed: add replay script, deterministic replay fixtures, opt-in replay-run trace recording, and an opt-in local context-search live executor.
 6. Completed: add one isolated LangGraph advisor deep-review workflow.
 7. Expand replay case memory, citation/SOTA live executors, guardrails, and aggregate observability metrics.
 
