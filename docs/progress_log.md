@@ -2,6 +2,26 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Project Skill Registry
+
+Implementation completed:
+
+- Added six project-local skills under `skills/*/SKILL.md`: `paper-ingestion`, `hybrid-context-search`, `literature-to-ideas`, `sota-review`, `benchmark-evaluation`, and `advisor-action-session`.
+- Added `docs/project_skill_registry.md` as the registry map for local operators and future agents.
+- Added `scripts/check_project_skills.sh` to validate required skill files, frontmatter names/descriptions, required instruction sections, registry links, and placeholder-free content.
+- Wired the project skill check into the default safe suite contract and README script catalog.
+- Updated TODO and the agent-engineering strengthening plan to mark the first skill registry slice as complete.
+
+Verification completed:
+
+- `bash scripts/check_project_skills.sh` passed.
+- `python3 /Users/zwz/.codex/skills/.system/skill-creator/scripts/quick_validate.py <skill-dir>` passed for all six skill directories.
+- `bash scripts/check_suite_contracts.sh` passed.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `git diff --check` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including project skill registry validation, local readiness, deployment/local doctor contracts `8 passed`, backup/restore manifest tests `3 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `5 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Advisor Chat Trace Wiring
 
 Implementation completed:

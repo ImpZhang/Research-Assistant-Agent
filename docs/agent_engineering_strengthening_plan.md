@@ -22,7 +22,7 @@ The project is not yet a full autonomous agent runtime:
 - The MCP surface is a lightweight bridge over FastAPI, not a full MCP SDK server with resources and prompts.
 - Advisor responses are still mostly deterministic composition over existing services, not an LLM-driven tool-calling loop.
 - Replay and LangGraph flows do not yet write trace records automatically.
-- There is no formal project-local skill registry such as `skills/*/SKILL.md`.
+- The project-local skill registry now covers core workflows under `skills/*/SKILL.md` and is validated by `scripts/check_project_skills.sh`.
 
 This is an intentional boundary. The current stable workflow should stay intact while the new agent layer is added incrementally.
 
@@ -102,16 +102,18 @@ Interview framing:
 
 Add a skill documentation layer over stable tools and workflows. This is not a runtime dependency at first; it is an operator and agent instruction layer.
 
+Initial status: the first project-local registry is implemented with six skills and a focused validation script.
+
 Proposed tree:
 
 ```text
 skills/
-  paper_ingestion/SKILL.md
-  hybrid_context_search/SKILL.md
-  literature_to_ideas/SKILL.md
-  sota_review/SKILL.md
-  benchmark_evaluation/SKILL.md
-  advisor_action_session/SKILL.md
+  paper-ingestion/SKILL.md
+  hybrid-context-search/SKILL.md
+  literature-to-ideas/SKILL.md
+  sota-review/SKILL.md
+  benchmark-evaluation/SKILL.md
+  advisor-action-session/SKILL.md
 ```
 
 Each `SKILL.md` should include:
@@ -307,7 +309,7 @@ The personal local target should remain simple: clone, configure `.env`, run loc
 1. Completed: add `AgentRun`, `ToolCallRecord`, and `ReplayCase` models plus read APIs.
 2. Completed: add Advisor trace creation without changing answer behavior.
 3. Add bounded read-only Advisor tool calling.
-4. Add project-local skill docs for the core workflows.
+4. Completed: add project-local skill docs for the core workflows.
 5. Add replay script and deterministic replay fixtures.
 6. Add one isolated LangGraph advisor deep-review workflow.
 7. Expand case memory, guardrails, and aggregate observability metrics.

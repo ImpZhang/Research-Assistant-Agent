@@ -150,6 +150,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Lightweight stdio MCP-to-HTTP bridge script for exposing the stable HTTP tools to MCP clients without extra SDK dependencies.
 - MCP bridge policy controls for read-only mode, allow/deny tool filters, API-key forwarding, project-scope header forwarding, request-id error correlation, and deployment health checks.
 - Agent trace foundation with persisted agent runs, tool-call records, replay cases, secret redaction, read-only tool-manifest access for trace inspection, and Advisor chat trace wiring for cockpit/context read calls.
+- Project-local skill registry under `skills/*/SKILL.md` for paper ingestion, hybrid context search, literature-to-ideas, SOTA review, benchmark evaluation, and Advisor action sessions, with `scripts/check_project_skills.sh` validation.
 - Research idea portfolio ranking with profile-aware weighting, lineage deduplication, claim validation result adjustments, and weighted score breakdowns.
 - Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
 - Markdown export for ranked idea portfolio reports.
@@ -206,6 +207,7 @@ scripts/
   check_pilot_operational_preflight.sh
   check_pilot_readiness.sh
   check_product_effect_smoke.sh
+  check_project_skills.sh
   check_project_delivery_loop.sh
   check_remote_long_suite.sh
   check_remote_safe_suite.sh
@@ -367,6 +369,12 @@ Run the focused-test coverage map check so new pytest tests stay assigned to a f
 
 ```bash
 bash scripts/check_focused_test_coverage.sh
+```
+
+Run the project-local skill registry check so every required `skills/*/SKILL.md` file stays usable:
+
+```bash
+bash scripts/check_project_skills.sh
 ```
 
 Run focused deployment artifact and local runtime contract checks without starting a service:

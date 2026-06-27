@@ -33,6 +33,7 @@ This document is the starting point for future development. Use it to find the r
 | `docs/workflow_queue_design.md` | Queue, job, and workflow execution design. |
 | `docs/graphrag_langgraph_deerflow_evaluation.md` | GraphRAG, LangGraph, DeerFlow comparison and integration evaluation. |
 | `docs/model_provider_strategy.md` | Chat, embedding, rerank, provider, and test-safety strategy. |
+| `docs/project_skill_registry.md` | Project-local skill registry for paper ingestion, context search, workflows, SOTA review, benchmarks, and Advisor action sessions. |
 | `docs/real_paper_evaluation_report.md` | Real-provider, real-PDF geolocalization evaluation metrics and remaining local-product blockers. |
 
 ## Operations And Deployment
