@@ -175,6 +175,15 @@ python3 scripts/build_local_backup_manifest.py --write-json outputs/backups/loca
 
 The manifest is read-only and aggregate-only: it counts files and bytes for `data/research`, `data/papers`, `data/audit`, `data/benchmarks`, `outputs`, and the ignored local benchmark profile manifest without listing private paper filenames, reading file contents, or including `.env` secrets.
 
+Before changing backup/restore code or packaging instructions, run the synthetic local backup/restore rehearsal:
+
+```bash
+python3 scripts/rehearse_local_backup_restore.py
+python3 scripts/rehearse_local_backup_restore.py --markdown --write-markdown outputs/restore-rehearsals/rehearsal.md
+```
+
+The rehearsal creates temporary synthetic data under project-local scratch space, archives the configured backup sets, restores them into a temporary project root, compares aggregate manifests, and verifies secret-like files are not copied. It does not copy live local papers, live SQLite data, `.env` files, API keys, cookies, private keys, or provider credentials. A successful rehearsal proves the mechanics are sane; it is not a live backup and does not replace operator-reviewed cold-backup or restore approval.
+
 Before SQLite troubleshooting or approved maintenance, build a read-only database report:
 
 ```bash

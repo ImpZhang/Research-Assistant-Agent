@@ -74,6 +74,15 @@ python3 scripts/build_local_backup_manifest.py
 
 The manifest is read-only. It reports backup-set counts and sizes without listing private paper filenames or including `.env` secrets.
 
+Run the synthetic local backup/restore rehearsal before changing backup or restore behavior:
+
+```bash
+python3 scripts/rehearse_local_backup_restore.py
+python3 scripts/rehearse_local_backup_restore.py --markdown --write-markdown outputs/restore-rehearsals/rehearsal.md
+```
+
+The rehearsal uses temporary synthetic data under project-local scratch space, archives the configured backup sets, restores into a temporary project root, compares aggregate manifests, and confirms secret-like files are not copied. It does not copy live local papers, live SQLite data, `.env` files, API keys, cookies, or provider credentials.
+
 Before SQLite troubleshooting or approved maintenance, build a read-only maintenance report:
 
 ```bash

@@ -2,6 +2,21 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - Synthetic Backup Restore Rehearsal
+
+Implementation completed:
+
+- Added `scripts/rehearse_local_backup_restore.py` to run a synthetic-only local backup/restore rehearsal with archive creation, temporary restore, aggregate manifest comparison, and secret-exclusion checks.
+- Added regression tests covering successful synthetic rehearsal, project-local JSON/Markdown reports, and rejection of report paths outside the project root.
+- Wired the rehearsal into backup/restore focused contracts and documented it in README, local isolation, deployment notes, documentation index, and TODO.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_local_backup_restore_rehearsal.py` passed: `3 passed`.
+- `python3 scripts/rehearse_local_backup_restore.py --json` passed on the local checkout with synthetic-only mode, matching source/restored manifests, `.env` excluded, and no secret-copy violations.
+- `bash scripts/check_backup_restore_contracts.sh` passed: manifest/rehearsal tests `6 passed` plus backup/restore contract validation.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `1 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `12 passed`, backup/restore manifest/rehearsal tests `6 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `5 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - SQLite Maintenance Report
 
 Implementation completed:

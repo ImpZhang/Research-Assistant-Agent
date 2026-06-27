@@ -21,6 +21,7 @@ This document is the starting point for future development. Use it to find the r
 | `scripts/check_local_safe_suite.sh` | Default local focused verification suite. | Before pushing a completed implementation round. |
 | `scripts/check_model_provider_config.py` | No-network model-provider environment readiness check that does not print secrets. | Before running the opt-in real-provider smoke or diagnosing local model setup. |
 | `scripts/build_local_backup_manifest.py` | Read-only aggregate manifest for local data backup scope, counts, sizes, and excluded secret files. | Before backing up or moving a local checkout's data. |
+| `scripts/rehearse_local_backup_restore.py` | Synthetic backup/restore rehearsal that validates archive, restore, manifest comparison, and secret-exclusion logic without copying live local data. | Before changing backup, restore, packaging, or local handoff behavior. |
 | `scripts/check_sqlite_maintenance.py` | Read-only SQLite maintenance report for database size, sidecars, table counts, vector-index counts, trace counts, and safe recommendations. | Before SQLite troubleshooting, approved maintenance, or local handoff. |
 
 ## Product And Architecture

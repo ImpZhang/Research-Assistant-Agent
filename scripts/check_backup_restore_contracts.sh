@@ -3,9 +3,17 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-.venv/bin/ruff check scripts/build_local_backup_manifest.py tests/test_local_backup_manifest.py
-.venv/bin/ruff format --check scripts/build_local_backup_manifest.py tests/test_local_backup_manifest.py
-.venv/bin/pytest -q tests/test_local_backup_manifest.py
+.venv/bin/ruff check \
+  scripts/build_local_backup_manifest.py \
+  scripts/rehearse_local_backup_restore.py \
+  tests/test_local_backup_manifest.py \
+  tests/test_local_backup_restore_rehearsal.py
+.venv/bin/ruff format --check \
+  scripts/build_local_backup_manifest.py \
+  scripts/rehearse_local_backup_restore.py \
+  tests/test_local_backup_manifest.py \
+  tests/test_local_backup_restore_rehearsal.py
+.venv/bin/pytest -q tests/test_local_backup_manifest.py tests/test_local_backup_restore_rehearsal.py
 
 python3 - <<'PYIN'
 from pathlib import Path
@@ -41,7 +49,9 @@ require_tokens(
     [
         "Backup And Restore Notes",
         "python3 scripts/build_local_backup_manifest.py",
+        "python3 scripts/rehearse_local_backup_restore.py",
         "The manifest is read-only and aggregate-only",
+        "synthetic local backup/restore rehearsal",
         "Back up this data before rebuilds, host moves, database migrations, or destructive maintenance.",
         "Keep `.env`, API keys, cookies, private keys, and provider credentials in a separate secret manager or operator vault.",
         "Cold backup is the preferred local path",

@@ -414,6 +414,13 @@ python3 scripts/build_local_backup_manifest.py
 python3 scripts/build_local_backup_manifest.py --write-json outputs/backups/local-backup-manifest.json
 ```
 
+Run the synthetic backup/restore rehearsal to validate archive, restore, manifest comparison, and secret-exclusion logic without copying live local papers or live SQLite data:
+
+```bash
+python3 scripts/rehearse_local_backup_restore.py
+python3 scripts/rehearse_local_backup_restore.py --markdown --write-markdown outputs/restore-rehearsals/rehearsal.md
+```
+
 Build a read-only SQLite maintenance report before database maintenance or troubleshooting. This reports aggregate table, vector-index, trace, storage, sidecar, and quick-check status without reading `.env` or private paper content:
 
 ```bash
