@@ -19,8 +19,10 @@ Opt-in live replay is available for bounded local executors:
 - The context-search executor re-runs `RetrievalService.search_context` with forced local hash embedding and disabled external rerank.
 - `--live-executors` also supports `citation_audit`, `citation_mismatch`, and `missing_citation` replay cases.
 - The citation-audit executor checks observed `cited_evidence_ids` against local `Evidence` rows, optional `paper_ids`, and optional required citation terms.
+- `--live-executors` also supports `sota_readiness`, `sota_readiness_false_positive`, and `sota_signoff_audit` replay cases.
+- The SOTA-readiness executor audits local `sota_signoff_record` briefs for signoff status, manual gate readiness, external-search completion, nearest-work count, benchmark-run count, benchmark evidence readiness, and blockers.
 - It does not call model providers, but it can refresh local `research_embeddings` rows in the selected SQLite database.
-- Advisor and SOTA-review workflow re-execution remain deferred until their replay policies are narrow enough to be deterministic and safe.
+- Full Advisor and SOTA-review workflow re-execution remain deferred until their replay policies are narrow enough to be deterministic and safe.
 
 Opt-in trace recording is also available:
 
@@ -37,6 +39,7 @@ python3 scripts/replay_agent_case.py --verdict needs_review --fail-on-regression
 python3 scripts/replay_agent_case.py --case-type context_search_miss --live-executors --json
 python3 scripts/replay_agent_case.py --case-type context_search_miss --live-executors --record-run --json
 python3 scripts/replay_agent_case.py --case-type citation_audit --live-executors --record-run --json
+python3 scripts/replay_agent_case.py --case-type sota_readiness_false_positive --live-executors --record-run --json
 ```
 
 Focused verification:
@@ -64,6 +67,11 @@ bash scripts/check_agent_replay.sh
 - `cited_evidence_ids`: evidence ids to audit when not supplied by `observed_json`.
 - `required_citation_terms`: terms that must appear in each audited evidence record.
 - `min_citation_count`, `max_missing_citation_count`, `max_wrong_paper_citation_count`, `max_citation_term_miss_count`: citation-audit thresholds.
+- `idea_id`, `sota_signoff_id` or `signoff_id`: identify the SOTA signoff to audit. If no signoff id is supplied, the latest local signoff for `idea_id` is used.
+- `sota_signoff_status` or `signoff_status`: expected signoff status, such as `sota_confirmed`.
+- `require_ready_for_sota_claim`, `require_effective_external_search_completed`, `require_benchmark_evidence_ready`: boolean readiness gates.
+- `min_nearest_work_count`, `min_benchmark_run_count`, `max_sota_blocker_count`: SOTA-readiness count thresholds.
+- `required_sota_blockers`, `forbidden_sota_blockers`: expected blocker membership checks.
 - Other simple key/value pairs: compared directly against observed or derived fields.
 
 If `expected_json` is empty, the replay verdict is `needs_review`.
@@ -96,5 +104,5 @@ These are engineering regression metrics. They do not certify scientific SOTA, m
 ## Next Steps
 
 - Add replay case creators for missing citations and SOTA-readiness false positives.
-- Extend live replay executors beyond context search/citation audit after bounded Advisor/SOTA policies exist.
+- Extend live replay executors beyond context search/citation/SOTA audit after bounded Advisor policies exist.
 - Add aggregate replay metrics to the local observability report.

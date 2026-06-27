@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.research.db import SessionLocal
-from backend.research.models import AgentRun, Evidence, ReplayCase, ToolCallRecord
+from backend.research.models import AgentRun, Evidence, ReplayCase, ResearchBrief, ToolCallRecord
 from backend.research.schemas import AgentRunCreate, ToolCallRecordCreate
 from backend.research.services.agent_trace_service import AgentTraceService
 from backend.research.services.embedding_service import EmbeddingService
@@ -211,6 +211,7 @@ def _record_replay_tool_calls(
         live_status = str(evaluation.observed.get("live_status") or "")
         context_counts = evaluation.observed.get("context_counts") or {}
         citation_counts = evaluation.observed.get("citation_counts") or {}
+        sota_counts = evaluation.observed.get("sota_counts") or {}
         trace_service.create_tool_call(
             run_id,
             ToolCallRecordCreate(
@@ -227,6 +228,8 @@ def _record_replay_tool_calls(
                     live_status,
                     context_counts,
                     citation_counts,
+                    sota_counts,
+                    evaluation.observed,
                 ),
                 status=_tool_status_from_live_status(live_status),
                 error=str(evaluation.observed.get("live_error") or ""),
@@ -267,7 +270,18 @@ def _replay_tool_summary(
     live_status: str,
     context_counts: dict[str, Any],
     citation_counts: dict[str, Any],
+    sota_counts: dict[str, Any],
+    observed: dict[str, Any],
 ) -> str:
+    if sota_counts:
+        return (
+            f"live_status={live_status or 'unknown'} "
+            f"signoff_status={observed.get('signoff_status', '')} "
+            f"ready={observed.get('ready_for_sota_claim', False)} "
+            f"blockers={sota_counts.get('blockers', 0)} "
+            f"nearest_work={sota_counts.get('nearest_work', 0)} "
+            f"benchmark_runs={sota_counts.get('benchmark_runs', 0)}"
+        )
     if citation_counts:
         return (
             f"live_status={live_status or 'unknown'} "
@@ -372,6 +386,12 @@ def _execute_live_replay(
         return _execute_context_search_replay(session, replay_case, expected)
     if replay_case.case_type in {"citation_audit", "citation_mismatch", "missing_citation"}:
         return _execute_citation_audit_replay(session, replay_case, expected, observed)
+    if replay_case.case_type in {
+        "sota_readiness",
+        "sota_readiness_false_positive",
+        "sota_signoff_audit",
+    }:
+        return _execute_sota_readiness_replay(session, replay_case, expected, observed)
     return {}
 
 
@@ -546,6 +566,101 @@ def _missing_citation_terms(evidence: Evidence, required_terms: list[str]) -> li
     return [term for term in required_terms if term.lower() not in text]
 
 
+def _execute_sota_readiness_replay(
+    session,
+    replay_case: ReplayCase,
+    expected: dict[str, Any],
+    observed: dict[str, Any],
+) -> dict[str, Any]:
+    metadata = replay_case.metadata_json or {}
+    idea_id = str(
+        expected.get("idea_id") or observed.get("idea_id") or metadata.get("idea_id") or ""
+    )
+    signoff_id = str(
+        expected.get("sota_signoff_id")
+        or expected.get("signoff_id")
+        or observed.get("sota_signoff_id")
+        or observed.get("signoff_id")
+        or metadata.get("sota_signoff_id")
+        or metadata.get("signoff_id")
+        or ""
+    )
+    signoff = _load_sota_signoff(session, idea_id=idea_id, signoff_id=signoff_id)
+    if signoff is None:
+        return {
+            "live_executor": "sota_readiness_audit",
+            "live_status": "failed",
+            "live_error": "sota signoff not found",
+            "idea_id": idea_id,
+            "sota_signoff_id": signoff_id,
+        }
+
+    summary = signoff.summary_json or {}
+    manual_gate = summary.get("manual_gate_summary") or {}
+    benchmark_readiness = summary.get("benchmark_evidence_readiness") or {}
+    blockers = _clean_str_list(manual_gate.get("blockers"))
+    nearest_work = summary.get("nearest_work") or []
+    benchmark_run_ids = _clean_str_list(summary.get("benchmark_run_ids"))
+    return {
+        "live_executor": "sota_readiness_audit",
+        "live_status": "completed",
+        "idea_id": summary.get("idea_id") or (signoff.idea_ids_json or [""])[0],
+        "sota_signoff_id": signoff.id,
+        "review_package_id": summary.get("review_package_id", ""),
+        "external_search_evidence_id": summary.get("external_search_evidence_id", ""),
+        "decision": summary.get("decision", ""),
+        "signoff_status": summary.get("signoff_status", ""),
+        "ready_for_sota_claim": bool(manual_gate.get("ready_for_sota_claim", False)),
+        "requires_human_review": bool(manual_gate.get("requires_human_review", False)),
+        "effective_external_search_completed": bool(
+            summary.get("effective_external_search_completed", False)
+        ),
+        "external_search_status": summary.get("external_search_status", ""),
+        "benchmark_evidence_ready": bool(
+            manual_gate.get("benchmark_evidence_ready_for_sota_review", False)
+        ),
+        "benchmark_evidence_readiness_status": manual_gate.get(
+            "benchmark_evidence_readiness_status",
+            benchmark_readiness.get("readiness_status", ""),
+        ),
+        "sota_blockers": blockers,
+        "nearest_work_count": len(nearest_work),
+        "benchmark_run_count": len(benchmark_run_ids),
+        "sota_counts": {
+            "blockers": len(blockers),
+            "nearest_work": len(nearest_work),
+            "benchmark_runs": len(benchmark_run_ids),
+        },
+    }
+
+
+def _load_sota_signoff(
+    session,
+    *,
+    idea_id: str,
+    signoff_id: str,
+) -> ResearchBrief | None:
+    if signoff_id:
+        signoff = session.get(ResearchBrief, signoff_id)
+        if signoff is None or signoff.scope != "sota_signoff_record":
+            return None
+        if idea_id and idea_id not in (signoff.idea_ids_json or []):
+            return None
+        return signoff
+
+    candidates = (
+        session.query(ResearchBrief)
+        .filter(ResearchBrief.scope == "sota_signoff_record")
+        .order_by(ResearchBrief.created_at.desc())
+        .limit(300)
+        .all()
+    )
+    for signoff in candidates:
+        if not idea_id or idea_id in (signoff.idea_ids_json or []):
+            return signoff
+    return None
+
+
 def _evaluate_expectations(
     expected: dict[str, Any],
     observed: dict[str, Any],
@@ -679,6 +794,61 @@ def _evaluate_expectations(
         expected.get("max_citation_term_miss_count"),
         citation_counts.get("term_miss", len(observed.get("citation_term_misses") or {})),
     )
+    expected_sota_status = expected.get("sota_signoff_status") or expected.get("signoff_status")
+    if expected_sota_status and observed.get("signoff_status") != expected_sota_status:
+        failures.append(
+            f"Expected SOTA signoff_status `{expected_sota_status}` "
+            f"but observed `{observed.get('signoff_status')}`."
+        )
+    _append_bool_expectation(
+        failures,
+        "ready_for_sota_claim",
+        expected.get("require_ready_for_sota_claim"),
+        observed.get("ready_for_sota_claim"),
+    )
+    _append_bool_expectation(
+        failures,
+        "effective_external_search_completed",
+        expected.get("require_effective_external_search_completed"),
+        observed.get("effective_external_search_completed"),
+    )
+    _append_bool_expectation(
+        failures,
+        "benchmark_evidence_ready",
+        expected.get("require_benchmark_evidence_ready"),
+        observed.get("benchmark_evidence_ready"),
+    )
+    sota_counts = observed.get("sota_counts") or {}
+    _append_min_count_failure(
+        failures,
+        "nearest-work",
+        expected.get("min_nearest_work_count"),
+        sota_counts.get("nearest_work", observed.get("nearest_work_count", 0)),
+    )
+    _append_min_count_failure(
+        failures,
+        "benchmark-run",
+        expected.get("min_benchmark_run_count"),
+        sota_counts.get("benchmark_runs", observed.get("benchmark_run_count", 0)),
+    )
+    _append_max_count_failure(
+        failures,
+        "SOTA blocker",
+        expected.get("max_sota_blocker_count"),
+        sota_counts.get("blockers", len(_as_list(observed.get("sota_blockers")))),
+    )
+    _append_required_values(
+        failures,
+        "SOTA blocker",
+        expected.get("required_sota_blockers"),
+        observed.get("sota_blockers"),
+    )
+    _append_forbidden_ids(
+        failures,
+        "SOTA blocker",
+        expected.get("forbidden_sota_blockers"),
+        observed.get("sota_blockers"),
+    )
 
     for required_text in _as_list(expected.get("must_contain")):
         if str(required_text).lower() not in text_blob:
@@ -715,6 +885,14 @@ def _evaluate_expectations(
         "forbidden_cited_evidence_ids",
         "cited_evidence_ids",
         "required_citation_terms",
+        "idea_id",
+        "sota_signoff_id",
+        "signoff_id",
+        "sota_signoff_status",
+        "signoff_status",
+        "require_ready_for_sota_claim",
+        "require_effective_external_search_completed",
+        "require_benchmark_evidence_ready",
         "min_chunk_count",
         "min_evidence_count",
         "min_gap_count",
@@ -723,6 +901,11 @@ def _evaluate_expectations(
         "max_missing_citation_count",
         "max_wrong_paper_citation_count",
         "max_citation_term_miss_count",
+        "min_nearest_work_count",
+        "min_benchmark_run_count",
+        "max_sota_blocker_count",
+        "required_sota_blockers",
+        "forbidden_sota_blockers",
     }
     for key, expected_value in expected.items():
         if key in special_keys:
@@ -766,6 +949,21 @@ def _append_forbidden_ids(
         failures.append(f"Forbidden {label} ids were observed: {', '.join(used)}.")
 
 
+def _append_required_values(
+    failures: list[str],
+    label: str,
+    expected_values: Any,
+    observed_values: Any,
+) -> None:
+    required = {str(item) for item in _as_list(expected_values)}
+    if not required:
+        return
+    observed = {str(item) for item in _as_list(observed_values)}
+    missing = sorted(required - observed)
+    if missing:
+        failures.append(f"Missing required {label} values: {', '.join(missing)}.")
+
+
 def _append_min_count_failure(
     failures: list[str],
     label: str,
@@ -798,6 +996,20 @@ def _append_max_count_failure(
         observed_int = 0
     if observed_int > maximum:
         failures.append(f"Expected at most {maximum} {label} results but observed {observed_int}.")
+
+
+def _append_bool_expectation(
+    failures: list[str],
+    label: str,
+    expected_value: Any,
+    observed_value: Any,
+) -> None:
+    if expected_value is None:
+        return
+    expected_bool = _as_bool(expected_value)
+    observed_bool = bool(observed_value)
+    if observed_bool != expected_bool:
+        failures.append(f"Expected {label} `{expected_bool}` but observed `{observed_bool}`.")
 
 
 def _verdict_from_reasons(expected: dict[str, Any], reasons: list[str]) -> str:

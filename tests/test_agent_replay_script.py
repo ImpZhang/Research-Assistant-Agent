@@ -394,3 +394,167 @@ with SessionLocal() as session:
     assert trace_payload["run_status"] == "completed"
     assert trace_payload["tool_names"] == ["replay.citation_audit"]
     assert "cited=1" in trace_payload["tool_summaries"][0]
+
+
+def test_replay_agent_case_sota_readiness_false_positive_fails(tmp_path: Path) -> None:
+    database_path = tmp_path / "replay-sota.db"
+    env = {
+        **os.environ,
+        "RESEARCH_DB_URL": f"sqlite:///{database_path}",
+        "PYTHONPATH": str(Path.cwd()),
+    }
+    fixture = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+from backend.research.db import SessionLocal, init_db
+from backend.research.models import Idea, ResearchBrief
+from backend.research.schemas import ReplayCaseCreate
+from backend.research.services.agent_trace_service import AgentTraceService
+
+init_db()
+with SessionLocal() as session:
+    idea = Idea(
+        title="SOTA readiness false positive fixture",
+        research_question="Can replay catch premature SOTA signoff?",
+        core_hypothesis="Manual gates should block unsupported SOTA claims.",
+        method_sketch="Audit signoff evidence readiness.",
+        novelty_argument="Requires benchmark and nearest-work closure.",
+    )
+    session.add(idea)
+    session.flush()
+    signoff = ResearchBrief(
+        title="SOTA Signoff - false positive fixture",
+        scope="sota_signoff_record",
+        idea_ids_json=[idea.id],
+        summary_json={
+            "idea_id": idea.id,
+            "decision": "confirmed_novel",
+            "signoff_status": "sota_confirmed",
+            "effective_external_search_completed": True,
+            "external_search_status": "external_completed",
+            "nearest_work": [{"title": "Nearest Work", "year": 2026}],
+            "benchmark_run_ids": [],
+            "benchmark_evidence_readiness": {
+                "ready_for_sota_review": False,
+                "readiness_status": "needs_benchmark_evidence",
+            },
+            "manual_gate_summary": {
+                "ready_for_sota_claim": False,
+                "requires_human_review": False,
+                "blockers": ["benchmark_evidence_not_ready"],
+                "nearest_work_count": 1,
+                "benchmark_run_count": 0,
+                "benchmark_evidence_ready_for_sota_review": False,
+                "benchmark_evidence_readiness_status": "needs_benchmark_evidence",
+            },
+        },
+        markdown_export="# SOTA Signoff Record",
+        created_by="pytest",
+    )
+    session.add(signoff)
+    session.flush()
+    replay_case = AgentTraceService(session).create_replay_case(
+        ReplayCaseCreate(
+            case_type="sota_readiness_false_positive",
+            query="Should this premature SOTA signoff be treated as ready?",
+            expected={
+                "idea_id": idea.id,
+                "sota_signoff_id": signoff.id,
+                "signoff_status": "sota_confirmed",
+                "require_ready_for_sota_claim": True,
+                "require_effective_external_search_completed": True,
+                "require_benchmark_evidence_ready": True,
+                "min_nearest_work_count": 1,
+                "min_benchmark_run_count": 1,
+                "max_sota_blocker_count": 0,
+                "live_status": "completed",
+            },
+            verdict="needs_review",
+        )
+    )
+    print(replay_case.id)
+""",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    case_id = fixture.stdout.strip()
+
+    replay = subprocess.run(
+        [
+            sys.executable,
+            "scripts/replay_agent_case.py",
+            "--case-id",
+            case_id,
+            "--live-executors",
+            "--record-run",
+            "--json",
+            "--fail-on-regression",
+        ],
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    payload = json.loads(replay.stdout)
+    case = payload["cases"][0]
+
+    assert replay.returncode == 1
+    assert payload["summary"]["case_count"] == 1
+    assert payload["summary"]["passed"] == 0
+    assert payload["summary"]["failed"] == 1
+    assert case["replay_verdict"] == "fail"
+    assert case["observed"]["live_executor"] == "sota_readiness_audit"
+    assert case["observed"]["ready_for_sota_claim"] is False
+    assert case["observed"]["sota_counts"]["blockers"] == 1
+    assert any("ready_for_sota_claim" in reason for reason in case["reasons"])
+    assert any("benchmark-run" in reason for reason in case["reasons"])
+
+    trace_probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import json
+
+from backend.research.db import SessionLocal
+from backend.research.models import AgentRun, ToolCallRecord
+
+with SessionLocal() as session:
+    run = (
+        session.query(AgentRun)
+        .filter(AgentRun.run_type == "agent_replay")
+        .order_by(AgentRun.created_at.desc())
+        .first()
+    )
+    records = (
+        session.query(ToolCallRecord)
+        .filter(ToolCallRecord.agent_run_id == run.id)
+        .order_by(ToolCallRecord.created_at.asc())
+        .all()
+    )
+    print(
+        json.dumps(
+            {
+                "run_status": run.status,
+                "tool_names": [record.tool_name for record in records],
+                "tool_summaries": [record.tool_result_summary for record in records],
+            },
+            sort_keys=True,
+        )
+    )
+""",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    trace_payload = json.loads(trace_probe.stdout)
+
+    assert trace_payload["run_status"] == "failed"
+    assert trace_payload["tool_names"] == ["replay.sota_readiness_audit"]
+    assert "ready=False" in trace_payload["tool_summaries"][0]

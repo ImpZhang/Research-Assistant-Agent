@@ -2,6 +2,27 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-27 - SOTA Readiness Live Replay Executor
+
+Implementation completed:
+
+- Added a local `sota_readiness_audit` live replay executor for `sota_readiness`, `sota_readiness_false_positive`, and `sota_signoff_audit` replay cases.
+- Audited local `sota_signoff_record` briefs for signoff status, manual gate readiness, external-search completion, nearest-work count, benchmark-run count, benchmark evidence readiness, and blockers.
+- Added expectations for signoff status, ready-for-SOTA-claim, effective external-search completion, benchmark evidence readiness, nearest-work count, benchmark-run count, blocker count, and required/forbidden blockers.
+- Updated `--record-run` tool summaries so `replay.sota_readiness_audit` records signoff status, readiness, blocker count, nearest-work count, and benchmark-run count.
+- Added a regression test that creates a deliberate SOTA false positive where `signoff_status=sota_confirmed` but manual gate readiness is false; replay now fails it and records the failed replay run.
+- Updated replay documentation, the agent strengthening plan, TODO, and README to describe SOTA-readiness live replay.
+
+Verification completed:
+
+- `.venv/bin/ruff check scripts/replay_agent_case.py tests/test_agent_replay_script.py` passed.
+- `.venv/bin/pytest -q tests/test_agent_replay_script.py` passed: `4 passed`.
+- `bash scripts/check_agent_replay.sh` passed: `4 passed`.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_context_search_evaluations.sh` passed: `42 passed`.
+- `bash scripts/check_local_safe_suite.sh` passed, including agent replay `4 passed`, project skill registry validation, local readiness, deployment/local doctor contracts `15 passed`, backup/restore manifest/rehearsal tests `6 passed`, workflow primitives `54 passed`, research planning `3 passed`, write audit `7 passed`, workflow job controls `7 passed`, tool bridge `12 passed`, GraphRAG-lite `4 passed`, and context search/evaluation `42 passed`.
+
 ## 2026-06-27 - Citation Audit Live Replay Executor
 
 Implementation completed:
