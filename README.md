@@ -454,6 +454,15 @@ python3 scripts/prepare_local_geoloc_benchmark.py --write-example --write-profil
 python3 scripts/prepare_local_geoloc_benchmark.py --require-runnable
 ```
 
+Run the local geolocalization prediction pipeline to turn project-local ground-truth and prediction JSONL files into JSON/Markdown benchmark reports:
+
+```bash
+python3 scripts/run_geoloc_benchmark_pipeline.py --json
+python3 scripts/run_geoloc_benchmark_pipeline.py \
+  --write-json outputs/benchmark-runs/geoloc/pipeline.json \
+  --write-markdown outputs/benchmark-runs/geoloc/pipeline.md
+```
+
 Run an opt-in real-provider smoke and real-paper PDF evaluation from a configured local environment:
 
 ```bash
@@ -796,7 +805,7 @@ For long literature-to-ideas jobs that should run outside the API process, set `
 .venv/bin/python scripts/run_workflow_worker.py --poll-interval-seconds 2
 ```
 
-Use `--once` for a one-job diagnostic run. The worker claims `pending` jobs from SQLite, writes lease/heartbeat metadata into the job output, and preserves the existing `GET /research/jobs/{job_id}` polling and artifact endpoints.
+Use `--once` for a one-job diagnostic run. The worker claims `pending` jobs from SQLite, writes lease/heartbeat metadata into the job output, can requeue stale leases through `--stale-lease-seconds`, can queue bounded failed-job retries through `--max-auto-retries`, and preserves the existing `GET /research/jobs/{job_id}` polling and artifact endpoints.
 
 For optional single-user Docker use, set a local `API_KEY` in `.env` and run Docker only after explicit operator approval:
 
@@ -810,9 +819,9 @@ See `docs/deployment.md` for the runtime contract, local deployment checklist, `
 
 - Polish the clone-to-run local setup path, local preflight, and `.env.example` guidance.
 - Add real-provider smoke tests, batch embedding, page-image retrieval, and retrieval-mode evaluation fixtures.
-- Add practical local benchmark recipes and prediction-generation pipelines for geolocalization evaluation.
+- Extend real geolocalization benchmark datasets and prediction-generation recipes beyond the current JSONL pipeline.
 - Add fully automated current-SOTA closure on top of manual SOTA review packages and external novelty search adapters.
-- Add richer retry policies, stale-lease recovery, and resumable workflow checkpoints for long runs.
+- Add resumable workflow checkpoints for long runs.
 - Expand the research Workbench into a full single-researcher review/edit loop.
 - Harden optional local auth, backup/export, and richer binary artifact handling around the lightweight MCP bridge.
 

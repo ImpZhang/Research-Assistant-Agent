@@ -12,10 +12,27 @@ from typing import Any
 def main() -> int:
     args = parse_args()
     ground_truth = load_records(args.ground_truth)
-    predictions = {record_id(record): record for record in load_records(args.predictions)}
-    if not ground_truth:
-        raise SystemExit("ground truth file contains no records")
+    predictions = load_records(args.predictions)
+    output = evaluate_predictions(
+        ground_truth=ground_truth,
+        predictions=predictions,
+        baseline_country_accuracy=args.baseline_country_accuracy,
+        baseline_mean_geodesic_km=args.baseline_mean_geodesic_km,
+    )
+    print(json.dumps(output, ensure_ascii=False, sort_keys=True))
+    return 0
 
+
+def evaluate_predictions(
+    *,
+    ground_truth: list[dict[str, Any]],
+    predictions: list[dict[str, Any]],
+    baseline_country_accuracy: float | None = None,
+    baseline_mean_geodesic_km: float | None = None,
+) -> dict[str, Any]:
+    predictions_by_id = {record_id(record): record for record in predictions}
+    if not ground_truth:
+        raise ValueError("ground truth file contains no records")
     correct_country = 0
     matched_predictions = 0
     distances_km: list[float] = []
@@ -23,7 +40,7 @@ def main() -> int:
 
     for truth in ground_truth:
         truth_id = record_id(truth)
-        prediction = predictions.get(truth_id)
+        prediction = predictions_by_id.get(truth_id)
         if prediction is None:
             missing_prediction_ids.append(truth_id)
             continue
@@ -39,7 +56,7 @@ def main() -> int:
     metrics: dict[str, Any] = {
         "country_accuracy": metric_payload(
             value=country_accuracy,
-            baseline=args.baseline_country_accuracy,
+            baseline=baseline_country_accuracy,
             direction="higher_is_better",
             extra={
                 "correct": correct_country,
@@ -54,7 +71,7 @@ def main() -> int:
         median_distance = round(float(median(distances_km)), 6)
         metrics["mean_geodesic_km"] = metric_payload(
             value=mean_distance,
-            baseline=args.baseline_mean_geodesic_km,
+            baseline=baseline_mean_geodesic_km,
             direction="lower_is_better",
             extra={"evaluated_pairs": len(distances_km)},
         )
@@ -68,14 +85,13 @@ def main() -> int:
         "metrics": metrics,
         "summary": {
             "ground_truth_records": total,
-            "prediction_records": len(predictions),
+            "prediction_records": len(predictions_by_id),
             "matched_predictions": matched_predictions,
             "missing_predictions": len(missing_prediction_ids),
             "missing_prediction_ids": missing_prediction_ids[:20],
         },
     }
-    print(json.dumps(output, ensure_ascii=False, sort_keys=True))
-    return 0
+    return output
 
 
 def parse_args() -> argparse.Namespace:

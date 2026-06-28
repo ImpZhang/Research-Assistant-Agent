@@ -21,12 +21,18 @@ Until migration tooling is added, schema changes that affect existing local data
 
 ## Migration Tooling Direction
 
-Recommended future path: Alembic, introduced in a separate implementation slice after operator approval.
+Recommended future path: Alembic, introduced in a separate implementation slice after operator approval. The current repository now includes an Alembic-style staging baseline without adding Alembic as a dependency or running migrations.
+
+Current baseline guardrails:
+
+- `migrations/baseline_schema.json` records the current SQLAlchemy metadata table count, table list, and deterministic schema hash.
+- `scripts/check_migration_baseline.py` compares current model metadata against that baseline.
+- The check does not connect to the local database, read `.env`, run migrations, or modify data.
 
 Expected shape:
 
 - Add Alembic as a development dependency only when dependency sync is intentionally approved.
-- Create `migrations/` with versioned migration files reviewed like application code.
+- Extend `migrations/` with versioned migration files reviewed like application code.
 - Configure Alembic to read `RESEARCH_DB_URL` and import `backend.research.models` metadata.
 - Keep migration commands explicit, never implicit on FastAPI startup.
 - Add a dry-run or current-head check to deployment verification before applying migrations.

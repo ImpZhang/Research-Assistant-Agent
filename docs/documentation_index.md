@@ -24,6 +24,7 @@ This document is the starting point for future development. Use it to find the r
 | `scripts/build_local_backup_manifest.py` | Read-only aggregate manifest for local data backup scope, counts, sizes, and excluded secret files. | Before backing up or moving a local checkout's data. |
 | `scripts/rehearse_local_backup_restore.py` | Synthetic backup/restore rehearsal that validates archive, restore, manifest comparison, and secret-exclusion logic without copying live local data. | Before changing backup, restore, packaging, or local handoff behavior. |
 | `scripts/check_sqlite_maintenance.py` | Read-only SQLite maintenance report for database size, sidecars, table counts, vector-index counts, trace counts, and safe recommendations. | Before SQLite troubleshooting, approved maintenance, or local handoff. |
+| `scripts/check_migration_baseline.py` | SQLAlchemy metadata drift check against the committed migration baseline. | Before changing models or migration policy. |
 | `scripts/run_workflow_worker.py` | Optional local SQLite worker that consumes queued workflow jobs when `WORKFLOW_BACKGROUND_TASKS_ENABLED=false`. | When running long async workflows outside the API process. |
 
 ## Product And Architecture
@@ -66,6 +67,7 @@ This document is the starting point for future development. Use it to find the r
 | `configs/benchmark_profiles.example.json` | Template for ignored local benchmark profile overrides. |
 | `scripts/prepare_local_geoloc_benchmark.py` | Local helper for benchmark directories, example JSONL files, ignored profile manifests, and readiness checks. |
 | `scripts/benchmark_geoloc_predictions.py` | Project-local geolocalization JSONL benchmark harness. |
+| `scripts/run_geoloc_benchmark_pipeline.py` | Local pipeline that turns geolocalization ground-truth/prediction JSONL artifacts into JSON/Markdown benchmark reports. |
 | `scripts/check_local_geoloc_benchmark_smoke.sh` | One-command local smoke for the geolocalization JSONL benchmark path. |
 | `/research/ideas/{idea_id}/sota-review-package` | Runtime API that turns an idea into a persisted manual SOTA review checklist and collision package. |
 | `/research/ideas/{idea_id}/sota-external-search-evidence` | Runtime API that persists local/external literature search statuses, result summaries, and signoff readiness for SOTA review queries. |

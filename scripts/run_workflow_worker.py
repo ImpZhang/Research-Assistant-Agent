@@ -33,6 +33,11 @@ def parse_args() -> argparse.Namespace:
         help="Claim at most one job and then exit.",
     )
     parser.add_argument(
+        "--job-id",
+        default="",
+        help="Run one specific queued workflow job id and then exit.",
+    )
+    parser.add_argument(
         "--max-jobs",
         type=int,
         default=0,
@@ -50,6 +55,24 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Exit after this many idle seconds. Use 0 to wait indefinitely.",
     )
+    parser.add_argument(
+        "--stale-lease-seconds",
+        type=int,
+        default=3600,
+        help="Requeue running jobs whose worker heartbeat is older than this value. Use 0 to disable.",
+    )
+    parser.add_argument(
+        "--max-auto-retries",
+        type=int,
+        default=0,
+        help="Automatically queue at most this many retries for failed jobs. Use 0 to disable.",
+    )
+    parser.add_argument(
+        "--retry-backoff-seconds",
+        type=int,
+        default=300,
+        help="Wait this many seconds after failure before queuing an automatic retry.",
+    )
     return parser.parse_args()
 
 
@@ -61,7 +84,14 @@ def main() -> int:
 
     while True:
         with SessionLocal() as session:
-            result = WorkflowWorkerService(session, worker_id=args.worker_id).run_once()
+            worker = WorkflowWorkerService(
+                session,
+                worker_id=args.worker_id,
+                stale_lease_seconds=args.stale_lease_seconds,
+                max_auto_retries=args.max_auto_retries,
+                retry_backoff_seconds=args.retry_backoff_seconds,
+            )
+            result = worker.run_job(args.job_id) if args.job_id else worker.run_once()
 
         print(json.dumps(result.as_dict(), ensure_ascii=False), flush=True)
         if result.status != "idle":
@@ -70,7 +100,7 @@ def main() -> int:
         else:
             idle_started_at = idle_started_at or time.monotonic()
 
-        if args.once:
+        if args.once or args.job_id:
             return 0 if result.status in {"completed", "idle"} else 1
         if args.max_jobs > 0 and processed >= args.max_jobs:
             return 0

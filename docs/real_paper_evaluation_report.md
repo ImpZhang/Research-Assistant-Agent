@@ -18,19 +18,23 @@ Implementation notes:
 - `multimodal-embedding-v1` uses DashScope native multimodal embedding behavior when needed.
 - `qwen3-rerank` uses DashScope native text-rerank fallback.
 
-## Latest Strict Embedding Verification
+## Latest Strict Three-Paper Verification
 
-On 2026-06-28, GeoToken was re-run with `multimodal-embedding-v1`, `--require-external-embeddings`, async workflow polling, and the guarded `json-metrics-smoke` benchmark profile.
+On 2026-06-28, G3, GeoToken, and Recognition through Reasoning were re-run with `multimodal-embedding-v1`, `--require-external-embeddings`, async workflow polling, retrieval-mode comparison, and the guarded `json-metrics-smoke` benchmark profile.
 
-- Report: `outputs/evaluations/real_paper_eval_20260628_095514.json`.
-- Completed papers: 1 / 1.
-- Workflow stage: `completed`.
+- Report: `outputs/evaluations/real_paper_eval_20260628_131612.json`.
+- Completed papers: 3 / 3.
+- Failed papers: 0.
+- Workflow recovered count: 0.
 - Embedding model: `multimodal-embedding-v1`.
 - Embedding dimension: 1024.
+- Total embedding indexed: 30.
 - Provider fallback warnings: 0.
-- Context searches with evidence: 3 / 3.
-- Benchmark runs/completed: 1 / 1.
+- Context searches with evidence: 3 / 3 papers.
+- Retrieval comparison coverage: 9 queries, 7 top-evidence overlaps.
+- Benchmark runs/completed: 3 / 3.
 - Experiment run source: `benchmark_profile`.
+- Proposal review decision: `ready_for_advisor_review` for all three papers.
 
 ## Evaluated Papers
 
@@ -97,4 +101,4 @@ Remaining hardening:
 
 1. Enable live external-search providers in production settings and require completed evidence packages before final signoff.
 2. Add optional page-image/figure-aware PDF evidence extraction for scanned or figure-heavy geolocalization papers.
-3. Populate project-local benchmark ground truth and prediction artifacts, then replace smoke-profile executions with repeated measured geolocalization runs.
+3. Populate larger project-local benchmark ground truth and prediction artifacts, then use `scripts/run_geoloc_benchmark_pipeline.py` plus benchmark profile execution for repeated measured geolocalization runs.

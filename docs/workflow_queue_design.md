@@ -10,6 +10,8 @@ The current async literature-to-ideas path is intentionally simple:
 - FastAPI `BackgroundTasks` calls `run_literature_to_ideas_job_background(job.id)` inside the API process.
 - `WORKFLOW_BACKGROUND_TASKS_ENABLED=false` disables that in-process background call and leaves the job as `pending` for a local worker.
 - `scripts/run_workflow_worker.py` claims pending `literature_to_ideas_workflow` jobs from SQLite, marks them `running`, writes lease metadata under `Job.output_json.lease`, and then runs the same `WorkflowService.run_literature_to_ideas_job` path.
+- The local worker can requeue stale running jobs when lease heartbeat age exceeds `--stale-lease-seconds`.
+- The local worker can queue bounded retries for failed jobs when `--max-auto-retries` and `--retry-backoff-seconds` are configured.
 - `WorkflowService.run_literature_to_ideas_job` reloads the job, marks it `running`, updates progress/output JSON after workflow stages, and marks it `completed`, `failed`, or `canceled`.
 - `WorkflowService` refreshes lease heartbeat metadata during stage updates when a worker lease exists.
 - `JobRead` exposes `stage` and `stage_message` derived from `Job.output_json` so clients can display current workflow phase without parsing every artifact id.
@@ -18,7 +20,7 @@ The current async literature-to-ideas path is intentionally simple:
 - `scripts/evaluate_real_papers.py` defaults to `--workflow-mode async-poll`, which queues a local `jobs` row through `WorkflowService`, starts a short-lived worker process, polls `GET /research/jobs/{job_id}`, saves poll history in the report, and hydrates artifacts through `GET /research/jobs/{job_id}/artifacts`.
 - The real-paper evaluator can terminate its own timed-out worker process and recover partial artifacts from the job row. This is an evaluation-runner safety mechanism, not a durable server queue.
 
-This is acceptable for the first local pilot because it avoids extra infrastructure and still gives operators a separate worker command for long jobs. It is not a full durable queue because stale-lease reclaim, retry backoff, and resumable stage checkpoints are still deliberately deferred.
+This is acceptable for the first local pilot because it avoids extra infrastructure and still gives operators a separate worker command for long jobs. It is not a full durable queue because lease fields are still JSON metadata rather than migration-backed columns, multi-worker concurrency is intentionally narrow, and resumable stage checkpoints are still deferred.
 
 ## Problem
 
@@ -63,7 +65,7 @@ Limits:
 
 - Requires schema migration for lease fields.
 - SQLite concurrency must be tested carefully.
-- Backoff and scheduling logic must be implemented by the project.
+- Backoff and scheduling logic starts in the local worker and should move to migration-backed fields before multi-worker use.
 
 ### RQ With Redis
 
@@ -183,12 +185,14 @@ The current local worker:
 - Claim only jobs with supported `job_type` values.
 - Uses a conditional SQLite update from `pending` to `running` to avoid duplicate claims in the common local case.
 - Records heartbeat updates during workflow stages through `Job.output_json.lease.heartbeat_at`.
+- Requeues stale running jobs by moving the stale lease to `Job.output_json.lease_history` and setting status back to `pending`.
+- Queues bounded retry jobs for failed workflows when explicitly configured on the worker command.
 - Check cancellation before and after each stage.
 - Treat `Job.output_json` as append-only stage progress until final completion.
 - Never store raw secrets, prompts with secret values, request bodies, or API keys in job metadata.
 - Log request/job ids, not sensitive payloads.
 
-Future migration-backed workers should add explicit stale-lease reclaim, retry backoff, and idempotency checks before supporting multi-worker concurrency.
+Future migration-backed workers should add durable lease columns, idempotency checks, retry attempt columns, and stronger multi-worker concurrency controls.
 
 ## Deployment And Operations
 

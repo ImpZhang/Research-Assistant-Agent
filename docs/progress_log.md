@@ -2,6 +2,40 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-28 - Strict Three-Paper Evaluation And Local Hardening
+
+Implementation completed:
+
+- Added `scripts/run_geoloc_benchmark_pipeline.py` to convert project-local geolocalization ground-truth and prediction JSONL artifacts into JSON/Markdown benchmark pipeline reports.
+- Refactored `scripts/benchmark_geoloc_predictions.py` so the metric computation is reusable by the pipeline script.
+- Hardened `WorkflowWorkerService` with stale-lease recovery, bounded failed-job retry queueing, and a targeted `run_job(job_id)` path for deterministic local worker diagnostics.
+- Extended `scripts/run_workflow_worker.py` with `--job-id`, `--stale-lease-seconds`, `--max-auto-retries`, and `--retry-backoff-seconds`.
+- Added `migrations/baseline_schema.json`, `migrations/README.md`, and `scripts/check_migration_baseline.py` as an Alembic-style metadata baseline and drift check without adding Alembic, running migrations, or touching live data.
+- Updated README, TODO, deployment, documentation index, workflow queue design, and database migration strategy to reflect the current benchmark, worker, and migration-baseline capabilities.
+
+Strict real evaluation completed:
+
+- Ran G3, GeoToken, and Recognition through Reasoning PDFs with `multimodal-embedding-v1`, `--require-external-embeddings`, async workflow polling, retrieval comparison, and `--benchmark-profile-id json-metrics-smoke`.
+- Report: `outputs/evaluations/real_paper_eval_20260628_131612.json`.
+- Completed papers: `3 / 3`; failed papers: `0`.
+- Workflow recovered count: `0`.
+- Provider fallback warnings: `0`.
+- Embedding models: `["multimodal-embedding-v1"]`; embedding dimension: `1024`; indexed objects: `30`.
+- Context-search evidence coverage: `3 / 3` papers.
+- Retrieval comparison: `9` queries with `7` top-evidence overlaps.
+- Benchmark runs/completed: `3 / 3`.
+- Proposal review decision was `ready_for_advisor_review` for all three papers.
+
+Verification completed:
+
+- `bash scripts/check_workflow_job_controls.sh` passed: `11 passed`.
+- `bash scripts/check_deployment_contracts.sh` passed: `17 passed`.
+- `.venv/bin/python -m pytest tests/test_sota_signoff_and_benchmark.py::test_geoloc_prediction_benchmark_harness_outputs_metrics tests/test_sota_signoff_and_benchmark.py::test_geoloc_benchmark_pipeline_writes_json_and_markdown_reports tests/test_sota_signoff_and_benchmark.py::test_geoloc_benchmark_pipeline_reports_missing_inputs` passed: `3 passed`.
+- `bash scripts/check_focused_test_coverage.sh` passed.
+- `bash scripts/check_script_catalog.sh` passed.
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_local_safe_suite.sh` passed, including deployment contracts `17 passed`, workflow job controls `11 passed`, local geolocalization benchmark smoke, and context-search/evaluation checks `48 passed`.
+
 ## 2026-06-28 - Embedding Model Switch
 
 Implementation completed:

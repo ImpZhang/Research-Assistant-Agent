@@ -9,6 +9,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_literature_to_ideas_workflow_runs_full_pipeline \
   tests/test_app.py::test_async_literature_to_ideas_workflow_completes_job_trace \
   tests/test_app.py::test_async_literature_to_ideas_workflow_can_run_from_local_worker \
+  tests/test_app.py::test_local_workflow_worker_recovers_stale_running_job \
+  tests/test_app.py::test_local_workflow_worker_can_queue_bounded_retry_for_failed_job \
   tests/test_app.py::test_agent_trace_records_run_tool_call_and_replay_case \
   tests/test_app.py::test_advisor_chat_records_agent_trace_tool_calls \
   tests/test_app.py::test_advisor_chat_captures_context_search_miss_replay_case \

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import io
 import json
@@ -24,6 +24,7 @@ from backend.research.models import (
     ProposalDraft,
     ExperimentPlan,
     Idea,
+    Job,
     NoveltyCheck,
     Paper,
     ResearchEdge,
@@ -9347,7 +9348,9 @@ The worker mode should preserve existing job polling and artifact hydration cont
     assert queued_body["stage"] == "queued"
 
     with SessionLocal() as session:
-        result = WorkflowWorkerService(session, worker_id="pytest-worker").run_once()
+        result = WorkflowWorkerService(session, worker_id="pytest-worker").run_job(
+            queued_body["id"]
+        )
 
     assert result.status == "completed"
     assert result.job_id == queued_body["id"]
@@ -9365,6 +9368,72 @@ The worker mode should preserve existing job polling and artifact hydration cont
     artifacts = client.get(f"/research/jobs/{queued_body['id']}/artifacts")
     assert artifacts.status_code == 200
     assert artifacts.json()["paper"]["id"] == paper_id
+
+
+def test_local_workflow_worker_recovers_stale_running_job() -> None:
+    with SessionLocal() as session:
+        job = WorkflowService(session).queue_literature_to_ideas(
+            paper_id=f"stale-worker-paper-{uuid4().hex}",
+            max_gaps=1,
+            max_ideas_per_gap=1,
+        )
+        old_heartbeat = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        job.status = "running"
+        job.output_json = {
+            **(job.output_json or {}),
+            "stage": "generating_ideas",
+            "lease": {
+                "worker_id": "stale-worker",
+                "claimed_at": old_heartbeat,
+                "heartbeat_at": old_heartbeat,
+                "mode": "local_sqlite_worker",
+            },
+        }
+        session.commit()
+
+        result = WorkflowWorkerService(
+            session,
+            worker_id="recovery-worker",
+            stale_lease_seconds=60,
+        ).run_once()
+        recovered = session.get(Job, job.id)
+
+    assert result.status == "recovered_stale"
+    assert recovered is not None
+    assert recovered.status == "pending"
+    assert recovered.output_json["stage"] == "requeued_after_stale_lease"
+    assert recovered.output_json["worker_recovery_count"] == 1
+    assert recovered.output_json["lease_history"][0]["worker_id"] == "stale-worker"
+
+
+def test_local_workflow_worker_can_queue_bounded_retry_for_failed_job() -> None:
+    with SessionLocal() as session:
+        job = WorkflowService(session).queue_literature_to_ideas(
+            paper_id=f"retry-worker-paper-{uuid4().hex}",
+            max_gaps=1,
+            max_ideas_per_gap=1,
+        )
+        job.status = "failed"
+        job.error = "pytest synthetic failure"
+        job.finished_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+        session.commit()
+
+        result = WorkflowWorkerService(
+            session,
+            worker_id="retry-worker",
+            stale_lease_seconds=0,
+            max_auto_retries=1,
+            retry_backoff_seconds=0,
+        ).run_once()
+        session.refresh(job)
+        retry_job = session.get(Job, job.output_json["worker_retry_child_job_id"])
+
+    assert result.status == "retry_queued"
+    assert job.output_json["worker_retry_count"] == 1
+    assert retry_job is not None
+    assert retry_job.status == "pending"
+    assert retry_job.output_json["worker_retry_of_job_id"] == job.id
+    assert retry_job.output_json["worker_retry_attempt"] == 1
 
 
 def _hit_at_k(ordered_ids: list[str], expected_ids: set[str], k: int) -> float:

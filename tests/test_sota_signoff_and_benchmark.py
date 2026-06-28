@@ -206,6 +206,84 @@ def test_local_geoloc_benchmark_smoke_script_exercises_harness() -> None:
     assert payload["summary"]["missing_prediction_ids"] == ["sample-3"]
 
 
+def test_geoloc_benchmark_pipeline_writes_json_and_markdown_reports(tmp_path) -> None:
+    ground_truth = tmp_path / "data/benchmarks/geoloc/validation.jsonl"
+    predictions = tmp_path / "outputs/predictions/geoloc/validation.jsonl"
+    json_report = tmp_path / "outputs/benchmark-runs/geoloc/pipeline.json"
+    markdown_report = tmp_path / "outputs/benchmark-runs/geoloc/pipeline.md"
+    ground_truth.parent.mkdir(parents=True)
+    predictions.parent.mkdir(parents=True)
+    ground_truth.write_text(
+        "\n".join(
+            [
+                json.dumps({"id": "sample-1", "country": "US", "lat": 40.0, "lon": -74.0}),
+                json.dumps({"id": "sample-2", "country": "FR", "lat": 48.8566, "lon": 2.3522}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    predictions.write_text(
+        "\n".join(
+            [
+                json.dumps({"id": "sample-1", "country": "US", "lat": 40.1, "lon": -74.1}),
+                json.dumps({"id": "sample-2", "country": "FR", "lat": 48.8566, "lon": 2.3522}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_geoloc_benchmark_pipeline.py",
+            "--project-root",
+            str(tmp_path),
+            "--baseline-country-accuracy",
+            "0.5",
+            "--write-json",
+            "outputs/benchmark-runs/geoloc/pipeline.json",
+            "--write-markdown",
+            "outputs/benchmark-runs/geoloc/pipeline.md",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    payload = json.loads(completed.stdout)
+    written = json.loads(json_report.read_text(encoding="utf-8"))
+    markdown = markdown_report.read_text(encoding="utf-8")
+
+    assert payload["decision"] == "completed"
+    assert written["metrics"]["country_accuracy"]["value"] == 1.0
+    assert written["metrics"]["country_accuracy"]["improved"] is True
+    assert written["summary"]["matched_predictions"] == 2
+    assert "# Geolocalization Benchmark Pipeline Report" in markdown
+    assert "`country_accuracy`: `1.0`" in markdown
+
+
+def test_geoloc_benchmark_pipeline_reports_missing_inputs(tmp_path) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_geoloc_benchmark_pipeline.py",
+            "--project-root",
+            str(tmp_path),
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+
+    assert completed.returncode == 1
+    assert payload["decision"] == "failed"
+    assert "ground truth file does not exist" in payload["errors"][0]
+    assert "predictions file does not exist" in payload["errors"][1]
+
+
 def test_prepare_local_geoloc_benchmark_writes_example_profile(tmp_path) -> None:
     script = Path("scripts/prepare_local_geoloc_benchmark.py")
     completed = subprocess.run(
