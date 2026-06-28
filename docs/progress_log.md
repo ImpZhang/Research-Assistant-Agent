@@ -2,6 +2,27 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-29 - Twelve-Paper Evaluation Set Expansion
+
+Strict real evaluation completed:
+
+- Expanded the strict geolocalization/place-recognition evaluation set from `4` to `12` papers by adding Img2Loc, PIGEON, Street-Level Geolocalization with MLLM+RAG, Vision-Language Reasoning for Geolocalization, GEOMR, HADGEO, CAMP, and NetVLAD.
+- Report: `outputs/evaluations/real_paper_eval_20260628_160429.json`.
+- Completed papers: `12 / 12`; failed papers: `0`.
+- Workflow recovered count: `0`.
+- Provider fallback warnings: `0`.
+- Embedding models: `["multimodal-embedding-v1"]`; embedding dimension: `1024`; indexed objects: `99`.
+- Context-search evidence coverage: `12 / 12` papers.
+- Retrieval comparison: `36` queries with `27` top-evidence overlaps.
+- Benchmark runs/completed: `12 / 12`.
+- Proposal review decision was `ready_for_advisor_review` for all 12 papers.
+
+Evaluation implications:
+
+- The project now has a stronger real-paper workflow stability story than the previous 3-4 paper smoke.
+- The 12-paper run still does not prove scientific SOTA, broad generalization, or citation correctness by itself.
+- The next evaluation layer should be 50-80 labeled query-evidence pairs and 20-30 bad-case replay cases covering context misses, citation mismatch, title/section extraction noise, weak evidence, benchmark artifact gaps, and worker/retry edge cases.
+
 ## 2026-06-28 - GeoRanker Restored To Strict Evaluation Set
 
 Implementation completed:
