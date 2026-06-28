@@ -18,40 +18,41 @@ Implementation notes:
 - `multimodal-embedding-v1` uses DashScope native multimodal embedding behavior when needed.
 - `qwen3-rerank` uses DashScope native text-rerank fallback.
 
-## Latest Strict Three-Paper Verification
+## Latest Strict Four-Paper Verification
 
-On 2026-06-28, G3, GeoToken, and Recognition through Reasoning were re-run with `multimodal-embedding-v1`, `--require-external-embeddings`, async workflow polling, retrieval-mode comparison, and the guarded `json-metrics-smoke` benchmark profile.
+On 2026-06-28, GeoRanker, G3, GeoToken, and Recognition through Reasoning were re-run with `multimodal-embedding-v1`, `--require-external-embeddings`, async workflow polling, retrieval-mode comparison, and the guarded `json-metrics-smoke` benchmark profile.
 
-- Report: `outputs/evaluations/real_paper_eval_20260628_131612.json`.
-- Completed papers: 3 / 3.
+- Report: `outputs/evaluations/real_paper_eval_20260628_155144.json`.
+- Completed papers: 4 / 4.
 - Failed papers: 0.
 - Workflow recovered count: 0.
 - Embedding model: `multimodal-embedding-v1`.
 - Embedding dimension: 1024.
-- Total embedding indexed: 30.
+- Total embedding indexed: 38.
 - Provider fallback warnings: 0.
-- Context searches with evidence: 3 / 3 papers.
-- Retrieval comparison coverage: 9 queries, 7 top-evidence overlaps.
-- Benchmark runs/completed: 3 / 3.
+- Context searches with evidence: 4 / 4 papers.
+- Retrieval comparison coverage: 12 queries, 8 top-evidence overlaps.
+- Benchmark runs/completed: 4 / 4.
 - Experiment run source: `benchmark_profile`.
-- Proposal review decision: `ready_for_advisor_review` for all three papers.
+- Proposal review decision: `ready_for_advisor_review` for all four papers.
 
 ## Evaluated Papers
 
 | Paper | Status | Sections | Chunks | Evidence | Gaps | Ideas | Embeddings | Readiness | Quality Gate | Proposal Review |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| G3 | completed | 11 | 64 | 9 | 1 | 1 | 11 | 0.6221 | 0.5587 | ready_for_advisor_review |
-| GeoToken | completed | 6 | 39 | 6 | 1 | 1 | 8 | 0.7021 | 0.5811 | ready_for_advisor_review |
-| Recognition through Reasoning | completed | 10 | 61 | 9 | 1 | 1 | 11 | 0.6221 | 0.5587 | ready_for_advisor_review |
+| GeoRanker | completed | 7 | 49 | 6 | 1 | 1 | 8 | 0.6839 | 0.5936 | ready_for_advisor_review |
+| G3 | completed | 11 | 64 | 9 | 1 | 1 | 11 | 0.6839 | 0.5936 | ready_for_advisor_review |
+| GeoToken | completed | 6 | 39 | 6 | 1 | 1 | 8 | 0.6839 | 0.5936 | ready_for_advisor_review |
+| Recognition through Reasoning | completed | 10 | 61 | 9 | 1 | 1 | 11 | 0.6839 | 0.5936 | ready_for_advisor_review |
 
 Combined metrics:
 
-- Completed papers: 3 / 3.
-- Total gaps: 3.
-- Total ideas: 3.
-- Total external embeddings indexed: 30.
-- Average readiness: 0.6488.
-- Average quality gate: 0.5662.
+- Completed papers: 4 / 4.
+- Total gaps: 4.
+- Total ideas: 4.
+- Total external embeddings indexed: 38.
+- Average readiness: 0.6839.
+- Average quality gate: 0.5936.
 - Context search returned evidence and graph context for every tested query.
 - Retrieval traces included both `vector` and `rerank` matched terms in real runs.
 

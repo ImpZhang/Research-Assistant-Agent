@@ -2,6 +2,31 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-28 - GeoRanker Restored To Strict Evaluation Set
+
+Implementation completed:
+
+- Raised the default local paper upload limit from 10 MiB to 20 MiB in `backend/research/config.py`, `.env.example`, and `docs/deployment.md` so larger representative PDFs such as GeoRanker can be evaluated without disabling upload protection.
+- Kept upload guardrail behavior intact: oversized files are still rejected when `PAPER_UPLOAD_MAX_BYTES` is set lower, and invalid/non-positive values still fall back safely.
+- Re-ran the strict real-paper evaluation with GeoRanker, G3, GeoToken, and Recognition through Reasoning.
+
+Strict real evaluation completed:
+
+- Report: `outputs/evaluations/real_paper_eval_20260628_155144.json`.
+- Completed papers: `4 / 4`; failed papers: `0`.
+- Workflow recovered count: `0`.
+- Provider fallback warnings: `0`.
+- Embedding models: `["multimodal-embedding-v1"]`; embedding dimension: `1024`; indexed objects: `38`.
+- Context-search evidence coverage: `4 / 4` papers.
+- Retrieval comparison: `12` queries with `8` top-evidence overlaps.
+- Benchmark runs/completed: `4 / 4`.
+- Proposal review decision was `ready_for_advisor_review` for all four papers.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/research/config.py tests/test_app.py` passed.
+- `.venv/bin/python -m pytest tests/test_app.py::test_upload_rejects_file_larger_than_limit tests/test_app.py::test_upload_invalid_max_bytes_falls_back_to_default_limit tests/test_app.py::test_upload_non_positive_max_bytes_falls_back_to_default_limit` passed: `3 passed`.
+
 ## 2026-06-28 - Strict Three-Paper Evaluation And Local Hardening
 
 Implementation completed:
