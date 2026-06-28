@@ -17,6 +17,10 @@ Verification completed:
 - `.venv/bin/ruff format --check backend/research/adapters/retrieval_provider_adapter.py tests/test_model_provider_config.py tests/test_retrieval_provider_adapter.py tests/test_evaluation_reports.py` passed.
 - `.venv/bin/python -m pytest tests/test_model_provider_config.py tests/test_retrieval_provider_adapter.py tests/test_evaluation_reports.py` passed: `17 passed`.
 - Application config loaded the local `.env` and reported `settings.embedder=multimodal-embedding-v1` without printing provider keys.
+- `env ALLOW_REAL_MODEL_PROVIDER_SMOKE=1 .venv/bin/python scripts/smoke_model_providers.py` passed for main, extraction, judge, embedding, and rerank; `multimodal-embedding-v1` returned 1024-dimensional vectors.
+- Strict real-paper evaluation passed on GeoToken with `--require-external-embeddings`, async workflow polling, and `--benchmark-profile-id json-metrics-smoke`.
+- Strict report: `outputs/evaluations/real_paper_eval_20260628_095514.json`.
+- Strict report summary: `completed_paper_count=1`, `provider_fallback_warning_count=0`, `embedding_models=["multimodal-embedding-v1"]`, `benchmark_run_count=1`, and `benchmark_completed_count=1`.
 
 ## 2026-06-28 - Async-Poll Real Evaluation Workflow
 

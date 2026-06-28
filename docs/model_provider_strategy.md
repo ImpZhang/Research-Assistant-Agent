@@ -84,7 +84,7 @@ The real-paper evaluator at `scripts/evaluate_real_papers.py` refuses to run unl
 Latest real-provider smoke status:
 
 - `qwen3-32b` main/extraction/judge roles: passed.
-- `multimodal-embedding-v1`: target embedding model for the next real-provider smoke.
+- `multimodal-embedding-v1`: passed with 1024-dimensional vectors.
 - `qwen3-rerank`: passed and ranked the relevant document first in the smoke pair.
 
 ## Test Safety

@@ -2,21 +2,35 @@
 
 Date: 2026-06-25
 
-This report summarizes the first real-provider, real-PDF evaluation round for the local Research Assistant Agent.
+This report summarizes the first real-provider, real-PDF evaluation round for the local Research Assistant Agent and the latest strict embedding smoke after the current embedding-model switch.
 
 ## Provider Status
 
-The explicit provider smoke passed for all configured roles:
+Current explicit provider smoke passed for all configured roles on 2026-06-28:
 
 - `qwen3-32b`: main, extraction, and judge roles passed.
-- `qwen3-vl-embedding`: passed with 2560-dimensional vectors.
+- `multimodal-embedding-v1`: passed with 1024-dimensional vectors.
 - `qwen3-rerank`: passed and ranked the relevant smoke document first.
 
 Implementation notes:
 
 - DashScope Qwen3 non-streaming chat calls require `enable_thinking=false`.
-- `qwen3-vl-embedding` uses DashScope native multimodal embedding fallback.
+- `multimodal-embedding-v1` uses DashScope native multimodal embedding behavior when needed.
 - `qwen3-rerank` uses DashScope native text-rerank fallback.
+
+## Latest Strict Embedding Verification
+
+On 2026-06-28, GeoToken was re-run with `multimodal-embedding-v1`, `--require-external-embeddings`, async workflow polling, and the guarded `json-metrics-smoke` benchmark profile.
+
+- Report: `outputs/evaluations/real_paper_eval_20260628_095514.json`.
+- Completed papers: 1 / 1.
+- Workflow stage: `completed`.
+- Embedding model: `multimodal-embedding-v1`.
+- Embedding dimension: 1024.
+- Provider fallback warnings: 0.
+- Context searches with evidence: 3 / 3.
+- Benchmark runs/completed: 1 / 1.
+- Experiment run source: `benchmark_profile`.
 
 ## Evaluated Papers
 
