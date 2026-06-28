@@ -2,6 +2,34 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-29 - Query-Evidence Dataset And Replay Quality Gates
+
+Implementation completed:
+
+- Added `scripts/build_geoloc_eval_dataset.py` to build ignored local `data/evaluation/geoloc_12paper/` artifacts from the 12-paper real evaluation report and local SQLite evidence rows.
+- Added `scripts/check_geoloc_eval_dataset.py` to validate dataset shape, evidence ids, paper ownership, query/evidence overlap, secret-like content, retrieval hit rates, and replay pass rates.
+- Added regression coverage in `tests/test_geoloc_eval_dataset_tools.py` with a temporary SQLite fixture, generated query-evidence rows, replay cases, retrieval validation, JSON report, and Markdown report.
+- Wired the new scripts and tests into `scripts/check_context_search_evaluations.sh`.
+- Added `docs/geoloc_eval_dataset_quality.md` as the durable quality policy and command reference.
+
+Local dataset generated:
+
+- Dataset directory: `data/evaluation/geoloc_12paper/` (ignored by Git).
+- Query-evidence pairs: `75`.
+- Replay cases: `30`.
+- Papers covered: `12`.
+- Replay types: `22` context-search cases and `8` citation-audit cases.
+
+Quality verification completed:
+
+- `.venv/bin/python scripts/check_geoloc_eval_dataset.py --dataset-dir data/evaluation/geoloc_12paper --run-retrieval ...` passed.
+- Re-ran the same checker with a second quality-report output; it passed with identical retrieval and replay metrics.
+- Retrieval hit@1: `0.9867`; hit@3: `1.0`; hit@8: `1.0`.
+- Replay pass rate: `1.0`.
+- Errors: `0`; warnings: `0`.
+- `bash scripts/check_context_search_evaluations.sh` passed: `49 passed`.
+- `bash scripts/check_focused_test_coverage.sh`, `bash scripts/check_script_catalog.sh`, `bash scripts/check_handoff_docs.sh`, `bash scripts/check_secret_file_guard.sh`, and `bash scripts/check_generated_file_guard.sh` passed.
+
 ## 2026-06-29 - Twelve-Paper Evaluation Set Expansion
 
 Strict real evaluation completed:

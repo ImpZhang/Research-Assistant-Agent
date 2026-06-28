@@ -441,6 +441,25 @@ Run focused context-search evaluation checks on the local `.venv`:
 bash scripts/check_context_search_evaluations.sh
 ```
 
+Build and validate the local 12-paper geolocalization query-evidence/replay dataset. Generated dataset rows and quality reports stay under ignored `data/evaluation/`:
+
+```bash
+.venv/bin/python scripts/build_geoloc_eval_dataset.py \
+  --report outputs/evaluations/real_paper_eval_20260628_160429.json \
+  --output-dir data/evaluation/geoloc_12paper \
+  --dataset-id geoloc_12paper_v1 \
+  --min-query-count 50 \
+  --max-query-count 80 \
+  --replay-count 30 \
+  --json
+.venv/bin/python scripts/check_geoloc_eval_dataset.py \
+  --dataset-dir data/evaluation/geoloc_12paper \
+  --run-retrieval \
+  --write-json data/evaluation/geoloc_12paper/quality_report.json \
+  --write-markdown data/evaluation/geoloc_12paper/quality_report.md \
+  --json
+```
+
 Run the standalone local geolocalization benchmark smoke to verify the JSONL scoring harness, baseline delta parsing, missing-prediction accounting, and geodesic-distance metrics with temporary project-local fixtures:
 
 ```bash

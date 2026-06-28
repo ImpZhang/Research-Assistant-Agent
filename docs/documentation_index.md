@@ -60,6 +60,7 @@ This document is the starting point for future development. Use it to find the r
 | `docs/product_effect_report.md` | Current product-effect scorecard and demo readiness. |
 | `docs/context_search_evaluation_plan.md` | Context-search evaluation fixtures and metrics. |
 | `docs/agent_replay_eval.md` | Bad-case replay script, metrics, report shape, and deterministic local evaluation policy. |
+| `docs/geoloc_eval_dataset_quality.md` | Local 12-paper query-evidence and replay-case dataset build/check policy and latest quality gates. |
 | `docs/demo_runbook.md` | Workbench-first demo flow and validation notes. |
 | `docs/representative_paper_review.md` | Representative-paper human review protocol and records. |
 | `docs/geolocalization_manual_sota_review.md` | Manual SOTA screening for geolocalization sources. |
@@ -68,6 +69,8 @@ This document is the starting point for future development. Use it to find the r
 | `scripts/prepare_local_geoloc_benchmark.py` | Local helper for benchmark directories, example JSONL files, ignored profile manifests, and readiness checks. |
 | `scripts/benchmark_geoloc_predictions.py` | Project-local geolocalization JSONL benchmark harness. |
 | `scripts/run_geoloc_benchmark_pipeline.py` | Local pipeline that turns geolocalization ground-truth/prediction JSONL artifacts into JSON/Markdown benchmark reports. |
+| `scripts/build_geoloc_eval_dataset.py` | Local generator for ignored 12-paper query-evidence and replay-case evaluation artifacts. |
+| `scripts/check_geoloc_eval_dataset.py` | Local quality checker for generated query-evidence rows, retrieval hits, and replay cases. |
 | `scripts/check_local_geoloc_benchmark_smoke.sh` | One-command local smoke for the geolocalization JSONL benchmark path. |
 | `/research/ideas/{idea_id}/sota-review-package` | Runtime API that turns an idea into a persisted manual SOTA review checklist and collision package. |
 | `/research/ideas/{idea_id}/sota-external-search-evidence` | Runtime API that persists local/external literature search statuses, result summaries, and signoff readiness for SOTA review queries. |
