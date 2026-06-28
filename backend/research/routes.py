@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import time
 import zipfile
 from collections import Counter
@@ -6735,15 +6736,25 @@ def _render_research_plan_progress_markdown(
 
 
 def _serialize_job(job: Job) -> JobRead:
+    output = job.output_json or {}
     return JobRead(
         id=job.id,
         job_type=job.job_type,
         status=job.status,
         progress=job.progress,
         input=job.input_json or {},
-        output=job.output_json or {},
+        output=output,
+        stage=output.get("stage", ""),
+        stage_message=output.get("stage_message", ""),
         error=job.error,
     )
+
+
+def _workflow_background_tasks_enabled() -> bool:
+    raw = os.getenv("WORKFLOW_BACKGROUND_TASKS_ENABLED")
+    if raw is not None:
+        return raw.lower() in {"1", "true", "yes", "on"}
+    return settings.workflow_background_tasks_enabled
 
 
 def _serialize_agent_run(run: AgentRun) -> AgentRunRead:
@@ -7108,7 +7119,7 @@ def retry_job(
     except ValueError as exc:
         status_code = 404 if str(exc) == "Job not found" else 409
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
-    if job.job_type == "literature_to_ideas_workflow":
+    if job.job_type == "literature_to_ideas_workflow" and _workflow_background_tasks_enabled():
         background_tasks.add_task(run_literature_to_ideas_job_background, job.id)
     return _serialize_job(job)
 
@@ -16769,7 +16780,8 @@ def queue_literature_to_ideas_workflow(
         run_experiment_plan=payload.run_experiment_plan,
         include_markdown_export=payload.include_markdown_export,
     )
-    background_tasks.add_task(run_literature_to_ideas_job_background, job.id)
+    if _workflow_background_tasks_enabled():
+        background_tasks.add_task(run_literature_to_ideas_job_background, job.id)
     return _serialize_job(job)
 
 

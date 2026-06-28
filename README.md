@@ -790,6 +790,14 @@ source scripts/env.sh
 ./scripts/run-local.sh
 ```
 
+For long literature-to-ideas jobs that should run outside the API process, set `WORKFLOW_BACKGROUND_TASKS_ENABLED=false` in `.env`, start the API normally, and run a separate local worker only when you want it to consume queued jobs:
+
+```bash
+.venv/bin/python scripts/run_workflow_worker.py --poll-interval-seconds 2
+```
+
+Use `--once` for a one-job diagnostic run. The worker claims `pending` jobs from SQLite, writes lease/heartbeat metadata into the job output, and preserves the existing `GET /research/jobs/{job_id}` polling and artifact endpoints.
+
 For optional single-user Docker use, set a local `API_KEY` in `.env` and run Docker only after explicit operator approval:
 
 ```bash
@@ -804,7 +812,7 @@ See `docs/deployment.md` for the runtime contract, local deployment checklist, `
 - Add real-provider smoke tests, batch embedding, page-image retrieval, and retrieval-mode evaluation fixtures.
 - Add practical local benchmark recipes and prediction-generation pipelines for geolocalization evaluation.
 - Add fully automated current-SOTA closure on top of manual SOTA review packages and external novelty search adapters.
-- Add durable local worker queues, richer retry policies, and resumable workflow state for long runs.
+- Add richer retry policies, stale-lease recovery, and resumable workflow checkpoints for long runs.
 - Expand the research Workbench into a full single-researcher review/edit loop.
 - Harden optional local auth, backup/export, and richer binary artifact handling around the lightweight MCP bridge.
 

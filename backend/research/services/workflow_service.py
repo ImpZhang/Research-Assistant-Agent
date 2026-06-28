@@ -65,7 +65,10 @@ class WorkflowService:
                 run_experiment_plan=run_experiment_plan,
                 include_markdown_export=include_markdown_export,
             ),
-            output_json={},
+            output_json={
+                "stage": "queued",
+                "stage_message": "Queued literature-to-ideas workflow.",
+            },
             progress=0.0,
         )
         self.session.add(job)
@@ -145,7 +148,11 @@ class WorkflowService:
             job_type=source.job_type,
             status="pending",
             input_json=dict(source.input_json or {}),
-            output_json={"retry_of_job_id": source.id},
+            output_json={
+                "retry_of_job_id": source.id,
+                "stage": "queued",
+                "stage_message": "Queued retry for literature-to-ideas workflow.",
+            },
             progress=0.0,
         )
         self.session.add(retry)
@@ -173,17 +180,56 @@ class WorkflowService:
         max_ideas_per_gap = max(1, min(max_ideas_per_gap, 5))
 
         self._raise_if_canceled(job.id)
+        self._update_job(
+            job.id,
+            progress=0.1,
+            output={"paper_id": paper.id},
+            stage="extracting_card",
+            stage_message="Extracting structured paper card.",
+        )
         card = StructuredExtractionService(self.session).extract_paper_card(paper.id)
-        self._update_job(job.id, progress=0.2, output={"paper_id": paper.id, "card_id": card.id})
+        self._update_job(
+            job.id,
+            progress=0.2,
+            output={"paper_id": paper.id, "card_id": card.id},
+            stage="card_extracted",
+            stage_message="Structured paper card extracted.",
+        )
         self._raise_if_canceled(job.id)
+        self._update_job(
+            job.id,
+            progress=0.3,
+            output={},
+            stage="mining_gaps",
+            stage_message="Mining research gaps from paper evidence.",
+        )
         gaps = GapService(self.session).mine_gaps([paper.id], max_gaps)
-        self._update_job(job.id, progress=0.4, output={"gap_ids": [gap.id for gap in gaps]})
+        self._update_job(
+            job.id,
+            progress=0.4,
+            output={"gap_ids": [gap.id for gap in gaps]},
+            stage="gaps_mined",
+            stage_message=f"Generated {len(gaps)} research gaps.",
+        )
         self._raise_if_canceled(job.id)
+        self._update_job(
+            job.id,
+            progress=0.48,
+            output={},
+            stage="generating_ideas",
+            stage_message="Generating structured research ideas.",
+        )
         ideas = StructuredIdeaService(self.session).generate_from_gaps(
             [gap.id for gap in gaps],
             max_ideas_per_gap,
         )
-        self._update_job(job.id, progress=0.55, output={"idea_ids": [idea.id for idea in ideas]})
+        self._update_job(
+            job.id,
+            progress=0.55,
+            output={"idea_ids": [idea.id for idea in ideas]},
+            stage="ideas_generated",
+            stage_message=f"Generated {len(ideas)} research ideas.",
+        )
 
         novelty_checks: list[NoveltyCheck] = []
         reviews: list[Review] = []
@@ -193,6 +239,13 @@ class WorkflowService:
         experiment_service = ExperimentService(self.session)
         for idea in ideas:
             self._raise_if_canceled(job.id)
+            self._update_job(
+                job.id,
+                progress=0.65,
+                output={},
+                stage="building_quality_artifacts",
+                stage_message="Creating novelty checks, reviews, and experiment plans.",
+            )
             if run_novelty_check:
                 novelty_checks.append(novelty_service.create_check(idea.id))
             if run_review:
@@ -207,11 +260,23 @@ class WorkflowService:
                 "review_ids": [review.id for review in reviews],
                 "experiment_plan_ids": [plan.id for plan in experiment_plans],
             },
+            stage="quality_artifacts_completed",
+            stage_message=(
+                f"Created {len(novelty_checks)} novelty checks, {len(reviews)} reviews, "
+                f"and {len(experiment_plans)} experiment plans."
+            ),
         )
 
         markdown_export = ""
         if include_markdown_export:
             self._raise_if_canceled(job.id)
+            self._update_job(
+                job.id,
+                progress=0.92,
+                output={},
+                stage="rendering_markdown",
+                stage_message="Rendering Markdown dossier bundle.",
+            )
             markdown_export = self._render_markdown_bundle(ideas)
 
         self._complete_job(
@@ -225,6 +290,8 @@ class WorkflowService:
                 "review_ids": [review.id for review in reviews],
                 "experiment_plan_ids": [plan.id for plan in experiment_plans],
                 "markdown_export_chars": len(markdown_export),
+                "stage": "completed",
+                "stage_message": "Completed literature-to-ideas workflow.",
             },
         )
         job = self.session.get(Job, job.id) or job
@@ -272,10 +339,26 @@ class WorkflowService:
             raise JobCanceledError("Job canceled before execution")
         job.status = "running"
         job.progress = 0.05
+        existing_output = job.output_json or {}
+        lease = self._refreshed_lease(existing_output)
+        job.output_json = {
+            **existing_output,
+            "stage": "starting",
+            "stage_message": "Starting literature-to-ideas workflow.",
+            **({"lease": lease} if lease else {}),
+        }
         job.started_at = utc_now()
         self.session.commit()
 
-    def _update_job(self, job_id: str, *, progress: float, output: dict) -> None:
+    def _update_job(
+        self,
+        job_id: str,
+        *,
+        progress: float,
+        output: dict,
+        stage: str = "",
+        stage_message: str = "",
+    ) -> None:
         job = self.session.get(Job, job_id)
         if job is None:
             return
@@ -283,7 +366,16 @@ class WorkflowService:
         if job.status == "canceled":
             raise JobCanceledError("Job canceled during execution")
         job.progress = progress
-        job.output_json = {**(job.output_json or {}), **output}
+        stage_output = {}
+        if stage:
+            stage_output["stage"] = stage
+        if stage_message:
+            stage_output["stage_message"] = stage_message
+        existing_output = job.output_json or {}
+        lease = self._refreshed_lease(existing_output)
+        if lease:
+            stage_output["lease"] = lease
+        job.output_json = {**existing_output, **output, **stage_output}
         self.session.commit()
 
     def _complete_job(self, job_id: str, output: dict) -> None:
@@ -293,11 +385,23 @@ class WorkflowService:
         self.session.refresh(job)
         if job.status == "canceled":
             raise JobCanceledError("Job canceled before completion")
+        existing_output = job.output_json or {}
+        lease = self._refreshed_lease(existing_output)
+        if lease:
+            lease["completed_at"] = utc_now().isoformat()
+            output = {**output, "lease": lease}
         job.status = "completed"
         job.progress = 1.0
         job.output_json = output
         job.finished_at = utc_now()
         self.session.commit()
+
+    def _refreshed_lease(self, output: dict) -> dict:
+        lease = dict(output.get("lease") or {})
+        if not lease:
+            return {}
+        lease["heartbeat_at"] = utc_now().isoformat()
+        return lease
 
     def _raise_if_canceled(self, job_id: str) -> None:
         job = self.session.get(Job, job_id)

@@ -96,6 +96,9 @@ def test_real_paper_evaluator_renders_retrieval_comparison_summary() -> None:
             {
                 "filename": "paper.pdf",
                 "status": "completed",
+                "warnings": [
+                    "embedding_provider_fallback: embeddings used local hash fallback instead of the configured external embedding provider"
+                ],
                 "workflow": {"idea_titles": ["Specific geolocalization idea"]},
                 "metrics": {
                     "sections": 1,
@@ -105,6 +108,10 @@ def test_real_paper_evaluator_renders_retrieval_comparison_summary() -> None:
                     "ideas": 1,
                     "reviews": 1,
                     "experiment_plans": 1,
+                    "workflow_execution_mode": "async_job_polling",
+                    "workflow_recovered": False,
+                    "workflow_stage": "completed",
+                    "workflow_poll_points": 4,
                     "embedding_model": "qwen3-vl-embedding",
                     "embedding_dimension": 2560,
                     "embedding_indexed": 3,
@@ -113,6 +120,12 @@ def test_real_paper_evaluator_renders_retrieval_comparison_summary() -> None:
                     "retrieval_top_evidence_overlap": 2,
                     "retrieval_comparison_queries": 3,
                     "local_retrieval_embedding_indexed": 3,
+                    "warning_count": 1,
+                    "provider_fallback_warning_count": 1,
+                    "benchmark_run_count": 1,
+                    "benchmark_completed_count": 1,
+                    "benchmark_metric_count": 2,
+                    "experiment_run_source": "benchmark_profile",
                 },
             }
         ],
@@ -123,7 +136,20 @@ def test_real_paper_evaluator_renders_retrieval_comparison_summary() -> None:
 
     assert report["summary"]["retrieval_top_evidence_overlap"] == 2
     assert report["summary"]["retrieval_comparison_queries"] == 3
+    assert report["summary"]["warning_count"] == 1
+    assert report["summary"]["provider_fallback_warning_count"] == 1
+    assert report["summary"]["benchmark_run_count"] == 1
+    assert report["summary"]["benchmark_completed_count"] == 1
     assert "Retrieval comparison: `2` / `3` top evidence overlap" in markdown
+    assert "Workflow recoveries: `0`" in markdown
+    assert "Warnings/provider fallbacks: `1` / `1`" in markdown
+    assert "Benchmark runs/completed: `1` / `1`" in markdown
+    assert (
+        "Workflow: `async_job_polling` stage `completed` recovered `False` poll points `4`"
+        in markdown
+    )
+    assert "embedding_provider_fallback" in markdown
+    assert "Benchmark: runs `1` completed `1` metrics `2` source `benchmark_profile`" in markdown
 
 
 def test_real_paper_evaluator_summarizes_recovered_workflow_artifacts() -> None:
@@ -149,11 +175,51 @@ def test_real_paper_evaluator_summarizes_recovered_workflow_artifacts() -> None:
     assert summary["job_id"] == "job-1"
     assert summary["job_status"] == "running"
     assert summary["job_progress"] == 0.55
+    assert summary["job_stage"] == ""
     assert summary["execution_mode"] == "recovered_from_job_artifacts"
     assert summary["recovered_from_job_artifacts"] is True
     assert summary["gap_count"] == 1
     assert summary["idea_count"] == 1
     assert summary["warning"].startswith("WorkflowTimeoutError")
+
+
+def test_real_paper_evaluator_can_summarize_normal_async_artifacts() -> None:
+    workflow = evaluate_real_papers._workflow_from_artifacts(
+        {
+            "job": {"id": "job-2", "status": "completed", "progress": 1.0, "stage": "completed"},
+            "paper": {"id": "paper-2"},
+            "card": {"id": "card-2"},
+            "gaps": [{"id": "gap-2", "title": "Async gap"}],
+            "ideas": [{"id": "idea-2", "title": "Async idea"}],
+            "reviews": [{"id": "review-2"}],
+            "novelty_checks": [],
+            "experiment_plans": [{"id": "plan-2"}],
+            "markdown_export": "# Async",
+            "message": "Loaded artifacts.",
+        },
+        recovered_from_job_artifacts=False,
+    )
+    workflow["_workflow_execution_mode"] = "async_job_polling"
+
+    summary = evaluate_real_papers._summarize_workflow(workflow)
+
+    assert summary["execution_mode"] == "async_job_polling"
+    assert summary["recovered_from_job_artifacts"] is False
+    assert summary["job_stage"] == "completed"
+    assert summary["review_count"] == 1
+    assert summary["experiment_plan_count"] == 1
+
+
+def test_real_paper_evaluator_records_embedding_provider_fallback_warning() -> None:
+    result = {"warnings": []}
+
+    provider_fallback = evaluate_real_papers._record_provider_fallback_warning(
+        result,
+        {"model": "local_hash_embedding_v0"},
+    )
+
+    assert provider_fallback is True
+    assert result["warnings"][0].startswith("embedding_provider_fallback")
 
 
 def _write_report(

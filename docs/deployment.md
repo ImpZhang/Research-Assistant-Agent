@@ -60,6 +60,24 @@ BENCHMARK_PROFILE_MANIFEST_PATH=./configs/benchmark_profiles.json
 
 `GET /research/benchmark-profiles` lists built-in and optional local benchmark profiles. The committed example manifest is `configs/benchmark_profiles.example.json`; the real `configs/benchmark_profiles.json` file is ignored so local dataset and prediction paths stay machine-specific. The built-in geolocalization profile expects ground truth under `data/benchmarks/geoloc/validation.jsonl` and predictions under `outputs/predictions/geoloc/validation.jsonl`, then runs `scripts/benchmark_geoloc_predictions.py` to emit `country_accuracy` plus optional geodesic-distance metrics.
 
+Async literature-to-ideas jobs can run in either the simple in-process background mode or an external local worker mode:
+
+```bash
+# Default: API queues and runs the job through FastAPI BackgroundTasks.
+WORKFLOW_BACKGROUND_TASKS_ENABLED=true
+
+# Optional: API only queues jobs; run scripts/run_workflow_worker.py separately.
+WORKFLOW_BACKGROUND_TASKS_ENABLED=false
+```
+
+For worker mode, start the API normally, then run:
+
+```bash
+.venv/bin/python scripts/run_workflow_worker.py --poll-interval-seconds 2
+```
+
+The worker stores only job ids, stage labels, and lease/heartbeat metadata in SQLite. It must not log or persist raw `.env` values, API keys, cookies, or provider credentials. Use `--once` for a single diagnostic job; do not configure it as a persistent service unless that operational change is explicitly approved.
+
 Model provider variables can stay empty for deterministic fallback behavior, or be filled with OpenAI-compatible endpoints:
 
 ```bash
@@ -134,6 +152,7 @@ Before starting or upgrading a local personal-agent service:
 - [ ] Verify `GET /health`, `GET /health/ready`, and authenticated `GET /research/status` before sharing `/workbench`; confirm the health payload build commit matches the intended deployment commit; confirm the response includes `X-Request-ID` or the configured request-id header; confirm `request_id_header.ok=true`; confirm `database_storage.ok=true` for SQLite persistence; confirm `workbench_assets.ok=true` for the browser entrypoint; review `model_provider_configuration.roles` for fallback versus external-model mode; if API-key auth is enabled, confirm `api_key_auth.ok=true` and `api_key_auth.configured=true`; if write audit is enabled, confirm the readiness payload includes an enabled, writable `write_audit_dir` check, and if external literature search is enabled, confirm `external_literature_search.ok=true`.
 - [ ] Open `/workbench`, save the API key in the top bar if auth is enabled, refresh the Workbench launch panel, and confirm the first-run empty/error states are actionable.
 - [ ] If MCP clients are used, run the bridge health check with the same API key and the intended read-only or allow/deny policy.
+- [ ] If `WORKFLOW_BACKGROUND_TASKS_ENABLED=false`, start `scripts/run_workflow_worker.py` in a separate local terminal and verify queued jobs move from `pending` to `running` to `completed`.
 - [ ] If audit summary/export features are enabled in a future release, confirm the separate admin authorization gate described in `docs/admin_authorization_policy.md`.
 - [ ] Record the deployed commit, verification commands, and rollback note in the project progress log or release notes.
 

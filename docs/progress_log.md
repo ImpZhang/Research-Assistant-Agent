@@ -2,6 +2,44 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-28 - Async-Poll Real Evaluation Workflow
+
+Implementation completed:
+
+- Added explicit workflow job stage reporting through `JobRead.stage` and `JobRead.stage_message`.
+- Updated `WorkflowService` to persist stage/progress updates for queued, starting, card extraction, gap mining, idea generation, quality artifact creation, Markdown rendering, completion, and timeout states.
+- Added `WORKFLOW_BACKGROUND_TASKS_ENABLED`; when set to `false`, async workflow routes only enqueue jobs so a separate local worker can consume them.
+- Added `WorkflowWorkerService` and `scripts/run_workflow_worker.py` as a project-local SQLite worker path that claims pending workflow jobs, records lease/heartbeat metadata in `Job.output_json`, runs the workflow, and preserves existing polling/artifact endpoints.
+- Changed `scripts/evaluate_real_papers.py` default workflow execution mode to `async-poll`.
+- Implemented a local short-lived worker process for real-paper evaluation jobs so the evaluator can queue a workflow job, poll `GET /research/jobs/{job_id}`, hydrate artifacts, and avoid relying on `TestClient` synchronous background-task behavior.
+- Preserved `--workflow-mode sync-endpoint` as a legacy diagnostic option.
+- Added optional benchmark-profile execution to the real-paper evaluator with `--benchmark-profile-id` and `--require-benchmark-profile`, so deep quality reports can use guarded local benchmark runs instead of only synthetic planning dry runs.
+- Added workflow poll history, execution mode, stage, recovery count, and provider-fallback warning counts to JSON and Markdown real-paper evaluation reports.
+- Added `--require-external-embeddings` so strict real-provider evaluations fail when embedding rebuild falls back to local hash embeddings.
+- Added tests for job stage serialization, local worker execution, normal async artifact summaries, recovered artifact summaries, provider-fallback warnings, benchmark-backed report rendering, and report rendering.
+
+Real verification completed:
+
+- Ran one real GeoToken PDF through the new `async-poll` evaluator path with `--skip-deep-quality-loop` and `--skip-retrieval-mode-comparison`.
+- Verified visible stage polling: `queued`, `extracting_card`, `generating_ideas`, and `completed`.
+- Latest smoke report: `outputs/evaluations/real_paper_eval_20260628_044953.json`.
+- The smoke completed `1 / 1` paper with no workflow recovery.
+- Ran one real GeoToken PDF through the benchmark-backed deep quality path with `--benchmark-profile-id json-metrics-smoke`.
+- Benchmark-backed smoke report: `outputs/evaluations/real_paper_eval_20260628_050448.json`.
+- The benchmark-backed smoke completed `1 / 1` paper, recorded `workflow_execution_mode=async_job_polling`, `workflow_stage=completed`, `benchmark_run_count=1`, `benchmark_completed_count=1`, and `experiment_run_source=benchmark_profile`.
+- External embedding provider smoke currently fails for embedding with `HTTP 403 AllocationQuota.FreeTierOnly`; main, extraction, judge, and rerank still pass. The evaluator now records local-hash fallback warnings and can fail strictly via `--require-external-embeddings`.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/research/schemas.py backend/research/routes.py backend/research/services/workflow_service.py scripts/evaluate_real_papers.py tests/test_app.py tests/test_evaluation_reports.py` passed.
+- `.venv/bin/ruff format --check backend/research/schemas.py backend/research/routes.py backend/research/services/workflow_service.py scripts/evaluate_real_papers.py tests/test_app.py tests/test_evaluation_reports.py` passed.
+- `.venv/bin/python -m pytest tests/test_evaluation_reports.py tests/test_app.py::test_literature_to_ideas_workflow_runs_full_pipeline tests/test_app.py::test_async_literature_to_ideas_workflow_completes_job_trace tests/test_app.py::test_job_cancel_and_retry_controls` passed: `10 passed`.
+- `.venv/bin/python -m pytest tests/test_evaluation_reports.py tests/test_sota_signoff_and_benchmark.py tests/test_app.py::test_literature_to_ideas_workflow_runs_full_pipeline tests/test_app.py::test_async_literature_to_ideas_workflow_completes_job_trace tests/test_app.py::test_async_literature_to_ideas_workflow_can_run_from_local_worker tests/test_app.py::test_job_cancel_and_retry_controls` passed: `23 passed`.
+- `bash scripts/check_workflow_job_controls.sh` passed: `9 passed`.
+- `bash scripts/check_local_safe_suite.sh` passed, including focused coverage, local readiness, project skills, operational preflight, backup/restore contracts, workflow primitives, workflow job controls, local geolocalization benchmark smoke, and context-search/evaluation checks.
+- `.venv/bin/python scripts/run_workflow_worker.py --once` passed with an idle empty-queue result.
+- `env ALLOW_REAL_MODEL_PROVIDER_SMOKE=1 .venv/bin/python scripts/smoke_model_providers.py` confirmed embedding quota exhaustion and successful main/extraction/judge/rerank checks.
+
 ## 2026-06-27 - Real Paper Evaluation Runner Hardening
 
 Implementation completed:

@@ -24,6 +24,7 @@ This document is the starting point for future development. Use it to find the r
 | `scripts/build_local_backup_manifest.py` | Read-only aggregate manifest for local data backup scope, counts, sizes, and excluded secret files. | Before backing up or moving a local checkout's data. |
 | `scripts/rehearse_local_backup_restore.py` | Synthetic backup/restore rehearsal that validates archive, restore, manifest comparison, and secret-exclusion logic without copying live local data. | Before changing backup, restore, packaging, or local handoff behavior. |
 | `scripts/check_sqlite_maintenance.py` | Read-only SQLite maintenance report for database size, sidecars, table counts, vector-index counts, trace counts, and safe recommendations. | Before SQLite troubleshooting, approved maintenance, or local handoff. |
+| `scripts/run_workflow_worker.py` | Optional local SQLite worker that consumes queued workflow jobs when `WORKFLOW_BACKGROUND_TASKS_ENABLED=false`. | When running long async workflows outside the API process. |
 
 ## Product And Architecture
 

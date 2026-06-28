@@ -49,6 +49,7 @@ from backend.research.services.retrieval_service import RetrievalService, Scored
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
 from backend.research.services.workflow_service import WorkflowService
+from backend.research.services.workflow_worker_service import WorkflowWorkerService
 
 
 def test_health() -> None:
@@ -9227,6 +9228,8 @@ Future work should connect the workflow to front-end actions and MCP tools.
     job_body = job.json()
     assert job_body["status"] == "completed"
     assert job_body["progress"] == 1.0
+    assert job_body["stage"] == "completed"
+    assert job_body["stage_message"] == "Completed literature-to-ideas workflow."
     assert job_body["output"]["paper_id"] == paper_id
     assert len(job_body["output"]["idea_ids"]) == len(body["ideas"])
 
@@ -9298,9 +9301,70 @@ Future work should connect async jobs to a frontend progress view and MCP tools.
 
     assert job_body["status"] == "completed"
     assert job_body["progress"] == 1.0
+    assert job_body["stage"] == "completed"
+    assert job_body["output"]["stage"] == "completed"
     assert job_body["output"]["paper_id"] == paper_id
     assert job_body["output"]["card_id"]
     assert len(job_body["output"]["idea_ids"]) >= 1
+
+
+def test_async_literature_to_ideas_workflow_can_run_from_local_worker(monkeypatch) -> None:
+    monkeypatch.setenv("WORKFLOW_BACKGROUND_TASKS_ENABLED", "false")
+    client = TestClient(create_app())
+    content = b"""Local Worker Workflow Test Paper
+
+Abstract
+This paper checks whether the async endpoint can queue work for a local worker process.
+
+Introduction
+Personal deployments need a mode where the API returns quickly and a separate worker consumes pending jobs.
+
+Method
+The local worker should claim the pending job, persist lease metadata, run the workflow, and complete artifacts.
+
+Conclusion
+The worker mode should preserve existing job polling and artifact hydration contracts.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("local_worker_workflow_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    queued = client.post(
+        "/research/workflows/literature-to-ideas/async",
+        json={
+            "paper_id": paper_id,
+            "max_gaps": 1,
+            "max_ideas_per_gap": 1,
+            "include_markdown_export": False,
+        },
+    )
+    assert queued.status_code == 200
+    queued_body = queued.json()
+    assert queued_body["status"] == "pending"
+    assert queued_body["stage"] == "queued"
+
+    with SessionLocal() as session:
+        result = WorkflowWorkerService(session, worker_id="pytest-worker").run_once()
+
+    assert result.status == "completed"
+    assert result.job_id == queued_body["id"]
+
+    job = client.get(f"/research/jobs/{queued_body['id']}")
+    assert job.status_code == 200
+    job_body = job.json()
+    assert job_body["status"] == "completed"
+    assert job_body["stage"] == "completed"
+    assert job_body["output"]["paper_id"] == paper_id
+    assert job_body["output"]["lease"]["worker_id"] == "pytest-worker"
+    assert job_body["output"]["lease"]["mode"] == "local_sqlite_worker"
+    assert job_body["output"]["lease"]["completed_at"]
+
+    artifacts = client.get(f"/research/jobs/{queued_body['id']}/artifacts")
+    assert artifacts.status_code == 200
+    assert artifacts.json()["paper"]["id"] == paper_id
 
 
 def _hit_at_k(ordered_ids: list[str], expected_ids: set[str], k: int) -> float:

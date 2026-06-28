@@ -105,6 +105,16 @@ class Settings:
 
     model_provider_timeout_seconds: float = float(os.getenv("MODEL_PROVIDER_TIMEOUT_SECONDS", "60"))
 
+    workflow_background_tasks_enabled: bool = os.getenv(
+        "WORKFLOW_BACKGROUND_TASKS_ENABLED",
+        "true",
+    ).lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
     benchmark_runner_enabled: bool = os.getenv("BENCHMARK_RUNNER_ENABLED", "false").lower() in {
         "1",
         "true",

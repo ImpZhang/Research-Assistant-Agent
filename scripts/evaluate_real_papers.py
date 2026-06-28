@@ -8,8 +8,10 @@ import json
 import mimetypes
 import os
 from pathlib import Path
+from multiprocessing import Process
 import signal
 import sys
+import time
 from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -20,10 +22,14 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from backend.app import create_app  # noqa: E402
 from backend.research.db import SessionLocal  # noqa: E402
-from backend.research.models import Job  # noqa: E402
+from backend.research.models import Job, utc_now  # noqa: E402
 from backend.research.services.embedding_service import EmbeddingService  # noqa: E402
 from backend.research.services.related_work_service import RelatedWorkService  # noqa: E402
 from backend.research.services.retrieval_service import RetrievalService  # noqa: E402
+from backend.research.services.workflow_service import (  # noqa: E402
+    JobCanceledError,
+    WorkflowService,
+)
 
 
 DEFAULT_CONTEXT_QUERIES = [
@@ -51,7 +57,22 @@ def main() -> int:
         "--workflow-timeout-seconds",
         type=int,
         default=180,
-        help="Abort the in-process workflow call after this many seconds and recover job artifacts.",
+        help="Abort the workflow worker after this many seconds and recover job artifacts.",
+    )
+    parser.add_argument(
+        "--workflow-mode",
+        choices=["async-poll", "sync-endpoint"],
+        default="async-poll",
+        help=(
+            "Run literature-to-ideas through a local job worker and poll status, or use the "
+            "legacy synchronous endpoint."
+        ),
+    )
+    parser.add_argument(
+        "--workflow-poll-interval-seconds",
+        type=float,
+        default=1.5,
+        help="Polling interval for async-poll workflow jobs.",
     )
     parser.add_argument(
         "--deep-step-timeout-seconds",
@@ -66,6 +87,21 @@ def main() -> int:
             "Run the workflow's built-in novelty check. Disabled by default because it may call "
             "external literature providers and can dominate real-paper evaluation time."
         ),
+    )
+    parser.add_argument(
+        "--require-external-embeddings",
+        action="store_true",
+        help="Fail a paper evaluation if embedding rebuild falls back to local hash embeddings.",
+    )
+    parser.add_argument(
+        "--benchmark-profile-id",
+        default="",
+        help="Optional benchmark profile id to execute for the top generated idea's experiment plan.",
+    )
+    parser.add_argument(
+        "--require-benchmark-profile",
+        action="store_true",
+        help="Fail a paper evaluation when --benchmark-profile-id is set but cannot execute.",
     )
     parser.add_argument(
         "--skip-deep-quality-loop",
@@ -101,8 +137,13 @@ def main() -> int:
             "max_ideas_per_gap": args.max_ideas_per_gap,
             "context_limit": args.context_limit,
             "workflow_timeout_seconds": args.workflow_timeout_seconds,
+            "workflow_mode": args.workflow_mode,
+            "workflow_poll_interval_seconds": args.workflow_poll_interval_seconds,
             "deep_step_timeout_seconds": args.deep_step_timeout_seconds,
             "run_workflow_novelty_check": args.run_workflow_novelty_check,
+            "require_external_embeddings": args.require_external_embeddings,
+            "benchmark_profile_id": args.benchmark_profile_id,
+            "require_benchmark_profile": args.require_benchmark_profile,
             "run_deep_quality_loop": not args.skip_deep_quality_loop,
             "compare_retrieval_modes": not args.skip_retrieval_mode_comparison,
         },
@@ -120,8 +161,13 @@ def main() -> int:
                 max_ideas_per_gap=args.max_ideas_per_gap,
                 context_limit=args.context_limit,
                 workflow_timeout_seconds=args.workflow_timeout_seconds,
+                workflow_mode=args.workflow_mode,
+                workflow_poll_interval_seconds=args.workflow_poll_interval_seconds,
                 deep_step_timeout_seconds=args.deep_step_timeout_seconds,
                 run_workflow_novelty_check=args.run_workflow_novelty_check,
+                require_external_embeddings=args.require_external_embeddings,
+                benchmark_profile_id=args.benchmark_profile_id,
+                require_benchmark_profile=args.require_benchmark_profile,
                 run_deep_quality_loop=not args.skip_deep_quality_loop,
                 compare_retrieval_modes=not args.skip_retrieval_mode_comparison,
             )
@@ -150,8 +196,13 @@ def _evaluate_one_paper(
     max_ideas_per_gap: int,
     context_limit: int,
     workflow_timeout_seconds: int,
+    workflow_mode: str,
+    workflow_poll_interval_seconds: float,
     deep_step_timeout_seconds: int,
     run_workflow_novelty_check: bool,
+    require_external_embeddings: bool,
+    benchmark_profile_id: str,
+    require_benchmark_profile: bool,
     run_deep_quality_loop: bool,
     compare_retrieval_modes: bool,
 ) -> dict[str, Any]:
@@ -161,6 +212,7 @@ def _evaluate_one_paper(
         "status": "failed",
         "steps": {},
         "metrics": {},
+        "warnings": [],
         "errors": [],
     }
     try:
@@ -199,6 +251,8 @@ def _evaluate_one_paper(
             max_ideas_per_gap=max_ideas_per_gap,
             run_workflow_novelty_check=run_workflow_novelty_check,
             workflow_timeout_seconds=workflow_timeout_seconds,
+            workflow_mode=workflow_mode,
+            workflow_poll_interval_seconds=workflow_poll_interval_seconds,
         )
         result["workflow"] = _summarize_workflow(workflow)
         result["steps"]["workflow"] = (
@@ -219,6 +273,11 @@ def _evaluate_one_paper(
         )
         result["embeddings"] = embeddings
         result["steps"]["embeddings"] = "ok"
+        provider_fallback = _record_provider_fallback_warning(result, embeddings)
+        if provider_fallback and require_external_embeddings:
+            raise RuntimeError(
+                "embedding provider fallback detected while --require-external-embeddings is set"
+            )
 
         context_results = []
         for query in DEFAULT_CONTEXT_QUERIES:
@@ -259,6 +318,8 @@ def _evaluate_one_paper(
                     workflow=workflow,
                     path=path,
                     step_timeout_seconds=deep_step_timeout_seconds,
+                    benchmark_profile_id=benchmark_profile_id,
+                    require_benchmark_profile=require_benchmark_profile,
                 )
                 result["steps"]["deep_quality_loop"] = "ok"
             print(f"- readiness/quality/advisor: {path.name}", flush=True)
@@ -298,6 +359,20 @@ def _evaluate_one_paper(
     return result
 
 
+def _record_provider_fallback_warning(
+    result: dict[str, Any],
+    embeddings: dict[str, Any],
+) -> bool:
+    model = embeddings.get("model", "")
+    if model.startswith("local_hash"):
+        result.setdefault("warnings", []).append(
+            "embedding_provider_fallback: embeddings used local hash fallback instead of the "
+            "configured external embedding provider"
+        )
+        return True
+    return False
+
+
 def _run_workflow_with_recovery(
     client: TestClient,
     *,
@@ -307,6 +382,8 @@ def _run_workflow_with_recovery(
     max_ideas_per_gap: int,
     run_workflow_novelty_check: bool,
     workflow_timeout_seconds: int,
+    workflow_mode: str,
+    workflow_poll_interval_seconds: float,
 ) -> dict[str, Any]:
     payload = {
         "paper_id": paper_id,
@@ -317,6 +394,16 @@ def _run_workflow_with_recovery(
         "run_experiment_plan": True,
         "include_markdown_export": True,
     }
+    if workflow_mode == "async-poll":
+        return _run_workflow_with_local_worker_polling(
+            client,
+            payload=payload,
+            paper_id=paper_id,
+            path=path,
+            timeout_seconds=workflow_timeout_seconds,
+            poll_interval_seconds=workflow_poll_interval_seconds,
+        )
+
     try:
         response = _call_with_timeout(
             lambda: client.post("/research/workflows/literature-to-ideas", json=payload),
@@ -333,6 +420,146 @@ def _run_workflow_with_recovery(
         recovered["_workflow_execution_mode"] = "recovered_from_job_artifacts"
         recovered["_workflow_warning"] = f"{exc.__class__.__name__}: {str(exc)[:240]}"
         return recovered
+
+
+def _run_workflow_with_local_worker_polling(
+    client: TestClient,
+    *,
+    payload: dict[str, Any],
+    paper_id: str,
+    path: Path,
+    timeout_seconds: int,
+    poll_interval_seconds: float,
+) -> dict[str, Any]:
+    job_id = _queue_local_workflow_job(payload)
+    worker = Process(target=_run_local_workflow_job_worker, args=(job_id,), daemon=True)
+    worker.start()
+    poll_history: list[dict[str, Any]] = []
+    deadline = time.monotonic() + max(1, timeout_seconds)
+    last_stage = ""
+    last_status = ""
+    final_job: dict[str, Any] | None = None
+
+    while time.monotonic() < deadline:
+        job = _require_ok(client.get(f"/research/jobs/{job_id}"), f"workflow job {job_id}")
+        final_job = job
+        stage = job.get("stage") or (job.get("output") or {}).get("stage") or ""
+        status = job.get("status", "")
+        progress = float(job.get("progress") or 0.0)
+        poll_history.append(
+            {
+                "status": status,
+                "progress": round(progress, 4),
+                "stage": stage,
+                "stage_message": job.get("stage_message", ""),
+            }
+        )
+        if stage != last_stage or status != last_status:
+            print(
+                f"  - workflow job {job_id}: {status} {progress:.0%} {stage}".rstrip(),
+                flush=True,
+            )
+            last_stage = stage
+            last_status = status
+        if status == "completed":
+            worker.join(timeout=5)
+            artifacts = _require_ok(
+                client.get(f"/research/jobs/{job_id}/artifacts"),
+                f"workflow artifacts {path.name}",
+            )
+            workflow = _workflow_from_artifacts(artifacts, recovered_from_job_artifacts=False)
+            workflow["_workflow_execution_mode"] = "async_job_polling"
+            workflow["_poll_history"] = _compact_poll_history(poll_history)
+            return workflow
+        if status in {"failed", "canceled"}:
+            worker.join(timeout=5)
+            recovered = _recover_latest_workflow_artifacts(client, paper_id=paper_id)
+            if recovered is None:
+                raise RuntimeError(
+                    f"workflow job {job_id} ended as {status}: {job.get('error', '')}"
+                )
+            recovered["_workflow_execution_mode"] = "recovered_from_job_artifacts"
+            recovered["_workflow_warning"] = (
+                f"workflow job {job_id} ended as {status}: {job.get('error', '')[:240]}"
+            )
+            recovered["_poll_history"] = _compact_poll_history(poll_history)
+            return recovered
+        time.sleep(max(0.1, poll_interval_seconds))
+
+    if worker.is_alive():
+        worker.terminate()
+        worker.join(timeout=5)
+    _mark_workflow_job_timed_out(job_id, timeout_seconds)
+    recovered = _recover_latest_workflow_artifacts(client, paper_id=paper_id)
+    if recovered is None:
+        stage = (final_job or {}).get("stage", "")
+        raise WorkflowTimeoutError(
+            f"workflow {path.name} timed out after {timeout_seconds} seconds at stage {stage}"
+        )
+    recovered["_workflow_execution_mode"] = "recovered_from_job_artifacts"
+    recovered["_workflow_warning"] = (
+        f"WorkflowTimeoutError: workflow {path.name} timed out after {timeout_seconds} seconds"
+    )
+    recovered["_poll_history"] = _compact_poll_history(poll_history)
+    return recovered
+
+
+def _queue_local_workflow_job(payload: dict[str, Any]) -> str:
+    session = SessionLocal()
+    try:
+        job = WorkflowService(session).queue_literature_to_ideas(
+            paper_id=payload["paper_id"],
+            max_gaps=payload.get("max_gaps", 4),
+            max_ideas_per_gap=payload.get("max_ideas_per_gap", 2),
+            run_review=payload.get("run_review", True),
+            run_novelty_check=payload.get("run_novelty_check", True),
+            run_experiment_plan=payload.get("run_experiment_plan", True),
+            include_markdown_export=payload.get("include_markdown_export", True),
+        )
+        return job.id
+    finally:
+        session.close()
+
+
+def _run_local_workflow_job_worker(job_id: str) -> None:
+    session = SessionLocal()
+    try:
+        WorkflowService(session).run_literature_to_ideas_job(job_id)
+    except JobCanceledError:
+        return
+    finally:
+        session.close()
+
+
+def _mark_workflow_job_timed_out(job_id: str, timeout_seconds: int) -> None:
+    session = SessionLocal()
+    try:
+        job = session.get(Job, job_id)
+        if job is None or job.status not in {"pending", "running"}:
+            return
+        job.status = "canceled"
+        job.error = f"Timed out by real-paper evaluator after {timeout_seconds} seconds"
+        job.finished_at = utc_now()
+        job.output_json = {
+            **(job.output_json or {}),
+            "stage": "timed_out",
+            "stage_message": job.error,
+        }
+        session.commit()
+    finally:
+        session.close()
+
+
+def _compact_poll_history(poll_history: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    compacted: list[dict[str, Any]] = []
+    seen = set()
+    for item in poll_history:
+        key = (item.get("status"), item.get("stage"), item.get("progress"))
+        if key in seen:
+            continue
+        seen.add(key)
+        compacted.append(item)
+    return compacted[-40:]
 
 
 def _call_with_timeout(
@@ -392,7 +619,11 @@ def _recover_latest_workflow_artifacts(
     return _workflow_from_artifacts(artifacts)
 
 
-def _workflow_from_artifacts(artifacts: dict[str, Any]) -> dict[str, Any]:
+def _workflow_from_artifacts(
+    artifacts: dict[str, Any],
+    *,
+    recovered_from_job_artifacts: bool = True,
+) -> dict[str, Any]:
     job = artifacts.get("job") or {}
     return {
         "job_id": job.get("id", ""),
@@ -407,7 +638,10 @@ def _workflow_from_artifacts(artifacts: dict[str, Any]) -> dict[str, Any]:
         "message": artifacts.get("message", ""),
         "_job_status": job.get("status", ""),
         "_job_progress": job.get("progress", 0.0),
-        "_recovered_from_job_artifacts": True,
+        "_job_stage": job.get("stage") or (job.get("output") or {}).get("stage", ""),
+        "_job_stage_message": job.get("stage_message")
+        or (job.get("output") or {}).get("stage_message", ""),
+        "_recovered_from_job_artifacts": recovered_from_job_artifacts,
     }
 
 
@@ -418,6 +652,8 @@ def _run_deep_quality_loop(
     workflow: dict[str, Any],
     path: Path,
     step_timeout_seconds: int,
+    benchmark_profile_id: str,
+    require_benchmark_profile: bool,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "related_work_matrix_id": "",
@@ -427,8 +663,13 @@ def _run_deep_quality_loop(
         "proposal_review_decision": "",
         "proposal_review_score": 0.0,
         "experiment_run_id": "",
+        "experiment_run_source": "",
         "experiment_analysis_id": "",
         "experiment_analysis_decision": "",
+        "benchmark_profile_id": benchmark_profile_id.strip(),
+        "benchmark_run_id": "",
+        "benchmark_run_status": "",
+        "benchmark_metric_count": 0,
         "decision_memo_id": "",
         "decision": "",
         "assumption_audit_id": "",
@@ -500,31 +741,48 @@ def _run_deep_quality_loop(
         result["proposal_review_decision"] = proposal_review.get("decision", "")
         result["proposal_review_score"] = proposal_review.get("readiness_score", 0.0)
 
-    print(f"  - experiment run: {path.name}", flush=True)
-    experiment_run = _post_json_step(
+    benchmark_run = _run_optional_benchmark_profile(
         client,
-        f"/research/experiment-plans/{experiment_plan_id}/runs",
-        json_payload={
-            "title": "Real-paper evaluation dry run",
-            "status": "completed",
-            "dataset_snapshot": "Synthetic planning checkpoint from real-paper evaluation",
-            "parameters": {"mode": "planning_eval", "source": "real_paper_eval"},
-            "metric_results": {
-                "planning_completeness": 0.72,
-                "evidence_alignment": 0.68,
-                "novelty_risk_remaining": 0.42,
-            },
-            "conclusion": (
-                "Planning checkpoint completed; use real benchmark execution before final claims."
-            ),
-            "notes": "Generated by local real-paper evaluation to exercise the quality gate loop.",
-            "created_by": "real_paper_eval",
-        },
-        label=f"experiment run {path.name}",
-        step_key="experiment_run",
+        experiment_plan_id=experiment_plan_id,
+        benchmark_profile_id=benchmark_profile_id,
+        require_benchmark_profile=require_benchmark_profile,
+        path=path,
         timeout_seconds=step_timeout_seconds,
         result=result,
     )
+    experiment_run = benchmark_run
+    if experiment_run:
+        result["benchmark_run_id"] = experiment_run["id"]
+        result["benchmark_run_status"] = experiment_run.get("status", "")
+        result["benchmark_metric_count"] = len(experiment_run.get("metric_results", {}))
+        result["experiment_run_source"] = "benchmark_profile"
+    else:
+        print(f"  - experiment run: {path.name}", flush=True)
+        experiment_run = _post_json_step(
+            client,
+            f"/research/experiment-plans/{experiment_plan_id}/runs",
+            json_payload={
+                "title": "Real-paper evaluation dry run",
+                "status": "completed",
+                "dataset_snapshot": "Synthetic planning checkpoint from real-paper evaluation",
+                "parameters": {"mode": "planning_eval", "source": "real_paper_eval"},
+                "metric_results": {
+                    "planning_completeness": 0.72,
+                    "evidence_alignment": 0.68,
+                    "novelty_risk_remaining": 0.42,
+                },
+                "conclusion": (
+                    "Planning checkpoint completed; use real benchmark execution before final claims."
+                ),
+                "notes": "Generated by local real-paper evaluation to exercise the quality gate loop.",
+                "created_by": "real_paper_eval",
+            },
+            label=f"experiment run {path.name}",
+            step_key="experiment_run",
+            timeout_seconds=step_timeout_seconds,
+            result=result,
+        )
+        result["experiment_run_source"] = "planning_dry_run" if experiment_run else ""
     if not experiment_run:
         return result
     result["experiment_run_id"] = experiment_run["id"]
@@ -601,6 +859,57 @@ def _run_deep_quality_loop(
         result["assumption_audit_id"] = assumption_audit["id"]
         result["assumption_count"] = len(assumption_audit.get("assumptions", []))
     return result
+
+
+def _run_optional_benchmark_profile(
+    client: TestClient,
+    *,
+    experiment_plan_id: str,
+    benchmark_profile_id: str,
+    require_benchmark_profile: bool,
+    path: Path,
+    timeout_seconds: int,
+    result: dict[str, Any],
+) -> dict[str, Any] | None:
+    profile_id = benchmark_profile_id.strip()
+    if not profile_id:
+        return None
+
+    print(f"  - benchmark profile {profile_id}: {path.name}", flush=True)
+    try:
+        profiles = _require_ok(client.get("/research/benchmark-profiles"), "benchmark profiles")
+        profile = next(
+            (item for item in profiles.get("profiles", []) if item.get("id") == profile_id),
+            None,
+        )
+        if profile is None:
+            raise RuntimeError(f"Benchmark profile not found: {profile_id}")
+        if not profile.get("runnable", False):
+            reason = profile.get("disabled_reason") or "profile is not runnable"
+            raise RuntimeError(f"Benchmark profile {profile_id} is not runnable: {reason}")
+    except Exception as exc:
+        result["steps"]["benchmark_profile"] = "failed"
+        warning = f"benchmark profile {profile_id}: {exc.__class__.__name__}: {str(exc)[:240]}"
+        result["warnings"].append(warning)
+        if require_benchmark_profile:
+            raise RuntimeError(warning) from exc
+        return None
+
+    benchmark_run = _post_json_step(
+        client,
+        f"/research/experiment-plans/{experiment_plan_id}/benchmark-run/execute",
+        json_payload={
+            "profile_id": profile_id,
+            "created_by": "real_paper_eval",
+        },
+        label=f"benchmark profile {profile_id} {path.name}",
+        step_key="benchmark_profile",
+        timeout_seconds=timeout_seconds,
+        result=result,
+    )
+    if benchmark_run is None and require_benchmark_profile:
+        raise RuntimeError(f"Benchmark profile {profile_id} did not execute.")
+    return benchmark_run
 
 
 def _create_local_related_work_matrix_step(
@@ -709,9 +1018,12 @@ def _summarize_workflow(workflow: dict[str, Any]) -> dict[str, Any]:
         "job_id": workflow.get("job_id"),
         "job_status": workflow.get("_job_status", "completed"),
         "job_progress": workflow.get("_job_progress", 1.0),
+        "job_stage": workflow.get("_job_stage", ""),
+        "job_stage_message": workflow.get("_job_stage_message", ""),
         "execution_mode": workflow.get("_workflow_execution_mode", "sync_endpoint"),
         "recovered_from_job_artifacts": bool(workflow.get("_recovered_from_job_artifacts")),
         "warning": workflow.get("_workflow_warning", ""),
+        "poll_history": workflow.get("_poll_history", []),
         "card_id": (workflow.get("card") or {}).get("id"),
         "gap_count": len(workflow.get("gaps", [])),
         "idea_count": len(workflow.get("ideas", [])),
@@ -874,6 +1186,10 @@ def _paper_metrics(result: dict[str, Any]) -> dict[str, Any]:
         "ideas": workflow.get("idea_count", 0),
         "reviews": workflow.get("review_count", 0),
         "experiment_plans": workflow.get("experiment_plan_count", 0),
+        "workflow_execution_mode": workflow.get("execution_mode", ""),
+        "workflow_recovered": bool(workflow.get("recovered_from_job_artifacts")),
+        "workflow_stage": workflow.get("job_stage", ""),
+        "workflow_poll_points": len(workflow.get("poll_history", [])),
         "embedding_indexed": result.get("embeddings", {}).get("indexed_count", 0),
         "embedding_model": result.get("embeddings", {}).get("model", ""),
         "embedding_dimension": result.get("embeddings", {}).get("dimension", 0),
@@ -897,7 +1213,15 @@ def _paper_metrics(result: dict[str, Any]) -> dict[str, Any]:
         "experiment_analysis_decision": deep.get("experiment_analysis_decision", ""),
         "decision_memo": deep.get("decision", ""),
         "assumption_count": deep.get("assumption_count", 0),
+        "benchmark_run_count": 1 if deep.get("benchmark_run_id") else 0,
+        "benchmark_completed_count": (1 if deep.get("benchmark_run_status") == "completed" else 0),
+        "benchmark_metric_count": deep.get("benchmark_metric_count", 0),
+        "experiment_run_source": deep.get("experiment_run_source", ""),
         "deep_quality_warning_count": len(deep.get("warnings", [])),
+        "warning_count": len(result.get("warnings", [])),
+        "provider_fallback_warning_count": sum(
+            1 for warning in result.get("warnings", []) if "provider_fallback" in str(warning)
+        ),
     }
 
 
@@ -929,6 +1253,22 @@ def _build_summary(papers: list[dict[str, Any]]) -> dict[str, Any]:
         "retrieval_comparison_queries": sum(
             paper.get("metrics", {}).get("retrieval_comparison_queries", 0) for paper in completed
         ),
+        "workflow_recovered_count": sum(
+            1 for paper in completed if paper.get("metrics", {}).get("workflow_recovered")
+        ),
+        "warning_count": sum(
+            paper.get("metrics", {}).get("warning_count", 0) for paper in completed
+        ),
+        "provider_fallback_warning_count": sum(
+            paper.get("metrics", {}).get("provider_fallback_warning_count", 0)
+            for paper in completed
+        ),
+        "benchmark_run_count": sum(
+            paper.get("metrics", {}).get("benchmark_run_count", 0) for paper in completed
+        ),
+        "benchmark_completed_count": sum(
+            paper.get("metrics", {}).get("benchmark_completed_count", 0) for paper in completed
+        ),
         "embedding_models": sorted(
             {
                 paper.get("metrics", {}).get("embedding_model", "")
@@ -949,6 +1289,9 @@ def _render_markdown(report: dict[str, Any]) -> str:
         f"- Total gaps: `{report['summary']['total_gaps']}`",
         f"- Total ideas: `{report['summary']['total_ideas']}`",
         f"- Embedding models: `{', '.join(report['summary']['embedding_models']) or 'n/a'}`",
+        f"- Workflow recoveries: `{report['summary'].get('workflow_recovered_count', 0)}`",
+        f"- Warnings/provider fallbacks: `{report['summary'].get('warning_count', 0)}` / `{report['summary'].get('provider_fallback_warning_count', 0)}`",
+        f"- Benchmark runs/completed: `{report['summary'].get('benchmark_run_count', 0)}` / `{report['summary'].get('benchmark_completed_count', 0)}`",
         f"- Retrieval comparison: `{report['summary'].get('retrieval_top_evidence_overlap', 0)}` / `{report['summary'].get('retrieval_comparison_queries', 0)}` top evidence overlap",
         "",
         "## Papers",
@@ -961,6 +1304,7 @@ def _render_markdown(report: dict[str, Any]) -> str:
                 f"### {paper['filename']}",
                 "",
                 f"- Status: `{paper['status']}`",
+                f"- Workflow: `{metrics.get('workflow_execution_mode', '')}` stage `{metrics.get('workflow_stage', '')}` recovered `{metrics.get('workflow_recovered', False)}` poll points `{metrics.get('workflow_poll_points', 0)}`",
                 f"- Sections/chunks/evidence: `{metrics.get('sections', 0)}` / `{metrics.get('chunks', 0)}` / `{metrics.get('evidence', 0)}`",
                 f"- Gaps/ideas/reviews/experiment plans: `{metrics.get('gaps', 0)}` / `{metrics.get('ideas', 0)}` / `{metrics.get('reviews', 0)}` / `{metrics.get('experiment_plans', 0)}`",
                 f"- Embedding: `{metrics.get('embedding_model', 'n/a')}` dim `{metrics.get('embedding_dimension', 0)}` indexed `{metrics.get('embedding_indexed', 0)}`",
@@ -970,9 +1314,13 @@ def _render_markdown(report: dict[str, Any]) -> str:
                 f"- Quality gate: `{metrics.get('quality_decision', '')}` score `{metrics.get('quality_score', 0.0)}`",
                 f"- Proposal review: `{metrics.get('proposal_review_decision', '')}` score `{metrics.get('proposal_review_score', 0.0)}`",
                 f"- Experiment/decision/assumptions: `{metrics.get('experiment_analysis_decision', '')}` / `{metrics.get('decision_memo', '')}` / `{metrics.get('assumption_count', 0)}`",
+                f"- Benchmark: runs `{metrics.get('benchmark_run_count', 0)}` completed `{metrics.get('benchmark_completed_count', 0)}` metrics `{metrics.get('benchmark_metric_count', 0)}` source `{metrics.get('experiment_run_source', '')}`",
                 f"- Deep quality warnings: `{metrics.get('deep_quality_warning_count', 0)}`",
+                f"- Warnings/provider fallbacks: `{metrics.get('warning_count', 0)}` / `{metrics.get('provider_fallback_warning_count', 0)}`",
             ]
         )
+        if paper.get("warnings"):
+            lines.append(f"- Warnings: `{' | '.join(paper['warnings'])}`")
         if paper.get("errors"):
             lines.append(f"- Errors: `{' | '.join(paper['errors'])}`")
         workflow = paper.get("workflow", {})

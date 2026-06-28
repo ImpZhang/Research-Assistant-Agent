@@ -53,6 +53,24 @@ Or use the wrapper:
 
 Open `http://127.0.0.1:8000/workbench`.
 
+For long workflow jobs, the default keeps execution inside FastAPI `BackgroundTasks`. To use the optional separate local worker, set this in the untracked `.env`:
+
+```bash
+WORKFLOW_BACKGROUND_TASKS_ENABLED=false
+```
+
+Then run the worker from the project root in a separate terminal only when you want it to consume queued jobs:
+
+```bash
+.venv/bin/python scripts/run_workflow_worker.py --poll-interval-seconds 2
+```
+
+For a single diagnostic job:
+
+```bash
+.venv/bin/python scripts/run_workflow_worker.py --once
+```
+
 ## Docker
 
 The compose project is scoped as `research-assistant-agent-local`; when using `scripts/env.sh`, `COMPOSE_PROJECT_NAME` is set to `research_assistant_agent_local`.

@@ -2064,6 +2064,8 @@ class JobRead(BaseModel):
     job_type: str
     status: Literal["pending", "running", "completed", "failed", "canceled"]
     progress: float = 0.0
+    stage: str = ""
+    stage_message: str = ""
     input: dict[str, Any] = Field(default_factory=dict)
     output: dict[str, Any] = Field(default_factory=dict)
     error: str = ""

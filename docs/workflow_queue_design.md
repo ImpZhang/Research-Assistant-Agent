@@ -1,6 +1,6 @@
 # Durable Workflow Queue Design
 
-This document records the migration plan for long-running research workflows. It is design-only: it does not add dependencies, workers, migrations, Redis, Celery, RQ, Dramatiq, Temporal, deployment services, or runtime behavior.
+This document records the current local queue contract and the migration plan for long-running research workflows. The default API server still uses the lightweight in-process background path, while personal local deployments can opt into a separate SQLite worker by setting `WORKFLOW_BACKGROUND_TASKS_ENABLED=false` and running `scripts/run_workflow_worker.py`. This document still does not introduce Redis, Celery, RQ, Dramatiq, Temporal, deployment services, or migration-backed queue columns.
 
 ## Current State
 
@@ -8,11 +8,17 @@ The current async literature-to-ideas path is intentionally simple:
 
 - `POST /research/workflows/literature-to-ideas/async` creates a `jobs` row with `status=pending`.
 - FastAPI `BackgroundTasks` calls `run_literature_to_ideas_job_background(job.id)` inside the API process.
+- `WORKFLOW_BACKGROUND_TASKS_ENABLED=false` disables that in-process background call and leaves the job as `pending` for a local worker.
+- `scripts/run_workflow_worker.py` claims pending `literature_to_ideas_workflow` jobs from SQLite, marks them `running`, writes lease metadata under `Job.output_json.lease`, and then runs the same `WorkflowService.run_literature_to_ideas_job` path.
 - `WorkflowService.run_literature_to_ideas_job` reloads the job, marks it `running`, updates progress/output JSON after workflow stages, and marks it `completed`, `failed`, or `canceled`.
+- `WorkflowService` refreshes lease heartbeat metadata during stage updates when a worker lease exists.
+- `JobRead` exposes `stage` and `stage_message` derived from `Job.output_json` so clients can display current workflow phase without parsing every artifact id.
 - Clients poll `GET /research/jobs/{job_id}` and hydrate artifacts through `GET /research/jobs/{job_id}/artifacts`.
-- Retry creates a new `pending` job and currently reuses the same in-process background execution path.
+- Retry creates a new `pending` job and uses either the in-process background path or the external local worker path, depending on `WORKFLOW_BACKGROUND_TASKS_ENABLED`.
+- `scripts/evaluate_real_papers.py` defaults to `--workflow-mode async-poll`, which queues a local `jobs` row through `WorkflowService`, starts a short-lived worker process, polls `GET /research/jobs/{job_id}`, saves poll history in the report, and hydrates artifacts through `GET /research/jobs/{job_id}/artifacts`.
+- The real-paper evaluator can terminate its own timed-out worker process and recover partial artifacts from the job row. This is an evaluation-runner safety mechanism, not a durable server queue.
 
-This is acceptable for the first pilot because it avoids a second process and extra infrastructure. It is not a durable queue.
+This is acceptable for the first local pilot because it avoids extra infrastructure and still gives operators a separate worker command for long jobs. It is not a full durable queue because stale-lease reclaim, retry backoff, and resumable stage checkpoints are still deliberately deferred.
 
 ## Problem
 
@@ -41,8 +47,8 @@ Best for:
 Limits:
 
 - No recovery after API process restart.
-- No independent worker process.
-- No durable lease or heartbeat.
+- Independent worker process only when `WORKFLOW_BACKGROUND_TASKS_ENABLED=false`.
+- Lease and heartbeat metadata are stored in `Job.output_json`, not migration-backed columns.
 - Hard to scale beyond one API process safely.
 
 ### DB-Backed Worker Lease
@@ -96,7 +102,7 @@ Limits:
 
 ## Recommended Direction
 
-Do not migrate immediately. Keep the current in-process path until one of these triggers is true:
+Do not migrate the API server to Redis/Celery immediately. Keep the current in-process path plus the optional SQLite worker until one of these triggers is true:
 
 - Multiple pilot users run long workflows concurrently.
 - Operators need jobs to survive API restarts without manual reruns.
@@ -106,7 +112,7 @@ Do not migrate immediately. Keep the current in-process path until one of these 
 
 When a trigger is met, prefer one of two first migrations:
 
-- DB-backed worker lease if the deployment must avoid Redis and the workload stays small.
+- Migration-backed DB worker lease if the deployment must avoid Redis and the workload stays small.
 - RQ/Redis if the operator accepts a Redis service and wants a standard Python queue quickly.
 
 Celery, Dramatiq, and Temporal should remain later options.
@@ -117,6 +123,7 @@ Any queue migration must preserve these user-facing contracts:
 
 - `POST /research/workflows/literature-to-ideas/async` returns a `JobRead` immediately.
 - `GET /research/jobs/{job_id}` remains the polling endpoint for Workbench, scripts, and MCP clients.
+- `JobRead.stage` and `JobRead.stage_message` remain backward-compatible optional strings for stage display.
 - `GET /research/jobs/{job_id}/artifacts` remains the hydration endpoint for workflow outputs.
 - `POST /research/jobs/{job_id}/cancel` continues to work for pending and running jobs.
 - `POST /research/jobs/{job_id}/retry` creates a new job linked to the source job.
@@ -136,7 +143,7 @@ The current table has:
 - `started_at`
 - `finished_at`
 
-Future durable execution likely needs migration-backed fields like:
+The current worker stores lease metadata in `Job.output_json.lease` to avoid a migration. Future durable execution likely needs migration-backed fields like:
 
 - `queued_at`
 - `lease_owner`
@@ -171,15 +178,17 @@ The public `status` values can remain compatible by either exposing `leased` as 
 
 ## Worker Contract
 
-A future worker process should:
+The current local worker:
 
 - Claim only jobs with supported `job_type` values.
-- Use database transactions or queue acknowledgement semantics to avoid duplicate execution.
-- Record heartbeat updates during long workflow stages.
+- Uses a conditional SQLite update from `pending` to `running` to avoid duplicate claims in the common local case.
+- Records heartbeat updates during workflow stages through `Job.output_json.lease.heartbeat_at`.
 - Check cancellation before and after each stage.
 - Treat `Job.output_json` as append-only stage progress until final completion.
 - Never store raw secrets, prompts with secret values, request bodies, or API keys in job metadata.
 - Log request/job ids, not sensitive payloads.
+
+Future migration-backed workers should add explicit stale-lease reclaim, retry backoff, and idempotency checks before supporting multi-worker concurrency.
 
 ## Deployment And Operations
 
