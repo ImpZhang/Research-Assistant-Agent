@@ -172,3 +172,242 @@ Path({str(report_path)!r}).write_text(json.dumps(report), encoding="utf-8")
     assert quality["metrics"]["retrieval"]["hit_at_8"] == 1.0
     assert quality["metrics"]["replay"]["pass_rate"] == 1.0
     assert "# Geoloc Evaluation Dataset Quality Report" in quality_md.read_text(encoding="utf-8")
+
+
+def test_geoloc_hard_question_builder_and_checker(tmp_path: Path) -> None:
+    database_path = tmp_path / "hard-questions.db"
+    output_dir = tmp_path / "dataset"
+    report_path = tmp_path / "real_paper_eval_fixture.json"
+    questions_path = tmp_path / "hard_questions.jsonl"
+    quality_json = output_dir / "hard_question_quality.json"
+    quality_md = output_dir / "hard_question_quality.md"
+    env = {
+        **os.environ,
+        "RESEARCH_DB_URL": f"sqlite:///{database_path}",
+        "PYTHONPATH": str(Path.cwd()),
+        "RETRIEVAL_EMBEDDING_PROVIDER": "local",
+        "RETRIEVAL_RERANK_PROVIDER": "disabled",
+    }
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"""
+import json
+from pathlib import Path
+
+from backend.research.db import SessionLocal, init_db
+from backend.research.models import Chunk, Evidence, Paper, PaperSection
+
+init_db()
+with SessionLocal() as session:
+    paper_a = Paper(
+        id="paper-a",
+        title="Fixture GeoRanker Evaluation Paper",
+        filename="fixture-georanker.pdf",
+        domain="image geolocalization",
+        status="parsed",
+    )
+    paper_b = Paper(
+        id="paper-b",
+        title="Fixture Cross View Geolocalization Paper",
+        filename="fixture-cross-view.pdf",
+        domain="cross-view geolocalization",
+        status="parsed",
+    )
+    session.add_all([paper_a, paper_b])
+    session.flush()
+    for paper, prefix in [(paper_a, "ranking"), (paper_b, "crossview")]:
+        section = PaperSection(
+            id=f"section-{{prefix}}",
+            paper_id=paper.id,
+            title="Evaluation",
+            section_type="evaluation",
+            text=f"{{prefix}} evaluation section",
+            order_index=1,
+        )
+        session.add(section)
+        for index, topic in enumerate(
+            ["long-tail regions", "hard negative mining", "coordinate accuracy"],
+            start=1,
+        ):
+            chunk = Chunk(
+                id=f"chunk-{{prefix}}-{{index}}",
+                paper_id=paper.id,
+                section_id=section.id,
+                chunk_id=f"chunk-{{prefix}}-{{index}}",
+                text=(
+                    f"The {{prefix}} study evaluates {{topic}} with geolocalization "
+                    f"benchmarks and region-aware retrieval diagnostics."
+                ),
+                token_count=18,
+            )
+            evidence = Evidence(
+                id=f"evidence-{{prefix}}-{{index}}",
+                paper_id=paper.id,
+                section_id=section.id,
+                chunk_id=chunk.chunk_id,
+                evidence_type="evaluation_signal",
+                text=(
+                    f"The {{prefix}} evidence reports {{topic}} for image "
+                    f"geolocalization under benchmark retrieval settings."
+                ),
+                summary=f"{{prefix}} {{topic}} geolocalization benchmark evidence.",
+                supports=f"{{prefix}} {{topic}} evaluation claim",
+                confidence=0.91,
+            )
+            session.add_all([chunk, evidence])
+    session.commit()
+
+report = {{
+    "papers": [
+        {{"status": "completed", "filename": "fixture-georanker.pdf", "paper": {{"id": "paper-a"}}}},
+        {{"status": "completed", "filename": "fixture-cross-view.pdf", "paper": {{"id": "paper-b"}}}},
+    ]
+}}
+Path({str(report_path)!r}).write_text(json.dumps(report), encoding="utf-8")
+""",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/build_geoloc_eval_dataset.py",
+            "--report",
+            str(report_path),
+            "--output-dir",
+            str(output_dir),
+            "--dataset-id",
+            "fixture_geoloc_eval",
+            "--min-query-count",
+            "4",
+            "--max-query-count",
+            "8",
+            "--replay-count",
+            "4",
+            "--json",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    question_rows = [
+        {
+            "id": "hq_fixture_0001",
+            "intent": "evaluation_gap",
+            "difficulty": "hard",
+            "target_papers": ["GeoRanker"],
+            "required_terms": ["ranking", "long-tail regions", "benchmark retrieval"],
+            "question": (
+                "If I improve ranking for long-tail regions, what GeoRanker evidence "
+                "shows the benchmark retrieval behavior I must compare against?"
+            ),
+        },
+        {
+            "id": "hq_fixture_0002",
+            "intent": "cross_view_design",
+            "difficulty": "hard",
+            "target_papers": ["Cross View"],
+            "required_terms": ["crossview", "hard negative mining", "geolocalization"],
+            "question": (
+                "For cross view geolocalization, what hard negative mining evidence "
+                "should constrain a new retrieval design?"
+            ),
+        },
+        {
+            "id": "hq_fixture_0003",
+            "intent": "method_contrast",
+            "difficulty": "hard",
+            "target_papers": ["GeoRanker", "Cross View"],
+            "required_terms": ["ranking", "crossview", "coordinate accuracy"],
+            "question": (
+                "How should I compare ranking coordinate accuracy evidence with "
+                "crossview coordinate accuracy evidence before writing a new idea?"
+            ),
+        },
+        {
+            "id": "hq_fixture_0004",
+            "intent": "baseline_choice",
+            "difficulty": "hard",
+            "target_papers": ["GeoRanker"],
+            "required_terms": ["ranking", "coordinate accuracy", "benchmark"],
+            "question": (
+                "Which ranking coordinate accuracy benchmark evidence is the baseline "
+                "I should not misrepresent in a proposal?"
+            ),
+        },
+    ]
+    questions_path.write_text(
+        "".join(
+            json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in question_rows
+        ),
+        encoding="utf-8",
+    )
+
+    built = subprocess.run(
+        [
+            sys.executable,
+            "scripts/build_geoloc_hard_questions.py",
+            "--dataset-dir",
+            str(output_dir),
+            "--questions",
+            str(questions_path),
+            "--dataset-id",
+            "fixture_hard_questions",
+            "--min-hard-questions",
+            "4",
+            "--json",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    manifest = json.loads(built.stdout)
+    assert manifest["hard_question_count"] == 4
+    assert manifest["hard_replay_case_count"] == 4
+    assert (output_dir / "hard_questions.jsonl").exists()
+    assert (output_dir / "hard_question_replay_cases.jsonl").exists()
+
+    checked = subprocess.run(
+        [
+            sys.executable,
+            "scripts/check_geoloc_hard_questions.py",
+            "--dataset-dir",
+            str(output_dir),
+            "--min-hard-questions",
+            "4",
+            "--min-paper-coverage",
+            "2",
+            "--min-intent-coverage",
+            "4",
+            "--run-retrieval",
+            "--min-any-hit-at-8",
+            "1.0",
+            "--min-all-hit-at-8",
+            "1.0",
+            "--min-replay-pass-rate",
+            "1.0",
+            "--write-json",
+            str(quality_json),
+            "--write-markdown",
+            str(quality_md),
+            "--json",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    quality = json.loads(checked.stdout)
+    assert quality["status"] == "pass"
+    assert quality["metrics"]["retrieval"]["any_hit_at_8"] == 1.0
+    assert quality["metrics"]["retrieval"]["all_hit_at_8"] == 1.0
+    assert quality["metrics"]["replay"]["pass_rate"] == 1.0
+    assert "# Geoloc Hard-Question Quality Report" in quality_md.read_text(encoding="utf-8")

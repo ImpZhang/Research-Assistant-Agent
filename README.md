@@ -178,6 +178,8 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Representative-paper human review protocol and persisted review records for Workbench-first pilot acceptance, with status capabilities `representative_paper_review_protocol` and `representative_paper_review_records`.
 - End-to-end smoke test covering the current research workflow.
 - Deterministic context-search evaluation fixtures for hit@k, MRR, graph edge hit/noise, score breakdown coverage/consistency, paper-filter leak checks, and empty-query guards.
+- Local 12-paper geolocalization evaluation assets with generated query-evidence pairs, replay cases, 20 human-style hard questions, strict retrieval/replay quality checks, and local-only paper-derived mappings.
+- Hardened PDF/text ingestion for noisy front matter, common heading variants, sparse-heading papers, and chunk-level evidence top-up.
 
 ## Repository Layout
 

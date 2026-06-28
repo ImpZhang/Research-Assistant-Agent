@@ -3581,6 +3581,106 @@ Future work should add structured paper-card extraction.
     assert len(evidence_response.json()) == body["evidence_count"]
 
 
+def test_upload_skips_noisy_front_matter_when_guessing_title(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+    content = b"""Latest updates: The publisher version may differ from this preprint.
+Contents lists available at ScienceDirect
+Journal homepage: www.example.org
+Img2Loc: Revisiting Image Geolocalization using Multi-modality Foundation Models and Image-based Retrieval
+Alice Example, Bob Example
+
+Abstract
+This paper studies image geolocalization using multimodality foundation models and retrieval.
+
+Conclusion
+Future work should improve retrieval grounding under ambiguous regions.
+"""
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("noisy_title_fixture.txt", content, "text/plain")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["paper"]["title"].startswith("Img2Loc: Revisiting Image Geolocalization")
+
+
+def test_upload_detects_compound_heading_variants(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+    content = b"""Compound Heading Geolocalization Paper
+
+Abstract.
+This paper studies geolocalization with complex heading variants from PDF extraction.
+
+1. Introduction
+Worldwide geolocalization remains difficult for long-tail regions.
+
+2. Methods
+The method combines retrieval, candidate ranking, and vision-language reasoning.
+
+3.1 Experimental Setup
+The benchmark covers multiple geographic regions and hard negative examples.
+
+4 Results and Discussion
+Results analyze retrieval failures and ranking quality.
+
+5 Conclusion and Future Work
+Future work should add stronger human reasoning signals.
+
+References.
+[1] Prior geolocalization benchmark.
+"""
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("compound_heading_fixture.txt", content, "text/plain")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["section_count"] >= 7
+
+    evidence_response = client.get(f"/research/papers/{body['paper']['id']}/evidence")
+    assert evidence_response.status_code == 200
+    evidence_types = {item["evidence_type"] for item in evidence_response.json()}
+    assert {"claim", "problem", "method", "dataset", "result", "future_work", "citation"}.issubset(
+        evidence_types
+    )
+
+
+def test_upload_long_sparse_text_adds_chunk_topup_evidence(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAPER_UPLOAD_DIR", str(tmp_path))
+    client = TestClient(create_app())
+    paragraphs = [
+        (
+            "This sparse PDF extraction paragraph discusses worldwide image geolocalization, "
+            "retrieval augmented reasoning, candidate ranking, and long-tail geographic "
+            "regions with enough prose to be treated as substantive evidence. "
+        )
+        * 4
+        for _ in range(8)
+    ]
+    content = ("Sparse Full Text Geolocalization Paper\n\n" + "\n\n".join(paragraphs)).encode()
+
+    response = client.post(
+        "/research/papers/upload",
+        files={"file": ("sparse_full_text_fixture.txt", content, "text/plain")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["section_count"] == 1
+    assert body["evidence_count"] >= 3
+
+    evidence_response = client.get(f"/research/papers/{body['paper']['id']}/evidence")
+    assert evidence_response.status_code == 200
+    supports = {item["supports"] for item in evidence_response.json()}
+    assert "Full Text (chunk 2)" in supports
+
+
 def test_upload_preserves_preamble_when_only_reference_heading_matches(
     tmp_path, monkeypatch
 ) -> None:

@@ -18,6 +18,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py::test_external_literature_search_reports_partial_when_provider_completes_without_items \
   tests/test_app.py::test_external_literature_search_reports_http_status_code \
   tests/test_app.py::test_markdown_gap_sections_are_mined_from_headings \
+  tests/test_app.py::test_upload_skips_noisy_front_matter_when_guessing_title \
+  tests/test_app.py::test_upload_detects_compound_heading_variants \
+  tests/test_app.py::test_upload_long_sparse_text_adds_chunk_topup_evidence \
   tests/test_app.py::test_upload_preserves_preamble_when_only_reference_heading_matches \
   tests/test_app.py::test_upload_detects_roman_heading_sections_and_claim_gap_topup \
   tests/test_app.py::test_upload_filters_metadata_checklist_and_leading_chart_noise \

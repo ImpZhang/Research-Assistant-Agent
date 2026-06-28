@@ -12,22 +12,28 @@ from backend.research.models import Chunk, Evidence, Paper, PaperSection
 from backend.research.services.graph_service import GraphService
 
 
-SECTION_NUMBERING_PREFIX = r"((\d+|[ivxlcdm]+)\.?\s*)?"
+SECTION_NUMBERING_PREFIX = r"((\d+(?:\.\d+)*|[ivxlcdm]+)\.?\s*)?"
 
 
 SECTION_PATTERNS = [
-    ("abstract", r"^\s*(abstract|摘要)\s*$"),
+    ("abstract", r"^\s*(abstract|摘要)\s*[-:：.]?\s*$"),
     ("introduction", rf"^\s*{SECTION_NUMBERING_PREFIX}(introduction|引言)\s*$"),
-    ("related_work", rf"^\s*{SECTION_NUMBERING_PREFIX}(related\s*work|background|相关工作)\s*$"),
+    (
+        "related_work",
+        rf"^\s*{SECTION_NUMBERING_PREFIX}(related\s*work|background|preliminaries|相关工作)\s*$",
+    ),
     (
         "method",
-        rf"^\s*{SECTION_NUMBERING_PREFIX}(method|methodology|approach|model|framework|方法|模型|框架)\s*$",
+        rf"^\s*{SECTION_NUMBERING_PREFIX}(method|methods|methodology|approach|model|framework|implementation|方法|模型|框架)\s*$",
     ),
     (
         "experiment",
-        rf"^\s*{SECTION_NUMBERING_PREFIX}(experiment|experiments|evaluation|实验|评估)\s*$",
+        rf"^\s*{SECTION_NUMBERING_PREFIX}(experiment|experiments|experimental\s*setup|evaluation|benchmark|ablation\s*study|实验|评估)\s*$",
     ),
-    ("result", rf"^\s*{SECTION_NUMBERING_PREFIX}(results|result|analysis|结果|分析)\s*$"),
+    (
+        "result",
+        rf"^\s*{SECTION_NUMBERING_PREFIX}(results|result|analysis|results\s*and\s*discussion|结果|分析)\s*$",
+    ),
     ("limitation", rf"^\s*{SECTION_NUMBERING_PREFIX}(limitations|limitation|局限|不足)\s*$"),
     (
         "future_work",
@@ -35,9 +41,9 @@ SECTION_PATTERNS = [
     ),
     (
         "conclusion",
-        rf"^\s*{SECTION_NUMBERING_PREFIX}(conclusion|conclusions|discussion|结论|讨论)\s*$",
+        rf"^\s*{SECTION_NUMBERING_PREFIX}(conclusion|conclusions|discussion|conclusion\s*and\s*future\s*work|结论|讨论)\s*$",
     ),
-    ("reference", r"^\s*(references|bibliography|参考文献)\s*$"),
+    ("reference", r"^\s*(references|bibliography|参考文献)\s*\.?\s*$"),
 ]
 
 SECTION_TO_EVIDENCE = {
@@ -164,37 +170,41 @@ class DocumentIngestionService:
                 has_substantive_sections=has_substantive_sections,
             )
             if evidence_text:
-                evidence = Evidence(
-                    paper_id=paper.id,
-                    section_id=section_row.id,
+                self._create_evidence(
+                    paper=paper,
+                    paper_node=paper_node,
+                    graph=graph,
+                    section_row=section_row,
+                    section=section,
                     chunk_id=root_chunk_id,
-                    evidence_type=SECTION_TO_EVIDENCE.get(section["section_type"], "claim"),
-                    text=evidence_text,
-                    summary=evidence_text[:500],
-                    supports=section["title"],
-                    confidence=0.55,
-                    page_number=None,
-                    metadata_json={"source": "heuristic_section_extraction"},
-                )
-                self.session.add(evidence)
-                self.session.flush()
-                evidence_node = graph.get_or_create_node(
-                    node_type="evidence",
-                    label=f"{evidence.evidence_type}: {section['title']}",
-                    canonical_key=evidence.id,
-                    payload={
-                        "paper_id": paper.id,
-                        "evidence_type": evidence.evidence_type,
-                        "section_type": section["section_type"],
-                    },
-                )
-                graph.create_edge(
-                    source_node=paper_node,
-                    target_node=evidence_node,
-                    edge_type="paper_has_evidence",
-                    evidence_ids=[evidence.id],
+                    evidence_text=evidence_text,
+                    source="heuristic_section_extraction",
                 )
                 evidence_count += 1
+
+            if section["section_type"] != "reference" and len(section_chunks) > 1:
+                for chunk_idx, chunk_text in enumerate(section_chunks[1:4], start=1):
+                    topup_text = self._pick_evidence_text(
+                        chunk_text,
+                        limit=700,
+                        section_type=section["section_type"],
+                        has_substantive_sections=False,
+                    )
+                    if not topup_text or topup_text == evidence_text:
+                        continue
+                    self._create_evidence(
+                        paper=paper,
+                        paper_node=paper_node,
+                        graph=graph,
+                        section_row=section_row,
+                        section=section,
+                        chunk_id=f"{paper.id}::{section_row.id}::chunk::{chunk_idx}",
+                        evidence_text=topup_text,
+                        source="heuristic_chunk_topup",
+                        supports=f"{section['title']} (chunk {chunk_idx + 1})",
+                        confidence=0.5,
+                    )
+                    evidence_count += 1
 
         paper.status = "indexed"
         self.session.commit()
@@ -250,17 +260,109 @@ class DocumentIngestionService:
         raise ValueError(f"Unsupported file type: {suffix}. Supported types: .pdf, .txt, .md")
 
     def _guess_title(self, filename: str, text: str) -> str:
-        for line in text.splitlines():
+        fallback = self._title_from_filename(filename)
+        for line in text.splitlines()[:80]:
             candidate = line.strip()
-            if 8 <= len(candidate) <= 180:
+            candidate = " ".join(candidate.split())
+            if 8 <= len(candidate) <= 180 and not self._looks_like_title_noise(candidate):
                 return candidate
-        return Path(filename).stem
+        return fallback
+
+    def _title_from_filename(self, filename: str) -> str:
+        stem = Path(filename).stem.replace("_", " ").strip()
+        zotero_match = re.match(r"^.+?\s+等\s+-\s+\d{4}\s+-\s+(.+)$", stem)
+        if zotero_match:
+            return zotero_match.group(1).strip()
+        return stem or "uploaded_document"
+
+    def _looks_like_title_noise(self, candidate: str) -> bool:
+        lower = candidate.lower()
+        noisy_markers = [
+            "latest updates:",
+            "contents lists available",
+            "journal homepage",
+            "available online",
+            "sciencedirect",
+            "elsevier",
+            "springer",
+            "ieee transactions",
+            "acm reference format",
+            "proceedings of",
+            "copyright",
+            "all rights reserved",
+            "issn",
+            "isbn",
+            "doi:",
+            "http://",
+            "https://",
+            "www.",
+            "department of",
+            "university",
+            "arxiv:",
+        ]
+        if any(marker in lower for marker in noisy_markers):
+            return True
+        words = re.findall(r"[A-Za-z][A-Za-z-]+", candidate)
+        if len(words) < 3:
+            return True
+        numeric_chars = sum(char.isdigit() for char in candidate)
+        if numeric_chars / max(len(candidate), 1) > 0.25:
+            return True
+        return False
+
+    def _create_evidence(
+        self,
+        *,
+        paper: Paper,
+        paper_node,
+        graph: GraphService,
+        section_row: PaperSection,
+        section: dict,
+        chunk_id: str,
+        evidence_text: str,
+        source: str,
+        supports: str | None = None,
+        confidence: float = 0.55,
+    ) -> Evidence:
+        evidence = Evidence(
+            paper_id=paper.id,
+            section_id=section_row.id,
+            chunk_id=chunk_id,
+            evidence_type=SECTION_TO_EVIDENCE.get(section["section_type"], "claim"),
+            text=evidence_text,
+            summary=evidence_text[:500],
+            supports=supports or section["title"],
+            confidence=confidence,
+            page_number=None,
+            metadata_json={"source": source},
+        )
+        self.session.add(evidence)
+        self.session.flush()
+        evidence_node = graph.get_or_create_node(
+            node_type="evidence",
+            label=f"{evidence.evidence_type}: {evidence.supports}",
+            canonical_key=evidence.id,
+            payload={
+                "paper_id": paper.id,
+                "evidence_type": evidence.evidence_type,
+                "section_type": section["section_type"],
+            },
+        )
+        graph.create_edge(
+            source_node=paper_node,
+            target_node=evidence_node,
+            edge_type="paper_has_evidence",
+            evidence_ids=[evidence.id],
+        )
+        return evidence
 
     def _normalize_section_heading(self, line: str) -> str:
         normalized = line.strip()
         normalized = re.sub(r"^#{1,6}\s*", "", normalized)
         normalized = re.sub(r"\s*#{1,6}$", "", normalized)
-        return normalized.strip(" *_`")
+        normalized = normalized.strip(" *_`")
+        normalized = re.sub(r"[-:：.]\s*$", "", normalized)
+        return normalized.strip()
 
     def _detect_sections(self, text: str) -> list[dict]:
         lines = text.splitlines()

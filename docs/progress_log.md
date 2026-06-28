@@ -2,6 +2,42 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-29 - Human Hard Questions And PDF Ingestion P3 Hardening
+
+Implementation completed:
+
+- Added `configs/geoloc_hard_questions.v1.jsonl` with 20 researcher-style hard questions for idea search, novelty boundaries, baselines, retrieval design, failure modes, reasoning signals, and benchmark gaps.
+- Added `scripts/build_geoloc_hard_questions.py` to map committed hard-question seeds to local SQLite evidence ids and generate ignored local hard replay cases.
+- Added `scripts/check_geoloc_hard_questions.py` to validate hard-question count, paper coverage, intent coverage, evidence existence, strict retrieval hit@8, and replay pass rate.
+- Added regression coverage in `tests/test_geoloc_eval_dataset_tools.py` for hard-question build/check behavior with a temporary SQLite fixture.
+- Hardened upload ingestion title guessing to skip publisher/header/front-matter noise and fall back to safer filename-derived titles.
+- Expanded section-heading detection for common PDF variants such as `Methods`, `Experimental Setup`, `Results and Discussion`, `Conclusion and Future Work`, and trailing punctuation.
+- Added chunk-level evidence top-up for long sparse full-text sections so PDFs with weak heading extraction produce enough retrievable evidence for downstream gap/idea work.
+- Added upload regression tests for noisy title guessing, compound heading variants, and sparse full-text evidence top-up.
+
+Local hard-question dataset generated:
+
+- Hard questions: `20`.
+- Hard replay cases: `20`.
+- Papers covered: `12`.
+- Intents covered: `19`.
+- Retrieval any-hit@8: `1.0`.
+- Retrieval all-gold-hit@8: `1.0`.
+- Replay pass rate: `1.0`.
+- Errors: `0`; warnings: `0`.
+
+Verification completed:
+
+- `.venv/bin/ruff format backend/research/services/document_ingestion.py scripts/build_geoloc_hard_questions.py scripts/check_geoloc_hard_questions.py tests/test_app.py tests/test_geoloc_eval_dataset_tools.py` passed.
+- `.venv/bin/ruff check backend/research/services/document_ingestion.py scripts/build_geoloc_hard_questions.py scripts/check_geoloc_hard_questions.py tests/test_app.py tests/test_geoloc_eval_dataset_tools.py` passed.
+- `.venv/bin/pytest -q tests/test_geoloc_eval_dataset_tools.py tests/test_app.py::test_upload_skips_noisy_front_matter_when_guessing_title tests/test_app.py::test_upload_detects_compound_heading_variants tests/test_app.py::test_upload_long_sparse_text_adds_chunk_topup_evidence tests/test_app.py::test_upload_preserves_preamble_when_only_reference_heading_matches tests/test_app.py::test_upload_detects_roman_heading_sections_and_claim_gap_topup tests/test_app.py::test_upload_filters_metadata_checklist_and_leading_chart_noise` passed: `8 passed`.
+- `.venv/bin/python scripts/build_geoloc_hard_questions.py --dataset-dir data/evaluation/geoloc_12paper --questions configs/geoloc_hard_questions.v1.jsonl --dataset-id geoloc_12paper_hard_questions_v1 --min-hard-questions 20 --json` passed.
+- `.venv/bin/python scripts/check_geoloc_hard_questions.py --dataset-dir data/evaluation/geoloc_12paper --min-hard-questions 20 --min-paper-coverage 12 --min-intent-coverage 12 --run-retrieval --min-any-hit-at-8 1.0 --min-all-hit-at-8 1.0 --min-replay-pass-rate 1.0 --write-json data/evaluation/geoloc_12paper/hard_question_quality_report.json --write-markdown data/evaluation/geoloc_12paper/hard_question_quality_report.md --json` passed.
+- `bash scripts/check_script_catalog.sh`, `bash scripts/check_handoff_docs.sh`, `bash scripts/check_secret_file_guard.sh`, `bash scripts/check_generated_file_guard.sh`, `bash scripts/check_focused_test_coverage.sh`, and `git diff --check` passed.
+- `bash scripts/check_research_workflow_primitives.sh` passed: `57 passed`.
+- `bash scripts/check_context_search_evaluations.sh` passed: `50 passed`.
+- `bash scripts/check_local_safe_suite.sh` passed; the local operational preflight warning about git status was expected because this implementation round had uncommitted changes.
+
 ## 2026-06-29 - Query-Evidence Dataset And Replay Quality Gates
 
 Implementation completed:
