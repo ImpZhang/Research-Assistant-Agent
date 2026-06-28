@@ -95,7 +95,7 @@ JUDGE_API_KEY=
 Embedding and rerank provider variables control the optional external retrieval path. In `auto` mode, a fully configured provider is used; otherwise the service keeps deterministic local hash embedding and skips learned rerank:
 
 ```bash
-EMBEDDER=qwen3-vl-embedding
+EMBEDDER=multimodal-embedding-v1
 EMBEDDER_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EMBEDDER_API_KEY=
 EMBEDDER_PATH=/embeddings

@@ -64,7 +64,10 @@ class OpenAICompatibleEmbeddingClient:
         response = getattr(exc, "response", None)
         if response is None or response.status_code not in {400, 404}:
             return False
-        return "dashscope.aliyuncs.com" in self.base_url and "vl-embedding" in self.model.lower()
+        model = self.model.lower()
+        return "dashscope.aliyuncs.com" in self.base_url and (
+            "vl-embedding" in model or model.startswith("multimodal-embedding")
+        )
 
     def _embed_texts_dashscope_multimodal(self, texts: list[str]) -> list[list[float]]:
         vectors = []

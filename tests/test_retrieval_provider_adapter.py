@@ -94,7 +94,7 @@ def test_embedding_client_falls_back_to_dashscope_multimodal_endpoint(monkeypatc
 
     monkeypatch.setattr(adapter.requests, "post", fake_post)
     client = adapter.OpenAICompatibleEmbeddingClient(
-        model="qwen3-vl-embedding",
+        model="multimodal-embedding-v1",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         api_key="unit-test-key",
     )
@@ -107,11 +107,11 @@ def test_embedding_client_falls_back_to_dashscope_multimodal_endpoint(monkeypatc
         == "https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
     )
     assert calls[1]["json"] == {
-        "model": "qwen3-vl-embedding",
+        "model": "multimodal-embedding-v1",
         "input": {"contents": [{"text": "alpha"}]},
     }
     assert calls[2]["json"] == {
-        "model": "qwen3-vl-embedding",
+        "model": "multimodal-embedding-v1",
         "input": {"contents": [{"text": "beta"}]},
     }
     assert vectors == [[0.1, 0.2], [0.3, 0.4]]

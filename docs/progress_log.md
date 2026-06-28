@@ -2,6 +2,22 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-28 - Embedding Model Switch
+
+Implementation completed:
+
+- Switched the current embedding model template and deployment docs from `qwen3-vl-embedding` to `multimodal-embedding-v1`.
+- Updated the retrieval provider adapter so DashScope multimodal fallback covers `multimodal-embedding-*` model names as well as the earlier VL embedding name.
+- Updated provider configuration, retrieval adapter, and real-evaluation report tests to use `multimodal-embedding-v1` as the current embedding model.
+- Updated the local ignored `.env` `EMBEDDER` value without printing or committing secret file contents.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/research/adapters/retrieval_provider_adapter.py tests/test_model_provider_config.py tests/test_retrieval_provider_adapter.py tests/test_evaluation_reports.py` passed.
+- `.venv/bin/ruff format --check backend/research/adapters/retrieval_provider_adapter.py tests/test_model_provider_config.py tests/test_retrieval_provider_adapter.py tests/test_evaluation_reports.py` passed.
+- `.venv/bin/python -m pytest tests/test_model_provider_config.py tests/test_retrieval_provider_adapter.py tests/test_evaluation_reports.py` passed: `17 passed`.
+- Application config loaded the local `.env` and reported `settings.embedder=multimodal-embedding-v1` without printing provider keys.
+
 ## 2026-06-28 - Async-Poll Real Evaluation Workflow
 
 Implementation completed:
