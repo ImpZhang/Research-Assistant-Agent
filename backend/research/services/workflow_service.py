@@ -20,6 +20,10 @@ from backend.research.services.novelty_service import NoveltyService
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_idea_service import StructuredIdeaService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
+from backend.research.services.workflow_lineage_service import (
+    WorkflowLineageService,
+    classify_failure,
+)
 
 
 @dataclass
@@ -178,6 +182,7 @@ class WorkflowService:
 
         max_gaps = max(1, min(max_gaps, 20))
         max_ideas_per_gap = max(1, min(max_ideas_per_gap, 5))
+        lineage = WorkflowLineageService(self.session)
 
         self._raise_if_canceled(job.id)
         self._update_job(
@@ -187,7 +192,36 @@ class WorkflowService:
             stage="extracting_card",
             stage_message="Extracting structured paper card.",
         )
-        card = StructuredExtractionService(self.session).extract_paper_card(paper.id)
+        card_stage = lineage.begin_stage(
+            job=self._lineage_job(job.id),
+            stage_name="extract_paper_card",
+            paper_id=paper.id,
+            metadata={"checkpoint_key": "card_id"},
+        )
+        try:
+            existing_card_id = self._job_output(job.id).get("card_id", "")
+            card = self.session.get(PaperCard, existing_card_id) if existing_card_id else None
+            card_status = "skipped" if card is not None else "succeeded"
+            if card is None:
+                card = StructuredExtractionService(self.session).extract_paper_card(paper.id)
+            card_artifact = lineage.record_artifact(
+                artifact_type="paper_card",
+                job=self._lineage_job(job.id),
+                paper_id=paper.id,
+                stage_name="extract_paper_card",
+                entity_type="paper_card",
+                entity_id=card.id,
+                metadata={"checkpoint_key": "card_id", "resume_status": card_status},
+            )
+            lineage.finish_stage(
+                card_stage.id,
+                status=card_status,
+                output_artifact_ids=[card_artifact.id],
+                metadata={"card_id": card.id},
+            )
+        except Exception as exc:
+            self._record_stage_failure(card_stage.id, "extract_paper_card", exc)
+            raise
         self._update_job(
             job.id,
             progress=0.2,
@@ -203,7 +237,40 @@ class WorkflowService:
             stage="mining_gaps",
             stage_message="Mining research gaps from paper evidence.",
         )
-        gaps = GapService(self.session).mine_gaps([paper.id], max_gaps)
+        gap_stage = lineage.begin_stage(
+            job=self._lineage_job(job.id),
+            stage_name="mine_research_gaps",
+            paper_id=paper.id,
+            input_artifact_ids=[card_artifact.id],
+            metadata={"checkpoint_key": "gap_ids", "max_gaps": max_gaps},
+        )
+        try:
+            existing_gap_ids = self._job_output(job.id).get("gap_ids") or []
+            gaps = _load_existing_records(self.session, ResearchGap, existing_gap_ids)
+            gap_status = "skipped" if gaps else "succeeded"
+            if not gaps:
+                gaps = GapService(self.session).mine_gaps([paper.id], max_gaps)
+            gap_artifacts = [
+                lineage.record_artifact(
+                    artifact_type="research_gap",
+                    job=self._lineage_job(job.id),
+                    paper_id=paper.id,
+                    stage_name="mine_research_gaps",
+                    entity_type="research_gap",
+                    entity_id=gap.id,
+                    metadata={"checkpoint_key": "gap_ids", "resume_status": gap_status},
+                )
+                for gap in gaps
+            ]
+            lineage.finish_stage(
+                gap_stage.id,
+                status=gap_status,
+                output_artifact_ids=[artifact.id for artifact in gap_artifacts],
+                metadata={"gap_count": len(gaps)},
+            )
+        except Exception as exc:
+            self._record_stage_failure(gap_stage.id, "mine_research_gaps", exc)
+            raise
         self._update_job(
             job.id,
             progress=0.4,
@@ -219,10 +286,46 @@ class WorkflowService:
             stage="generating_ideas",
             stage_message="Generating structured research ideas.",
         )
-        ideas = StructuredIdeaService(self.session).generate_from_gaps(
-            [gap.id for gap in gaps],
-            max_ideas_per_gap,
+        idea_stage = lineage.begin_stage(
+            job=self._lineage_job(job.id),
+            stage_name="generate_structured_ideas",
+            paper_id=paper.id,
+            input_artifact_ids=[artifact.id for artifact in gap_artifacts],
+            metadata={
+                "checkpoint_key": "idea_ids",
+                "max_ideas_per_gap": max_ideas_per_gap,
+            },
         )
+        try:
+            existing_idea_ids = self._job_output(job.id).get("idea_ids") or []
+            ideas = _load_existing_records(self.session, Idea, existing_idea_ids)
+            idea_status = "skipped" if ideas else "succeeded"
+            if not ideas:
+                ideas = StructuredIdeaService(self.session).generate_from_gaps(
+                    [gap.id for gap in gaps],
+                    max_ideas_per_gap,
+                )
+            idea_artifacts = [
+                lineage.record_artifact(
+                    artifact_type="research_idea",
+                    job=self._lineage_job(job.id),
+                    paper_id=paper.id,
+                    stage_name="generate_structured_ideas",
+                    entity_type="idea",
+                    entity_id=idea.id,
+                    metadata={"checkpoint_key": "idea_ids", "resume_status": idea_status},
+                )
+                for idea in ideas
+            ]
+            lineage.finish_stage(
+                idea_stage.id,
+                status=idea_status,
+                output_artifact_ids=[artifact.id for artifact in idea_artifacts],
+                metadata={"idea_count": len(ideas)},
+            )
+        except Exception as exc:
+            self._record_stage_failure(idea_stage.id, "generate_structured_ideas", exc)
+            raise
         self._update_job(
             job.id,
             progress=0.55,
@@ -237,21 +340,114 @@ class WorkflowService:
         novelty_service = NoveltyService(self.session)
         review_service = ReviewService(self.session)
         experiment_service = ExperimentService(self.session)
-        for idea in ideas:
-            self._raise_if_canceled(job.id)
-            self._update_job(
-                job.id,
-                progress=0.65,
-                output={},
-                stage="building_quality_artifacts",
-                stage_message="Creating novelty checks, reviews, and experiment plans.",
+        self._raise_if_canceled(job.id)
+        self._update_job(
+            job.id,
+            progress=0.65,
+            output={},
+            stage="building_quality_artifacts",
+            stage_message="Creating novelty checks, reviews, and experiment plans.",
+        )
+        quality_stage = lineage.begin_stage(
+            job=self._lineage_job(job.id),
+            stage_name="build_quality_artifacts",
+            paper_id=paper.id,
+            input_artifact_ids=[artifact.id for artifact in idea_artifacts],
+            metadata={
+                "checkpoint_keys": [
+                    "novelty_check_ids",
+                    "review_ids",
+                    "experiment_plan_ids",
+                ],
+                "run_novelty_check": run_novelty_check,
+                "run_review": run_review,
+                "run_experiment_plan": run_experiment_plan,
+            },
+        )
+        try:
+            output = self._job_output(job.id)
+            novelty_checks = _load_existing_records(
+                self.session,
+                NoveltyCheck,
+                output.get("novelty_check_ids") or [],
             )
-            if run_novelty_check:
-                novelty_checks.append(novelty_service.create_check(idea.id))
-            if run_review:
-                reviews.append(review_service.create_review(idea.id))
-            if run_experiment_plan:
-                experiment_plans.append(experiment_service.create_plan(idea.id))
+            reviews = _load_existing_records(self.session, Review, output.get("review_ids") or [])
+            experiment_plans = _load_existing_records(
+                self.session,
+                ExperimentPlan,
+                output.get("experiment_plan_ids") or [],
+            )
+            quality_status = (
+                "skipped"
+                if (
+                    (not run_novelty_check or novelty_checks)
+                    and (not run_review or reviews)
+                    and (not run_experiment_plan or experiment_plans)
+                )
+                else "succeeded"
+            )
+            if quality_status != "skipped":
+                novelty_checks = []
+                reviews = []
+                experiment_plans = []
+                for idea in ideas:
+                    self._raise_if_canceled(job.id)
+                    if run_novelty_check:
+                        novelty_checks.append(novelty_service.create_check(idea.id))
+                    if run_review:
+                        reviews.append(review_service.create_review(idea.id))
+                    if run_experiment_plan:
+                        experiment_plans.append(experiment_service.create_plan(idea.id))
+            quality_artifacts = []
+            for check in novelty_checks:
+                quality_artifacts.append(
+                    lineage.record_artifact(
+                        artifact_type="novelty_check",
+                        job=self._lineage_job(job.id),
+                        paper_id=paper.id,
+                        stage_name="build_quality_artifacts",
+                        entity_type="novelty_check",
+                        entity_id=check.id,
+                        metadata={"checkpoint_key": "novelty_check_ids"},
+                    )
+                )
+            for review in reviews:
+                quality_artifacts.append(
+                    lineage.record_artifact(
+                        artifact_type="review",
+                        job=self._lineage_job(job.id),
+                        paper_id=paper.id,
+                        stage_name="build_quality_artifacts",
+                        entity_type="review",
+                        entity_id=review.id,
+                        metadata={"checkpoint_key": "review_ids"},
+                    )
+                )
+            for plan in experiment_plans:
+                quality_artifacts.append(
+                    lineage.record_artifact(
+                        artifact_type="experiment_plan",
+                        job=self._lineage_job(job.id),
+                        paper_id=paper.id,
+                        stage_name="build_quality_artifacts",
+                        entity_type="experiment_plan",
+                        entity_id=plan.id,
+                        metadata={"checkpoint_key": "experiment_plan_ids"},
+                    )
+                )
+            lineage.finish_stage(
+                quality_stage.id,
+                status=quality_status,
+                output_artifact_ids=[artifact.id for artifact in quality_artifacts],
+                metadata={
+                    "novelty_check_count": len(novelty_checks),
+                    "review_count": len(reviews),
+                    "experiment_plan_count": len(experiment_plans),
+                },
+            )
+        except Exception as exc:
+            self._record_stage_failure(quality_stage.id, "build_quality_artifacts", exc)
+            raise
         self._update_job(
             job.id,
             progress=0.85,
@@ -277,7 +473,38 @@ class WorkflowService:
                 stage="rendering_markdown",
                 stage_message="Rendering Markdown dossier bundle.",
             )
-            markdown_export = self._render_markdown_bundle(ideas)
+            markdown_stage = lineage.begin_stage(
+                job=self._lineage_job(job.id),
+                stage_name="render_markdown_dossier",
+                paper_id=paper.id,
+                input_artifact_ids=[
+                    *[artifact.id for artifact in idea_artifacts],
+                    *[artifact.id for artifact in quality_artifacts],
+                ],
+                metadata={"checkpoint_key": "markdown_export_chars"},
+            )
+            try:
+                markdown_export = self._render_markdown_bundle(ideas)
+                markdown_artifact = lineage.record_artifact(
+                    artifact_type="markdown_dossier",
+                    job=self._lineage_job(job.id),
+                    paper_id=paper.id,
+                    stage_name="render_markdown_dossier",
+                    entity_type="job",
+                    entity_id=job.id,
+                    path=f"artifacts/workflows/literature-to-ideas-{job.id}.md",
+                    content=markdown_export,
+                    metadata={"markdown_export_chars": len(markdown_export)},
+                )
+                lineage.finish_stage(
+                    markdown_stage.id,
+                    status="succeeded",
+                    output_artifact_ids=[markdown_artifact.id],
+                    metadata={"markdown_export_chars": len(markdown_export)},
+                )
+            except Exception as exc:
+                self._record_stage_failure(markdown_stage.id, "render_markdown_dossier", exc)
+                raise
 
         self._complete_job(
             job.id,
@@ -341,10 +568,12 @@ class WorkflowService:
         job.progress = 0.05
         existing_output = job.output_json or {}
         lease = self._refreshed_lease(existing_output)
+        lineage = WorkflowLineageService(self.session)
         job.output_json = {
             **existing_output,
             "stage": "starting",
             "stage_message": "Starting literature-to-ideas workflow.",
+            "workflow_run_metadata": lineage.run_metadata(job),
             **({"lease": lease} if lease else {}),
         }
         job.started_at = utc_now()
@@ -392,7 +621,7 @@ class WorkflowService:
             output = {**output, "lease": lease}
         job.status = "completed"
         job.progress = 1.0
-        job.output_json = output
+        job.output_json = {**existing_output, **output}
         job.finished_at = utc_now()
         self.session.commit()
 
@@ -426,8 +655,13 @@ class WorkflowService:
         job = self.session.get(Job, job_id)
         if job is None:
             return
+        classification = classify_failure(error, (job.output_json or {}).get("stage", ""))
+        output = dict(job.output_json or {})
+        output["failure_taxonomy"] = classification.as_dict()
+        output["stage_message"] = output.get("stage_message") or "Workflow failed."
         job.status = "failed"
         job.error = error
+        job.output_json = output
         job.finished_at = utc_now()
         self.session.commit()
 
@@ -438,6 +672,34 @@ class WorkflowService:
         export_service = ExportService(self.session)
         sections = [export_service.render_idea_markdown(idea.id) for idea in ideas]
         return "\n---\n\n".join(section.strip() for section in sections) + "\n"
+
+    def _lineage_job(self, job_id: str) -> Job:
+        job = self.session.get(Job, job_id)
+        if job is None:
+            raise ValueError("Job not found")
+        return job
+
+    def _job_output(self, job_id: str) -> dict:
+        job = self.session.get(Job, job_id)
+        if job is None:
+            return {}
+        return dict(job.output_json or {})
+
+    def _record_stage_failure(self, stage_run_id: str, stage_name: str, exc: Exception) -> None:
+        self.session.rollback()
+        WorkflowLineageService(self.session).fail_stage(
+            stage_run_id,
+            error=str(exc),
+            stage_name=stage_name,
+        )
+
+
+def _load_existing_records(session: Session, model, ids: list[str]) -> list:
+    if not ids:
+        return []
+    records = session.query(model).filter(model.id.in_(ids)).all()
+    by_id = {record.id: record for record in records}
+    return [by_id[record_id] for record_id in ids if record_id in by_id]
 
 
 def run_literature_to_ideas_job_background(job_id: str) -> None:

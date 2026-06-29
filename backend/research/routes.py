@@ -51,6 +51,8 @@ from backend.research.models import (
     ReplayCase,
     TaskBoardSnapshot,
     ToolCallRecord,
+    WorkflowArtifact,
+    WorkflowStageRun,
 )
 from backend.research.schemas import (
     AgentRunCreate,
@@ -120,6 +122,7 @@ from backend.research.schemas import (
     IdeaRead,
     IdeaScore,
     JobArtifactsResponse,
+    JobLineageResponse,
     JobRead,
     LiteratureSearchRequest,
     LiteratureSearchResponse,
@@ -237,6 +240,8 @@ from backend.research.schemas import (
     ToolCallRecordRead,
     ToolManifestItem,
     ToolManifestResponse,
+    WorkflowArtifactRead,
+    WorkflowStageRunRead,
 )
 from backend.research.services.agent_trace_service import AgentTraceService
 from backend.research.services.artifact_graph_service import ArtifactGraphService
@@ -298,6 +303,7 @@ from backend.research.services.workflow_service import (
     WorkflowService,
     run_literature_to_ideas_job_background,
 )
+from backend.research.services.workflow_lineage_service import WorkflowLineageService
 
 
 router = APIRouter(prefix="/research", tags=["research"])
@@ -6762,6 +6768,50 @@ def _serialize_job(job: Job) -> JobRead:
         stage=output.get("stage", ""),
         stage_message=output.get("stage_message", ""),
         error=job.error,
+        workflow_run_metadata=output.get("workflow_run_metadata", {}),
+        failure_taxonomy=output.get("failure_taxonomy", {}),
+    )
+
+
+def _serialize_workflow_stage_run(stage: WorkflowStageRun) -> WorkflowStageRunRead:
+    return WorkflowStageRunRead(
+        id=stage.id,
+        job_id=stage.job_id,
+        paper_id=stage.paper_id,
+        stage_name=stage.stage_name,
+        status=stage.status,
+        input_artifact_ids=stage.input_artifact_ids_json or [],
+        output_artifact_ids=stage.output_artifact_ids_json or [],
+        error_type=stage.error_type,
+        error_message=stage.error_message,
+        is_retriable=stage.is_retriable,
+        needs_manual_review=stage.needs_manual_review,
+        retry_count=stage.retry_count,
+        code_commit=stage.code_commit,
+        config_hash=stage.config_hash,
+        metadata=stage.metadata_json or {},
+        started_at=stage.started_at,
+        finished_at=stage.finished_at,
+        created_at=stage.created_at,
+        updated_at=stage.updated_at,
+    )
+
+
+def _serialize_workflow_artifact(artifact: WorkflowArtifact) -> WorkflowArtifactRead:
+    return WorkflowArtifactRead(
+        id=artifact.id,
+        artifact_type=artifact.artifact_type,
+        paper_id=artifact.paper_id,
+        job_id=artifact.job_id,
+        stage_name=artifact.stage_name,
+        entity_type=artifact.entity_type,
+        entity_id=artifact.entity_id,
+        path=artifact.path,
+        content_hash=artifact.content_hash,
+        metadata=artifact.metadata_json or {},
+        created_by=artifact.created_by,
+        created_at=artifact.created_at,
+        updated_at=artifact.updated_at,
     )
 
 
@@ -7137,6 +7187,33 @@ def retry_job(
     if job.job_type == "literature_to_ideas_workflow" and _workflow_background_tasks_enabled():
         background_tasks.add_task(run_literature_to_ideas_job_background, job.id)
     return _serialize_job(job)
+
+
+@router.get("/jobs/{job_id}/lineage", response_model=JobLineageResponse)
+def get_job_lineage(
+    job_id: str,
+    session: Session = Depends(get_session),
+) -> JobLineageResponse:
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    lineage = WorkflowLineageService(session)
+    stages = lineage.list_stage_runs(job.id)
+    artifacts = lineage.list_artifacts(job.id)
+    failure_counts = Counter(
+        stage.error_type for stage in stages if stage.error_type and stage.status == "failed"
+    )
+    return JobLineageResponse(
+        job=_serialize_job(job),
+        stages=[_serialize_workflow_stage_run(stage) for stage in stages],
+        artifacts=[_serialize_workflow_artifact(artifact) for artifact in artifacts],
+        stage_status_counts=dict(Counter(stage.status for stage in stages)),
+        artifact_type_counts=dict(Counter(artifact.artifact_type for artifact in artifacts)),
+        failure_type_counts=dict(failure_counts),
+        message=(
+            f"Loaded lineage for job {job.id}: {len(stages)} stages, {len(artifacts)} artifacts."
+        ),
+    )
 
 
 @router.get("/jobs/{job_id}/artifacts", response_model=JobArtifactsResponse)

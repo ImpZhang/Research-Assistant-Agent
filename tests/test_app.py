@@ -32,6 +32,8 @@ from backend.research.models import (
     ResearchGap,
     ResearchNode,
     ResearchTask,
+    WorkflowArtifact,
+    WorkflowStageRun,
 )
 from backend.research.services.evidence_ledger_service import IdeaEvidenceLedgerService
 from backend.research.services.experiment_service import ExperimentService
@@ -49,6 +51,7 @@ from backend.research.services.related_work_service import RelatedWorkService
 from backend.research.services.retrieval_service import RetrievalService, ScoredItem
 from backend.research.services.review_service import ReviewService
 from backend.research.services.structured_extraction_service import StructuredExtractionService
+from backend.research.services.structured_idea_service import StructuredIdeaService
 from backend.research.services.workflow_service import WorkflowService
 from backend.research.services.workflow_worker_service import WorkflowWorkerService
 
@@ -9333,6 +9336,8 @@ Future work should connect the workflow to front-end actions and MCP tools.
     assert job_body["stage_message"] == "Completed literature-to-ideas workflow."
     assert job_body["output"]["paper_id"] == paper_id
     assert len(job_body["output"]["idea_ids"]) == len(body["ideas"])
+    assert job_body["workflow_run_metadata"]["lineage_schema_version"] == "workflow_lineage_v1"
+    assert job_body["workflow_run_metadata"]["config_hash"]
 
     artifacts = client.get(f"/research/jobs/{body['job_id']}/artifacts")
     assert artifacts.status_code == 200
@@ -9347,6 +9352,27 @@ Future work should connect the workflow to front-end actions and MCP tools.
     assert len(artifact_body["experiment_plans"]) == len(body["experiment_plans"])
     assert "# Research Idea Dossier:" in artifact_body["markdown_export"]
     assert "Loaded artifact snapshot" in artifact_body["message"]
+
+    lineage = client.get(f"/research/jobs/{body['job_id']}/lineage")
+    assert lineage.status_code == 200
+    lineage_body = lineage.json()
+    assert lineage_body["job"]["id"] == body["job_id"]
+    assert lineage_body["stage_status_counts"]["succeeded"] >= 5
+    assert lineage_body["artifact_type_counts"]["paper_card"] == 1
+    assert lineage_body["artifact_type_counts"]["research_gap"] == len(body["gaps"])
+    assert lineage_body["artifact_type_counts"]["research_idea"] == len(body["ideas"])
+    assert lineage_body["artifact_type_counts"]["markdown_dossier"] == 1
+    assert {stage["stage_name"] for stage in lineage_body["stages"]}.issuperset(
+        {
+            "extract_paper_card",
+            "mine_research_gaps",
+            "generate_structured_ideas",
+            "build_quality_artifacts",
+            "render_markdown_dossier",
+        }
+    )
+    assert all(artifact["content_hash"] for artifact in lineage_body["artifacts"])
+    assert "Loaded lineage" in lineage_body["message"]
 
     jobs = client.get("/research/jobs?limit=5")
     assert jobs.status_code == 200
@@ -9468,6 +9494,92 @@ The worker mode should preserve existing job polling and artifact hydration cont
     artifacts = client.get(f"/research/jobs/{queued_body['id']}/artifacts")
     assert artifacts.status_code == 200
     assert artifacts.json()["paper"]["id"] == paper_id
+
+
+def test_literature_workflow_resumes_from_checkpointed_outputs() -> None:
+    client = TestClient(create_app())
+    content = b"""Checkpoint Workflow Paper
+
+Abstract
+This paper checks whether workflow checkpoints can resume without rebuilding early stages.
+
+Method
+The pipeline should preserve paper cards, gaps, and ideas when a job restarts.
+
+Conclusion
+Reliable local agents should continue from durable stage outputs.
+"""
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("checkpoint_workflow_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    with SessionLocal() as session:
+        workflow = WorkflowService(session)
+        job = workflow.queue_literature_to_ideas(
+            paper_id=paper_id,
+            max_gaps=1,
+            max_ideas_per_gap=1,
+            include_markdown_export=False,
+        )
+        card = StructuredExtractionService(session).extract_paper_card(paper_id)
+        gaps = GapService(session).mine_gaps([paper_id], 1)
+        ideas = StructuredIdeaService(session).generate_from_gaps([gaps[0].id], 1)
+        job = session.get(Job, job.id)
+        assert job is not None
+        job.output_json = {
+            **(job.output_json or {}),
+            "paper_id": paper_id,
+            "card_id": card.id,
+            "gap_ids": [gap.id for gap in gaps],
+            "idea_ids": [idea.id for idea in ideas],
+        }
+        session.commit()
+
+        result = workflow.run_literature_to_ideas_job(job.id)
+        stage_rows = (
+            session.query(WorkflowStageRun)
+            .filter(WorkflowStageRun.job_id == job.id)
+            .order_by(WorkflowStageRun.created_at.asc())
+            .all()
+        )
+        artifact_rows = (
+            session.query(WorkflowArtifact)
+            .filter(WorkflowArtifact.job_id == job.id)
+            .order_by(WorkflowArtifact.created_at.asc())
+            .all()
+        )
+
+    assert result.job.status == "completed"
+    stage_statuses = {stage.stage_name: stage.status for stage in stage_rows}
+    assert stage_statuses["extract_paper_card"] == "skipped"
+    assert stage_statuses["mine_research_gaps"] == "skipped"
+    assert stage_statuses["generate_structured_ideas"] == "skipped"
+    assert stage_statuses["build_quality_artifacts"] == "succeeded"
+    assert {artifact.artifact_type for artifact in artifact_rows}.issuperset(
+        {"paper_card", "research_gap", "research_idea", "review", "experiment_plan"}
+    )
+
+
+def test_literature_workflow_records_failure_taxonomy_for_missing_paper() -> None:
+    with SessionLocal() as session:
+        job = WorkflowService(session).queue_literature_to_ideas(
+            paper_id=f"missing-paper-{uuid4().hex}",
+            max_gaps=1,
+            max_ideas_per_gap=1,
+        )
+        try:
+            WorkflowService(session).run_literature_to_ideas_job(job.id)
+        except ValueError as exc:
+            assert "Paper not found" in str(exc)
+        failed = session.get(Job, job.id)
+
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.output_json["failure_taxonomy"]["error_type"] == "paper_missing"
+    assert failed.output_json["failure_taxonomy"]["needs_manual_review"] is True
 
 
 def test_local_workflow_worker_recovers_stale_running_job() -> None:

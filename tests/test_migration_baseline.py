@@ -18,7 +18,7 @@ def test_migration_baseline_matches_current_models() -> None:
 
     assert payload["ok"] is True
     assert payload["expected_revision"] == "0001_baseline_schema"
-    assert payload["current_table_count"] == 35
+    assert payload["current_table_count"] == 37
     assert payload["expected_schema_hash"] == payload["current_schema_hash"]
 
 

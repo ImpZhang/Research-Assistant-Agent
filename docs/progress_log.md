@@ -2,6 +2,17 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-29 - Workflow Checkpoint Lineage And Failure Taxonomy
+
+- Re-audited the current RAG/workflow surface after the 12-paper, hard-question, replay, and RAG v1 work. Decision: do not add more heavy RAG modules yet; the next real gap is workflow recoverability, lineage, and failure diagnosis.
+- Added `workflow_stage_runs` and `workflow_artifacts` tables for stage-level checkpoint records and durable artifact lineage.
+- Added `WorkflowLineageService` with safe runtime config hashing, code commit capture, artifact content hashes, and `workflow_failure_taxonomy_v1`.
+- Wired the literature-to-ideas workflow to record stages for paper-card extraction, gap mining, idea generation, quality artifact creation, and Markdown dossier rendering.
+- Added lightweight same-job resume behavior: when `card_id`, `gap_ids`, or `idea_ids` already exist in job output, those stages are reused and marked `skipped` instead of regenerated.
+- Added `/research/jobs/{job_id}/lineage` to inspect stage runs, artifact records, stage status counts, artifact type counts, and failure type counts.
+- Added failure taxonomy to failed `JobRead` output, including `paper_missing`, provider/rate-limit, timeout, parse, retrieval, evidence, benchmark-artifact, and generic workflow-stage categories.
+- Updated the migration metadata baseline from `35` to `37` SQLAlchemy tables.
+
 ## 2026-06-29 - Text Embedding Provider Template Switch
 
 - Switched the current safe provider template from `multimodal-embedding-v1` to `text-embedding-v1` for the text-first PDF retrieval workflow.

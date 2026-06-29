@@ -19,8 +19,12 @@ The current async literature-to-ideas path is intentionally simple:
 - Retry creates a new `pending` job and uses either the in-process background path or the external local worker path, depending on `WORKFLOW_BACKGROUND_TASKS_ENABLED`.
 - `scripts/evaluate_real_papers.py` defaults to `--workflow-mode async-poll`, which queues a local `jobs` row through `WorkflowService`, starts a short-lived worker process, polls `GET /research/jobs/{job_id}`, saves poll history in the report, and hydrates artifacts through `GET /research/jobs/{job_id}/artifacts`.
 - The real-paper evaluator can terminate its own timed-out worker process and recover partial artifacts from the job row. This is an evaluation-runner safety mechanism, not a durable server queue.
+- `workflow_stage_runs` records stage status, input/output artifact ids, config hash, code commit, retry count, and failure taxonomy metadata.
+- `workflow_artifacts` records workflow-generated artifacts with artifact type, paper id, job id, stage name, entity pointer, path, content hash, and metadata.
+- `GET /research/jobs/{job_id}/lineage` exposes stage and artifact lineage alongside status/type counts for local observability.
+- Literature-to-ideas jobs can reuse same-job checkpoint outputs for `card_id`, `gap_ids`, and `idea_ids`, marking those stages `skipped` instead of regenerating them after stale lease recovery or manual rerun.
 
-This is acceptable for the first local pilot because it avoids extra infrastructure and still gives operators a separate worker command for long jobs. It is not a full durable queue because lease fields are still JSON metadata rather than migration-backed columns, multi-worker concurrency is intentionally narrow, and resumable stage checkpoints are still deferred.
+This is acceptable for the first local pilot because it avoids extra infrastructure and still gives operators a separate worker command for long jobs. It is not a full durable queue because lease fields are still JSON metadata rather than migration-backed columns, multi-worker concurrency is intentionally narrow, and stage checkpoints are lightweight same-job checkpoints rather than a full workflow DAG/state-machine runtime.
 
 ## Problem
 
@@ -127,6 +131,7 @@ Any queue migration must preserve these user-facing contracts:
 - `GET /research/jobs/{job_id}` remains the polling endpoint for Workbench, scripts, and MCP clients.
 - `JobRead.stage` and `JobRead.stage_message` remain backward-compatible optional strings for stage display.
 - `GET /research/jobs/{job_id}/artifacts` remains the hydration endpoint for workflow outputs.
+- `GET /research/jobs/{job_id}/lineage` remains the inspection endpoint for stage runs, artifact hashes, and failure classification.
 - `POST /research/jobs/{job_id}/cancel` continues to work for pending and running jobs.
 - `POST /research/jobs/{job_id}/retry` creates a new job linked to the source job.
 - `Job.output_json` remains the durable artifact manifest for paper, card, gap, idea, novelty, review, experiment plan, and Markdown export ids.

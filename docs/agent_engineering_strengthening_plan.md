@@ -12,6 +12,7 @@ The project is already beyond a basic RAG chatbot:
 - SQLite persists papers, chunks, embeddings, evidence, gaps, ideas, jobs, tasks, reviews, experiments, graph nodes, and graph edges.
 - GraphRAG-lite records lineage through `ResearchNode` and `ResearchEdge`.
 - The initial agent trace foundation persists `AgentRun`, `ToolCallRecord`, and `ReplayCase` rows with secret redaction and read-only trace inspection tools.
+- Workflow checkpoint and lineage now persist `WorkflowStageRun` and `WorkflowArtifact` rows, expose `/research/jobs/{job_id}/lineage`, and classify failed workflow jobs with `workflow_failure_taxonomy_v1`.
 - Advisor chat now creates an `advisor_chat` run and records its cockpit/context read calls as `ToolCallRecord` rows without changing the existing response contract.
 - The Workbench, HTTP API, local scripts, and optional stdio MCP-to-HTTP bridge expose the system locally.
 - Focused checks cover context-search metrics, graph behavior, tool bridge contracts, workflow primitives, backup manifests, and local readiness.
@@ -23,6 +24,7 @@ The project is not yet a full autonomous agent runtime:
 - Advisor responses now use a bounded deterministic read-tool plan over approved tools; they are not yet an LLM-ranked tool-calling loop.
 - Replay and LangGraph flows do not yet write trace records automatically.
 - The project-local skill registry now covers core workflows under `skills/*/SKILL.md` and is validated by `scripts/check_project_skills.sh`.
+- Literature-to-ideas jobs can reuse same-job checkpoint outputs for card, gap, and idea stages and mark those stages `skipped` in lineage rather than rebuilding them.
 
 This is an intentional boundary. The current stable workflow should stay intact while the new agent layer is added incrementally.
 

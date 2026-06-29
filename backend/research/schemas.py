@@ -2083,7 +2083,57 @@ class JobRead(BaseModel):
     stage_message: str = ""
     input: dict[str, Any] = Field(default_factory=dict)
     output: dict[str, Any] = Field(default_factory=dict)
+    workflow_run_metadata: dict[str, Any] = Field(default_factory=dict)
+    failure_taxonomy: dict[str, Any] = Field(default_factory=dict)
     error: str = ""
+
+
+class WorkflowStageRunRead(BaseModel):
+    id: str
+    job_id: str
+    paper_id: str = ""
+    stage_name: str
+    status: str
+    input_artifact_ids: list[str] = Field(default_factory=list)
+    output_artifact_ids: list[str] = Field(default_factory=list)
+    error_type: str = ""
+    error_message: str = ""
+    is_retriable: bool = False
+    needs_manual_review: bool = False
+    retry_count: int = 0
+    code_commit: str = ""
+    config_hash: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkflowArtifactRead(BaseModel):
+    id: str
+    artifact_type: str
+    paper_id: str = ""
+    job_id: str
+    stage_name: str = ""
+    entity_type: str = ""
+    entity_id: str = ""
+    path: str = ""
+    content_hash: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_by: str = "workflow"
+    created_at: datetime
+    updated_at: datetime
+
+
+class JobLineageResponse(BaseModel):
+    job: JobRead
+    stages: list[WorkflowStageRunRead] = Field(default_factory=list)
+    artifacts: list[WorkflowArtifactRead] = Field(default_factory=list)
+    stage_status_counts: dict[str, int] = Field(default_factory=dict)
+    artifact_type_counts: dict[str, int] = Field(default_factory=dict)
+    failure_type_counts: dict[str, int] = Field(default_factory=dict)
+    message: str
 
 
 class AgentRunCreate(BaseModel):

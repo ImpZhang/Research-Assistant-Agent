@@ -2,8 +2,8 @@
   "revision": "0001_baseline_schema",
   "down_revision": null,
   "description": "Baseline SQLAlchemy metadata before Alembic is introduced.",
-  "table_count": 35,
-  "schema_hash": "acd61119ecbb3a6a30355eef6048445e848c865ab99966e739361367c0121a99",
+  "table_count": 37,
+  "schema_hash": "9d3348e6b4c1c73caffc061cf21d8929569429f488b13cb1c5e4fb0f131b9994",
   "tables": [
     "agent_runs",
     "chunks",
@@ -39,7 +39,9 @@
     "research_tasks",
     "reviews",
     "task_board_snapshots",
-    "tool_call_records"
+    "tool_call_records",
+    "workflow_artifacts",
+    "workflow_stage_runs"
   ],
   "notes": [
     "This is a metadata fingerprint, not an applied migration.",

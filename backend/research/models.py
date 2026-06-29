@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.research.db import Base
@@ -618,3 +618,45 @@ class Job(Base, TimestampMixin):
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class WorkflowStageRun(Base, TimestampMixin):
+    __tablename__ = "workflow_stage_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id"), index=True)
+    paper_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    stage_name: Mapped[str] = mapped_column(String(128), index=True)
+    status: Mapped[str] = mapped_column(String(64), default="running", index=True)
+    input_artifact_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    output_artifact_ids_json: Mapped[list] = mapped_column(JSON, default=list)
+    error_type: Mapped[str] = mapped_column(String(128), default="", index=True)
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    is_retriable: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    needs_manual_review: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    code_commit: Mapped[str] = mapped_column(String(128), default="")
+    config_hash: Mapped[str] = mapped_column(String(64), default="", index=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=True,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class WorkflowArtifact(Base, TimestampMixin):
+    __tablename__ = "workflow_artifacts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    artifact_type: Mapped[str] = mapped_column(String(128), index=True)
+    paper_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id"), index=True)
+    stage_name: Mapped[str] = mapped_column(String(128), default="", index=True)
+    entity_type: Mapped[str] = mapped_column(String(128), default="", index=True)
+    entity_id: Mapped[str] = mapped_column(String(64), default="", index=True)
+    path: Mapped[str] = mapped_column(String(1024), default="")
+    content_hash: Mapped[str] = mapped_column(String(64), default="", index=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[str] = mapped_column(String(128), default="workflow")
