@@ -10,6 +10,7 @@ Current retrieval storage is:
 
 - relational SQLite for source artifacts and metadata;
 - `ResearchEmbedding.vector_json` rows for source chunk, evidence, gap, and idea vectors;
+- text-hash cache reuse across `ResearchEmbedding` rows so repeated local evaluations can copy existing vectors for identical text under the same embedding model;
 - deterministic `local_hash_embedding_v0` vectors when no external embedding provider is configured;
 - optional external embedding vectors when `RETRIEVAL_EMBEDDING_PROVIDER=auto` or `external` and `EMBEDDER`, `EMBEDDER_BASE_URL`, and `EMBEDDER_API_KEY` are configured;
 - optional learned rerank when `RETRIEVAL_RERANK_PROVIDER=auto` or `external` and rerank settings are configured.

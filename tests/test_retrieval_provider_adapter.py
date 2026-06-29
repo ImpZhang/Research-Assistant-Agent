@@ -255,12 +255,29 @@ def test_embedding_service_uses_external_provider_and_skips_unchanged_text() -> 
             paper_ids=[paper.id],
             limit=10,
         )
+        cached_evidence = Evidence(
+            paper_id=paper.id,
+            evidence_type="provider_fixture",
+            text=evidence.text,
+            summary=evidence.summary,
+            supports=evidence.supports,
+            confidence=0.3,
+        )
+        session.add(cached_evidence)
+        session.commit()
+        third = service.rebuild_index(
+            owner_types=["evidence"],
+            paper_ids=[paper.id],
+            limit=10,
+        )
 
         rows = (
             session.query(ResearchEmbedding)
             .filter(
                 ResearchEmbedding.embedding_model == "fake-external-embedding",
-                ResearchEmbedding.owner_id.in_([evidence.id, second_evidence.id]),
+                ResearchEmbedding.owner_id.in_(
+                    [evidence.id, second_evidence.id, cached_evidence.id]
+                ),
             )
             .all()
         )
@@ -270,10 +287,13 @@ def test_embedding_service_uses_external_provider_and_skips_unchanged_text() -> 
         assert second.model == "fake-external-embedding"
         assert second.dimension == 3
         assert second.evidence_count == 2
+        assert third.model == "fake-external-embedding"
+        assert third.dimension == 3
+        assert third.evidence_count == 3
         assert len(fake_client.calls) == 1
         assert len(fake_client.calls[0]) == 2
         assert all(marker in text for text in fake_client.calls[0])
-        assert len(rows) == 2
+        assert len(rows) == 3
         assert {row.dimension for row in rows} == {3}
         assert {tuple(row.vector_json) for row in rows} == {(1.0, 0.0, 0.0)}
     finally:

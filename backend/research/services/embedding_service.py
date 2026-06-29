@@ -382,9 +382,54 @@ class EmbeddingService:
         if not pending:
             return
 
+        pending = self._reuse_cached_embeddings(target_model, pending)
+        if not pending:
+            return
+
         embeddings = self.embed_texts_results([item.text for item, _, _ in pending])
         for (item, text_hash, row), embedding in zip(pending, embeddings, strict=True):
             self._upsert_embedding_result(item, text_hash, embedding, row)
+
+    def _reuse_cached_embeddings(
+        self,
+        target_model: str,
+        pending: list[tuple[EmbeddingInput, str, ResearchEmbedding | None]],
+    ) -> list[tuple[EmbeddingInput, str, ResearchEmbedding | None]]:
+        text_hashes = sorted({text_hash for _, text_hash, _ in pending if text_hash})
+        if not text_hashes:
+            return pending
+        cached_rows = (
+            self.session.query(ResearchEmbedding)
+            .filter(
+                ResearchEmbedding.embedding_model == target_model,
+                ResearchEmbedding.text_hash.in_(text_hashes),
+            )
+            .order_by(ResearchEmbedding.updated_at.desc())
+            .all()
+        )
+        cache_by_hash: dict[str, ResearchEmbedding] = {}
+        for cached in cached_rows:
+            if cached.vector_json and cached.text_hash not in cache_by_hash:
+                cache_by_hash[cached.text_hash] = cached
+
+        still_pending = []
+        for item, text_hash, row in pending:
+            cached = cache_by_hash.get(text_hash)
+            if cached is None:
+                still_pending.append((item, text_hash, row))
+                continue
+            self._upsert_embedding_result(
+                item,
+                text_hash,
+                TextEmbedding(
+                    model=cached.embedding_model,
+                    dimension=cached.dimension,
+                    vector=list(cached.vector_json or []),
+                    provider="cache",
+                ),
+                row,
+            )
+        return still_pending
 
     def _upsert_embedding_result(
         self,

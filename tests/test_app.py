@@ -9687,7 +9687,10 @@ def test_context_search_no_match_fixture() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["retrieval_method"] == "lexical_vector_graph_rag_lite_v0"
+    assert (
+        body["retrieval_method"]
+        == "lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1"
+    )
     assert body["chunks"] == []
     assert body["evidences"] == []
     assert body["gaps"] == []
@@ -10094,6 +10097,56 @@ Repeated query terms should be counted once for deterministic ranking fixtures.
     assert top_evidence["matched_terms"].count(marker) == 1
     assert top_evidence["score_breakdown"]["lexical"] == 1.0
     assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
+
+
+def test_paper_ingestion_extracts_table_caption_and_result_evidence() -> None:
+    client = TestClient(create_app())
+    marker = f"structuredevidence{time.time_ns()}"
+    content = f"""Structured Evidence Test Paper {marker}
+
+Abstract
+This paper studies structured extraction for research assistant retrieval.
+
+Method
+Figure 1: The pipeline links section-aware chunks to evidence compression.
+The diagram shows how multi-query retrieval routes hard questions to supporting context.
+
+Results
+Table 2: Geolocalization benchmark results across city-scale datasets.
+The proposed system improves Top-1 accuracy by 7.5% over the baseline and reduces median error to 1.2 km.
+Additional ablation metrics report Recall@5 gains of 4.1% for reranking.
+
+Conclusion
+Structured evidence should preserve figure captions, table captions, and result statements.
+""".encode()
+
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("structured_evidence_test.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    session = SessionLocal()
+    try:
+        evidence_rows = session.query(Evidence).filter(Evidence.paper_id == paper_id).all()
+        evidence_types = {row.evidence_type for row in evidence_rows}
+        structured_sources = {
+            (row.metadata_json or {}).get("source")
+            for row in evidence_rows
+            if row.evidence_type in {"table", "figure_caption", "result"}
+        }
+        structured_text = " ".join(row.text for row in evidence_rows)
+    finally:
+        session.close()
+
+    assert {"table", "figure_caption", "result"}.issubset(evidence_types)
+    assert "heuristic_structured_caption_extraction" in structured_sources
+    assert "heuristic_result_signal_extraction" in structured_sources
+    assert marker not in structured_text
+    assert "Top-1 accuracy" in structured_text
+    assert "Figure 1" in structured_text
+    assert "Table 2" in structured_text
 
 
 def test_context_search_clamps_non_positive_limit() -> None:
@@ -10641,7 +10694,10 @@ Future work should make GraphRAG context retrieval stronger.
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["retrieval_method"] == "lexical_vector_graph_rag_lite_v0"
+    assert (
+        body["retrieval_method"]
+        == "lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1"
+    )
     assert body["chunks"]
     assert body["evidences"]
     assert body["gaps"] or body["ideas"]
@@ -10656,6 +10712,12 @@ Future work should make GraphRAG context retrieval stronger.
     assert body["graph_nodes"]
     assert body["graph_edges"]
     assert "Matched" in body["answer_brief"]
+    assert body["query_variants"]
+    assert body["retrieval_diagnostics"]["query_variant_count"] >= 1
+    assert body["retrieval_diagnostics"]["candidate_limit"] >= 30
+    assert body["chunks"][0]["compressed_evidence"]
+    assert body["chunks"][0]["parent_section_title"]
+    assert body["evidences"][0]["compressed_evidence"]
 
     evidence_result_ids = [item["evidence"]["id"] for item in body["evidences"]]
     evidence_metrics = {

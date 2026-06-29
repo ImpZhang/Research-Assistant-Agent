@@ -4,7 +4,7 @@ This document defines how to evaluate and calibrate context search before introd
 
 ## Purpose
 
-Context search now combines chunk-level source retrieval, artifact-level lexical scoring, local hash-vector hits, optional GraphRAG-lite neighbor expansion, edge-type filters, stable ranking tie-breaks, and per-result score breakdowns. The next improvement should be evidence-led calibration, not arbitrary weight changes.
+Context search now combines chunk-level source retrieval, artifact-level lexical scoring, multi-query vector recall, local hash-vector hits, optional external rerank, section-aware chunk context, contextual evidence compression, optional GraphRAG-lite neighbor expansion, edge-type filters, stable ranking tie-breaks, and per-result score breakdowns. The next improvement should be evidence-led calibration, not arbitrary weight changes.
 
 This plan defines the minimum evaluation harness needed to decide whether scoring changes improve research usefulness.
 
@@ -18,10 +18,12 @@ This plan defines the minimum evaluation harness needed to decide whether scorin
 - matched ideas;
 - GraphRAG-lite nodes and edges when `include_graph=true`;
 - optional edge filtering through `graph_edge_types`;
+- query variants and retrieval diagnostics;
+- section-aware chunk excerpts and compressed evidence snippets;
 - per-result `score_breakdown` values for lexical, bonus, phrase, and vector contributions;
 - a short deterministic answer brief.
 
-The public retrieval method remains `lexical_vector_graph_rag_lite_v0`.
+The public retrieval method is `lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1`.
 
 ## Evaluation Questions
 
@@ -32,6 +34,8 @@ Evaluate changes against these questions:
 - Do top gaps and ideas connect to the same research intent as the query?
 - Does graph expansion add useful lineage instead of unrelated graph noise?
 - Do vector hits rescue relevant items that lexical matching misses?
+- Do query variants improve recall without overwhelming external embedding providers?
+- Do compressed evidence snippets preserve the exact support instead of hiding critical context?
 - Do score breakdowns explain ranking decisions clearly enough for Workbench, MCP bridge, and external planner consumers?
 - Does edge-type filtering reduce noise without hiding critical context?
 
@@ -44,6 +48,7 @@ Use small, committed, non-sensitive fixtures first:
 - negative queries that should return little or no context;
 - graph-heavy queries where graph neighbor expansion is expected to help;
 - lexical-miss/vector-hit cases.
+- structured table/caption/result evidence cases for experiment-heavy papers.
 
 Do not use private customer data, `.env` values, API keys, cookies, private notes, or raw confidential papers in committed fixtures.
 
@@ -60,6 +65,8 @@ Start with deterministic ranking metrics:
 - `score_breakdown_total_match_rate` to ensure per-result score breakdown totals match visible scores within rounding tolerance;
 - `paper_filter_leak_rate` to ensure scoped context searches do not return chunks, evidence, gaps, or ideas from excluded papers;
 - `empty_query_guard_rate` for invalid or too-short queries.
+- `query_variant_count` and `vector_query_variant_count` diagnostics to detect over-expansion;
+- `compressed_evidence_coverage` for returned source chunks and evidence records.
 
 Later, if model-backed judging is introduced, it must be optional and secret-safe.
 
@@ -69,6 +76,7 @@ Do not change scoring weights unless an evaluation fixture shows a problem:
 
 - Increase lexical weight only when exact query terms are under-ranked despite being relevant.
 - Increase vector weight only when semantic matches are consistently missed by lexical scoring.
+- Add or widen query variants only when hard-question retrieval misses show a recall problem; external-provider vector variants should stay bounded to avoid rate-limit failures.
 - Adjust bonus fields only when artifact-specific confidence/quality signals correlate with better human judgment.
 - Adjust graph expansion only when graph edges are useful but underrepresented, or noisy and overrepresented.
 - Keep stable tie-breaks unless they contradict measured relevance.
@@ -86,7 +94,7 @@ A first implementation should be a local test or script that:
 5. Compares returned ids, edge types, and score breakdowns against expected fixtures.
 6. Prints aggregate metrics and fails on regressions.
 
-Prefer pytest fixtures for small deterministic checks. Add a script only if metric output becomes too large for unit tests. Committed fixtures now cover source chunk vector rescue, evidence hit@k, MRR, graph edge hit/noise checks, blank/duplicate/whitespace filter normalization, multi-edge-type filter checks, score breakdown coverage, idea overall-score bonus scoring, gap feasibility bonus scoring, evidence confidence bonus scoring, exact phrase bonus scoring, score breakdown total consistency, paper-filter leak checks, graph paper-filter leak checks, graph expansion recall under recent-edge noise, no-match scoped queries, lexical-miss/vector-hit rescue, and `empty_query_guard_rate` for empty, too-short, and punctuation-only queries. Run `bash scripts/check_context_search_evaluations.sh` as the focused remote check before changing scoring or graph-expansion behavior.
+Prefer pytest fixtures for small deterministic checks. Add a script only if metric output becomes too large for unit tests. Committed fixtures now cover source chunk vector rescue, evidence hit@k, MRR, graph edge hit/noise checks, blank/duplicate/whitespace filter normalization, multi-edge-type filter checks, score breakdown coverage, idea overall-score bonus scoring, gap feasibility bonus scoring, evidence confidence bonus scoring, exact phrase bonus scoring, score breakdown total consistency, paper-filter leak checks, graph paper-filter leak checks, graph expansion recall under recent-edge noise, no-match scoped queries, lexical-miss/vector-hit rescue, table/caption/result evidence extraction, section-aware compressed context, and `empty_query_guard_rate` for empty, too-short, and punctuation-only queries. Run `bash scripts/check_context_search_evaluations.sh` as the focused check before changing scoring, query-variant, compression, embedding-cache, rerank, or graph-expansion behavior.
 
 ## Operational Guardrails
 

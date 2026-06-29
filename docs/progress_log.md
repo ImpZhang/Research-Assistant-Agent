@@ -2,6 +2,38 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-29 - RAG v1 Retrieval And Ingestion Hardening
+
+Implementation completed:
+
+- Upgraded context search to `lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1`.
+- Added deterministic query variants, bounded external-provider vector variants, larger pre-rerank candidate pools, section-aware chunk context, and compressed evidence snippets.
+- Added table, figure-caption, and quantitative-result evidence extraction during paper ingestion.
+- Added retry/backoff for retryable embedding/rerank provider HTTP failures.
+- Added text-hash embedding cache reuse across owners to reduce repeated provider calls in local regression runs.
+- Updated API response schemas with query variants, retrieval diagnostics, context excerpts, compressed evidence, parent section titles, and source query metadata.
+- Updated project skills and RAG documentation for v1 retrieval behavior and ingestion signals.
+
+Verification completed:
+
+- `.venv/bin/ruff check backend/research/services/retrieval_service.py backend/research/services/document_ingestion.py backend/research/schemas.py backend/research/routes.py tests/test_app.py` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_paper_ingestion_extracts_table_caption_and_result_evidence tests/test_app.py::test_context_search_returns_evidence_and_graph_context tests/test_app.py::test_context_search_vector_hit_rescues_lexical_miss tests/test_app.py::test_context_search_chunk_vector_hit_rescues_lexical_miss tests/test_app.py::test_context_search_no_match_fixture` passed.
+- `.venv/bin/pytest -q tests/test_retrieval_provider_adapter.py` passed.
+- `bash scripts/check_context_search_evaluations.sh` passed with `52 passed` and the local geolocalization benchmark smoke.
+- `.venv/bin/python scripts/check_geoloc_realistic_eval.py --write-json data/evaluation/geoloc_12paper/realistic_quality_report.json --write-markdown data/evaluation/geoloc_12paper/realistic_quality_report.md --write-failure-replay data/evaluation/geoloc_12paper/realistic_failure_replay_cases.jsonl` passed.
+
+Evaluation results:
+
+- Realistic gold eval: `20` hard questions, `12` papers, primary hit@8 `0.6500`, primary MRR `0.3780`, replay pass `0.6500`, primary misses `7`.
+- Full 12-paper end-to-end workflow with local retrieval embeddings: completed `12 / 12`, benchmark completed `12 / 12`, context evidence coverage `12 / 12`, retrieval comparison `36 / 36` queries, final report `outputs/evaluations/rag_v1_final_local_embedding/real_paper_eval_20260629_065445.json`.
+- Strict external embedding report `outputs/evaluations/rag_v1_full/real_paper_eval_20260629_054621.json` completed `11 / 12`; GeoRanker failed only because the local `.env` upload limit was 10 MiB while the PDF was 12.5 MB.
+- GeoRanker strict external rerun with `PAPER_UPLOAD_MAX_BYTES=20971520` completed `1 / 1`, benchmark completed `1 / 1`, embedding model `multimodal-embedding-v1`, report `outputs/evaluations/rag_v1_georanker_rerun/real_paper_eval_20260629_060847.json`.
+
+Operational notes:
+
+- The source default upload limit is 20 MiB, but local `.env` can still override it lower; use `PAPER_UPLOAD_MAX_BYTES=20971520` or higher for larger local PDFs such as GeoRanker.
+- After repeated provider-heavy full runs, the external embedding provider began returning fallback-triggering failures. The code now has bounded query variants, provider retry/backoff, and embedding cache reuse, but large strict external batches should still be paced or split.
+
 ## 2026-06-29 - Realistic Gold Evidence Evaluation
 
 Implementation completed:

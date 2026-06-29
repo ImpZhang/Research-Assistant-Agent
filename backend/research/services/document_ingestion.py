@@ -164,6 +164,7 @@ class DocumentIngestionService:
                 self.session.add(chunk)
                 chunk_count += 1
 
+            section_evidence_keys: set[str] = set()
             evidence_text = self._pick_evidence_text(
                 section["text"],
                 section_type=section["section_type"],
@@ -180,6 +181,7 @@ class DocumentIngestionService:
                     evidence_text=evidence_text,
                     source="heuristic_section_extraction",
                 )
+                section_evidence_keys.add(self._evidence_key(evidence_text))
                 evidence_count += 1
 
             if section["section_type"] != "reference" and len(section_chunks) > 1:
@@ -190,7 +192,8 @@ class DocumentIngestionService:
                         section_type=section["section_type"],
                         has_substantive_sections=False,
                     )
-                    if not topup_text or topup_text == evidence_text:
+                    topup_key = self._evidence_key(topup_text)
+                    if not topup_text or topup_key in section_evidence_keys:
                         continue
                     self._create_evidence(
                         paper=paper,
@@ -204,7 +207,33 @@ class DocumentIngestionService:
                         supports=f"{section['title']} (chunk {chunk_idx + 1})",
                         confidence=0.5,
                     )
+                    section_evidence_keys.add(topup_key)
                     evidence_count += 1
+
+            for structured in self._extract_structured_evidence(
+                section["text"],
+                section_type=section["section_type"],
+                section_title=section["title"],
+            ):
+                structured_key = self._evidence_key(structured["text"])
+                if not structured_key or structured_key in section_evidence_keys:
+                    continue
+                self._create_evidence(
+                    paper=paper,
+                    paper_node=paper_node,
+                    graph=graph,
+                    section_row=section_row,
+                    section=section,
+                    chunk_id=root_chunk_id,
+                    evidence_text=structured["text"],
+                    source=structured["source"],
+                    supports=structured["supports"],
+                    confidence=structured["confidence"],
+                    evidence_type=structured["evidence_type"],
+                    metadata=structured["metadata"],
+                )
+                section_evidence_keys.add(structured_key)
+                evidence_count += 1
 
         paper.status = "indexed"
         self.session.commit()
@@ -310,6 +339,111 @@ class DocumentIngestionService:
             return True
         return False
 
+    def _extract_structured_evidence(
+        self,
+        text: str,
+        *,
+        section_type: str,
+        section_title: str,
+    ) -> list[dict]:
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        records: list[dict] = []
+        for idx, line in enumerate(lines):
+            caption_type = self._caption_type(line)
+            if caption_type:
+                records.append(
+                    {
+                        "evidence_type": caption_type,
+                        "text": self._caption_block(lines, idx),
+                        "supports": f"{section_title} structured caption",
+                        "source": "heuristic_structured_caption_extraction",
+                        "confidence": 0.68,
+                        "metadata": {
+                            "structured_signal": caption_type,
+                            "line_index": idx,
+                        },
+                    }
+                )
+            elif section_type in {"experiment", "result"} and self._looks_like_result_line(line):
+                records.append(
+                    {
+                        "evidence_type": "result",
+                        "text": self._result_context(lines, idx),
+                        "supports": f"{section_title} quantitative result",
+                        "source": "heuristic_result_signal_extraction",
+                        "confidence": 0.66,
+                        "metadata": {
+                            "structured_signal": "quantitative_result",
+                            "line_index": idx,
+                        },
+                    }
+                )
+            if len(records) >= 12:
+                break
+        return records
+
+    def _caption_type(self, line: str) -> str:
+        normalized = " ".join(line.split())
+        if re.match(r"^(table)\s+[A-Za-z0-9IVXivx_.:-]+\s+.+", normalized, flags=re.I):
+            return "table"
+        if re.match(r"^(figure|fig\.)\s+[A-Za-z0-9IVXivx_.:-]+\s+.+", normalized, flags=re.I):
+            return "figure_caption"
+        return ""
+
+    def _caption_block(self, lines: list[str], start_idx: int, max_chars: int = 900) -> str:
+        block = [lines[start_idx]]
+        for line in lines[start_idx + 1 : start_idx + 3]:
+            if self._caption_type(line):
+                break
+            if self._normalize_section_heading(line).lower() in {
+                "abstract",
+                "introduction",
+                "method",
+                "methods",
+                "results",
+                "conclusion",
+                "references",
+            }:
+                break
+            if len(line.split()) < 4:
+                break
+            block.append(line)
+        return " ".join(" ".join(block).split())[:max_chars]
+
+    def _looks_like_result_line(self, line: str) -> bool:
+        normalized = " ".join(line.split())
+        lower = normalized.lower()
+        if not any(char.isdigit() for char in normalized):
+            return False
+        result_markers = [
+            "%",
+            "accuracy",
+            "auc",
+            "baseline",
+            "benchmark",
+            "error",
+            "f1",
+            "improve",
+            "km",
+            "median",
+            "metric",
+            "outperform",
+            "precision",
+            "recall",
+            "result",
+            "r@",
+            "top-1",
+            "top1",
+            "top-k",
+        ]
+        return any(marker in lower for marker in result_markers)
+
+    def _result_context(self, lines: list[str], idx: int, max_chars: int = 900) -> str:
+        return " ".join(lines[idx].split())[:max_chars]
+
+    def _evidence_key(self, text: str) -> str:
+        return " ".join((text or "").lower().split())[:500]
+
     def _create_evidence(
         self,
         *,
@@ -323,18 +457,24 @@ class DocumentIngestionService:
         source: str,
         supports: str | None = None,
         confidence: float = 0.55,
+        evidence_type: str | None = None,
+        metadata: dict | None = None,
     ) -> Evidence:
+        metadata_json = {"source": source}
+        if metadata:
+            metadata_json.update(metadata)
         evidence = Evidence(
             paper_id=paper.id,
             section_id=section_row.id,
             chunk_id=chunk_id,
-            evidence_type=SECTION_TO_EVIDENCE.get(section["section_type"], "claim"),
+            evidence_type=evidence_type
+            or SECTION_TO_EVIDENCE.get(section["section_type"], "claim"),
             text=evidence_text,
             summary=evidence_text[:500],
             supports=supports or section["title"],
             confidence=confidence,
             page_number=None,
-            metadata_json={"source": source},
+            metadata_json=metadata_json,
         )
         self.session.add(evidence)
         self.session.flush()

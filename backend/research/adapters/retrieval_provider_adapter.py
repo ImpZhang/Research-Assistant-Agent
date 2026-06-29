@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any
 
 import requests
+
+RETRYABLE_HTTP_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
+MAX_PROVIDER_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 0.8
 
 
 @dataclass(frozen=True)
@@ -41,16 +46,15 @@ class OpenAICompatibleEmbeddingClient:
             return self._embed_texts_dashscope_multimodal(texts)
 
         try:
-            response = requests.post(
+            response = _post_json_with_retries(
                 f"{self.base_url}{self.path}",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                 },
-                json={"model": self.model, "input": texts},
+                payload={"model": self.model, "input": texts},
                 timeout=self.timeout,
             )
-            response.raise_for_status()
         except requests.HTTPError as exc:
             if self._should_fallback_to_dashscope_multimodal(exc):
                 return self._embed_texts_dashscope_multimodal(texts)
@@ -71,8 +75,10 @@ class OpenAICompatibleEmbeddingClient:
 
     def _embed_texts_dashscope_multimodal(self, texts: list[str]) -> list[list[float]]:
         vectors = []
-        for text in texts:
-            response = requests.post(
+        for index, text in enumerate(texts):
+            if index:
+                time.sleep(0.05)
+            response = _post_json_with_retries(
                 (
                     f"{_dashscope_native_base_url(self.base_url)}"
                     "/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
@@ -81,7 +87,7 @@ class OpenAICompatibleEmbeddingClient:
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
+                payload={
                     "model": self.model,
                     "input": {
                         "contents": [{"text": text or ""}],
@@ -89,7 +95,6 @@ class OpenAICompatibleEmbeddingClient:
                 },
                 timeout=self.timeout,
             )
-            response.raise_for_status()
             parsed = _parse_embedding_vectors(response.json())
             if not parsed:
                 raise ValueError("DashScope multimodal embedding returned no vectors.")
@@ -128,13 +133,13 @@ class OpenAICompatibleRerankClient:
             return self._rerank_dashscope_text(query=query, documents=documents, top_n=top_n)
 
         try:
-            response = requests.post(
+            response = _post_json_with_retries(
                 f"{self.base_url}{self.path}",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
+                payload={
                     "model": self.model,
                     "query": query,
                     "documents": documents,
@@ -143,7 +148,6 @@ class OpenAICompatibleRerankClient:
                 },
                 timeout=self.timeout,
             )
-            response.raise_for_status()
         except requests.HTTPError as exc:
             if self._should_fallback_to_dashscope_text_rerank(exc):
                 return self._rerank_dashscope_text(query=query, documents=documents, top_n=top_n)
@@ -166,7 +170,7 @@ class OpenAICompatibleRerankClient:
         documents: list[str],
         top_n: int | None = None,
     ) -> list[RerankScore]:
-        response = requests.post(
+        response = _post_json_with_retries(
             (
                 f"{_dashscope_native_base_url(self.base_url)}"
                 "/api/v1/services/rerank/text-rerank/text-rerank"
@@ -175,7 +179,7 @@ class OpenAICompatibleRerankClient:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
             },
-            json={
+            payload={
                 "model": self.model,
                 "input": {
                     "query": query,
@@ -188,8 +192,38 @@ class OpenAICompatibleRerankClient:
             },
             timeout=self.timeout,
         )
-        response.raise_for_status()
         return _parse_rerank_scores(response.json())
+
+
+def _post_json_with_retries(
+    url: str,
+    *,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    timeout: float,
+) -> requests.Response:
+    last_exc: requests.RequestException | None = None
+    for attempt in range(MAX_PROVIDER_ATTEMPTS):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            if response.status_code not in RETRYABLE_HTTP_STATUS_CODES:
+                response.raise_for_status()
+                return response
+            if attempt == MAX_PROVIDER_ATTEMPTS - 1:
+                response.raise_for_status()
+            time.sleep(RETRY_BACKOFF_SECONDS * (2**attempt))
+        except requests.RequestException as exc:
+            last_exc = exc
+            response = getattr(exc, "response", None)
+            retryable_status = (
+                response is None or response.status_code in RETRYABLE_HTTP_STATUS_CODES
+            )
+            if attempt == MAX_PROVIDER_ATTEMPTS - 1 or not retryable_status:
+                raise
+            time.sleep(RETRY_BACKOFF_SECONDS * (2**attempt))
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("Provider request failed without a response or exception.")
 
 
 def _normalize_path(path: str) -> str:

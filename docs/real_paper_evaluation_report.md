@@ -38,6 +38,34 @@ On 2026-06-29 Asia/Shanghai time, the evaluation set was expanded from the four-
 
 The current evaluation set covers distance-aware ranking, RAG/multimodal foundation-model geolocalization, hierarchical token prediction, reasoning/RL, retrieval-based geolocalization, street-level MLLM+RAG, cross-view geolocalization, and classic place recognition.
 
+## RAG v1 Retrieval Hardening Pass
+
+On 2026-06-29, the retrieval layer was upgraded from `lexical_vector_graph_rag_lite_v0` to `lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1`.
+
+Implemented:
+
+- deterministic query rewrite and multi-query retrieval variants;
+- bounded external-provider vector variants to avoid multiplying embedding calls;
+- section-aware chunk context for parent/neighbor evidence;
+- compressed evidence snippets on returned chunks, evidence, gaps, and ideas;
+- larger pre-rerank candidate pools before top-k truncation;
+- structured table, figure-caption, and quantitative-result evidence extraction during ingestion;
+- provider HTTP retry/backoff for retryable 429/5xx/network failures;
+- text-hash embedding cache reuse across owners for repeated local evaluations.
+
+Validation results:
+
+- `bash scripts/check_context_search_evaluations.sh`: passed, including 52 focused tests and the local geolocalization benchmark smoke.
+- Realistic gold retrieval: passed on 20 reviewer-style hard questions over 12 papers, primary hit@8 `0.6500`, primary MRR `0.3780`, replay pass `0.6500`.
+- Full 12-paper end-to-end workflow with local retrieval embeddings: completed `12 / 12`, benchmark completed `12 / 12`, context evidence coverage `12 / 12`, retrieval comparison `36 / 36` queries, final report `outputs/evaluations/rag_v1_final_local_embedding/real_paper_eval_20260629_065445.json`.
+- External embedding strict pass was partially verified as `11 / 12` in `outputs/evaluations/rag_v1_full/real_paper_eval_20260629_054621.json`; GeoRanker failed there because the local `.env` upload limit was 10 MiB while the PDF is 12.5 MB.
+- GeoRanker then completed as a strict external-embedding single-paper rerun with `multimodal-embedding-v1`, benchmark completed `1 / 1`, report `outputs/evaluations/rag_v1_georanker_rerun/real_paper_eval_20260629_060847.json`.
+
+Operational boundary:
+
+- A clean single-run strict external-embedding `12 / 12` pass was not repeated after multiple consecutive provider-heavy evaluations because the external embedding provider began returning fallback-triggering failures. The code now has bounded query variants, retry/backoff, and cache reuse, but a production operator should still pace large real-provider evaluation batches or use local embeddings for repeated workflow regression runs.
+- The local embedding full pass is therefore the authoritative full-chain regression result for this round; the external reports verify provider wiring and expose rate-limit/capacity behavior rather than proving unlimited batch throughput.
+
 ## Evaluated Papers
 
 | Paper | Status | Sections | Chunks | Evidence | Gaps | Ideas | Embeddings | Readiness | Quality Gate | Proposal Review |

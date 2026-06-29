@@ -7,11 +7,59 @@ from sqlalchemy.orm import Session
 
 from backend.research.adapters.retrieval_provider_adapter import OpenAICompatibleRerankClient
 from backend.research.config import settings
-from backend.research.models import Chunk, Evidence, Idea, ResearchEdge, ResearchGap, ResearchNode
-from backend.research.services.embedding_service import EmbeddingService, VectorHit
+from backend.research.models import (
+    Chunk,
+    Evidence,
+    Idea,
+    PaperSection,
+    ResearchEdge,
+    ResearchGap,
+    ResearchNode,
+)
+from backend.research.services.embedding_service import (
+    LOCAL_EMBEDDING_MODEL,
+    EmbeddingService,
+    VectorHit,
+)
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_\-]{2,}")
+STOP_TERMS = {
+    "about",
+    "after",
+    "against",
+    "between",
+    "could",
+    "does",
+    "from",
+    "have",
+    "into",
+    "should",
+    "than",
+    "that",
+    "their",
+    "then",
+    "there",
+    "these",
+    "this",
+    "through",
+    "using",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "with",
+    "would",
+}
+
+
+@dataclass(frozen=True)
+class QueryVariant:
+    label: str
+    query: str
+    terms: list[str]
+    weight: float = 1.0
 
 
 @dataclass
@@ -20,6 +68,10 @@ class ScoredItem:
     score: float
     matched_terms: list[str]
     score_breakdown: dict[str, float] = field(default_factory=dict)
+    context_excerpt: str = ""
+    compressed_evidence: str = ""
+    parent_section_title: str = ""
+    source_queries: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -31,6 +83,8 @@ class ContextSearchResult:
     graph_nodes: list[ResearchNode]
     graph_edges: list[ResearchEdge]
     answer_brief: str
+    query_variants: list[dict[str, Any]] = field(default_factory=list)
+    retrieval_diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 class RetrievalService:
@@ -54,6 +108,7 @@ class RetrievalService:
             rerank_provider_mode or settings.retrieval_rerank_provider,
             default="auto",
         )
+        self._section_cache: dict[str, PaperSection | None] = {}
 
     def search_context(
         self,
@@ -68,24 +123,47 @@ class RetrievalService:
             raise ValueError("Query must contain at least one searchable term")
 
         limit = max(1, min(limit, 25))
+        candidate_limit = max(30, min(limit * 5, 50))
+        query_variants = self._query_variants(query, terms)
+        compression_terms = self._compression_terms(terms, query_variants)
         embedding = self.embedding_service or EmbeddingService(self.session)
-        embedding.ensure_indexed(paper_ids or [], 800)
-        vector_hits = embedding.search(query, limit=limit * 6, paper_ids=paper_ids or [])
-
-        chunks = self._score_chunks(terms, paper_ids or [], limit)
-        evidences = self._score_evidences(terms, paper_ids or [], limit)
-        gaps = self._score_gaps(terms, paper_ids or [], limit)
-        ideas = self._score_ideas(terms, paper_ids or [], limit)
-        chunks = self._merge_vector_hits("chunk", chunks, vector_hits, paper_ids or [], limit)
-        evidences = self._merge_vector_hits(
-            "evidence", evidences, vector_hits, paper_ids or [], limit
+        embedding.ensure_indexed(paper_ids or [], max(800, candidate_limit * 20))
+        vector_query_variants = self._vector_query_variants(embedding, query_variants)
+        vector_hits = self._combined_vector_hits(
+            embedding,
+            vector_query_variants,
+            limit=candidate_limit * 4,
+            paper_ids=paper_ids or [],
         )
-        gaps = self._merge_vector_hits("gap", gaps, vector_hits, paper_ids or [], limit)
-        ideas = self._merge_vector_hits("idea", ideas, vector_hits, paper_ids or [], limit)
+
+        chunks = self._score_chunks(terms, paper_ids or [], candidate_limit)
+        evidences = self._score_evidences(terms, paper_ids or [], candidate_limit)
+        gaps = self._score_gaps(terms, paper_ids or [], candidate_limit)
+        ideas = self._score_ideas(terms, paper_ids or [], candidate_limit)
+        chunks = self._merge_vector_hits(
+            "chunk", chunks, vector_hits, paper_ids or [], candidate_limit
+        )
+        evidences = self._merge_vector_hits(
+            "evidence", evidences, vector_hits, paper_ids or [], candidate_limit
+        )
+        gaps = self._merge_vector_hits("gap", gaps, vector_hits, paper_ids or [], candidate_limit)
+        ideas = self._merge_vector_hits(
+            "idea", ideas, vector_hits, paper_ids or [], candidate_limit
+        )
+        candidate_counts = {
+            "chunks": len(chunks),
+            "evidences": len(evidences),
+            "gaps": len(gaps),
+            "ideas": len(ideas),
+        }
         chunks = self._rerank_scored_items("chunk", query, chunks, limit)
         evidences = self._rerank_scored_items("evidence", query, evidences, limit)
         gaps = self._rerank_scored_items("gap", query, gaps, limit)
         ideas = self._rerank_scored_items("idea", query, ideas, limit)
+        self._annotate_context("chunk", chunks, compression_terms)
+        self._annotate_context("evidence", evidences, compression_terms)
+        self._annotate_context("gap", gaps, compression_terms)
+        self._annotate_context("idea", ideas, compression_terms)
 
         graph_nodes: list[ResearchNode] = []
         graph_edges: list[ResearchEdge] = []
@@ -106,7 +184,70 @@ class RetrievalService:
             graph_nodes=graph_nodes,
             graph_edges=graph_edges,
             answer_brief=self._build_answer_brief(query, chunks, evidences, gaps, ideas),
+            query_variants=[
+                {
+                    "label": variant.label,
+                    "query": variant.query,
+                    "weight": variant.weight,
+                }
+                for variant in query_variants
+            ],
+            retrieval_diagnostics={
+                "retrieval_method": "lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1",
+                "candidate_limit": candidate_limit,
+                "final_limit": limit,
+                "query_variant_count": len(query_variants),
+                "vector_query_variant_count": len(vector_query_variants),
+                "vector_hit_count": len(vector_hits),
+                "rerank_enabled": self._external_rerank_selected(),
+                "candidate_counts_before_rerank": candidate_counts,
+                "result_counts": {
+                    "chunks": len(chunks),
+                    "evidences": len(evidences),
+                    "gaps": len(gaps),
+                    "ideas": len(ideas),
+                    "graph_nodes": len(graph_nodes),
+                    "graph_edges": len(graph_edges),
+                },
+            },
         )
+
+    def _vector_query_variants(
+        self,
+        embedding: EmbeddingService,
+        query_variants: list[QueryVariant],
+    ) -> list[QueryVariant]:
+        if embedding.target_embedding_model == LOCAL_EMBEDDING_MODEL:
+            return query_variants
+        return query_variants[:2]
+
+    def _combined_vector_hits(
+        self,
+        embedding: EmbeddingService,
+        query_variants: list[QueryVariant],
+        limit: int,
+        paper_ids: list[str],
+    ) -> list[VectorHit]:
+        best_scores: dict[tuple[str, str], float] = {}
+        for variant in query_variants:
+            try:
+                hits = embedding.search(variant.query, limit=limit, paper_ids=paper_ids)
+            except Exception:
+                if variant.label == "original":
+                    raise
+                continue
+            for hit in hits:
+                key = (hit.owner_type, hit.owner_id)
+                weighted_score = round(hit.score * variant.weight, 4)
+                if weighted_score > best_scores.get(key, 0.0):
+                    best_scores[key] = weighted_score
+
+        merged = [
+            VectorHit(owner_type=owner_type, owner_id=owner_id, score=score)
+            for (owner_type, owner_id), score in best_scores.items()
+        ]
+        merged.sort(key=lambda hit: hit.score, reverse=True)
+        return merged[: max(1, min(limit, 200))]
 
     def _score_chunks(
         self,
@@ -343,7 +484,7 @@ class RetrievalService:
         limit: int,
     ) -> list[ScoredItem]:
         if not scored or not self._external_rerank_selected():
-            return scored
+            return self._ranked(scored, limit)
 
         documents = [self._document_text(owner_type, item.item) for item in scored]
         try:
@@ -439,6 +580,7 @@ class RetrievalService:
             score=round(score, 4),
             matched_terms=matched_terms,
             score_breakdown=score_breakdown,
+            source_queries=["original"],
         )
 
     def _top(self, scored: list[ScoredItem], limit: int) -> list[ScoredItem]:
@@ -460,7 +602,15 @@ class RetrievalService:
 
     def _document_text(self, owner_type: str, item: Any) -> str:
         if owner_type == "chunk":
-            return " ".join([item.chunk_id, item.text])
+            section = self._section_for_chunk(item)
+            return " ".join(
+                [
+                    item.chunk_id,
+                    section.title if section is not None else "",
+                    section.section_type if section is not None else "",
+                    item.text,
+                ]
+            )
         if owner_type == "evidence":
             return " ".join([item.evidence_type, item.text, item.summary, item.supports])
         if owner_type == "gap":
@@ -492,12 +642,186 @@ class RetrievalService:
             )
         return ""
 
+    def _annotate_context(
+        self,
+        owner_type: str,
+        scored_items: list[ScoredItem],
+        terms: list[str],
+    ) -> None:
+        for scored in scored_items:
+            text = self._context_text(owner_type, scored.item)
+            scored.context_excerpt = self._trim_context(text, 1200)
+            scored.compressed_evidence = self._compress_context(text, terms)
+            if owner_type == "chunk":
+                section = self._section_for_chunk(scored.item)
+                scored.parent_section_title = section.title if section is not None else ""
+
+    def _context_text(self, owner_type: str, item: Any) -> str:
+        if owner_type == "chunk":
+            return self._chunk_section_context(item)
+        return self._document_text(owner_type, item)
+
+    def _chunk_section_context(self, chunk: Chunk) -> str:
+        parts = []
+        section = self._section_for_chunk(chunk)
+        if section is not None:
+            parts.extend([section.title, section.section_type])
+        parts.append(chunk.text)
+        if chunk.section_id:
+            neighbors = (
+                self.session.query(Chunk)
+                .filter(Chunk.section_id == chunk.section_id)
+                .filter(Chunk.chunk_idx >= max(0, chunk.chunk_idx - 1))
+                .filter(Chunk.chunk_idx <= chunk.chunk_idx + 1)
+                .order_by(Chunk.chunk_idx.asc())
+                .limit(3)
+                .all()
+            )
+            for neighbor in neighbors:
+                if neighbor.id != chunk.id:
+                    parts.append(neighbor.text)
+        return " ".join(" ".join(parts).split())
+
+    def _section_for_chunk(self, chunk: Chunk) -> PaperSection | None:
+        if not chunk.section_id:
+            return None
+        if chunk.section_id not in self._section_cache:
+            self._section_cache[chunk.section_id] = self.session.get(PaperSection, chunk.section_id)
+        return self._section_cache[chunk.section_id]
+
+    def _compress_context(self, text: str, terms: list[str], max_chars: int = 700) -> str:
+        cleaned = " ".join((text or "").split())
+        if not cleaned:
+            return ""
+        if not terms:
+            return self._trim_context(cleaned, max_chars)
+        lower_terms = [term.lower() for term in terms if term]
+        sentences = [
+            sentence.strip()
+            for sentence in re.split(r"(?<=[.!?])\s+|\n+", cleaned)
+            if sentence.strip()
+        ]
+        if not sentences:
+            return self._trim_context(cleaned, max_chars)
+
+        selected = []
+        for sentence in sentences:
+            normalized = sentence.lower()
+            if any(term in normalized for term in lower_terms):
+                selected.append(sentence)
+            if len(" ".join(selected)) >= max_chars:
+                break
+        if not selected:
+            return self._trim_context(cleaned, max_chars)
+        return self._trim_context(" ".join(selected), max_chars)
+
+    def _trim_context(self, text: str, max_chars: int) -> str:
+        cleaned = " ".join((text or "").split())
+        if len(cleaned) <= max_chars:
+            return cleaned
+        return cleaned[: max_chars - 3].rstrip() + "..."
+
     def _external_rerank_selected(self) -> bool:
         if self.rerank_provider_mode in {"disabled", "local", "none"}:
             return False
         if self.rerank_provider_mode == "external":
             return True
         return self.rerank_client.is_configured
+
+    def _query_variants(self, query: str, terms: list[str]) -> list[QueryVariant]:
+        cleaned_query = " ".join(query.split())
+        variants: list[QueryVariant] = []
+
+        def add(label: str, variant_terms: list[str], weight: float) -> None:
+            deduped_terms = self._dedupe_terms(variant_terms)
+            variant_query = " ".join(deduped_terms)
+            if not variant_query:
+                return
+            if any(existing.query == variant_query for existing in variants):
+                return
+            variants.append(
+                QueryVariant(
+                    label=label,
+                    query=variant_query,
+                    terms=deduped_terms,
+                    weight=weight,
+                )
+            )
+
+        variants.append(
+            QueryVariant(label="original", query=cleaned_query, terms=terms, weight=1.0)
+        )
+        focused_terms = [term for term in terms if term not in STOP_TERMS]
+        if len(focused_terms) >= 3 and focused_terms != terms:
+            add("focused_terms", focused_terms, 0.96)
+
+        term_set = set(terms)
+        expansion_rules = [
+            (
+                "method_intent",
+                {"method", "methods", "approach", "architecture", "framework", "model"},
+                ["method", "approach", "architecture", "framework", "implementation"],
+                0.9,
+            ),
+            (
+                "benchmark_intent",
+                {
+                    "benchmark",
+                    "dataset",
+                    "datasets",
+                    "evaluation",
+                    "metric",
+                    "metrics",
+                    "experiment",
+                    "experiments",
+                    "result",
+                    "results",
+                },
+                ["benchmark", "dataset", "evaluation", "metric", "result", "baseline"],
+                0.92,
+            ),
+            (
+                "limitation_intent",
+                {"fail", "failure", "limitation", "limitations", "weakness", "risk", "robust"},
+                ["limitation", "failure", "risk", "robustness", "generalization"],
+                0.88,
+            ),
+            (
+                "comparison_intent",
+                {"compare", "comparison", "sota", "state-of-the-art", "baseline", "related"},
+                ["comparison", "baseline", "related", "prior", "state-of-the-art"],
+                0.88,
+            ),
+        ]
+        for label, triggers, expansions, weight in expansion_rules:
+            if term_set.intersection(triggers):
+                add(label, focused_terms + expansions, weight)
+
+        technical_terms = [
+            term
+            for term in focused_terms
+            if any(char.isdigit() for char in term) or "-" in term or "_" in term or len(term) >= 8
+        ]
+        if len(technical_terms) >= 2:
+            add("technical_terms", technical_terms[:12], 0.86)
+        return variants[:6]
+
+    def _compression_terms(self, terms: list[str], query_variants: list[QueryVariant]) -> list[str]:
+        expanded = list(terms)
+        for variant in query_variants:
+            expanded.extend(term for term in variant.terms if term not in STOP_TERMS)
+        return self._dedupe_terms(expanded)[:32]
+
+    def _dedupe_terms(self, terms: list[str]) -> list[str]:
+        seen = set()
+        deduped = []
+        for term in terms:
+            cleaned = term.strip().lower()
+            if not cleaned or cleaned in seen:
+                continue
+            seen.add(cleaned)
+            deduped.append(cleaned)
+        return deduped
 
     def _terms(self, query: str) -> list[str]:
         seen = set()

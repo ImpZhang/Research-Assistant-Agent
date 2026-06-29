@@ -7,7 +7,7 @@ description: Ingest local research papers into the Research Assistant Agent. Use
 
 ## Purpose
 
-Turn a local paper file into durable paper, chunk, evidence, and paper-card records that later workflows can cite.
+Turn a local paper file into durable paper, section, chunk, structured evidence, and paper-card records that later workflows can cite.
 
 ## Backing APIs And Tools
 
@@ -23,7 +23,7 @@ Turn a local paper file into durable paper, chunk, evidence, and paper-card reco
 1. Confirm the file is intentionally provided for local processing; do not inspect private papers unless the operator says they are safe for the task.
 2. Upload only supported `.txt`, `.md`, or `.pdf` files through `/research/papers/upload`.
 3. Record the returned `paper.id`; downstream workflows should pass ids, not raw file paths.
-4. Fetch paper evidence and card records to confirm the paper has usable problem, method, evidence, limitation, and future-work signals.
+4. Fetch paper evidence and card records to confirm the paper has usable problem, method, result, limitation, future-work, table, figure-caption, and quantitative-result signals when present.
 5. If the heuristic card is weak and model keys are configured, use structured extraction; otherwise keep the deterministic fallback result and mark missing fields as evidence gaps.
 
 ## Safety Boundaries
@@ -37,6 +37,7 @@ Turn a local paper file into durable paper, chunk, evidence, and paper-card reco
 
 - Empty or binary-like files should stop at upload guardrails.
 - Weak section detection should still preserve source chunks; continue with caveated card extraction.
+- Figure/table/result extraction is heuristic text extraction; if a PDF is scanned or table text is visually encoded, create a page-aware follow-up rather than inventing missing evidence.
 - For PDFs with poor text extraction, prefer page-aware follow-up extraction work rather than hand-editing database rows.
 
 ## Verification

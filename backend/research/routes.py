@@ -3927,14 +3927,20 @@ def _advisor_chat_context_response(
         )
     return ContextSearchResponse(
         query=search_query,
-        retrieval_method="advisor_chat_lexical_vector_graph_rag_lite_v0",
+        retrieval_method="advisor_chat_lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1",
         answer_brief=result.answer_brief,
+        query_variants=result.query_variants,
+        retrieval_diagnostics=result.retrieval_diagnostics,
         chunks=[
             ScoredChunkRead(
                 chunk=_serialize_chunk(scored.item),
                 score=scored.score,
                 matched_terms=scored.matched_terms,
                 score_breakdown=scored.score_breakdown,
+                context_excerpt=scored.context_excerpt,
+                compressed_evidence=scored.compressed_evidence,
+                parent_section_title=scored.parent_section_title,
+                source_queries=scored.source_queries,
             )
             for scored in result.chunks
         ],
@@ -3944,6 +3950,9 @@ def _advisor_chat_context_response(
                 score=scored.score,
                 matched_terms=scored.matched_terms,
                 score_breakdown=scored.score_breakdown,
+                context_excerpt=scored.context_excerpt,
+                compressed_evidence=scored.compressed_evidence,
+                source_queries=scored.source_queries,
             )
             for scored in result.evidences
         ],
@@ -3953,6 +3962,9 @@ def _advisor_chat_context_response(
                 score=scored.score,
                 matched_terms=scored.matched_terms,
                 score_breakdown=scored.score_breakdown,
+                context_excerpt=scored.context_excerpt,
+                compressed_evidence=scored.compressed_evidence,
+                source_queries=scored.source_queries,
             )
             for scored in result.gaps
         ],
@@ -3962,6 +3974,9 @@ def _advisor_chat_context_response(
                 score=scored.score,
                 matched_terms=scored.matched_terms,
                 score_breakdown=scored.score_breakdown,
+                context_excerpt=scored.context_excerpt,
+                compressed_evidence=scored.compressed_evidence,
+                source_queries=scored.source_queries,
             )
             for scored in result.ideas
         ],
@@ -16803,14 +16818,20 @@ def search_research_context(
 
     return ContextSearchResponse(
         query=payload.query,
-        retrieval_method="lexical_vector_graph_rag_lite_v0",
+        retrieval_method="lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1",
         answer_brief=result.answer_brief,
+        query_variants=result.query_variants,
+        retrieval_diagnostics=result.retrieval_diagnostics,
         chunks=[
             ScoredChunkRead(
                 chunk=_serialize_chunk(scored.item),
                 score=scored.score,
                 matched_terms=scored.matched_terms,
                 score_breakdown=scored.score_breakdown,
+                context_excerpt=scored.context_excerpt,
+                compressed_evidence=scored.compressed_evidence,
+                parent_section_title=scored.parent_section_title,
+                source_queries=scored.source_queries,
             )
             for scored in result.chunks
         ],
@@ -16820,6 +16841,9 @@ def search_research_context(
                 score=scored.score,
                 matched_terms=scored.matched_terms,
                 score_breakdown=scored.score_breakdown,
+                context_excerpt=scored.context_excerpt,
+                compressed_evidence=scored.compressed_evidence,
+                source_queries=scored.source_queries,
             )
             for scored in result.evidences
         ],
@@ -16829,6 +16853,9 @@ def search_research_context(
                 score=scored.score,
                 matched_terms=scored.matched_terms,
                 score_breakdown=scored.score_breakdown,
+                context_excerpt=scored.context_excerpt,
+                compressed_evidence=scored.compressed_evidence,
+                source_queries=scored.source_queries,
             )
             for scored in result.gaps
         ],
@@ -16838,6 +16865,9 @@ def search_research_context(
                 score=scored.score,
                 matched_terms=scored.matched_terms,
                 score_breakdown=scored.score_breakdown,
+                context_excerpt=scored.context_excerpt,
+                compressed_evidence=scored.compressed_evidence,
+                source_queries=scored.source_queries,
             )
             for scored in result.ideas
         ],

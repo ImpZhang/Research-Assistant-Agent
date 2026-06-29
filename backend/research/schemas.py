@@ -1889,6 +1889,9 @@ class ScoredEvidenceRead(BaseModel):
     score: float
     matched_terms: list[str] = Field(default_factory=list)
     score_breakdown: dict[str, float] = Field(default_factory=dict)
+    context_excerpt: str = ""
+    compressed_evidence: str = ""
+    source_queries: list[str] = Field(default_factory=list)
 
 
 class ScoredResearchGapRead(BaseModel):
@@ -1896,6 +1899,9 @@ class ScoredResearchGapRead(BaseModel):
     score: float
     matched_terms: list[str] = Field(default_factory=list)
     score_breakdown: dict[str, float] = Field(default_factory=dict)
+    context_excerpt: str = ""
+    compressed_evidence: str = ""
+    source_queries: list[str] = Field(default_factory=list)
 
 
 class ScoredIdeaRead(BaseModel):
@@ -1903,6 +1909,9 @@ class ScoredIdeaRead(BaseModel):
     score: float
     matched_terms: list[str] = Field(default_factory=list)
     score_breakdown: dict[str, float] = Field(default_factory=dict)
+    context_excerpt: str = ""
+    compressed_evidence: str = ""
+    source_queries: list[str] = Field(default_factory=list)
 
 
 class ScoredChunkRead(BaseModel):
@@ -1910,12 +1919,18 @@ class ScoredChunkRead(BaseModel):
     score: float
     matched_terms: list[str] = Field(default_factory=list)
     score_breakdown: dict[str, float] = Field(default_factory=dict)
+    context_excerpt: str = ""
+    compressed_evidence: str = ""
+    parent_section_title: str = ""
+    source_queries: list[str] = Field(default_factory=list)
 
 
 class ContextSearchResponse(BaseModel):
     query: str
     retrieval_method: str
     answer_brief: str
+    query_variants: list[dict[str, Any]] = Field(default_factory=list)
+    retrieval_diagnostics: dict[str, Any] = Field(default_factory=dict)
     chunks: list[ScoredChunkRead] = Field(default_factory=list)
     evidences: list[ScoredEvidenceRead]
     gaps: list[ScoredResearchGapRead]

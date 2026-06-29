@@ -164,12 +164,13 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - Local literature search with optional OpenAlex, arXiv, and Semantic Scholar external-search adapters.
 - Reviewer simulation for generated ideas.
 - Experiment plan generation.
-- Local hashed embedding index for source chunks, evidence, gaps, and ideas, with optional external embedding provider vectors.
+- Local hashed embedding index for source chunks, evidence, gaps, and ideas, with optional external embedding provider vectors and text-hash cache reuse across owners to reduce repeated provider calls.
 - Markdown export for paper cards and idea dossiers.
 - Robust sparse-heading paper ingestion and gap-mining fallback for PDFs that expose Roman numeral headings, compact headings such as `RELATEDWORK`, or only a clean References heading.
+- Structured table, figure-caption, and quantitative-result evidence extraction for experiment-heavy papers.
 - GraphRAG-lite node and edge persistence with same source/target/type edge reuse.
 - Read-only GraphRAG-lite stats for node/edge type counts, orphan edge counts, and duplicate edge group counts.
-- Query-time lexical/vector/rerank context retrieval over source chunks, evidence, gaps, ideas, and optionally filtered graph neighborhoods, with stable ranking tie-breaks and score breakdowns.
+- Query-time multi-query lexical/vector/rerank context retrieval over source chunks, evidence, gaps, ideas, and optionally filtered graph neighborhoods, with bounded external-provider query variants, section-aware chunk context, compressed evidence snippets, stable ranking tie-breaks, and score breakdowns.
 - Synchronous workflow job trace with input, output, status, progress, and errors.
 - Async literature-to-ideas workflow launch for frontend and MCP clients.
 - Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.
@@ -179,7 +180,7 @@ It returns a `pending` job immediately and executes the workflow in the backgrou
 - End-to-end smoke test covering the current research workflow.
 - Deterministic context-search evaluation fixtures for hit@k, MRR, graph edge hit/noise, score breakdown coverage/consistency, paper-filter leak checks, and empty-query guards.
 - Local 12-paper geolocalization evaluation assets with generated query-evidence pairs, replay cases, 20 human-style hard-question regression checks, reviewer-labeled realistic gold evidence, corpus-level no-per-query-filter retrieval metrics, failure replay export, and local-only paper-derived mappings.
-- Hardened PDF/text ingestion for noisy front matter, common heading variants, sparse-heading papers, and chunk-level evidence top-up.
+- Hardened PDF/text ingestion for noisy front matter, common heading variants, sparse-heading papers, chunk-level evidence top-up, and structured table/figure/result signals.
 
 ## Repository Layout
 
@@ -839,7 +840,7 @@ See `docs/deployment.md` for the runtime contract, local deployment checklist, `
 ## Near-Term Roadmap
 
 - Polish the clone-to-run local setup path, local preflight, and `.env.example` guidance.
-- Add real-provider smoke tests, batch embedding, page-image retrieval, and retrieval-mode evaluation fixtures.
+- Add batch/page-image embedding experiments, page-image retrieval, and larger retrieval-mode evaluation fixtures.
 - Extend real geolocalization benchmark datasets and prediction-generation recipes beyond the current JSONL pipeline.
 - Add fully automated current-SOTA closure on top of manual SOTA review packages and external novelty search adapters.
 - Add resumable workflow checkpoints for long runs.
