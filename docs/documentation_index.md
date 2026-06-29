@@ -74,6 +74,9 @@ This document is the starting point for future development. Use it to find the r
 | `configs/geoloc_hard_questions.v1.jsonl` | Committed 20-question researcher-style stress set for idea-search, baseline, novelty-boundary, and failure-mode retrieval. |
 | `scripts/build_geoloc_hard_questions.py` | Maps committed hard-question seeds to local SQLite evidence ids and hard replay cases without committing paper-derived mappings. |
 | `scripts/check_geoloc_hard_questions.py` | Validates hard-question coverage, strict retrieval hit@8, and hard replay pass rate. |
+| `configs/geoloc_realistic_gold.v1.jsonl` | Reviewer-style realistic gold-label spec with blind queries, primary/supporting evidence targets, required terms, and rationales. |
+| `scripts/build_geoloc_realistic_eval.py` | Resolves realistic gold-label specs to local evidence ids and writes ignored gold review/replay artifacts. |
+| `scripts/check_geoloc_realistic_eval.py` | Runs corpus-level no-per-query-filter retrieval metrics, MRR, partial/miss reporting, and failure replay export. |
 | `scripts/check_local_geoloc_benchmark_smoke.sh` | One-command local smoke for the geolocalization JSONL benchmark path. |
 | `/research/ideas/{idea_id}/sota-review-package` | Runtime API that turns an idea into a persisted manual SOTA review checklist and collision package. |
 | `/research/ideas/{idea_id}/sota-external-search-evidence` | Runtime API that persists local/external literature search statuses, result summaries, and signoff readiness for SOTA review queries. |

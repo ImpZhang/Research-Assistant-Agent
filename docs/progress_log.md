@@ -2,6 +2,48 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-29 - Realistic Gold Evidence Evaluation
+
+Implementation completed:
+
+- Added `configs/geoloc_realistic_gold.v1.jsonl` as a reviewer-style gold-label spec with blind natural queries, primary/supporting gold targets, required evidence terms, target-paper leakage checks, and label rationales.
+- Added `scripts/build_geoloc_realistic_eval.py` to resolve the committed gold-label spec against the local 12-paper SQLite corpus and write ignored local `realistic_gold_questions.jsonl`, `realistic_replay_cases.jsonl`, `realistic_gold_manifest.json`, and `realistic_gold_review.md`.
+- Added `scripts/check_geoloc_realistic_eval.py` to run realistic corpus-level retrieval without per-query paper filters, calculate primary hit@1/3/5/8, any/all-gold hit@8, primary MRR, partial/miss counts, replay pass rate, and export primary-miss replay cases.
+- Added regression coverage in `tests/test_geoloc_eval_dataset_tools.py` proving realistic gold labels resolve to evidence, preserve label rationales, and run no-per-query-filter retrieval checks.
+- Wired the new scripts into `scripts/check_context_search_evaluations.sh`.
+- Updated README, TODO, documentation index, and geoloc evaluation docs to distinguish regression-style hard questions from realistic no-filter metrics.
+
+Local realistic evaluation generated:
+
+- Questions: `20`.
+- Gold labels: `38` total, `20` primary and `18` supporting.
+- Corpus scope: `12` papers.
+- Per-query paper filter: `false`.
+- Primary hit@1: `0.2`.
+- Primary hit@3: `0.5`.
+- Primary hit@5: `0.5`.
+- Primary hit@8: `0.65`.
+- Any-gold hit@8: `0.65`.
+- All-gold hit@8: `0.4`.
+- Primary MRR: `0.3571`.
+- Replay pass rate: `0.65`.
+- Primary misses: `7`.
+- Partial gold hits: `5`.
+- Failure replay cases: `7`.
+- Second-pass metrics matched the first pass.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_geoloc_eval_dataset_tools.py::test_geoloc_realistic_gold_builder_and_checker` passed.
+- `.venv/bin/python scripts/build_geoloc_realistic_eval.py --dataset-dir data/evaluation/geoloc_12paper --gold-spec configs/geoloc_realistic_gold.v1.jsonl --dataset-id geoloc_12paper_realistic_gold_v1 --min-questions 20 --json` passed.
+- `.venv/bin/python scripts/check_geoloc_realistic_eval.py --dataset-dir data/evaluation/geoloc_12paper --min-questions 20 --min-paper-coverage 12 --min-primary-hit-at-8 0.5 --min-mrr-primary 0.2 --min-replay-pass-rate 0.5 --write-json data/evaluation/geoloc_12paper/realistic_quality_report.json --write-markdown data/evaluation/geoloc_12paper/realistic_quality_report.md --write-failure-replay data/evaluation/geoloc_12paper/realistic_failure_replay_cases.jsonl --json` passed.
+- Re-ran build/check to `realistic_quality_report_second_pass.json` and compared key metrics against the first report; all matched.
+- `.venv/bin/ruff check scripts/build_geoloc_realistic_eval.py scripts/check_geoloc_realistic_eval.py tests/test_geoloc_eval_dataset_tools.py` passed.
+- `.venv/bin/ruff format --check` equivalent for the new/changed realistic eval scripts and tests passed.
+- `bash scripts/check_handoff_docs.sh`, `bash scripts/check_focused_test_coverage.sh`, `bash scripts/check_script_catalog.sh`, `bash scripts/check_secret_file_guard.sh`, `bash scripts/check_generated_file_guard.sh`, and `git diff --check` passed.
+- `bash scripts/check_context_search_evaluations.sh` passed: `51 passed`.
+- `bash scripts/check_local_safe_suite.sh` passed; the local operational preflight warning about git status was expected because this implementation round had uncommitted changes.
+
 ## 2026-06-29 - Human Hard Questions And PDF Ingestion P3 Hardening
 
 Implementation completed:
