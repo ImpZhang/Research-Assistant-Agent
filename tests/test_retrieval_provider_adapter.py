@@ -8,7 +8,11 @@ from backend.research.adapters import retrieval_provider_adapter as adapter
 from backend.research.adapters.retrieval_provider_adapter import RerankScore
 from backend.research.db import SessionLocal
 from backend.research.models import Evidence, Paper, ResearchEmbedding
-from backend.research.services.embedding_service import EmbeddingService
+from backend.research.services.embedding_service import (
+    EXTERNAL_EMBEDDING_BATCH_SIZE,
+    EXTERNAL_EMBEDDING_MAX_TEXT_CHARS,
+    EmbeddingService,
+)
 from backend.research.services.retrieval_service import RetrievalService
 
 
@@ -113,6 +117,45 @@ def test_embedding_client_falls_back_to_dashscope_multimodal_endpoint(monkeypatc
     assert calls[2]["json"] == {
         "model": "multimodal-embedding-v1",
         "input": {"contents": [{"text": "beta"}]},
+    }
+    assert vectors == [[0.1, 0.2], [0.3, 0.4]]
+
+
+def test_embedding_client_falls_back_to_dashscope_text_embedding_endpoint(monkeypatch) -> None:
+    calls = []
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        if len(calls) == 1:
+            return _FakeResponse({"error": {"message": "bad request"}}, status_code=400)
+        return _FakeResponse(
+            {
+                "output": {
+                    "embeddings": [
+                        {"text_index": 1, "embedding": [0.3, 0.4]},
+                        {"text_index": 0, "embedding": [0.1, 0.2]},
+                    ]
+                }
+            }
+        )
+
+    monkeypatch.setattr(adapter.requests, "post", fake_post)
+    client = adapter.OpenAICompatibleEmbeddingClient(
+        model="text-embedding-v1",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        api_key="unit-test-key",
+    )
+
+    vectors = client.embed_texts(["alpha", "beta"])
+
+    assert calls[0]["url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+    assert (
+        calls[1]["url"]
+        == "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding"
+    )
+    assert calls[1]["json"] == {
+        "model": "text-embedding-v1",
+        "input": {"texts": ["alpha", "beta"]},
     }
     assert vectors == [[0.1, 0.2], [0.3, 0.4]]
 
@@ -308,6 +351,40 @@ def test_embedding_service_uses_external_provider_and_skips_unchanged_text() -> 
             synchronize_session=False
         )
         session.commit()
+        session.close()
+
+
+def test_embedding_service_batches_and_truncates_external_provider_text() -> None:
+    class FakeEmbeddingClient:
+        model = "fake-external-embedding"
+        is_configured = True
+
+        def __init__(self) -> None:
+            self.calls: list[list[str]] = []
+
+        def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            self.calls.append(list(texts))
+            return [[1.0, 0.0] for _ in texts]
+
+    fake_client = FakeEmbeddingClient()
+    session = SessionLocal()
+    try:
+        service = EmbeddingService(
+            session,
+            embedding_client=fake_client,
+            embedding_provider_mode="external",
+        )
+        long_text = "x" * (EXTERNAL_EMBEDDING_MAX_TEXT_CHARS + 50)
+        text_count = EXTERNAL_EMBEDDING_BATCH_SIZE + 1
+
+        embeddings = service.embed_texts_results([long_text, *[f"short {idx}" for idx in range(8)]])
+
+        assert len(embeddings) == text_count
+        assert len(fake_client.calls) == 2
+        assert len(fake_client.calls[0]) == EXTERNAL_EMBEDDING_BATCH_SIZE
+        assert len(fake_client.calls[0][0]) == EXTERNAL_EMBEDDING_MAX_TEXT_CHARS
+        assert fake_client.calls[1] == ["short 7"]
+    finally:
         session.close()
 
 

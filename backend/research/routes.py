@@ -7216,6 +7216,22 @@ def get_job_lineage(
     )
 
 
+@router.get("/artifacts/lineage", response_model=list[WorkflowArtifactRead])
+def list_artifact_lineage(
+    entity_type: str = "",
+    entity_id: str = "",
+    limit: int = 100,
+    session: Session = Depends(get_session),
+) -> list[WorkflowArtifactRead]:
+    limit = max(1, min(limit, 500))
+    query = session.query(WorkflowArtifact).order_by(WorkflowArtifact.created_at.desc())
+    if entity_type:
+        query = query.filter(WorkflowArtifact.entity_type == entity_type)
+    if entity_id:
+        query = query.filter(WorkflowArtifact.entity_id == entity_id)
+    return [_serialize_workflow_artifact(artifact) for artifact in query.limit(limit).all()]
+
+
 @router.get("/jobs/{job_id}/artifacts", response_model=JobArtifactsResponse)
 def get_job_artifacts(
     job_id: str,

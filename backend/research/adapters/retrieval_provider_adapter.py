@@ -42,6 +42,8 @@ class OpenAICompatibleEmbeddingClient:
             raise RuntimeError("Embedding client is not configured.")
         if not texts:
             return []
+        if self._uses_dashscope_text_embedding():
+            return self._embed_texts_dashscope_text(texts)
         if self._uses_dashscope_multimodal_embedding():
             return self._embed_texts_dashscope_multimodal(texts)
 
@@ -56,13 +58,26 @@ class OpenAICompatibleEmbeddingClient:
                 timeout=self.timeout,
             )
         except requests.HTTPError as exc:
+            if self._should_fallback_to_dashscope_text_embedding(exc):
+                return self._embed_texts_dashscope_text(texts)
             if self._should_fallback_to_dashscope_multimodal(exc):
                 return self._embed_texts_dashscope_multimodal(texts)
             raise
         return _parse_embedding_vectors(response.json())
 
+    def _uses_dashscope_text_embedding(self) -> bool:
+        return "services/embeddings/text-embedding" in self.path
+
     def _uses_dashscope_multimodal_embedding(self) -> bool:
         return "multimodal-embedding" in self.path
+
+    def _should_fallback_to_dashscope_text_embedding(self, exc: requests.HTTPError) -> bool:
+        response = getattr(exc, "response", None)
+        if response is None or response.status_code not in {400, 404}:
+            return False
+        return "dashscope.aliyuncs.com" in self.base_url and self.model.lower().startswith(
+            "text-embedding"
+        )
 
     def _should_fallback_to_dashscope_multimodal(self, exc: requests.HTTPError) -> bool:
         response = getattr(exc, "response", None)
@@ -72,6 +87,26 @@ class OpenAICompatibleEmbeddingClient:
         return "dashscope.aliyuncs.com" in self.base_url and (
             "vl-embedding" in model or model.startswith("multimodal-embedding")
         )
+
+    def _embed_texts_dashscope_text(self, texts: list[str]) -> list[list[float]]:
+        response = _post_json_with_retries(
+            (
+                f"{_dashscope_native_base_url(self.base_url)}"
+                "/api/v1/services/embeddings/text-embedding/text-embedding"
+            ),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            payload={
+                "model": self.model,
+                "input": {
+                    "texts": [text or "" for text in texts],
+                },
+            },
+            timeout=self.timeout,
+        )
+        return _parse_embedding_vectors(response.json())
 
     def _embed_texts_dashscope_multimodal(self, texts: list[str]) -> list[list[float]]:
         vectors = []

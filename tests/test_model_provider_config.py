@@ -6,6 +6,8 @@ import sys
 
 
 PROVIDER_KEYS = [
+    "MODEL_PROVIDER_CONFIG_LOAD_DOTENV",
+    "MODEL_PROVIDER_CONFIG_DOTENV_PATH",
     "MODEL",
     "BASE_URL",
     "ARK_API_KEY",
@@ -83,6 +85,34 @@ def test_model_provider_config_external_mode_requires_embedding() -> None:
     assert "embedding provider is required" in " ".join(payload["errors"])
 
 
+def test_model_provider_config_loads_dotenv_without_printing_secret(tmp_path) -> None:
+    secret = "sk-dotenv-secret-never-print"
+    dotenv_path = tmp_path / ".env"
+    dotenv_path.write_text(
+        "\n".join(
+            [
+                "MAIN_MODEL=qwen3-32b",
+                "MAIN_BASE_URL=https://example.test/v1",
+                f"MAIN_API_KEY={secret}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    env = clean_provider_env()
+    env["MODEL_PROVIDER_CONFIG_LOAD_DOTENV"] = "true"
+    env["MODEL_PROVIDER_CONFIG_DOTENV_PATH"] = str(dotenv_path)
+
+    completed = run_config_check("--json", env=env)
+    payload = json.loads(completed.stdout)
+
+    assert payload["ok"] is True
+    assert payload["roles"]["main"]["configured"] is True
+    assert payload["roles"]["main"]["fields"]["api_key"]["source"] == "MAIN_API_KEY"
+    assert secret not in completed.stdout
+    assert secret not in completed.stderr
+
+
 def run_config_check(
     *args: str, env: dict[str, str], check: bool = True
 ) -> subprocess.CompletedProcess:
@@ -99,4 +129,5 @@ def clean_provider_env() -> dict[str, str]:
     env = os.environ.copy()
     for key in PROVIDER_KEYS:
         env.pop(key, None)
+    env["MODEL_PROVIDER_CONFIG_LOAD_DOTENV"] = "false"
     return env

@@ -1,3 +1,4 @@
+from collections import Counter
 from dataclasses import dataclass, field
 import re
 from typing import Any
@@ -194,6 +195,7 @@ class RetrievalService:
             ],
             retrieval_diagnostics={
                 "retrieval_method": "lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1",
+                "final_ranking_policy": "score_then_paper_section_diversity_v1",
                 "candidate_limit": candidate_limit,
                 "final_limit": limit,
                 "query_variant_count": len(query_variants),
@@ -587,8 +589,8 @@ class RetrievalService:
         return self._ranked([item for item in scored if item.score > 0], limit)
 
     def _ranked(self, hits: list[ScoredItem], limit: int) -> list[ScoredItem]:
-        hits.sort(key=self._rank_key, reverse=True)
-        return hits[:limit]
+        ranked_hits = sorted(hits, key=self._rank_key, reverse=True)
+        return self._diversity_aware_top(ranked_hits, limit)
 
     def _rank_key(self, scored: ScoredItem) -> tuple:
         created_at = getattr(scored.item, "created_at", None)
@@ -599,6 +601,89 @@ class RetrievalService:
             created_rank,
             str(getattr(scored.item, "id", "")),
         )
+
+    def _diversity_aware_top(self, ranked_hits: list[ScoredItem], limit: int) -> list[ScoredItem]:
+        if limit <= 0:
+            return []
+        if len(ranked_hits) <= limit or limit < 3:
+            return ranked_hits[:limit]
+
+        paper_keys = [self._paper_diversity_key(scored.item) for scored in ranked_hits]
+        section_keys = [self._section_diversity_key(scored.item) for scored in ranked_hits]
+        distinct_papers = {key for key in paper_keys if key}
+        distinct_sections = {key for key in section_keys if key}
+        if len(distinct_papers) <= 1 and len(distinct_sections) <= 1:
+            return ranked_hits[:limit]
+
+        top_score = ranked_hits[0].score
+        max_per_paper = max(2, (limit + 1) // 2)
+        max_per_section = max(2, min(4, (limit + 2) // 3))
+        selected: list[ScoredItem] = []
+        deferred: list[ScoredItem] = []
+        selected_ids: set[str] = set()
+        paper_counts: Counter[str] = Counter()
+        section_counts: Counter[str] = Counter()
+
+        for scored in ranked_hits:
+            item_id = str(getattr(scored.item, "id", id(scored.item)))
+            paper_key = self._paper_diversity_key(scored.item)
+            section_key = self._section_diversity_key(scored.item)
+            paper_crowded = bool(
+                paper_key and len(distinct_papers) > 1 and paper_counts[paper_key] >= max_per_paper
+            )
+            section_crowded = bool(
+                section_key
+                and len(distinct_sections) > 1
+                and section_counts[section_key] >= max_per_section
+            )
+            below_diversity_band = bool(
+                selected and not self._within_diversity_band(scored.score, top_score)
+            )
+            if paper_crowded or section_crowded or below_diversity_band:
+                deferred.append(scored)
+                continue
+            selected.append(scored)
+            selected_ids.add(item_id)
+            if paper_key:
+                paper_counts[paper_key] += 1
+            if section_key:
+                section_counts[section_key] += 1
+            if len(selected) >= limit:
+                return selected[:limit]
+
+        for scored in deferred:
+            item_id = str(getattr(scored.item, "id", id(scored.item)))
+            if item_id in selected_ids:
+                continue
+            selected.append(scored)
+            selected_ids.add(item_id)
+            if len(selected) >= limit:
+                break
+        return selected[:limit]
+
+    def _within_diversity_band(self, score: float, top_score: float) -> bool:
+        if top_score <= 0:
+            return True
+        return score >= top_score - 0.75 or score >= top_score * 0.85
+
+    def _paper_diversity_key(self, item: Any) -> str:
+        paper_id = getattr(item, "paper_id", "")
+        if paper_id:
+            return str(paper_id)
+        for attr in ("source_paper_ids_json", "related_paper_ids_json"):
+            paper_ids = getattr(item, attr, None) or []
+            if paper_ids:
+                return "|".join(sorted(str(paper_id) for paper_id in paper_ids))
+        return ""
+
+    def _section_diversity_key(self, item: Any) -> str:
+        section_id = getattr(item, "section_id", "")
+        if section_id:
+            return f"section:{section_id}"
+        chunk_id = getattr(item, "chunk_id", "")
+        if chunk_id:
+            return f"chunk:{self._paper_diversity_key(item)}:{chunk_id}"
+        return ""
 
     def _document_text(self, owner_type: str, item: Any) -> str:
         if owner_type == "chunk":

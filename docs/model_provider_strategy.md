@@ -41,7 +41,8 @@ The retrieval implementation now supports external embedding and rerank provider
 DashScope compatibility notes:
 
 - Qwen3 chat completions require `enable_thinking=false` for non-streaming JSON calls; the JSON client adds this automatically for DashScope Qwen3 models.
-- `text-embedding-v1` uses the OpenAI-compatible `/embeddings` path for the current text-first PDF workflow.
+- `text-embedding-v1` first tries the configured OpenAI-compatible `/embeddings` path, then falls back to DashScope native `/api/v1/services/embeddings/text-embedding/text-embedding` when the compatible path rejects the request.
+- External embedding rebuilds are batched and provider-safe truncated before calls so long PDF chunks do not turn a one-paper smoke into a provider 400.
 - `multimodal-embedding-v1` remains supported through DashScope native multimodal embedding behavior when the OpenAI-compatible `/embeddings` path is not available.
 - `qwen3-rerank` is not served through the OpenAI-compatible `/rerank` path. The rerank adapter falls back to DashScope native text-rerank when needed.
 
@@ -84,10 +85,10 @@ The real-paper evaluator at `scripts/evaluate_real_papers.py` refuses to run unl
 
 Latest real-provider smoke status:
 
-- `qwen3-32b` main/extraction/judge roles: passed.
-- `text-embedding-v1` is the current recommended text embedding model for new local deployments.
+- `text-embedding-v1`: passed the explicit smoke and returned 1536-dimensional vectors.
+- One-paper strict real-paper smoke passed with `text-embedding-v1`, `47` external embeddings, `0` provider fallback warnings, and benchmark `1 / 1`: `outputs/evaluations/text_embedding_smoke/real_paper_eval_20260629_122451.json`.
+- `qwen3-32b` main/extraction/judge and `qwen3-rerank`: currently blocked in the local account by DashScope `AllocationQuota.FreeTierOnly`; the code path is wired, but a full strict qwen3-rerank run requires quota/payment mode to be enabled by the operator.
 - Historical `multimodal-embedding-v1` smoke/evaluation runs passed with 1024-dimensional vectors and remain valid as compatibility evidence.
-- `qwen3-rerank`: passed and ranked the relevant document first in the smoke pair.
 
 ## Test Safety
 

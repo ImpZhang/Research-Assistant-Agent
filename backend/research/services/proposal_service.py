@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from backend.research.models import ExperimentPlan, Idea, ProposalDraft, RelatedWorkMatrix
 from backend.research.services.artifact_graph_service import ArtifactGraphService
 from backend.research.services.graph_service import GraphService
+from backend.research.services.workflow_lineage_service import WorkflowLineageService
 
 
 class ProposalDraftService:
@@ -59,6 +60,20 @@ class ProposalDraftService:
         self.session.commit()
         self.session.refresh(draft)
         ArtifactGraphService(GraphService(self.session)).link_proposal_draft(draft)
+        WorkflowLineageService(self.session).record_standalone_artifact(
+            artifact_type="proposal_draft",
+            entity_type="proposal_draft",
+            entity_id=draft.id,
+            stage_name="create_proposal_draft",
+            path=f"artifacts/proposals/drafts/proposal-draft-{draft.id}.md",
+            content=draft.markdown_export,
+            metadata={
+                "idea_id": draft.idea_id,
+                "related_work_matrix_id": draft.related_work_matrix_id or "",
+                "experiment_plan_id": draft.experiment_plan_id or "",
+            },
+            created_by=draft.created_by,
+        )
         self.session.commit()
         return draft
 

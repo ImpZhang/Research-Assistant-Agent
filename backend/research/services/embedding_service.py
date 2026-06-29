@@ -15,6 +15,8 @@ from backend.research.models import Chunk, Evidence, Idea, ResearchEmbedding, Re
 TOKEN_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_\-]{2,}")
 LOCAL_EMBEDDING_MODEL = "local_hash_embedding_v0"
 LOCAL_EMBEDDING_DIMENSION = 128
+EXTERNAL_EMBEDDING_BATCH_SIZE = 8
+EXTERNAL_EMBEDDING_MAX_TEXT_CHARS = 6000
 logger = logging.getLogger(__name__)
 
 
@@ -176,7 +178,11 @@ class EmbeddingService:
     def embed_texts_results(self, texts: list[str]) -> list[TextEmbedding]:
         if self._external_embedding_selected():
             try:
-                vectors = self.embedding_client.embed_texts([text or "" for text in texts])
+                vectors = []
+                provider_texts = [self._provider_safe_text(text) for text in texts]
+                for start in range(0, len(provider_texts), EXTERNAL_EMBEDDING_BATCH_SIZE):
+                    batch = provider_texts[start : start + EXTERNAL_EMBEDDING_BATCH_SIZE]
+                    vectors.extend(self.embedding_client.embed_texts(batch))
                 if len(vectors) != len(texts):
                     raise ValueError("Embedding provider returned an unexpected vector count.")
                 return [
@@ -205,6 +211,12 @@ class EmbeddingService:
             )
             for text in texts
         ]
+
+    def _provider_safe_text(self, text: str) -> str:
+        cleaned = " ".join((text or "").split())
+        if len(cleaned) <= EXTERNAL_EMBEDDING_MAX_TEXT_CHARS:
+            return cleaned
+        return cleaned[:EXTERNAL_EMBEDDING_MAX_TEXT_CHARS]
 
     def _embed_text_local(self, text: str) -> list[float]:
         vector = [0.0 for _ in range(LOCAL_EMBEDDING_DIMENSION)]

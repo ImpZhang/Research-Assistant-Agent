@@ -33,6 +33,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   scripts/check_geoloc_eval_dataset.py \
   scripts/check_geoloc_hard_questions.py \
   scripts/check_geoloc_realistic_eval.py \
+  scripts/analyze_geoloc_retrieval_misses.py \
+  scripts/run_local_pipeline_profile.py \
   scripts/benchmark_geoloc_predictions.py \
   scripts/prepare_local_geoloc_benchmark.py
 .venv/bin/ruff format --check \
@@ -65,6 +67,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   scripts/check_geoloc_eval_dataset.py \
   scripts/check_geoloc_hard_questions.py \
   scripts/check_geoloc_realistic_eval.py \
+  scripts/analyze_geoloc_retrieval_misses.py \
+  scripts/run_local_pipeline_profile.py \
   scripts/benchmark_geoloc_predictions.py \
   scripts/prepare_local_geoloc_benchmark.py
 bash scripts/check_local_geoloc_benchmark_smoke.sh
@@ -82,6 +86,7 @@ bash scripts/check_local_geoloc_benchmark_smoke.sh
   tests/test_app.py::test_context_search_gap_feasibility_bonus_breakdown \
   tests/test_app.py::test_context_search_evidence_confidence_bonus_breakdown \
   tests/test_app.py::test_context_search_exact_phrase_bonus_breakdown \
+  tests/test_app.py::test_context_search_diversity_ranking_prevents_single_paper_crowding \
   tests/test_app.py::test_context_search_vector_hit_rescues_lexical_miss \
   tests/test_app.py::test_context_search_chunk_vector_hit_rescues_lexical_miss \
   tests/test_app.py::test_context_search_deduplicates_repeated_query_terms \
@@ -93,3 +98,5 @@ bash scripts/check_local_geoloc_benchmark_smoke.sh
   tests/test_app.py::test_context_search_graph_expansion_keeps_relevant_edge_after_recent_noise \
   tests/test_app.py::test_context_search_returns_evidence_and_graph_context \
   tests/test_app.py::test_benchmark_profiles_report_builtin_readiness
+
+.venv/bin/python scripts/run_local_pipeline_profile.py --profile rag_miss_analysis

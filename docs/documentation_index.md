@@ -20,6 +20,8 @@ This document is the starting point for future development. Use it to find the r
 | `scripts/check_local_runtime_smoke.sh` | Transient localhost runtime smoke for health, readiness, and Workbench. | Before claiming the app starts successfully on the current machine. |
 | `scripts/check_local_safe_suite.sh` | Default local focused verification suite. | Before pushing a completed implementation round. |
 | `scripts/check_model_provider_config.py` | No-network model-provider environment readiness check that does not print secrets. | Before running the opt-in real-provider smoke or diagnosing local model setup. |
+| `configs/local_pipeline_profiles.json` | Committed local profile manifest for common smoke, RAG eval, miss-analysis, lineage, and strict text-embedding runs. | Before running or adding repeatable local verification profiles. |
+| `scripts/run_local_pipeline_profile.py` | Safe profile runner with external-provider guard, glob expansion, command allowlist, and timeout reporting. | When running a committed local verification profile without memorizing long commands. |
 | `scripts/check_single_user_docker_deployment.py` | Static single-user Docker deployment contract check for Dockerfile, compose, dockerignore, env template, and deployment docs. | Before changing optional Docker packaging or deployment docs. |
 | `scripts/build_local_backup_manifest.py` | Read-only aggregate manifest for local data backup scope, counts, sizes, and excluded secret files. | Before backing up or moving a local checkout's data. |
 | `scripts/rehearse_local_backup_restore.py` | Synthetic backup/restore rehearsal that validates archive, restore, manifest comparison, and secret-exclusion logic without copying live local data. | Before changing backup, restore, packaging, or local handoff behavior. |
@@ -77,6 +79,8 @@ This document is the starting point for future development. Use it to find the r
 | `configs/geoloc_realistic_gold.v1.jsonl` | Reviewer-style realistic gold-label spec with blind queries, primary/supporting evidence targets, required terms, and rationales. |
 | `scripts/build_geoloc_realistic_eval.py` | Resolves realistic gold-label specs to local evidence ids and writes ignored gold review/replay artifacts. |
 | `scripts/check_geoloc_realistic_eval.py` | Runs corpus-level no-per-query-filter retrieval metrics, MRR, partial/miss reporting, and failure replay export. |
+| `scripts/analyze_geoloc_retrieval_misses.py` | Classifies realistic primary retrieval misses into query-gap, paper-recall, section-granularity, supporting-over-primary, same-paper, and candidate-competition categories. |
+| `docs/depth_completion_plan.md` | Current deepening pass status for RAG miss taxonomy, pipeline profiles, lineage coverage, and strict text-embedding readiness. |
 | `scripts/check_local_geoloc_benchmark_smoke.sh` | One-command local smoke for the geolocalization JSONL benchmark path. |
 | `/research/ideas/{idea_id}/sota-review-package` | Runtime API that turns an idea into a persisted manual SOTA review checklist and collision package. |
 | `/research/ideas/{idea_id}/sota-external-search-evidence` | Runtime API that persists local/external literature search statuses, result summaries, and signoff readiness for SOTA review queries. |

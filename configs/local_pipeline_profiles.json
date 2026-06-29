@@ -1,0 +1,151 @@
+{
+  "profiles": [
+    {
+      "id": "quick_smoke",
+      "description": "Fast local checks that do not call model providers.",
+      "external_provider": false,
+      "commands": [
+        {
+          "name": "model_provider_config",
+          "args": [".venv/bin/python", "scripts/check_model_provider_config.py", "--json"]
+        },
+        {
+          "name": "benchmark_smoke",
+          "args": ["bash", "scripts/check_local_geoloc_benchmark_smoke.sh"]
+        }
+      ]
+    },
+    {
+      "id": "rag_realistic_eval",
+      "description": "Run the realistic no-per-query-filter geolocalization RAG evaluation.",
+      "external_provider": false,
+      "commands": [
+        {
+          "name": "realistic_eval",
+          "args": [
+            ".venv/bin/python",
+            "scripts/check_geoloc_realistic_eval.py",
+            "--write-json",
+            "data/evaluation/geoloc_12paper/realistic_quality_report.json",
+            "--write-markdown",
+            "data/evaluation/geoloc_12paper/realistic_quality_report.md",
+            "--write-failure-replay",
+            "data/evaluation/geoloc_12paper/realistic_failure_replay_cases.jsonl"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rag_miss_analysis",
+      "description": "Classify realistic RAG misses into actionable retrieval failure categories.",
+      "external_provider": false,
+      "commands": [
+        {
+          "name": "miss_analysis",
+          "args": [
+            ".venv/bin/python",
+            "scripts/analyze_geoloc_retrieval_misses.py",
+            "--write-json",
+            "data/evaluation/geoloc_12paper/realistic_miss_analysis.json",
+            "--write-markdown",
+            "data/evaluation/geoloc_12paper/realistic_miss_analysis.md"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "workflow_lineage_smoke",
+      "description": "Verify workflow job controls, checkpoint reuse, lineage, and failure taxonomy.",
+      "external_provider": false,
+      "commands": [
+        {
+          "name": "workflow_job_controls",
+          "args": ["bash", "scripts/check_workflow_job_controls.sh"]
+        }
+      ]
+    },
+    {
+      "id": "strict_text_embedding_eval",
+      "description": "Run strict external real-paper evaluation with text-embedding-v1 and qwen3-rerank.",
+      "external_provider": true,
+      "timeout_seconds": 1800,
+      "env": {
+        "ALLOW_REAL_PAPER_EVAL": "1",
+        "EMBEDDER": "text-embedding-v1",
+        "PAPER_UPLOAD_MAX_BYTES": "20971520",
+        "RETRIEVAL_EMBEDDING_PROVIDER": "external",
+        "RETRIEVAL_RERANK_PROVIDER": "external"
+      },
+      "commands": [
+        {
+          "name": "strict_text_embedding_real_papers",
+          "args": [
+            ".venv/bin/python",
+            "scripts/evaluate_real_papers.py",
+            "--max-gaps",
+            "1",
+            "--max-ideas-per-gap",
+            "1",
+            "--context-limit",
+            "8",
+            "--workflow-timeout-seconds",
+            "180",
+            "--workflow-poll-interval-seconds",
+            "1",
+            "--deep-step-timeout-seconds",
+            "60",
+            "--benchmark-profile-id",
+            "json-metrics-smoke",
+            "--require-benchmark-profile",
+            "--require-external-embeddings",
+            "--output-dir",
+            "outputs/evaluations/text_embedding_strict",
+            "glob:data/papers/*.pdf"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "strict_text_embedding_smoke",
+      "description": "Run a one-paper strict external embedding smoke with text-embedding-v1 and local rerank disabled.",
+      "external_provider": true,
+      "timeout_seconds": 600,
+      "env": {
+        "ALLOW_REAL_PAPER_EVAL": "1",
+        "EMBEDDER": "text-embedding-v1",
+        "PAPER_UPLOAD_MAX_BYTES": "20971520",
+        "RETRIEVAL_EMBEDDING_PROVIDER": "external",
+        "RETRIEVAL_RERANK_PROVIDER": "disabled"
+      },
+      "commands": [
+        {
+          "name": "strict_text_embedding_georanker_smoke",
+          "args": [
+            ".venv/bin/python",
+            "scripts/evaluate_real_papers.py",
+            "--max-gaps",
+            "1",
+            "--max-ideas-per-gap",
+            "1",
+            "--context-limit",
+            "6",
+            "--workflow-timeout-seconds",
+            "180",
+            "--workflow-poll-interval-seconds",
+            "1",
+            "--deep-step-timeout-seconds",
+            "60",
+            "--benchmark-profile-id",
+            "json-metrics-smoke",
+            "--require-benchmark-profile",
+            "--require-external-embeddings",
+            "--skip-retrieval-mode-comparison",
+            "--output-dir",
+            "outputs/evaluations/text_embedding_smoke",
+            "data/papers/Jia 等 - 2025 - GeoRanker Distance-aware ranking for worldwide image geolocalization.pdf"
+          ]
+        }
+      ]
+    }
+  ]
+}

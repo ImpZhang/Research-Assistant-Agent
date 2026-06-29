@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from backend.research.models import ProposalDraft, ProposalReview, RelatedWorkMatrix
 from backend.research.services.artifact_graph_service import ArtifactGraphService
 from backend.research.services.graph_service import GraphService
+from backend.research.services.workflow_lineage_service import WorkflowLineageService
 
 
 class ProposalReviewService:
@@ -51,6 +52,21 @@ class ProposalReviewService:
         self.session.commit()
         self.session.refresh(review)
         ArtifactGraphService(GraphService(self.session)).link_proposal_review(review)
+        WorkflowLineageService(self.session).record_standalone_artifact(
+            artifact_type="proposal_review",
+            entity_type="proposal_review",
+            entity_id=review.id,
+            stage_name="create_proposal_review",
+            path=f"artifacts/proposals/reviews/proposal-review-{review.id}.md",
+            content=review.markdown_export,
+            metadata={
+                "idea_id": review.idea_id,
+                "proposal_draft_id": review.proposal_draft_id,
+                "decision": review.decision,
+                "readiness_score": review.readiness_score,
+            },
+            created_by=review.created_by,
+        )
         self.session.commit()
         return review
 

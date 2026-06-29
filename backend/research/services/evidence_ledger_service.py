@@ -15,6 +15,7 @@ from backend.research.models import (
 )
 from backend.research.services.artifact_graph_service import ArtifactGraphService
 from backend.research.services.graph_service import GraphService
+from backend.research.services.workflow_lineage_service import WorkflowLineageService
 
 
 class IdeaEvidenceLedgerService:
@@ -117,6 +118,20 @@ class IdeaEvidenceLedgerService:
         self.session.commit()
         self.session.refresh(ledger)
         ArtifactGraphService(GraphService(self.session)).link_idea_evidence_ledger(ledger)
+        WorkflowLineageService(self.session).record_standalone_artifact(
+            artifact_type="evidence_ledger",
+            entity_type="idea_evidence_ledger",
+            entity_id=ledger.id,
+            stage_name="create_evidence_ledger",
+            path=f"artifacts/evidence-ledgers/evidence-ledger-{ledger.id}.md",
+            content=ledger.markdown_export,
+            metadata={
+                "idea_id": ledger.idea_id,
+                "coverage_score": ledger.coverage_score,
+                "source_artifacts": ledger.source_artifacts_json or {},
+            },
+            created_by=ledger.created_by,
+        )
         self.session.commit()
         self.session.refresh(ledger)
         return ledger

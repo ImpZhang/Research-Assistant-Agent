@@ -16,6 +16,7 @@ from backend.research.models import Job, WorkflowArtifact, WorkflowStageRun, utc
 FAILURE_TAXONOMY_VERSION = "workflow_failure_taxonomy_v1"
 LINEAGE_SCHEMA_VERSION = "workflow_lineage_v1"
 SECRET_VALUE_PATTERN = re.compile(r"(sk-[A-Za-z0-9_\-]{8,}|Bearer\s+[A-Za-z0-9._\-]{8,})")
+STANDALONE_ARTIFACT_JOB_ID = "standalone_artifact_lineage"
 
 
 @dataclass(frozen=True)
@@ -194,6 +195,75 @@ class WorkflowLineageService:
         self.session.refresh(artifact)
         return artifact
 
+    def record_standalone_artifact(
+        self,
+        *,
+        artifact_type: str,
+        entity_type: str,
+        entity_id: str,
+        paper_id: str = "",
+        stage_name: str = "",
+        path: str = "",
+        content: str = "",
+        metadata: dict[str, Any] | None = None,
+        created_by: str = "workflow",
+    ) -> WorkflowArtifact:
+        content_hash = hash_text(
+            content
+            or stable_json(
+                {
+                    "artifact_type": artifact_type,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "metadata": metadata or {},
+                }
+            )
+        )
+        existing = (
+            self.session.query(WorkflowArtifact)
+            .filter(
+                WorkflowArtifact.job_id == STANDALONE_ARTIFACT_JOB_ID,
+                WorkflowArtifact.artifact_type == artifact_type,
+                WorkflowArtifact.entity_type == entity_type,
+                WorkflowArtifact.entity_id == entity_id,
+            )
+            .first()
+        )
+        payload = {
+            "lineage_schema_version": LINEAGE_SCHEMA_VERSION,
+            "code_commit": current_code_commit(),
+            "config_hash": workflow_config_hash({}),
+            **(metadata or {}),
+        }
+        lineage_job = self._standalone_artifact_job()
+        if existing is not None:
+            existing.paper_id = paper_id or existing.paper_id
+            existing.job_id = lineage_job.id
+            existing.stage_name = stage_name or existing.stage_name
+            existing.path = path or existing.path
+            existing.content_hash = content_hash
+            existing.metadata_json = {**(existing.metadata_json or {}), **payload}
+            self.session.commit()
+            self.session.refresh(existing)
+            return existing
+
+        artifact = WorkflowArtifact(
+            artifact_type=artifact_type,
+            paper_id=paper_id,
+            job_id=lineage_job.id,
+            stage_name=stage_name,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            path=path,
+            content_hash=content_hash,
+            metadata_json=payload,
+            created_by=created_by or "workflow",
+        )
+        self.session.add(artifact)
+        self.session.commit()
+        self.session.refresh(artifact)
+        return artifact
+
     def list_stage_runs(self, job_id: str) -> list[WorkflowStageRun]:
         return (
             self.session.query(WorkflowStageRun)
@@ -209,6 +279,41 @@ class WorkflowLineageService:
             .order_by(WorkflowArtifact.created_at.asc())
             .all()
         )
+
+    def list_entity_artifacts(self, entity_type: str, entity_id: str) -> list[WorkflowArtifact]:
+        return (
+            self.session.query(WorkflowArtifact)
+            .filter(
+                WorkflowArtifact.entity_type == entity_type,
+                WorkflowArtifact.entity_id == entity_id,
+            )
+            .order_by(WorkflowArtifact.created_at.asc())
+            .all()
+        )
+
+    def _standalone_artifact_job(self) -> Job:
+        job = self.session.get(Job, STANDALONE_ARTIFACT_JOB_ID)
+        if job is not None:
+            return job
+        job = Job(
+            id=STANDALONE_ARTIFACT_JOB_ID,
+            job_type="standalone_artifact_lineage",
+            status="completed",
+            input_json={},
+            output_json={
+                "stage": "lineage_registry",
+                "stage_message": "Synthetic system job for standalone artifact lineage.",
+                "workflow_run_metadata": self.run_metadata(
+                    Job(input_json={}, output_json={}, job_type="standalone_artifact_lineage")
+                ),
+            },
+            progress=1.0,
+            started_at=utc_now(),
+            finished_at=utc_now(),
+        )
+        self.session.add(job)
+        self.session.flush()
+        return job
 
 
 def classify_failure(error: str, stage_name: str = "") -> FailureClassification:

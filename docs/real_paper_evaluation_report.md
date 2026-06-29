@@ -6,15 +6,17 @@ This report summarizes the real-provider, real-PDF evaluation rounds for the loc
 
 ## Provider Status
 
-Current explicit provider smoke passed for all configured roles on 2026-06-28:
+Current explicit provider status after the `text-embedding-v1` switch:
 
-- `qwen3-32b`: main, extraction, and judge roles passed.
-- `multimodal-embedding-v1`: passed with 1024-dimensional vectors.
-- `qwen3-rerank`: passed and ranked the relevant smoke document first.
+- `text-embedding-v1`: passed the explicit smoke with 1536-dimensional vectors.
+- One-paper strict real-paper smoke passed on GeoRanker with `text-embedding-v1`, `47` external embeddings, provider fallback warnings `0`, and benchmark completed `1 / 1`; report `outputs/evaluations/text_embedding_smoke/real_paper_eval_20260629_122451.json`.
+- `qwen3-32b` main/extraction/judge and `qwen3-rerank`: currently blocked in this local account by DashScope `AllocationQuota.FreeTierOnly`, so a full strict qwen3-rerank external run is an operator quota/payment-mode task rather than a code-completeness claim.
+- Historical `multimodal-embedding-v1`: passed with 1024-dimensional vectors and remains useful compatibility evidence.
 
 Implementation notes:
 
 - DashScope Qwen3 non-streaming chat calls require `enable_thinking=false`.
+- `text-embedding-v1` uses DashScope native text-embedding fallback when the compatible `/embeddings` endpoint rejects the request, and external rebuilds now batch/truncate provider inputs.
 - `multimodal-embedding-v1` uses DashScope native multimodal embedding behavior when needed.
 - `qwen3-rerank` uses DashScope native text-rerank fallback.
 

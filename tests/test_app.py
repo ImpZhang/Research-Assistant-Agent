@@ -36,6 +36,10 @@ from backend.research.models import (
     WorkflowStageRun,
 )
 from backend.research.services.evidence_ledger_service import IdeaEvidenceLedgerService
+from backend.research.services.assumption_audit_service import IdeaAssumptionAuditService
+from backend.research.services.decision_memo_service import IdeaDecisionMemoService
+from backend.research.services.embedding_service import EmbeddingService
+from backend.research.services.experiment_run_service import ExperimentRunService
 from backend.research.services.experiment_service import ExperimentService
 from backend.research.services.gap_service import GapService
 from backend.research.services.graph_service import GraphService
@@ -6387,6 +6391,87 @@ def test_proposal_review_service_scores_decisions_and_missing_evidence() -> None
     assert service._missing_evidence(complete, matrix) == ["arxiv_recent_preprints"]
 
 
+def test_downstream_artifacts_record_standalone_lineage() -> None:
+    marker = f"standalone-lineage-{time.time_ns()}"
+    client = TestClient(create_app())
+    with SessionLocal() as session:
+        idea = Idea(
+            title=f"Standalone Lineage Idea {marker}",
+            research_question="Can standalone artifacts enter workflow lineage?",
+            core_hypothesis="Standalone artifacts can be tracked.",
+            motivation="Researchers need traceability after the first workflow.",
+            method_sketch="Create proposal and review artifacts.",
+            expected_contribution="Unified lineage vocabulary.",
+            novelty_argument="The lineage layer covers downstream artifacts.",
+            evidence_ids_json=[f"evidence-{marker}"],
+        )
+        evidence = Evidence(
+            id=f"evidence-{marker}",
+            paper_id="",
+            evidence_type="claim",
+            text="Standalone lineage evidence supports the idea.",
+            summary="Lineage evidence.",
+            supports="Traceability claim.",
+            confidence=0.9,
+        )
+        plan = ExperimentPlan(
+            idea_id="",
+            objective="Verify standalone lineage.",
+            hypothesis="Artifacts are recorded.",
+            main_experiment_json={"success_criterion": "Lineage artifacts exist."},
+        )
+        session.add_all([idea, evidence])
+        session.flush()
+        idea_id = idea.id
+        plan.idea_id = idea.id
+        session.add(plan)
+        session.commit()
+
+        draft = ProposalDraftService(session).create_draft(
+            idea_id,
+            experiment_plan_id=plan.id,
+            include_latest_related_work=False,
+        )
+        review = ProposalReviewService(session).create_review(draft.id)
+        memo = IdeaDecisionMemoService(session).create_memo(idea.id)
+        audit = IdeaAssumptionAuditService(session).create_audit(idea.id)
+        ledger = IdeaEvidenceLedgerService(session).create_ledger(idea.id)
+        run = ExperimentRunService(session).create_benchmark_run(
+            plan.id,
+            benchmark_name="Lineage benchmark",
+            dry_run=True,
+        )
+        artifacts = (
+            session.query(WorkflowArtifact)
+            .filter(
+                WorkflowArtifact.entity_id.in_(
+                    [draft.id, review.id, memo.id, audit.id, ledger.id, run.id]
+                )
+            )
+            .all()
+        )
+
+    artifact_types = {artifact.artifact_type for artifact in artifacts}
+    assert {
+        "proposal_draft",
+        "proposal_review",
+        "decision_memo",
+        "assumption_audit",
+        "evidence_ledger",
+        "benchmark_run",
+    }.issubset(artifact_types)
+    assert all(artifact.job_id == "standalone_artifact_lineage" for artifact in artifacts)
+    assert all(artifact.content_hash for artifact in artifacts)
+
+    response = client.get(
+        f"/research/artifacts/lineage?entity_type=proposal_draft&entity_id={draft.id}"
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body[0]["artifact_type"] == "proposal_draft"
+    assert body[0]["metadata"]["idea_id"] == idea_id
+
+
 def test_proposal_revision_service_applies_review_actions_and_fallbacks() -> None:
     service = ProposalRevisionService(None)
     draft = ProposalDraft(
@@ -10051,6 +10136,90 @@ def test_context_search_exact_phrase_bonus_breakdown() -> None:
     assert top_evidence["score_breakdown"]["phrase"] == 2.0
     assert top_evidence["score_breakdown"]["vector"] >= 0.0
     assert _score_breakdown_total_match_rate(body["evidences"]) == 1.0
+
+
+def test_context_search_diversity_ranking_prevents_single_paper_crowding() -> None:
+    marker = f"diversityrank{time.time_ns()}"
+    session = SessionLocal()
+    crowded_paper = None
+    supporting_paper = None
+    evidence_ids: list[str] = []
+    try:
+        crowded_paper = Paper(
+            title=f"Context Search Crowded Ranking Paper {marker}",
+            filename="context_diversity_crowded.txt",
+            source_type="pytest",
+            status="indexed",
+        )
+        supporting_paper = Paper(
+            title=f"Context Search Supporting Ranking Paper {marker}",
+            filename="context_diversity_supporting.txt",
+            source_type="pytest",
+            status="indexed",
+        )
+        session.add_all([crowded_paper, supporting_paper])
+        session.flush()
+        crowded_rows = [
+            Evidence(
+                paper_id=crowded_paper.id,
+                evidence_type="diversity_fixture",
+                text=f"{marker} high-confidence crowded evidence row {index}",
+                summary=f"{marker} crowded summary {index}",
+                supports=f"{marker} crowded support {index}",
+                confidence=1.0,
+                metadata_json={"fixture": "context_search_diversity_ranking"},
+            )
+            for index in range(5)
+        ]
+        supporting_row = Evidence(
+            paper_id=supporting_paper.id,
+            evidence_type="diversity_fixture",
+            text=f"{marker} near-tie supporting evidence from another paper",
+            summary=f"{marker} supporting summary",
+            supports=f"{marker} supporting support",
+            confidence=0.5,
+            metadata_json={"fixture": "context_search_diversity_ranking"},
+        )
+        session.add_all([*crowded_rows, supporting_row])
+        session.commit()
+        evidence_ids = [row.id for row in [*crowded_rows, supporting_row]]
+
+        result = RetrievalService(
+            session,
+            embedding_service=EmbeddingService(session, embedding_provider_mode="local"),
+            rerank_provider_mode="disabled",
+        ).search_context(
+            query=marker,
+            limit=3,
+            include_graph=False,
+        )
+
+        evidence_paper_ids = [scored.item.paper_id for scored in result.evidences]
+        assert len(result.evidences) == 3
+        assert supporting_paper.id in evidence_paper_ids
+        assert evidence_paper_ids.count(crowded_paper.id) == 2
+        assert (
+            result.retrieval_diagnostics["final_ranking_policy"]
+            == "score_then_paper_section_diversity_v1"
+        )
+    finally:
+        session.rollback()
+        if evidence_ids:
+            session.query(ResearchEmbedding).filter(
+                ResearchEmbedding.owner_id.in_(evidence_ids)
+            ).delete(synchronize_session=False)
+            session.query(Evidence).filter(Evidence.id.in_(evidence_ids)).delete(
+                synchronize_session=False
+            )
+        paper_ids = [
+            paper.id
+            for paper in [crowded_paper, supporting_paper]
+            if paper is not None and paper.id
+        ]
+        if paper_ids:
+            session.query(Paper).filter(Paper.id.in_(paper_ids)).delete(synchronize_session=False)
+        session.commit()
+        session.close()
 
 
 def test_context_search_vector_hit_rescues_lexical_miss() -> None:

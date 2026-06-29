@@ -13,6 +13,7 @@ from backend.research.models import (
 )
 from backend.research.services.artifact_graph_service import ArtifactGraphService
 from backend.research.services.graph_service import GraphService
+from backend.research.services.workflow_lineage_service import WorkflowLineageService
 
 
 class IdeaDecisionMemoService:
@@ -88,6 +89,20 @@ class IdeaDecisionMemoService:
         self.session.commit()
         self.session.refresh(memo)
         ArtifactGraphService(GraphService(self.session)).link_idea_decision_memo(memo)
+        WorkflowLineageService(self.session).record_standalone_artifact(
+            artifact_type="decision_memo",
+            entity_type="idea_decision_memo",
+            entity_id=memo.id,
+            stage_name="create_decision_memo",
+            path=f"artifacts/decisions/decision-memo-{memo.id}.md",
+            content=memo.markdown_export,
+            metadata={
+                "idea_id": memo.idea_id,
+                "decision": memo.decision,
+                "source_artifacts": memo.source_artifacts_json or {},
+            },
+            created_by=memo.created_by,
+        )
         self.session.commit()
         self.session.refresh(memo)
         return memo

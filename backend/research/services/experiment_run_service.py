@@ -11,6 +11,7 @@ from backend.research.models import (
 )
 from backend.research.services.artifact_graph_service import ArtifactGraphService
 from backend.research.services.graph_service import GraphService
+from backend.research.services.workflow_lineage_service import WorkflowLineageService
 
 
 FINAL_STATUSES = {"completed", "failed", "inconclusive"}
@@ -77,6 +78,23 @@ class ExperimentRunService:
         self.session.commit()
         self.session.refresh(run)
         ArtifactGraphService(GraphService(self.session)).link_experiment_run(plan, run, task)
+        execution_kind = (run.parameters_json or {}).get("execution_kind", "experiment")
+        WorkflowLineageService(self.session).record_standalone_artifact(
+            artifact_type="benchmark_run" if execution_kind == "benchmark" else "experiment_run",
+            entity_type="experiment_run",
+            entity_id=run.id,
+            stage_name="create_experiment_run",
+            path=f"artifacts/experiments/runs/experiment-run-{run.id}.md",
+            content=run.markdown_export,
+            metadata={
+                "idea_id": run.idea_id,
+                "experiment_plan_id": run.experiment_plan_id,
+                "status": run.status,
+                "execution_kind": execution_kind,
+                "metric_names": sorted((run.metric_results_json or {}).keys()),
+            },
+            created_by=run.created_by,
+        )
         self.session.commit()
         return run
 

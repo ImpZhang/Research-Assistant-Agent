@@ -2,6 +2,39 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-29 - Depth Completion Pass: RAG Misses, Profiles, Lineage, And Text Embedding
+
+Implementation completed:
+
+- Added `docs/depth_completion_plan.md` to define and close the current deepening pass before coding.
+- Added `scripts/analyze_geoloc_retrieval_misses.py` and regenerated realistic miss-analysis JSON/Markdown. Current misses: `7`; categories: candidate competition `7`, query term gap `6`, same-paper wrong evidence `4`, section/evidence granularity `4`, paper recall miss `3`.
+- Added `configs/local_pipeline_profiles.json` plus `scripts/run_local_pipeline_profile.py` for reproducible local profiles with external-provider guard, allowlisted commands, glob expansion, dry-run/block reports, and timeout reporting.
+- Added profiles for quick smoke, realistic RAG eval, RAG miss analysis, workflow lineage smoke, full strict text-embedding eval, and one-paper strict text-embedding smoke.
+- Extended standalone artifact lineage for proposal drafts, proposal reviews, decision memos, assumption audits, evidence ledgers, and benchmark/experiment runs using the synthetic `standalone_artifact_lineage` job.
+- Added `/research/artifacts/lineage` for entity-scoped artifact lineage lookup.
+- Added near-tie diversity-aware final ranking in context search and exposed `final_ranking_policy=score_then_paper_section_diversity_v1` in retrieval diagnostics.
+- Fixed `scripts/check_model_provider_config.py` to load the local `.env` safely while still reporting only configured variable names, never secret values.
+- Added DashScope native text-embedding fallback for `text-embedding-v1`, external embedding batching, and provider-safe text truncation for long PDF chunks.
+
+Evaluation results:
+
+- Realistic 12-paper eval after ranking change stayed stable: primary hit@8 `0.65`, MRR `0.3780`, replay pass `0.65`, miss count `7`.
+- Full strict `strict_text_embedding_eval` initially failed `0 / 12` because `text-embedding-v1` rejected the compatible `/embeddings` path and then large native batches; the adapter/batching fixes addressed this for the one-paper path.
+- Explicit real-provider smoke after the fix: `text-embedding-v1` passed with 1536-dimensional vectors; main/extraction/judge/rerank were blocked by DashScope `AllocationQuota.FreeTierOnly`.
+- New one-paper `strict_text_embedding_smoke` passed on GeoRanker: completed `1 / 1`, external embeddings indexed `47`, provider fallback warnings `0`, benchmark completed `1 / 1`, report `outputs/evaluations/text_embedding_smoke/real_paper_eval_20260629_122451.json`.
+
+Verification completed:
+
+- `.venv/bin/pytest -q tests/test_model_provider_config.py` passed: `4 passed`.
+- `.venv/bin/pytest -q tests/test_retrieval_provider_adapter.py::test_embedding_service_batches_and_truncates_external_provider_text tests/test_retrieval_provider_adapter.py::test_embedding_service_uses_external_provider_and_skips_unchanged_text tests/test_retrieval_provider_adapter.py::test_embedding_client_falls_back_to_dashscope_text_embedding_endpoint` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_context_search_diversity_ranking_prevents_single_paper_crowding` passed.
+- `.venv/bin/pytest -q tests/test_app.py::test_downstream_artifacts_record_standalone_lineage` passed.
+- `.venv/bin/pytest -q tests/test_geoloc_eval_dataset_tools.py::test_geoloc_retrieval_miss_analysis_classifies_actionable_failures tests/test_geoloc_eval_dataset_tools.py::test_local_pipeline_profiles_list_and_block_external` passed.
+- `.venv/bin/python scripts/check_model_provider_config.py --require-real --json` passed without printing secrets.
+- `.venv/bin/python scripts/check_geoloc_realistic_eval.py --dataset-dir data/evaluation/geoloc_12paper ... --json` passed and refreshed realistic quality reports.
+- `.venv/bin/python scripts/analyze_geoloc_retrieval_misses.py --write-json data/evaluation/geoloc_12paper/realistic_miss_analysis.json --write-markdown data/evaluation/geoloc_12paper/realistic_miss_analysis.md` passed.
+- `.venv/bin/python scripts/run_local_pipeline_profile.py --profile strict_text_embedding_smoke --allow-external` passed.
+
 ## 2026-06-29 - Workflow Checkpoint Lineage And Failure Taxonomy
 
 - Re-audited the current RAG/workflow surface after the 12-paper, hard-question, replay, and RAG v1 work. Decision: do not add more heavy RAG modules yet; the next real gap is workflow recoverability, lineage, and failure diagnosis.

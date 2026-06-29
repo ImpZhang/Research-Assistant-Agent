@@ -4,8 +4,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 from typing import Any
 
+try:
+    from dotenv import load_dotenv as python_dotenv_load
+except ModuleNotFoundError:  # pragma: no cover - exercised by system-python doctor checks.
+    python_dotenv_load = None
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 CHAT_ROLES = {
     "main": {
@@ -38,6 +46,7 @@ RERANK_ROLE = {
 
 
 def main() -> int:
+    load_environment()
     args = parse_args()
     report = build_report(require_real=args.require_real)
     if args.json:
@@ -61,6 +70,40 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     return parser.parse_args()
+
+
+def load_environment() -> None:
+    load_dotenv_flag = os.getenv("MODEL_PROVIDER_CONFIG_LOAD_DOTENV", "true").strip().lower()
+    if load_dotenv_flag in {"0", "false", "no", "off"}:
+        return
+    dotenv_path = os.getenv("MODEL_PROVIDER_CONFIG_DOTENV_PATH", "").strip()
+    path = Path(dotenv_path).expanduser() if dotenv_path else PROJECT_ROOT / ".env"
+    if python_dotenv_load is not None:
+        python_dotenv_load(path, override=False)
+        return
+    load_dotenv_without_dependency(path)
+
+
+def load_dotenv_without_dependency(path: Path) -> None:
+    if not path.exists() or not path.is_file():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if key.startswith("export "):
+            key = key.removeprefix("export ").strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = strip_dotenv_quotes(value.strip())
+
+
+def strip_dotenv_quotes(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
 
 
 def build_report(*, require_real: bool) -> dict[str, Any]:

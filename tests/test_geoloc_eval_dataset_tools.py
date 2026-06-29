@@ -4,6 +4,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from scripts import analyze_geoloc_retrieval_misses
+
 
 def test_geoloc_eval_dataset_builder_and_checker(tmp_path: Path) -> None:
     database_path = tmp_path / "eval-dataset.db"
@@ -656,3 +658,114 @@ Path({str(report_path)!r}).write_text(json.dumps(report), encoding="utf-8")
     assert quality["metrics"]["replay"]["pass_rate"] == 1.0
     assert "# Geoloc Realistic Gold Evaluation Report" in quality_md.read_text(encoding="utf-8")
     assert failure_replay_path.read_text(encoding="utf-8") == ""
+
+
+def test_geoloc_retrieval_miss_analysis_classifies_actionable_failures() -> None:
+    question = {
+        "id": "rg_fixture_miss",
+        "query": "Which evidence proves a retrieval augmented geolocation pipeline?",
+        "gold_evidence_ids": ["gold-primary", "gold-support"],
+        "primary_gold_evidence_ids": ["gold-primary"],
+        "gold_targets": [
+            {
+                "role": "primary",
+                "required_terms": ["retrieval module", "street-view", "pipeline"],
+                "section_title": "3 METHOD",
+            }
+        ],
+    }
+    failure = {
+        "query": question["query"],
+        "verdict": "failed",
+        "expected": {
+            "gold_evidence_ids": ["gold-primary", "gold-support"],
+            "primary_gold_evidence_ids": ["gold-primary"],
+        },
+        "observed": {
+            "id": "rg_fixture_miss",
+            "intent": "retrieval_design",
+            "returned_evidence_ids": ["same-paper-abstract", "gold-support", "other-paper"],
+        },
+    }
+    snapshots = {
+        "gold-primary": analyze_geoloc_retrieval_misses.EvidenceSnapshot(
+            evidence_id="gold-primary",
+            paper_id="paper-a",
+            paper_title="Retrieval Pipeline Paper",
+            evidence_type="method",
+            section_title="3 METHOD",
+            text="The retrieval module compares street-view images and generated textual evidence.",
+        ),
+        "same-paper-abstract": analyze_geoloc_retrieval_misses.EvidenceSnapshot(
+            evidence_id="same-paper-abstract",
+            paper_id="paper-a",
+            paper_title="Retrieval Pipeline Paper",
+            evidence_type="claim",
+            section_title="ABSTRACT",
+            text="A retrieval augmented geolocation pipeline is introduced.",
+        ),
+        "gold-support": analyze_geoloc_retrieval_misses.EvidenceSnapshot(
+            evidence_id="gold-support",
+            paper_id="paper-b",
+            paper_title="Supporting Street View Paper",
+            evidence_type="claim",
+            section_title="Abstract",
+            text="Street-view geolocalization benefits from MLLM evidence.",
+        ),
+        "other-paper": analyze_geoloc_retrieval_misses.EvidenceSnapshot(
+            evidence_id="other-paper",
+            paper_id="paper-c",
+            paper_title="Competing Paper",
+            evidence_type="claim",
+            section_title="Related Work",
+            text="Retrieval augmented geolocation uses a pipeline.",
+        ),
+    }
+
+    analysis = analyze_geoloc_retrieval_misses.analyze_failure(
+        failure,
+        {"rg_fixture_miss": question},
+        snapshots,
+    )
+
+    assert analysis["id"] == "rg_fixture_miss"
+    assert "same_paper_wrong_evidence" in analysis["categories"]
+    assert "supporting_over_primary" in analysis["categories"]
+    assert "section_evidence_granularity" in analysis["categories"]
+    assert analysis["recommended_actions"]
+
+
+def test_local_pipeline_profiles_list_and_block_external() -> None:
+    listed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_local_pipeline_profile.py",
+            "--list",
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    payload = json.loads(listed.stdout)
+    profiles = {profile["id"]: profile for profile in payload["profiles"]}
+
+    assert profiles["rag_miss_analysis"]["external_provider"] is False
+    assert profiles["strict_text_embedding_eval"]["external_provider"] is True
+    assert profiles["strict_text_embedding_smoke"]["external_provider"] is True
+
+    blocked = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_local_pipeline_profile.py",
+            "--profile",
+            "strict_text_embedding_eval",
+        ],
+        text=True,
+        capture_output=True,
+    )
+    blocked_payload = json.loads(blocked.stdout)
+
+    assert blocked.returncode == 2
+    assert blocked_payload["status"] == "blocked_external_provider"
+    assert blocked_payload["commands"][0]["skipped"] is True
+    assert blocked_payload["commands"][0]["timeout_seconds"] == 1800

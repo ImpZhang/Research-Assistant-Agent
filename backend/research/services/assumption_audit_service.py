@@ -11,6 +11,7 @@ from backend.research.models import (
 )
 from backend.research.services.artifact_graph_service import ArtifactGraphService
 from backend.research.services.graph_service import GraphService
+from backend.research.services.workflow_lineage_service import WorkflowLineageService
 
 
 class IdeaAssumptionAuditService:
@@ -61,6 +62,20 @@ class IdeaAssumptionAuditService:
         self.session.commit()
         self.session.refresh(audit)
         ArtifactGraphService(GraphService(self.session)).link_idea_assumption_audit(audit)
+        WorkflowLineageService(self.session).record_standalone_artifact(
+            artifact_type="assumption_audit",
+            entity_type="idea_assumption_audit",
+            entity_id=audit.id,
+            stage_name="create_assumption_audit",
+            path=f"artifacts/assumptions/assumption-audit-{audit.id}.md",
+            content=audit.markdown_export,
+            metadata={
+                "idea_id": audit.idea_id,
+                "assumption_count": len(audit.assumptions_json or []),
+                "source_artifacts": audit.source_artifacts_json or {},
+            },
+            created_by=audit.created_by,
+        )
         self.session.commit()
         self.session.refresh(audit)
         return audit
