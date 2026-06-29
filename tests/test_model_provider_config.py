@@ -53,7 +53,7 @@ def test_model_provider_config_require_real_uses_presence_without_printing_keys(
             "JUDGE_MODEL": "qwen3-32b",
             "JUDGE_BASE_URL": "https://example.test/v1",
             "JUDGE_API_KEY": secret,
-            "EMBEDDER": "multimodal-embedding-v1",
+            "EMBEDDER": "text-embedding-v1",
             "EMBEDDER_BASE_URL": "https://example.test/v1",
             "EMBEDDER_API_KEY": secret,
             "RERANK_MODEL": "qwen3-rerank",

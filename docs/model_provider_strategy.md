@@ -12,7 +12,7 @@ The current local `.env` is intentionally untracked and should not be committed.
 MAIN_MODEL=qwen3-32b
 EXTRACTION_MODEL=qwen3-32b
 JUDGE_MODEL=qwen3-32b
-EMBEDDER=multimodal-embedding-v1
+EMBEDDER=text-embedding-v1
 RERANK_MODEL=qwen3-rerank
 ```
 
@@ -31,7 +31,7 @@ Keep real API keys only in `.env` or another ignored local secret file.
 | `MAIN_MODEL` | `qwen3-32b` | Wired | General structured reasoning and agent-facing generation. |
 | `EXTRACTION_MODEL` | `qwen3-32b` | Wired | Paper-card extraction and structured paper understanding. |
 | `JUDGE_MODEL` | `qwen3-32b` | Wired | Review, critique, readiness, and judgement-style calls. |
-| `EMBEDDER` | `multimodal-embedding-v1` | Wired through provider adapter | Replace local hash embeddings for semantic retrieval when provider mode allows it. |
+| `EMBEDDER` | `text-embedding-v1` | Wired through provider adapter | Replace local hash embeddings for semantic retrieval when provider mode allows it. |
 | `RERANK_MODEL` | `qwen3-rerank` | Wired through provider adapter | Re-rank retrieved evidence, gaps, ideas, and chunks when provider mode allows it. |
 
 ## Important Current Limitation
@@ -41,14 +41,15 @@ The retrieval implementation now supports external embedding and rerank provider
 DashScope compatibility notes:
 
 - Qwen3 chat completions require `enable_thinking=false` for non-streaming JSON calls; the JSON client adds this automatically for DashScope Qwen3 models.
-- `multimodal-embedding-v1` is served through DashScope native multimodal embedding behavior when the OpenAI-compatible `/embeddings` path is not available.
+- `text-embedding-v1` uses the OpenAI-compatible `/embeddings` path for the current text-first PDF workflow.
+- `multimodal-embedding-v1` remains supported through DashScope native multimodal embedding behavior when the OpenAI-compatible `/embeddings` path is not available.
 - `qwen3-rerank` is not served through the OpenAI-compatible `/rerank` path. The rerank adapter falls back to DashScope native text-rerank when needed.
 
 That means:
 
 - `qwen3-32b` can affect current structured model behavior immediately.
 - `qwen3-32b` can optionally rank Advisor read-tool candidates when `tool_selection_mode="model_ranked"` is set on Advisor requests; deterministic selection remains the default and fallback.
-- `multimodal-embedding-v1` can replace the local hash vectors when `RETRIEVAL_EMBEDDING_PROVIDER=auto` or `external` and the provider is fully configured.
+- `text-embedding-v1` can replace the local hash vectors when `RETRIEVAL_EMBEDDING_PROVIDER=auto` or `external` and the provider is fully configured.
 - `qwen3-rerank` can re-rank retrieved evidence, gaps, and ideas when `RETRIEVAL_RERANK_PROVIDER=auto` or `external` and the provider is fully configured.
 
 Provider modes:
@@ -84,7 +85,8 @@ The real-paper evaluator at `scripts/evaluate_real_papers.py` refuses to run unl
 Latest real-provider smoke status:
 
 - `qwen3-32b` main/extraction/judge roles: passed.
-- `multimodal-embedding-v1`: passed with 1024-dimensional vectors.
+- `text-embedding-v1` is the current recommended text embedding model for new local deployments.
+- Historical `multimodal-embedding-v1` smoke/evaluation runs passed with 1024-dimensional vectors and remain valid as compatibility evidence.
 - `qwen3-rerank`: passed and ranked the relevant document first in the smoke pair.
 
 ## Test Safety

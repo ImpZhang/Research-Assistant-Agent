@@ -2,6 +2,12 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-29 - Text Embedding Provider Template Switch
+
+- Switched the current safe provider template from `multimodal-embedding-v1` to `text-embedding-v1` for the text-first PDF retrieval workflow.
+- Kept historical `multimodal-embedding-v1` evaluation records unchanged because those reports were generated with that model and remain useful compatibility evidence.
+- Preserved the multimodal embedding fallback adapter path for future scanned-PDF, figure-heavy, or page-image retrieval work.
+
 ## 2026-06-29 - RAG v1 Retrieval And Ingestion Hardening
 
 Implementation completed:
