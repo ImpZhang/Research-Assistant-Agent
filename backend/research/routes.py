@@ -16911,7 +16911,7 @@ def search_research_context(
 
     return ContextSearchResponse(
         query=payload.query,
-        retrieval_method="lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1",
+        retrieval_method=result.retrieval_diagnostics.get("retrieval_method", "context_search"),
         answer_brief=result.answer_brief,
         query_variants=result.query_variants,
         retrieval_diagnostics=result.retrieval_diagnostics,

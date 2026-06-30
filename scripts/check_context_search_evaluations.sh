@@ -89,8 +89,10 @@ bash scripts/check_local_geoloc_benchmark_smoke.sh
   tests/test_app.py::test_context_search_diversity_ranking_prevents_single_paper_crowding \
   tests/test_app.py::test_context_search_vector_hit_rescues_lexical_miss \
   tests/test_app.py::test_context_search_chunk_vector_hit_rescues_lexical_miss \
+  tests/test_app.py::test_context_search_child_chunk_returns_parent_context \
   tests/test_app.py::test_context_search_deduplicates_repeated_query_terms \
   tests/test_app.py::test_paper_ingestion_extracts_table_caption_and_result_evidence \
+  tests/test_app.py::test_paper_ingestion_creates_parent_child_chunks \
   tests/test_app.py::test_context_search_clamps_non_positive_limit \
   tests/test_app.py::test_context_search_clamps_large_limit \
   tests/test_app.py::test_context_search_paper_filter_evaluation_fixture \

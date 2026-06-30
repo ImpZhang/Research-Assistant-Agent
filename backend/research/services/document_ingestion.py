@@ -143,17 +143,33 @@ class DocumentIngestionService:
             self.session.flush()
             section_count += 1
 
-            section_chunks = self._split_text(section["text"])
-            root_chunk_id = ""
+            section_text = section["text"]
+            section_chunks = self._split_text(section_text)
+            parent_chunk_id = f"{paper.id}::{section_row.id}::parent"
+            root_chunk_id = parent_chunk_id
+            # 父 chunk 保存章节级上下文；子 chunk 继续保持较小粒度，专门用于召回。
+            if section_text.strip():
+                parent_chunk = Chunk(
+                    paper_id=paper.id,
+                    section_id=section_row.id,
+                    chunk_id=parent_chunk_id,
+                    parent_chunk_id="",
+                    root_chunk_id=parent_chunk_id,
+                    chunk_level=0,
+                    chunk_idx=-1,
+                    page_number=None,
+                    text=section_text,
+                    token_count=len(section_text.split()),
+                )
+                self.session.add(parent_chunk)
+                chunk_count += 1
             for chunk_idx, chunk_text in enumerate(section_chunks):
                 chunk_id = f"{paper.id}::{section_row.id}::chunk::{chunk_idx}"
-                if not root_chunk_id:
-                    root_chunk_id = chunk_id
                 chunk = Chunk(
                     paper_id=paper.id,
                     section_id=section_row.id,
                     chunk_id=chunk_id,
-                    parent_chunk_id="",
+                    parent_chunk_id=parent_chunk_id,
                     root_chunk_id=root_chunk_id,
                     chunk_level=1,
                     chunk_idx=chunk_idx,

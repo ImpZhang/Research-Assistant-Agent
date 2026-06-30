@@ -238,7 +238,12 @@ class EmbeddingService:
         return sum(left[idx] * right[idx] for idx in range(width))
 
     def _index_chunks(self, paper_ids: list[str], limit: int) -> int:
-        query = self.session.query(Chunk).order_by(Chunk.updated_at.desc())
+        # 只索引子 chunk：召回保持细粒度，命中后再由 retrieval 合并父 chunk 上下文。
+        query = (
+            self.session.query(Chunk)
+            .filter(Chunk.chunk_level >= 1)
+            .order_by(Chunk.updated_at.desc())
+        )
         if paper_ids:
             query = query.filter(Chunk.paper_id.in_(paper_ids))
         inputs = []

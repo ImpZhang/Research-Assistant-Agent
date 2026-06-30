@@ -110,6 +110,7 @@ class RetrievalService:
             default="auto",
         )
         self._section_cache: dict[str, PaperSection | None] = {}
+        self._parent_chunk_cache: dict[str, Chunk | None] = {}
 
     def search_context(
         self,
@@ -194,7 +195,7 @@ class RetrievalService:
                 for variant in query_variants
             ],
             retrieval_diagnostics={
-                "retrieval_method": "lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1",
+                "retrieval_method": "lexical_vector_multi_query_parent_child_compression_rerank_graph_rag_lite_v2",
                 "final_ranking_policy": "score_then_paper_section_diversity_v1",
                 "candidate_limit": candidate_limit,
                 "final_limit": limit,
@@ -257,7 +258,11 @@ class RetrievalService:
         paper_ids: list[str],
         limit: int,
     ) -> list[ScoredItem]:
-        query = self.session.query(Chunk).order_by(Chunk.created_at.desc())
+        query = (
+            self.session.query(Chunk)
+            .filter(Chunk.chunk_level >= 1)
+            .order_by(Chunk.created_at.desc())
+        )
         if paper_ids:
             query = query.filter(Chunk.paper_id.in_(paper_ids))
 
@@ -451,6 +456,8 @@ class RetrievalService:
                 continue
             item = self.session.get(model, hit.owner_id)
             if item is None or not self._matches_paper_filter(owner_type, item, paper_ids):
+                continue
+            if owner_type == "chunk" and getattr(item, "chunk_level", 1) < 1:
                 continue
 
             vector_boost = round(hit.score * 3.0, 4)
@@ -751,11 +758,17 @@ class RetrievalService:
         section = self._section_for_chunk(chunk)
         if section is not None:
             parts.extend([section.title, section.section_type])
-        parts.append(chunk.text)
-        if chunk.section_id:
+        parent = self._parent_for_chunk(chunk)
+        if parent is not None and parent.id != chunk.id:
+            # 子 chunk 命中后回填父 chunk，让回答拥有完整章节上下文而不牺牲召回精度。
+            parts.append(parent.text)
+        else:
+            parts.append(chunk.text)
+        if parent is None and chunk.section_id:
             neighbors = (
                 self.session.query(Chunk)
                 .filter(Chunk.section_id == chunk.section_id)
+                .filter(Chunk.chunk_level >= 1)
                 .filter(Chunk.chunk_idx >= max(0, chunk.chunk_idx - 1))
                 .filter(Chunk.chunk_idx <= chunk.chunk_idx + 1)
                 .order_by(Chunk.chunk_idx.asc())
@@ -766,6 +779,19 @@ class RetrievalService:
                 if neighbor.id != chunk.id:
                     parts.append(neighbor.text)
         return " ".join(" ".join(parts).split())
+
+    def _parent_for_chunk(self, chunk: Chunk) -> Chunk | None:
+        parent_chunk_id = (chunk.parent_chunk_id or "").strip()
+        if not parent_chunk_id:
+            return None
+        if parent_chunk_id not in self._parent_chunk_cache:
+            self._parent_chunk_cache[parent_chunk_id] = (
+                self.session.query(Chunk)
+                .filter(Chunk.chunk_id == parent_chunk_id)
+                .filter(Chunk.paper_id == chunk.paper_id)
+                .first()
+            )
+        return self._parent_chunk_cache[parent_chunk_id]
 
     def _section_for_chunk(self, chunk: Chunk) -> PaperSection | None:
         if not chunk.section_id:

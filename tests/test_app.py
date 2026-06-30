@@ -27,6 +27,7 @@ from backend.research.models import (
     Job,
     NoveltyCheck,
     Paper,
+    PaperSection,
     ResearchEdge,
     ResearchEmbedding,
     ResearchGap,
@@ -9886,7 +9887,7 @@ def test_context_search_no_match_fixture() -> None:
     body = response.json()
     assert (
         body["retrieval_method"]
-        == "lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1"
+        == "lexical_vector_multi_query_parent_child_compression_rerank_graph_rag_lite_v2"
     )
     assert body["chunks"] == []
     assert body["evidences"] == []
@@ -10337,6 +10338,84 @@ def test_context_search_chunk_vector_hit_rescues_lexical_miss() -> None:
     assert _score_breakdown_total_match_rate(body["chunks"]) == 1.0
 
 
+def test_context_search_child_chunk_returns_parent_context() -> None:
+    client = TestClient(create_app())
+    child_token = f"childretrievaltoken{time.time_ns()}"
+    parent_token = f"parentcontexttoken{time.time_ns()}"
+
+    session = SessionLocal()
+    try:
+        paper = Paper(
+            title=f"Parent Child Retrieval Paper {child_token}",
+            filename="parent_child_context.txt",
+            source_type="pytest",
+            status="indexed",
+        )
+        session.add(paper)
+        session.flush()
+        section = PaperSection(
+            paper_id=paper.id,
+            title="Method",
+            section_type="method",
+            text=(
+                f"The parent section explains {parent_token} and repeats {child_token} "
+                "so the compressed evidence proves that parent context was merged."
+            ),
+            order_index=0,
+        )
+        session.add(section)
+        session.flush()
+        parent_chunk_id = f"{paper.id}::{section.id}::parent"
+        parent = Chunk(
+            paper_id=paper.id,
+            section_id=section.id,
+            chunk_id=parent_chunk_id,
+            parent_chunk_id="",
+            root_chunk_id=parent_chunk_id,
+            chunk_level=0,
+            chunk_idx=-1,
+            text=section.text,
+            token_count=len(section.text.split()),
+        )
+        child = Chunk(
+            paper_id=paper.id,
+            section_id=section.id,
+            chunk_id=f"{paper.id}::{section.id}::chunk::0",
+            parent_chunk_id=parent_chunk_id,
+            root_chunk_id=parent_chunk_id,
+            chunk_level=1,
+            chunk_idx=0,
+            text=f"The small child chunk contains {child_token}.",
+            token_count=6,
+        )
+        session.add_all([parent, child])
+        session.commit()
+        paper_id = paper.id
+        child_id = child.id
+    finally:
+        session.close()
+
+    response = client.post(
+        "/research/search/context",
+        json={
+            "query": child_token,
+            "paper_ids": [paper_id],
+            "limit": 3,
+            "include_graph": False,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["chunks"]
+    top_chunk = body["chunks"][0]
+    assert top_chunk["chunk"]["id"] == child_id
+    assert top_chunk["chunk"]["chunk_level"] == 1
+    assert top_chunk["chunk"]["parent_chunk_id"] == parent_chunk_id
+    assert parent_token in top_chunk["context_excerpt"]
+    assert parent_token in top_chunk["compressed_evidence"]
+
+
 def test_context_search_deduplicates_repeated_query_terms() -> None:
     client = TestClient(create_app())
     marker = f"dedupterm{time.time_ns()}"
@@ -10428,6 +10507,53 @@ Structured evidence should preserve figure captions, table captions, and result 
     assert "Top-1 accuracy" in structured_text
     assert "Figure 1" in structured_text
     assert "Table 2" in structured_text
+
+
+def test_paper_ingestion_creates_parent_child_chunks() -> None:
+    client = TestClient(create_app())
+    marker = f"parentchildingestion{time.time_ns()}"
+    content = f"""Parent Child Chunk Test Paper {marker}
+
+Abstract
+This paper checks that ingestion stores a section-level parent chunk and smaller child chunks.
+
+Method
+The retrieval system should let child chunks handle dense and lexical recall while parent chunks
+preserve the surrounding method context for grounding answers and citations.
+
+Conclusion
+Parent-child chunk organization keeps local RAG explainable and reproducible.
+""".encode()
+
+    upload = client.post(
+        "/research/papers/upload",
+        files={"file": ("parent_child_ingestion.txt", content, "text/plain")},
+    )
+    assert upload.status_code == 200
+    paper_id = upload.json()["paper"]["id"]
+
+    session = SessionLocal()
+    try:
+        parent_chunks = (
+            session.query(Chunk)
+            .filter(Chunk.paper_id == paper_id)
+            .filter(Chunk.chunk_level == 0)
+            .all()
+        )
+        child_chunks = (
+            session.query(Chunk)
+            .filter(Chunk.paper_id == paper_id)
+            .filter(Chunk.chunk_level == 1)
+            .all()
+        )
+    finally:
+        session.close()
+
+    parent_chunk_ids = {chunk.chunk_id for chunk in parent_chunks}
+    assert parent_chunks
+    assert child_chunks
+    assert all(chunk.parent_chunk_id in parent_chunk_ids for chunk in child_chunks)
+    assert all(chunk.root_chunk_id == chunk.parent_chunk_id for chunk in child_chunks)
 
 
 def test_context_search_clamps_non_positive_limit() -> None:
@@ -10977,7 +11103,7 @@ Future work should make GraphRAG context retrieval stronger.
     body = response.json()
     assert (
         body["retrieval_method"]
-        == "lexical_vector_multi_query_section_compression_rerank_graph_rag_lite_v1"
+        == "lexical_vector_multi_query_parent_child_compression_rerank_graph_rag_lite_v2"
     )
     assert body["chunks"]
     assert body["evidences"]

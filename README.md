@@ -1,870 +1,398 @@
 # Research Assistant Agent
 
-Research Assistant Agent is a backend-first research workflow system rebuilt from the lessons of SuperMew. It is not a plain RAG chatbot: the goal is to turn literature evidence into research gaps, testable ideas, novelty checks, related-work matrices, proposal drafts, reviewer critiques, experiment plans, graph context, and exportable proposal dossiers.
+Research Assistant Agent 是一个面向个人科研场景的本地可部署 RAG / Agent 工作流系统。它不是单轮 PDF 问答 Demo，而是把论文解析、证据检索、研究空白挖掘、Idea 生成、Proposal 构建、质量审查、实验规划、结果回溯和失败复盘串成一条可运行、可追踪、可复现的科研辅助流程。
 
 ## Current Distribution Target
 
-The current product target is a personal, local-deployable research agent. Each user clones `ImpZhang/Research-Assistant-Agent.git`, creates an untracked local `.env`, configures their own model provider API keys, and runs the backend, Workbench, optional MCP bridge, data, caches, models, benchmarks, logs, and outputs inside the local project root.
+当前分发目标是个人本地可部署科研 Agent：研究者从 GitHub clone 到本地，配置自己的模型 API Key，在个人电脑或单机服务器上运行。项目优先追求本地部署简单、数据可控、流程可解释、产物可回溯，而不是一开始就做多用户 SaaS、复杂权限系统或重型分布式基础设施。
 
-Multi-user accounts, tenant isolation, hosted SaaS operations, billing, SSO, and central admin workflows are intentionally out of scope for the current build. Historical `pilot`, `customer`, and `project scope` wording in API names and older docs should be read as single-operator local workflow and handoff terminology unless a future product decision changes the target.
+Workbench 和 API 仍保留历史本地试用形态中的 API-key-backed and project-scope-aware pilot access 能力；在当前个人本地部署目标下，它主要用于单机访问保护、请求隔离和演示环境的操作边界。
 
-See `docs/local_agent_distribution.md` and `docs/local_isolation.md` before changing packaging, setup, storage, or deployment behavior.
+## 这个项目解决什么问题
 
-## Current Workflow
+科研阅读和选题过程中经常会遇到几个真实问题：
+
+- 论文很多，证据分散，读完之后很难把方法、实验、限制和可改进点系统化沉淀。
+- 普通 RAG 只能回答“这篇论文说了什么”，但很难继续推进到“哪些地方值得做新工作”。
+- Agent 输出经常缺少来源，生成的 Idea、Proposal、SOTA 判断难以追踪到底来自哪些论文证据。
+- 检索结果好坏难以评估，一旦回答错了，很难复现当时的上下文和工具调用过程。
+- 长流程任务容易中断，失败后如果只能整条重跑，会非常不适合真实使用。
+
+Research Assistant Agent 的设计目标是把这些问题拆成工程化对象：
+
+- 把论文解析成 section、parent chunk、child chunk、evidence、paper card。
+- 把检索链路做成可评测、可回放、可定位失败原因的 RAG 管线。
+- 把 Idea、Proposal、Review、Experiment、Decision Memo 等科研产物持久化。
+- 把工具调用、Agent run、工作流阶段、产物 hash、配置 hash 记录下来，支持后续审计和 replay。
+- 在本地 SQLite 中保存结构化状态，让个人用户可以低成本部署、备份和调试。
+
+## 核心流程
 
 ```text
-paper upload
-  -> evidence extraction
-  -> structured paper card
-  -> research gap mining
-  -> structured idea generation
-  -> novelty/collision screening
-  -> reviewer simulation
-  -> experiment planning
-  -> benchmark run packet / experiment run tracking
-  -> manual SOTA signoff record
-  -> Markdown research dossier
-  -> GraphRAG-lite context retrieval
+论文上传
+  -> PDF / TXT / MD 解析
+  -> 章节识别与 parent-child chunk 构建
+  -> evidence / table / figure caption / result 信号抽取
+  -> paper card 结构化
+  -> 研究空白挖掘
+  -> idea 生成与 novelty / collision 初筛
+  -> related work matrix
+  -> proposal draft
+  -> reviewer critique
+  -> experiment plan / benchmark packet
+  -> evidence ledger / assumption audit / decision memo
+  -> quality gate
+  -> replay / evaluation / markdown export
 ```
 
-The main product entrypoint is:
+主要入口：
 
 ```http
 POST /research/workflows/literature-to-ideas
 ```
 
-It runs the full synchronous workflow and writes a job trace that can be fetched from:
-
-```http
-GET /research/jobs/{job_id}
-GET /research/jobs/{job_id}/artifacts
-GET /research/jobs
-```
-
-For long-running clients, use the async workflow entrypoint:
+异步入口：
 
 ```http
 POST /research/workflows/literature-to-ideas/async
 ```
 
-It returns a `pending` job immediately and executes the workflow in the background.
+作业、阶段和产物查看：
 
-## Implemented Capabilities
-
-- FastAPI API layer with OpenAPI docs.
-- Local runtime-readiness checks with `/health/ready`, SQLite storage readiness, optional API-key auth readiness, Workbench asset readiness, model-provider configuration visibility, request-id response headers and header readiness, external-literature configuration checks, default-project scope contract, runtime readiness status capability, health build metadata, optional API-key protection for `/research/*`, Dockerfile, and docker-compose single-user deployment.
-- SQLite/SQLAlchemy research database.
-- Research profile for durable domains, goals, constraints, risk tolerance, target venues, and ranking weights.
-- Upload and ingest size-limited `.txt`, `.md`, and `.pdf` papers with lightweight content sniffing before files are written.
-- Section, chunk, and evidence extraction.
-- Heuristic paper card extraction.
-- OpenAI-compatible structured paper card extraction with safe heuristic fallback.
-- Research gap mining from evidence records.
-- OpenAI-compatible structured idea generation with deterministic fallback.
-- Novelty/collision checks against existing evidence, gaps, ideas, and literature search results.
-- Persisted related-work matrices that compare an idea with local evidence, gaps, nearby ideas, and literature search rows.
-- Manual SOTA review packages that combine novelty screening, related-work rows, missing searches, review queries, and Markdown checklists before claiming novelty.
-- SOTA external-search evidence packages that persist review queries, local/external provider statuses, result summaries, missing searches, and signoff readiness.
-- Manual SOTA signoff records that capture reviewer decision, linked external-search evidence package, effective external-search completion, nearest work, evidence links, linked benchmark runs, final novelty claim, limitations, and remaining blockers; the manual gate blocks ready-for-claim status when benchmark evidence readiness is incomplete.
-- Persisted proposal drafts that bundle an idea, related-work positioning, experiment plan, risks, milestones, and evidence IDs.
-- Proposal readiness reviews with advisor-style scores, concerns, required revisions, and missing evidence.
-- Proposal revision artifacts that turn readiness-review actions into a revised proposal checkpoint.
-- Research task backlog generation from proposal revisions, with task listing, status updates, and workbench task-board controls.
-- Research task event logs for created/updated/progress/blocker notes and execution history.
-- Experiment run tracking that links an experiment plan to task events, metrics, conclusions, artifacts, and Markdown run reports.
-- Benchmark run packets that structure dataset, split, nearest baseline, primary metric, metric direction, command, dry-run flag, artifacts, and reproducibility notes as first-class experiment runs.
-- Guarded local benchmark command runner that is disabled by default, executes command-argument lists without a shell when enabled, captures stdout/stderr/metrics under `outputs/benchmark-runs/`, and saves the result as an experiment run.
-- Benchmark profile registry, local preparation helper, and project-local geolocalization JSONL harness so Workbench/API clients can discover runnable benchmark profiles, see missing data/prediction paths, execute profile-backed commands, and parse country-accuracy/geodesic-distance metrics.
-- Benchmark run comparison records that compute metric deltas between two experiment runs and persist the result as an auditable Markdown research brief.
-- Benchmark evidence readiness gate and task generation that summarize completed runs, comparison briefs, missing evidence, warnings, and turn follow-up actions into task-board items before manual SOTA signoff.
-- Experiment result analysis that turns run metrics into a decision, concerns, next actions, task events, and Markdown analysis reports.
-- Follow-up task generation from experiment analysis next actions.
-- Persisted task board snapshots for progress summaries, blocker tracking, and next-action exports.
-- GraphRAG-lite links for proposal drafts, reviews, revisions, experiment runs, experiment analyses, decision memos, assumption audits, evidence ledgers, claim/evidence support edges, generated follow-up tasks, evidence-ledger follow-up tasks, decision follow-up tasks, project cockpit tasks, and task board snapshots.
-- Idea lineage endpoint that hydrates matrices, proposal artifacts, experiment runs, experiment analyses, decision memos, assumption audits, evidence ledgers, tasks, task snapshots, and graph edge summaries.
-- Idea activity timeline that turns proposal, experiment, decision, audit, evidence ledger, plan, and task events into a chronological handoff log.
-- Traceable idea refinement from reviewer feedback, novelty risk, and experiment plans.
-- Idea progress summaries that aggregate proposal, experiment, analysis, evidence-ledger follow-up, task, blocker, and recommended-next-step state.
-- Idea research packets that bundle the latest artifacts, open tasks, graph edge summary, and Markdown context for a single idea.
-- Idea readiness scoring that combines evidence, novelty, proposal review, experiment evidence, decision memo, assumptions, task health, and claim validation result impact.
-- Idea quality gate that combines novelty, readiness, proposal review, experiment evidence, decision memo, task health, and claim validation result impact into a go/no-go decision.
-- Task generation from idea quality-gate actions so go/no-go decisions become concrete de-risking work.
-- Task generation from idea readiness blockers so readiness gaps become trackable follow-up work.
-- Configurable novelty refresh for rerunning local and optional external literature collision checks on an idea.
-- Task generation from novelty check recommended actions so collision-screening concerns become follow-up work.
-- Project readiness overview for comparing recent ideas by readiness decision and blockers.
-- Project quality gate overview for deciding which ideas to advance, de-risk, revise, park, or reject.
-- Task generation from project quality-gate candidates for portfolio-level triage.
-- Zip bundle export for a single idea's dossier, lineage, progress, packet, readiness, artifact Markdown, and JSON metadata.
-- Idea decision memos that record pursue/revise/park/reject rationale, risks, evidence, next commitments, and graph links.
-- Follow-up task generation from idea decision memo commitments.
-- Idea assumption audits that expose falsifiable assumptions, validation signals, risk levels, and source artifacts.
-- Idea evidence ledgers that map claims to supporting evidence, counterevidence, missing evidence, risks, coverage scores, Markdown exports, claim/evidence graph links, follow-up task generation, per-claim validation packets, project-level claim validation queues, queue-driven validation task generation, validation result reporting, and validation-result impact signals for readiness and quality gates.
-- Project progress overview that aggregates all ideas, open tasks, blockers, recent analyses, and recommended actions.
-- Project onboarding readiness checklist that turns profile, literature, workflow, task board, bundle, security, and MCP setup signals into a first-run pilot score, missing required checks, quick actions, and Markdown report.
-- Project setup wizard that saves the first-run research profile, captures success criteria and the first milestone, then immediately returns refreshed onboarding readiness and a Markdown setup report.
-- Task generation from project onboarding readiness gaps and optional pilot guardrails so first-run setup work enters the task board and GraphRAG-lite trace.
-- Project onboarding progress tracking that reports setup-task completion, blockers, next action, current readiness, and Markdown status after onboarding tasks are generated.
-- Customer-facing pilot status report that combines onboarding readiness/progress, cockpit phase, metrics, risks, next actions, quick actions, and Markdown for stakeholder updates.
-- Persisted pilot report snapshots that save customer-facing status reports as `pilot_report` briefs with list, detail, and Markdown export endpoints.
-- Pilot report snapshot comparison that shows status, metric, risk, next-action, and quick-action changes between two saved customer updates.
-- Task generation from pilot report snapshot comparisons so new weekly risks and action changes become follow-up work.
-- Task generation from pilot report snapshots so saved customer updates can drive follow-up work and GraphRAG-lite traceability.
-- Project cockpit dashboard that compresses setup state, workflow stages, metrics, readiness, quality gates, opportunity radar, risks, highlights, quick actions, and Markdown export into one customer-facing entry point.
-- Task generation from project cockpit primary action, next actions, risks, and highlights so the customer-facing entry point can drive the task board directly.
-- Advisor chat endpoint that answers project-level questions through a bounded read-first tool plan over cockpit, context search, idea progress, lineage, and task-list tools, with Markdown output, citations, recommended actions, tool suggestions, and persisted agent-run/tool-call trace records.
-- Task generation from advisor chat answers so recommendations, risks, and optional tool suggestions enter the task board and graph trace.
-- Advisor action sessions that turn one advisor question into a grounded answer, follow-up tasks, a task-board snapshot, progress summary, and Markdown execution report.
-- Opt-in LangGraph advisor deep-review workflow that runs load/retrieve/verify/compose nodes, records agent trace/tool calls, returns evidence verification flags, and leaves the stable service workflow unchanged.
-- Project triage brief that combines progress, readiness, quality gates, and opportunity radar into one daily decision view.
-- Task generation from project triage brief next actions and risks for daily execution.
-- Persisted project triage snapshots that freeze daily decision state, source task ids, and Markdown exports for later review.
-- Project triage snapshot comparison for tracking focus, risk, next-action, and metric changes across decision rounds.
-- Task generation from triage snapshot comparison changes so newly added risks and actions enter the task board.
-- Research opportunity radar that fuses portfolio ranking, readiness, blockers, and open tasks into a prioritized next-action view.
-- Task generation from opportunity radar next actions so project-level prioritization enters the task board.
-- Project handoff bundle export that packages triage brief, saved triage snapshots, latest triage comparison, pilot report snapshots, latest pilot report comparison, project overviews, readiness, quality gates, opportunity radar, claim validation queue, task board state, briefs, and research plans.
-- Project bundle readiness checks that score whether the handoff package has enough snapshots, comparisons, claim validation, plans, quality gates, and opportunity context before customer/advisor delivery.
-- Task generation from project bundle readiness gaps so missing handoff materials and final delivery checks become task-board work and GraphRAG-lite trace.
-- Persisted project bundle readiness snapshots that save delivery preflight scores, missing checks, manifest summaries, and Markdown audits into the project bundle.
-- Project bundle readiness snapshot comparison that tracks score, missing-check, action, quick-action, and manifest deltas across delivery rounds.
-- Task generation from project bundle readiness snapshot comparisons so newly introduced handoff gaps and delivery actions become task-board work with graph traceability.
-- Project bundle release notes that persist customer/advisor handoff metadata, recipient, readiness state, manifest signals, and Markdown delivery notes into the exported project bundle.
-- Task generation from project bundle release notes so recipient confirmation, claim queue review, open task ownership, and release closeout enter the task board and graph trace.
-- Project bundle release progress tracking that summarizes follow-up completion, blockers, next tasks, and latest release progress artifacts in the exported bundle.
-- Project bundle release feedback records that capture customer/advisor acceptance status, signoff state, requested changes, blockers, accepted artifacts, follow-up tasks, and graph traceability.
-- Project bundle release closeout reports that combine release progress, latest feedback, feedback-task progress, blockers, signoff state, and next actions into a delivery closeout decision.
-- Task generation from project bundle release closeout reports so blockers, next actions, signoff gaps, and archive checks become traceable task-board work.
-- Project bundle release acceptance packets that combine the release note, progress, feedback, closeout decision, closeout tasks, checklist, remaining actions, and Markdown signoff summary.
-- Persisted project bundle release acceptance packet snapshots that freeze customer/advisor signoff state, acceptance status, remaining actions, and Markdown evidence into the exported project bundle.
-- Project bundle release acceptance snapshot comparison that explains what changed between signoff attempts and can generate follow-up tasks for new remaining actions, checklist regressions, or status/signoff regressions.
-- Project bundle release review sessions that turn the release, progress, feedback, closeout, acceptance packet, and acceptance snapshot comparison into a customer/advisor agenda, decisions, risks, follow-up actions, and review tasks.
-- Persisted project bundle release review outcomes that record post-meeting decisions, participants, accepted artifacts, risks, follow-up actions, signoff state, task generation, graph traceability, and exported bundle artifacts.
-- Project bundle release review outcome progress reports that summarize post-meeting follow-up completion, blockers, next tasks, and latest progress artifacts in the exported bundle.
-- Persisted project bundle release review outcome signoff evidence records that capture approver decisions, notes, accepted artifacts, conditions, evidence links, graph traceability, and the current outcome progress snapshot in the exported bundle.
-- Persisted advisor research briefs for group-meeting or supervisor-ready Markdown summaries, including profile, tasks, experiment decisions, plan progress, readiness signals, evidence ledger signals, claim validation queue/task/result signals, triage signals, and latest triage snapshot comparison.
-- Persisted research execution plans that turn profile, ranked ideas, and open tasks into 7/14+ day action plans.
-- Task generation from research execution plans so plan actions enter the task board, idea progress, lineage, research packets, and bundle exports.
-- Research plan progress reports that summarize generated plan tasks, completion ratio, blockers, phases, and next plan actions.
-- MCP/tool-ready manifest for stable research workflow APIs.
-- MCP-ready HTTP tool bridge spec generated from the stable tool manifest.
-- Lightweight stdio MCP-to-HTTP bridge script for exposing the stable HTTP tools to MCP clients without extra SDK dependencies.
-- MCP bridge policy controls for read-only mode, allow/deny tool filters, API-key forwarding, project-scope header forwarding, request-id error correlation, and deployment health checks.
-- Agent trace foundation with persisted agent runs, tool-call records, replay cases, secret redaction, read-only tool-manifest access for trace inspection, and Advisor chat trace wiring for cockpit/context read calls.
-- Deterministic bad-case replay script for saved `ReplayCase` rows, source agent runs, and tool-call records, plus opt-in local context-search/citation/SOTA-readiness live replay and replay-run trace recording, with JSON/Markdown reports and focused local validation.
-- Agent observability metrics endpoint and Markdown export for run status/type counts, tool-call success rate, replay verdict distribution, average latency, and recent failures.
-- Project-local skill registry under `skills/*/SKILL.md` for paper ingestion, hybrid context search, literature-to-ideas, SOTA review, benchmark evaluation, and Advisor action sessions, with `scripts/check_project_skills.sh` validation.
-- Read-only SQLite maintenance report for local database size, sidecar files, table counts, vector-index counts, trace counts, integrity check status, and safe operator recommendations.
-- Research idea portfolio ranking with profile-aware weighting, lineage deduplication, claim validation result adjustments, and weighted score breakdowns.
-- Human feedback capture for idea shortlist/accept/revise/reject decisions and ranking adjustments.
-- Markdown export for ranked idea portfolio reports.
-- Persisted idea portfolio snapshots for saved shortlist/ranking review states.
-- Portfolio snapshot comparison for tracking shortlist/ranking changes over time.
-- 30/60/90-day execution agenda export for saved idea portfolios.
-- Local literature search with optional OpenAlex, arXiv, and Semantic Scholar external-search adapters.
-- Reviewer simulation for generated ideas.
-- Experiment plan generation.
-- Local hashed embedding index for source chunks, evidence, gaps, and ideas, with optional external embedding provider vectors and text-hash cache reuse across owners to reduce repeated provider calls.
-- Markdown export for paper cards and idea dossiers.
-- Robust sparse-heading paper ingestion and gap-mining fallback for PDFs that expose Roman numeral headings, compact headings such as `RELATEDWORK`, or only a clean References heading.
-- Structured table, figure-caption, and quantitative-result evidence extraction for experiment-heavy papers.
-- GraphRAG-lite node and edge persistence with same source/target/type edge reuse.
-- Read-only GraphRAG-lite stats for node/edge type counts, orphan edge counts, and duplicate edge group counts.
-- Query-time multi-query lexical/vector/rerank context retrieval over source chunks, evidence, gaps, ideas, and optionally filtered graph neighborhoods, with bounded external-provider query variants, section-aware chunk context, compressed evidence snippets, stable ranking tie-breaks, and score breakdowns.
-- Synchronous workflow job trace with input, output, status, progress, and errors.
-- Async literature-to-ideas workflow launch for frontend and MCP clients.
-- Job artifact snapshots that hydrate workflow outputs into full papers, cards, gaps, ideas, checks, reviews, plans, and dossier Markdown.
-- Job cancellation and retry controls for failed or interrupted workflow runs.
-- Browser workbench for API-key-backed and project-scope-aware pilot access with scope-contract status, runtime readiness and request-id signals, first-run and delivery empty/API-key/network states, grouped idea/task/delivery/operations controls, pilot launch status, profile editing, upload, workflow launch, job tracking/cancel/retry, search, advisor chat/action sessions, cockpit, readiness, quality gates, decision, audit, bundle export, and dossier preview.
-- Representative-paper human review protocol and persisted review records for Workbench-first pilot acceptance, with status capabilities `representative_paper_review_protocol` and `representative_paper_review_records`.
-- End-to-end smoke test covering the current research workflow.
-- Deterministic context-search evaluation fixtures for hit@k, MRR, graph edge hit/noise, score breakdown coverage/consistency, paper-filter leak checks, and empty-query guards.
-- Local 12-paper geolocalization evaluation assets with generated query-evidence pairs, replay cases, 20 human-style hard-question regression checks, reviewer-labeled realistic gold evidence, corpus-level no-per-query-filter retrieval metrics, failure replay export, and local-only paper-derived mappings.
-- Hardened PDF/text ingestion for noisy front matter, common heading variants, sparse-heading papers, chunk-level evidence top-up, and structured table/figure/result signals.
-
-## Repository Layout
-
-```text
-backend/
-  app.py
-  research/
-    adapters/      OpenAI-compatible JSON client
-    config.py
-    db.py
-    models.py      SQLAlchemy domain models
-    routes.py      FastAPI routes
-    schemas.py     Pydantic API schemas
-    services/      Research workflow services
-docs/
-scripts/
-  build_local_backup_manifest.py
-  check_agent_replay.sh
-  check_backup_restore_contracts.sh
-  check_context_search_evaluations.sh
-  check_deployment_contracts.sh
-  check_focused_test_coverage.sh
-  check_generated_file_guard.sh
-  check_graph_rag_lite.sh
-  check_handoff_docs.sh
-  check_local_agent_readiness.sh
-  check_local_doctor.sh
-  check_local_geoloc_benchmark_smoke.sh
-  check_local_operational_preflight.sh
-  check_local_runtime_smoke.sh
-  check_local_safe_suite.sh
-  check_pilot_operational_preflight.sh
-  check_pilot_readiness.sh
-  check_product_effect_smoke.sh
-  check_project_skills.sh
-  check_project_delivery_loop.sh
-  check_remote_long_suite.sh
-  check_remote_safe_suite.sh
-  check_research_planning_contracts.sh
-  check_script_catalog.sh
-  check_secret_file_guard.sh
-  check_suite_contracts.sh
-  check_research_proposal_contracts.sh
-  check_research_workflow_primitives.sh
-  check_tool_bridge_contracts.sh
-  check_workflow_job_controls.sh
-  check_write_audit_guardrails.sh
-  check_model_provider_config.py
-  prepare_local_geoloc_benchmark.py
-  replay_agent_case.py
-  smoke_api.py
-tests/
+```http
+GET /research/jobs
+GET /research/jobs/{job_id}
+GET /research/jobs/{job_id}/artifacts
 ```
 
-## Development Documents
-
-Start future development from:
-
-- `AGENTS.md` for repository operating rules.
-- `docs/documentation_index.md` for the documentation map.
-- `docs/development_process.md` for the standard change workflow and verification ladder.
-- `docs/local_agent_distribution.md` for the personal local-agent distribution target.
-- `docs/local_isolation.md` for Mac-local dependency, cache, data, model, output, and cleanup rules.
-- `docs/model_provider_strategy.md` for chat, embedding, rerank, and provider configuration.
-- `docs/vector_store_strategy.md` for the current SQLite vector-row baseline and Milvus/Qdrant/pgvector migration triggers.
-- `docs/agent_engineering_strengthening_plan.md` for the next agent-engineering roadmap: trace, tool calling, skills, replay, LangGraph, and local-deployment polish.
-
-## Quick Start
-
-This project is developed as a local clone. Keep dependencies, caches, data, model artifacts, generated outputs, and logs inside the project root.
-
-```bash
-cp .env.example .env
-# edit .env locally; never commit real keys
-./scripts/setup-local.sh
-source scripts/env.sh
-./scripts/run-local.sh
-```
-
-API docs:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-Research workbench:
+Workbench 页面：
 
 ```text
 http://127.0.0.1:8000/workbench
 ```
 
-Health check:
+## 技术架构
 
-```bash
-curl http://127.0.0.1:8000/health
+```mermaid
+flowchart LR
+    A["Paper Files"] --> B["Ingestion Service"]
+    B --> C["Sections / Parent Chunks / Child Chunks"]
+    B --> D["Evidence Records"]
+    C --> E["Embedding Index in SQLite"]
+    D --> E
+    E --> F["Hybrid Retrieval"]
+    F --> G["Rerank / Compression / Graph Context"]
+    G --> H["Advisor / Workflow Agent"]
+    H --> I["Ideas / Proposals / Experiments"]
+    H --> J["Agent Trace / Replay / Quality Gate"]
+    I --> K["Markdown / JSON Artifacts"]
+    J --> K
 ```
 
-## Model Configuration
+后端以 FastAPI + SQLAlchemy + SQLite 为主。模型侧使用 OpenAI-compatible API 适配器，方便接入 DashScope、OpenAI 兼容服务或其他自建模型网关。没有配置外部模型时，部分流程会回退到本地启发式逻辑，便于开发和测试。
 
-The system works without model credentials by falling back to deterministic local services. To enable model-backed structured extraction and idea generation, set OpenAI-compatible environment variables:
+## RAG 能力
+
+项目内置的 RAG 不是单一向量检索，而是面向论文任务做了多层增强。
+
+### 分层分块与 parent-child retrieval
+
+- 论文先被解析成 section。
+- 每个 section 会保存一个章节级 parent chunk，用来保留完整上下文。
+- section 内再切分成更小的 child chunk，用来做关键词召回和向量召回。
+- 检索时只召回 child chunk，命中后再合并 parent chunk 上下文。
+
+这样可以兼顾两件事：
+
+- 召回阶段粒度小，语义匹配更精确。
+- 回答和证据压缩阶段上下文足够完整，减少只命中一句话却缺少上下文的问题。
+
+### Hybrid Retrieval
+
+检索同时利用：
+
+- lexical term scoring
+- local hash embedding 或外部 embedding
+- multi-query / query rewrite variants
+- evidence、chunk、gap、idea 多对象召回
+- paper filter，避免指定论文场景下串库
+- diversity ranking，减少同一论文或同一章节过度挤占结果
+
+### Rerank 与证据压缩
+
+项目支持外部 rerank 模型。默认可以在 `auto` 模式下运行：有可用 API 时使用外部 rerank，失败时回退到稳定本地排序。
+
+检索结果会进一步生成：
+
+- `context_excerpt`：用于保留上下文片段
+- `compressed_evidence`：用于给回答、评审和质量门控提供更短证据
+- `score_breakdown`：记录 lexical、vector、phrase、rerank 等得分来源
+
+### GraphRAG-lite
+
+项目没有直接引入完整版 GraphRAG 框架，而是实现了轻量关系图：
+
+- 论文、证据、gap、idea、proposal、experiment、decision 等对象会形成节点。
+- support、derived_from、reviewed_by、validated_by 等关系会形成边。
+- 检索时可以围绕 evidence / gap / idea 扩展相关 graph context。
+
+它的目标不是做通用知识图谱平台，而是让科研产物之间的来源关系可追踪。
+
+## Agent 能力
+
+项目中的 Agent 重点不在“多角色聊天”，而在工程化闭环：
+
+- Advisor chat 会通过受控工具读取 project cockpit、context search、idea progress、lineage、task board 等信息。
+- 每次 Agent run 会记录输入、输出、模型、延迟、状态和工具调用。
+- Tool call record 会保存工具名、输入输出摘要、成功失败状态和错误信息。
+- Replay case 可以把失败样例保存下来，后续用脚本复现。
+- Quality gate 会阻止系统在证据不足时直接做过度 SOTA 或 novelty claim。
+
+项目也提供一个 LangGraph advisor deep-review 示例工作流，用来展示节点化 Agent 编排，但主流程仍保持稳定服务化实现，避免为了框架而重写核心业务。
+
+## 可追溯与工程化
+
+为了让科研 Agent 更接近真实开发场景，项目支持：
+
+- workflow stage run：记录长流程每个阶段的状态、输入、输出和错误。
+- artifact lineage：记录产物路径、hash、类型、关联 workflow 和 stage。
+- failure taxonomy：把失败分成 PDF 解析、embedding provider、retrieval miss、citation mismatch、timeout 等类型。
+- bad-case replay：把失败样例变成可重复执行的回归用例。
+- local maintenance report：只读检查 SQLite、sidecar、表数量、向量索引数量和 trace 状态。
+- benchmark packet / experiment run：把实验命令、数据集、指标、输出文件和结论结构化保存。
+
+这些能力的目标是让系统不仅能生成答案，还能解释“为什么这样生成、来自哪里、如何复现、失败后怎么定位”。
+
+## 为什么默认使用 SQLite
+
+当前目标是个人本地部署，所以默认选择 SQLite：
+
+- clone 后即可运行，部署成本低。
+- 数据、向量、trace、产物索引都在本地，方便备份和迁移。
+- 对个人论文库、评测集和开发调试规模足够简单直接。
+- 可以直接 inspect 数据表，适合学习、面试讲解和快速迭代。
+
+项目已经实现文档切分、embedding 入库、dense retrieval、hybrid retrieval 和 rerank。没有默认引入 Milvus / Qdrant / pgvector，是一个有意识的架构取舍：当论文规模、并发量或检索延迟成为瓶颈时，再迁移到专门向量数据库会更合理。
+
+## 本地部署
+
+推荐使用 Python 3.12 或更新版本。依赖、缓存、数据库、上传论文、输出文件都应保留在项目目录内。
+
+```bash
+git clone https://github.com/ImpZhang/Research-Assistant-Agent.git
+cd Research-Assistant-Agent
+PYTHON_BIN=/path/to/python3.12 ./scripts/setup-local.sh
+source scripts/env.sh
+```
+
+启动服务：
+
+```bash
+./scripts/run-local.sh
+```
+
+或直接运行：
+
+```bash
+source scripts/env.sh
+uvicorn backend.app:app --host 127.0.0.1 --port 8000
+```
+
+打开：
+
+```text
+http://127.0.0.1:8000/workbench
+```
+
+## 环境变量
+
+复制模板：
+
+```bash
+cp .env.example .env
+```
+
+真实 key 只写入本地 `.env`，不要提交到 GitHub。
+
+常用配置：
 
 ```env
-MAIN_MODEL=
-MAIN_BASE_URL=
+MAIN_MODEL=qwen3-32b
+MAIN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 MAIN_API_KEY=
 
-EXTRACTION_MODEL=
-EXTRACTION_BASE_URL=
+EXTRACTION_MODEL=qwen3-32b
+EXTRACTION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EXTRACTION_API_KEY=
 
-JUDGE_MODEL=
-JUDGE_BASE_URL=
+JUDGE_MODEL=qwen3-32b
+JUDGE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 JUDGE_API_KEY=
 
-EMBEDDER=
-EMBEDDER_BASE_URL=
+EMBEDDER=text-embedding-v1
+EMBEDDER_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 EMBEDDER_API_KEY=
 RETRIEVAL_EMBEDDING_PROVIDER=auto
 
-RERANK_MODEL=
-RERANK_BINDING_HOST=
+RERANK_MODEL=qwen3-rerank
+RERANK_BINDING_HOST=https://dashscope.aliyuncs.com/compatible-mode/v1
 RERANK_API_KEY=
 RETRIEVAL_RERANK_PROVIDER=auto
-
-EXTERNAL_LITERATURE_SEARCH_ENABLED=false
-OPENALEX_BASE_URL=https://api.openalex.org
 ```
 
-If `EXTRACTION_*` is empty, paper card extraction falls back to the heuristic extractor. If `MAIN_*` is empty, idea generation falls back to the deterministic idea generator. Retrieval can run without provider credentials through the local hash index; external embedding and rerank providers are used only when configured.
+如果只想先跑通本地开发，可以保持 provider mode 为 `auto`，让系统在外部模型不可用时使用本地回退逻辑。真实科研使用建议配置 main、extraction、judge、embedding、rerank 这些模型能力。
 
-Check the current shell's model-provider readiness without printing secrets or calling real providers:
+## 常用命令
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/health/ready
+```
+
+运行核心测试：
+
+```bash
+bash scripts/check_context_search_evaluations.sh
+bash scripts/check_research_workflow_primitives.sh
+bash scripts/check_agent_replay.sh
+bash scripts/check_local_safe_suite.sh
+```
+
+检查模型供应商配置，命令只报告配置状态，不输出真实 secret 值：
 
 ```bash
 python3 scripts/check_model_provider_config.py
-python3 scripts/check_model_provider_config.py --require-real
 ```
 
-## Verification
-
-Run unit tests:
-
-```bash
-uv run pytest -q
-```
-
-Run the focused-suite contract check so default and long remote suites keep the intended boundary:
-
-```bash
-bash scripts/check_suite_contracts.sh
-```
-
-Run the check-script catalog sync check so README and check script structure stay aligned:
-
-```bash
-bash scripts/check_script_catalog.sh
-```
-
-Run the secret-file guard to catch sensitive-looking tracked filenames and required ignore patterns:
-
-```bash
-bash scripts/check_secret_file_guard.sh
-```
-
-Run the handoff document consistency check so AGENTS, TODO, README, and the handoff queue keep the local-development operating rules aligned:
-
-```bash
-bash scripts/check_handoff_docs.sh
-```
-
-Run the generated-file guard to catch tracked caches, virtualenvs, dependency folders, and build/coverage outputs:
-
-```bash
-bash scripts/check_generated_file_guard.sh
-```
-
-Run the local-agent readiness check to verify the clone-to-run contract, project-local cache/data/output paths, ignored local artifacts, model placeholders, and setup/run scripts without reading `.env` values:
-
-```bash
-bash scripts/check_local_agent_readiness.sh
-```
-
-Run the local doctor to collect readiness, model-provider, backup-manifest, SQLite-maintenance, and geolocalization benchmark diagnostics without starting a service or printing secrets:
-
-```bash
-bash scripts/check_local_doctor.sh
-```
-
-Run the bad-case replay check for saved `ReplayCase` fixtures and deterministic report generation:
-
-```bash
-bash scripts/check_agent_replay.sh
-```
-
-Run the local operational preflight to confirm docs, runtime artifacts, environment template keys, compose persistence, and safe-suite hooks before a packaged local deployment. Use `LOCAL_PREFLIGHT_STRICT_GIT=true` before sharing a release to require a clean `main` checkout aligned with `origin/main`:
-
-```bash
-bash scripts/check_local_operational_preflight.sh
-```
-
-Run the focused-test coverage map check so new pytest tests stay assigned to a focused remote check:
-
-```bash
-bash scripts/check_focused_test_coverage.sh
-```
-
-Run the project-local skill registry check so every required `skills/*/SKILL.md` file stays usable:
+检查项目技能说明：
 
 ```bash
 bash scripts/check_project_skills.sh
 ```
 
-Run focused deployment artifact and local runtime contract checks without starting a service:
-
-```bash
-bash scripts/check_deployment_contracts.sh
-```
-
-Run the single-user Docker deployment static check without starting Docker or reading `.env` values:
-
-```bash
-python3 scripts/check_single_user_docker_deployment.py
-python3 scripts/check_single_user_docker_deployment.py --markdown --write-markdown outputs/docker/static-check.md
-```
-
-Run the opt-in local runtime smoke to start a temporary localhost server, verify `/health`, `/health/ready`, and Workbench HTML, then stop the server automatically:
-
-```bash
-bash scripts/check_local_runtime_smoke.sh
-```
-
-Run backup/restore contract checks to keep persistent data volume, cold-backup, restore, migration, and operator-approval guardrails aligned without touching Docker or live data:
-
-```bash
-bash scripts/check_backup_restore_contracts.sh
-```
-
-Build a read-only aggregate manifest before backing up local data. This reports counts and sizes for backup sets without listing private paper filenames or reading `.env` values:
-
-```bash
-python3 scripts/build_local_backup_manifest.py
-python3 scripts/build_local_backup_manifest.py --write-json outputs/backups/local-backup-manifest.json
-```
-
-Run the synthetic backup/restore rehearsal to validate archive, restore, manifest comparison, and secret-exclusion logic without copying live local papers or live SQLite data:
-
-```bash
-python3 scripts/rehearse_local_backup_restore.py
-python3 scripts/rehearse_local_backup_restore.py --markdown --write-markdown outputs/restore-rehearsals/rehearsal.md
-```
-
-Build a read-only SQLite maintenance report before database maintenance or troubleshooting. This reports aggregate table, vector-index, trace, storage, sidecar, and quick-check status without reading `.env` or private paper content:
+生成只读 SQLite 维护报告：
 
 ```bash
 python3 scripts/check_sqlite_maintenance.py
-python3 scripts/check_sqlite_maintenance.py --markdown --write-markdown outputs/maintenance/sqlite-report.md
 ```
 
-Run focused context-search evaluation checks on the local `.venv`:
+构建本地备份清单：
 
 ```bash
-bash scripts/check_context_search_evaluations.sh
+python3 scripts/build_local_backup_manifest.py
 ```
 
-Build and validate the local 12-paper geolocalization query-evidence/replay dataset. Generated dataset rows and quality reports stay under ignored `data/evaluation/`:
+## 验证脚本索引
 
-```bash
-.venv/bin/python scripts/build_geoloc_eval_dataset.py \
-  --report outputs/evaluations/real_paper_eval_20260628_160429.json \
-  --output-dir data/evaluation/geoloc_12paper \
-  --dataset-id geoloc_12paper_v1 \
-  --min-query-count 50 \
-  --max-query-count 80 \
-  --replay-count 30 \
-  --json
-.venv/bin/python scripts/check_geoloc_eval_dataset.py \
-  --dataset-dir data/evaluation/geoloc_12paper \
-  --run-retrieval \
-  --write-json data/evaluation/geoloc_12paper/quality_report.json \
-  --write-markdown data/evaluation/geoloc_12paper/quality_report.md \
-  --json
+仓库里的 `check_*.sh` 脚本用于不同层级的本地验证。常规开发优先跑和本次变更相关的脚本；公开发布或大改前再跑更重的 suite。
+
+- `scripts/check_agent_replay.sh`
+- `scripts/check_backup_restore_contracts.sh`
+- `scripts/check_context_search_evaluations.sh`
+- `scripts/check_deployment_contracts.sh`
+- `scripts/check_focused_test_coverage.sh`
+- `scripts/check_generated_file_guard.sh`
+- `scripts/check_graph_rag_lite.sh`
+- `scripts/check_handoff_docs.sh`
+- `scripts/check_local_agent_readiness.sh`
+- `scripts/check_local_doctor.sh`
+- `scripts/check_local_geoloc_benchmark_smoke.sh`
+- `scripts/check_local_operational_preflight.sh`
+- `scripts/check_local_runtime_smoke.sh`
+- `scripts/check_local_safe_suite.sh`
+- `scripts/check_pilot_operational_preflight.sh`
+- `scripts/check_pilot_readiness.sh`
+- `scripts/check_product_effect_smoke.sh`
+- `scripts/check_project_delivery_loop.sh`
+- `scripts/check_project_skills.sh`
+- `scripts/check_remote_long_suite.sh`
+- `scripts/check_remote_safe_suite.sh`
+- `scripts/check_research_planning_contracts.sh`
+- `scripts/check_research_proposal_contracts.sh`
+- `scripts/check_research_workflow_primitives.sh`
+- `scripts/check_script_catalog.sh`
+- `scripts/check_secret_file_guard.sh`
+- `scripts/check_suite_contracts.sh`
+- `scripts/check_tool_bridge_contracts.sh`
+- `scripts/check_workflow_job_controls.sh`
+- `scripts/check_write_audit_guardrails.sh`
+
+## 目录结构
+
+```text
+backend/
+  app.py                         FastAPI application
+  research/
+    adapters/                    OpenAI-compatible model adapters
+    config.py                    settings and environment binding
+    db.py                        SQLAlchemy engine/session setup
+    models.py                    database domain models
+    routes.py                    HTTP API routes
+    schemas.py                   Pydantic schemas
+    services/                    ingestion, retrieval, workflow, review, benchmark services
+
+configs/
+  benchmark_profiles.example.json
+
+data/                            local SQLite database, papers, benchmark data
+docs/                            design docs, runbooks, reports
+outputs/                         generated reports, benchmark outputs, exported bundles
+scripts/                         setup, validation, replay, benchmark, maintenance scripts
+skills/                          project-local Agent skill descriptions
+tests/                           pytest regression tests
 ```
 
-Run the standalone local geolocalization benchmark smoke to verify the JSONL scoring harness, baseline delta parsing, missing-prediction accounting, and geodesic-distance metrics with temporary project-local fixtures:
+`data/`、`outputs/`、`logs/`、`.venv/`、`.cache/`、`.env` 都是本地运行产物或私有配置，不应该作为开源内容提交。
 
-```bash
-bash scripts/check_local_geoloc_benchmark_smoke.sh
-```
+## 文档入口
 
-Prepare local geolocalization benchmark directories, optional example files, and an ignored machine-local benchmark profile manifest:
+- `AGENTS.md`：本仓库的 Codex / Agent 本地开发规则。
+- `TODO.md`：项目后续任务和工程 backlog。
+- `codex_handoff/03_TODO.md`：历史交接中的待办整理。
+- `docs/local_isolation.md`：本地隔离部署规则。
+- `docs/local_agent_distribution.md`：个人本地可部署产品形态说明。
+- `docs/development_process.md`：开发流程和验证习惯。
+- `docs/documentation_index.md`：文档索引。
+- `docs/progress_log.md`：本地开发进度记录。
+- `docs/model_provider_strategy.md`：模型供应商配置策略。
+- `docs/vector_store_strategy.md`：SQLite 向量存储与后续迁移策略。
+- `docs/agent_replay_eval.md`：Agent replay 与评测说明。
+- `docs/context_search_evaluation_plan.md`：检索评测设计。
+- `docs/demo_runbook.md`：演示流程。
 
-```bash
-python3 scripts/prepare_local_geoloc_benchmark.py --write-example --write-profile-manifest
-python3 scripts/prepare_local_geoloc_benchmark.py --require-runnable
-```
+## 项目边界
 
-Run the local geolocalization prediction pipeline to turn project-local ground-truth and prediction JSONL files into JSON/Markdown benchmark reports:
+当前版本刻意不做：
 
-```bash
-python3 scripts/run_geoloc_benchmark_pipeline.py --json
-python3 scripts/run_geoloc_benchmark_pipeline.py \
-  --write-json outputs/benchmark-runs/geoloc/pipeline.json \
-  --write-markdown outputs/benchmark-runs/geoloc/pipeline.md
-```
+- 多用户账号体系
+- SaaS 租户隔离
+- 计费系统
+- SSO / 企业权限
+- 大规模分布式任务调度
+- 默认 Milvus / Qdrant 部署
+- 自动宣称 SOTA
 
-Run an opt-in real-provider smoke and real-paper PDF evaluation from a configured local environment:
+这些不是不会做，而是与当前“个人本地科研 Agent”的目标不匹配。项目更强调本地可部署、科研流程闭环、证据可追踪和失败可复现。
 
-```bash
-ALLOW_REAL_MODEL_PROVIDER_SMOKE=1 .venv/bin/python scripts/smoke_model_providers.py
-ALLOW_REAL_PAPER_EVAL=1 .venv/bin/python scripts/evaluate_real_papers.py path/to/paper.pdf
-```
+## 开源与安全
 
-Real-paper reports are written to `outputs/evaluations/`, can compare configured retrieval against a local hash/no-rerank baseline, and are available in the Workbench Real Eval panel.
+在公开仓库前请确认：
 
-Run focused GraphRAG-lite duplicate-edge and graph stats checks:
+- `.env` 不在 git 中。
+- 真实 API Key、论文私有数据、数据库 dump、token、cookie、SSH key 不被提交。
+- 只提交 `.env.example`、示例配置和不含敏感内容的文档。
+- 生成的 benchmark 输出、私有论文、真实实验数据按需保存在本地 `data/` 或 `outputs/`。
 
-```bash
-bash scripts/check_graph_rag_lite.sh
-```
+如果你准备把项目作为简历项目，可以重点讲：
 
-Run focused research workflow primitive checks for local literature search, paper cards, structured extraction fallback, gaps, ideas, novelty, related work, and Markdown dossier exports:
+- 从普通 RAG 问答升级为科研决策工作流。
+- parent-child chunk + hybrid retrieval + rerank + evidence compression。
+- Agent trace、tool call record、bad-case replay 和 quality gate。
+- workflow checkpoint、artifact lineage 和 failure taxonomy。
+- local-first 架构为什么使用 SQLite，而不是一开始就引入重型向量数据库。
 
-```bash
-bash scripts/check_research_workflow_primitives.sh
-```
+## License
 
-Run focused research planning checks for profiles, advisor briefs, plans, idea refinement, ranking, portfolios, and agenda exports:
-
-```bash
-bash scripts/check_research_planning_contracts.sh
-```
-
-Run the long focused research proposal check for proposal drafts, readiness reviews, revisions, revision tasks, and Markdown exports before proposal changes:
-
-```bash
-bash scripts/check_research_proposal_contracts.sh
-```
-
-Run the long focused suite for checks that are intentionally kept out of the default local focused suite:
-
-```bash
-bash scripts/check_remote_long_suite.sh
-```
-
-Run focused local readiness, status capability, first-run onboarding, and report guardrail checks without starting a service:
-
-```bash
-bash scripts/check_pilot_readiness.sh
-```
-
-Run the isolated product-effect smoke to validate the complete research-assistant workflow without touching the default local database:
-
-```bash
-bash scripts/check_product_effect_smoke.sh
-```
-
-Use `PRODUCT_EFFECT_SMOKE_PAPER_FILE=/path/to/paper.md` with `check_product_effect_smoke.sh` to run the same product-effect smoke against a representative paper fixture. The JSON output includes `product_effect_score`, `product_effect_band`, and a dimension-level `product_effect_scorecard` for foundation, research workflow, quality signal, and delivery loop readiness. Use `docs/representative_paper_review.md` for the human review protocol and findings table before marking a representative-paper local review acceptable.
-
-Run focused write-audit guardrail checks without reading local audit logs:
-
-```bash
-bash scripts/check_write_audit_guardrails.sh
-```
-
-Run focused workflow job, artifact, async, cancel, and retry checks:
-
-```bash
-bash scripts/check_workflow_job_controls.sh
-```
-
-Run focused tool manifest and MCP bridge contract checks:
-
-```bash
-bash scripts/check_tool_bridge_contracts.sh
-```
-
-Run the current focused local safe suite without starting services:
-
-```bash
-bash scripts/check_local_safe_suite.sh
-```
-
-The historical `check_remote_safe_suite.sh` and `check_pilot_operational_preflight.sh` names remain as compatibility wrappers for older documentation and automation; prefer the `check_local_*` entrypoints for new local work.
-
-Run the full in-process API smoke workflow:
-
-```bash
-uv run python scripts/smoke_api.py
-```
-
-Run the same smoke workflow against a live server:
-
-```bash
-uv run python scripts/smoke_api.py --base-url http://127.0.0.1:8000
-```
-
-The smoke workflow uploads a paper, validates the research profile, tool manifest, MCP-ready bridge spec, and task execution controls, runs the project setup wizard, checks project onboarding readiness, creates onboarding tasks, tracks onboarding progress, builds and saves the pilot status report snapshot, compares pilot report snapshots, creates pilot report snapshot tasks, creates pilot report comparison tasks, runs the literature-to-ideas workflow, fetches the workflow job trace, builds a related-work matrix, proposal draft, readiness review, proposal revision, task backlog, experiment run, experiment analysis, analysis follow-up tasks, decision memo, decision follow-up tasks, assumption audit, evidence ledger, evidence-ledger follow-up tasks, claim validation packet, claim validation queue, claim queue follow-up tasks, claim validation result tracking/reporting/decision signals, idea progress summary, idea research packet, idea timeline, readiness score, quality gate, quality-gate follow-up tasks, readiness follow-up tasks, idea bundle export, project readiness overview, project quality gate overview, project onboarding readiness after workflow, project cockpit dashboard, project advisor chat, project advisor chat tasks, project advisor action session, project cockpit tasks, project triage brief, project triage tasks, persisted project triage snapshots, triage snapshot comparison, triage comparison tasks, project quality-gate tasks, project overview, project bundle readiness, project bundle readiness tasks, persisted project bundle readiness snapshots, bundle readiness snapshot comparison, bundle readiness comparison tasks, project bundle release notes, project bundle release tasks, project bundle release progress, project bundle release feedback, project bundle release feedback tasks, project bundle release closeout, project bundle release closeout tasks, project bundle release acceptance packets, persisted release acceptance snapshots, release acceptance snapshot comparison, release acceptance comparison tasks, release review sessions, release review session tasks, release review outcomes, release review outcome tasks, release review outcome progress, release review outcome signoff evidence, project bundle export with claim validation queue metadata and pilot/readiness/release/review-outcome/signoff metadata, advisor brief, research execution plan, plan tasks, plan progress, plan-aware advisor brief, plan-aware progress/packet/bundle checks, and task board snapshot, performs context search, and checks graph endpoints.
-It also validates the job artifact snapshot endpoint used by the workbench and future MCP tools. The final summary reports a product-effect scorecard so a run can be judged by both completion and quality-risk signals.
-
-## Useful Endpoints
-
-```http
-GET  /health
-GET  /health/ready
-POST /research/papers/upload
-GET  /research/papers
-GET  /research/papers/{paper_id}
-GET  /research/papers/{paper_id}/evidence
-POST /research/literature/search
-POST /research/embeddings/rebuild
-GET  /research/evaluations/real-paper/reports
-GET  /research/evaluations/real-paper/reports/latest
-GET  /research/evaluations/real-paper/reports/{report_id}
-GET  /research/tools/manifest
-GET  /research/tools/mcp-spec
-GET  /research/profile
-PUT  /research/profile
-GET  /research/profile/export/markdown
-GET  /research/progress/overview
-GET  /research/onboarding/readiness
-POST /research/onboarding/setup
-POST /research/onboarding/tasks
-GET  /research/onboarding/progress
-GET  /research/pilot/report
-POST /research/pilot/report/snapshots
-GET  /research/pilot/report/snapshots
-POST /research/pilot/report/snapshots/compare
-POST /research/pilot/report/snapshots/compare/export/markdown
-POST /research/pilot/report/snapshots/compare/tasks
-GET  /research/pilot/report/snapshots/{snapshot_id}
-GET  /research/pilot/report/snapshots/{snapshot_id}/export/markdown
-POST /research/pilot/report/snapshots/{snapshot_id}/tasks
-GET  /research/cockpit
-GET  /research/cockpit/export/markdown
-POST /research/cockpit/tasks
-POST /research/advisor/chat
-POST /research/advisor/chat/tasks
-POST /research/advisor/action-session
-GET  /research/triage/brief
-GET  /research/triage/brief/export/markdown
-POST /research/triage/brief/tasks
-POST /research/triage/snapshots
-GET  /research/triage/snapshots
-POST /research/triage/snapshots/compare
-POST /research/triage/snapshots/compare/export/markdown
-POST /research/triage/snapshots/compare/tasks
-GET  /research/triage/snapshots/{snapshot_id}
-GET  /research/triage/snapshots/{snapshot_id}/export/markdown
-GET  /research/opportunities/radar
-POST /research/opportunities/radar/tasks
-POST /research/export/project-bundle/releases
-GET  /research/export/project-bundle/releases
-GET  /research/export/project-bundle/releases/{release_id}
-GET  /research/export/project-bundle/releases/{release_id}/export/markdown
-POST /research/export/project-bundle/releases/{release_id}/tasks
-GET  /research/export/project-bundle/releases/{release_id}/progress
-POST /research/export/project-bundle/releases/{release_id}/feedback
-GET  /research/export/project-bundle/releases/{release_id}/feedback
-GET  /research/export/project-bundle/releases/{release_id}/feedback/{feedback_id}
-GET  /research/export/project-bundle/releases/{release_id}/feedback/{feedback_id}/export/markdown
-POST /research/export/project-bundle/releases/{release_id}/feedback/{feedback_id}/tasks
-GET  /research/export/project-bundle/releases/{release_id}/closeout
-POST /research/export/project-bundle/releases/{release_id}/closeout/tasks
-GET  /research/export/project-bundle/releases/{release_id}/acceptance-packet
-POST /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots
-GET  /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots
-GET  /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/{snapshot_id}
-GET  /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/{snapshot_id}/export/markdown
-POST /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/compare
-POST /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/compare/export/markdown
-POST /research/export/project-bundle/releases/{release_id}/acceptance-packet/snapshots/compare/tasks
-GET  /research/export/project-bundle/releases/{release_id}/review-session
-POST /research/export/project-bundle/releases/{release_id}/review-session/tasks
-POST /research/export/project-bundle/releases/{release_id}/review-session/outcomes
-GET  /research/export/project-bundle/releases/{release_id}/review-session/outcomes
-GET  /research/export/project-bundle/releases/{release_id}/review-session/outcomes/{outcome_id}
-GET  /research/export/project-bundle/releases/{release_id}/review-session/outcomes/{outcome_id}/export/markdown
-POST /research/export/project-bundle/releases/{release_id}/review-session/outcomes/{outcome_id}/tasks
-GET  /research/export/project-bundle/releases/{release_id}/review-session/outcomes/{outcome_id}/progress
-GET  /research/export/project-bundle/readiness
-POST /research/export/project-bundle/readiness/tasks
-POST /research/export/project-bundle/readiness/snapshots
-GET  /research/export/project-bundle/readiness/snapshots
-GET  /research/export/project-bundle/readiness/snapshots/{snapshot_id}
-GET  /research/export/project-bundle/readiness/snapshots/{snapshot_id}/export/markdown
-POST /research/export/project-bundle/readiness/snapshots/compare
-POST /research/export/project-bundle/readiness/snapshots/compare/export/markdown
-POST /research/export/project-bundle/readiness/snapshots/compare/tasks
-GET  /research/export/project-bundle
-POST /research/briefs
-GET  /research/briefs
-GET  /research/briefs/{brief_id}
-GET  /research/briefs/{brief_id}/export/markdown
-POST /research/plans
-GET  /research/plans
-GET  /research/plans/{plan_id}
-GET  /research/plans/{plan_id}/export/markdown
-POST /research/plans/{plan_id}/tasks
-GET  /research/plans/{plan_id}/progress
-
-POST /research/papers/{paper_id}/card/extract-structured
-GET  /research/papers/{paper_id}/card/export/markdown
-
-POST /research/gaps/mine
-POST /research/gaps/{gap_id}/ideas
-POST /research/ideas/{idea_id}/novelty-check
-POST /research/ideas/{idea_id}/novelty-refresh
-POST /research/ideas/{idea_id}/novelty-checks/{check_id}/tasks
-POST /research/ideas/{idea_id}/review
-POST /research/ideas/{idea_id}/experiment-plan
-GET  /research/ideas/{idea_id}/experiment-runs
-POST /research/experiment-plans/{plan_id}/runs
-GET  /research/experiment-plans/{plan_id}/runs
-GET  /research/experiment-runs/{run_id}
-PATCH /research/experiment-runs/{run_id}
-GET  /research/experiment-runs/{run_id}/export/markdown
-POST /research/experiment-runs/{run_id}/analysis
-GET  /research/experiment-runs/{run_id}/analyses
-GET  /research/ideas/{idea_id}/experiment-analyses
-GET  /research/experiment-analyses/{analysis_id}
-GET  /research/experiment-analyses/{analysis_id}/export/markdown
-POST /research/experiment-analyses/{analysis_id}/tasks
-POST /research/ideas/{idea_id}/refine
-GET  /research/ideas/{idea_id}/progress
-GET  /research/ideas/{idea_id}/research-packet
-GET  /research/ideas/{idea_id}/timeline
-GET  /research/ideas/{idea_id}/readiness
-GET  /research/ideas/{idea_id}/quality-gate
-POST /research/ideas/{idea_id}/quality-gate/tasks
-POST /research/ideas/{idea_id}/readiness/tasks
-GET  /research/ideas/{idea_id}/export/bundle
-GET  /research/readiness/overview
-GET  /research/quality/overview
-POST /research/quality/overview/tasks
-POST /research/ideas/{idea_id}/decision-memo
-GET  /research/ideas/{idea_id}/decision-memos
-GET  /research/ideas/{idea_id}/decision-memos/{memo_id}
-GET  /research/ideas/{idea_id}/decision-memos/{memo_id}/export/markdown
-POST /research/ideas/{idea_id}/decision-memos/{memo_id}/tasks
-POST /research/ideas/{idea_id}/assumption-audit
-GET  /research/ideas/{idea_id}/assumption-audits
-GET  /research/ideas/{idea_id}/assumption-audits/{audit_id}
-GET  /research/ideas/{idea_id}/assumption-audits/{audit_id}/export/markdown
-POST /research/ideas/{idea_id}/evidence-ledger
-GET  /research/ideas/{idea_id}/evidence-ledgers
-GET  /research/ideas/{idea_id}/evidence-ledgers/{ledger_id}
-GET  /research/ideas/{idea_id}/evidence-ledgers/{ledger_id}/export/markdown
-POST /research/ideas/{idea_id}/evidence-ledgers/{ledger_id}/tasks
-GET  /research/ideas/{idea_id}/evidence-ledgers/{ledger_id}/claims/{claim_id}/validation-packet
-GET  /research/claims/validation-queue
-POST /research/claims/validation-queue/tasks
-POST /research/tasks/{task_id}/claim-validation-result
-POST /research/ideas/{idea_id}/related-work-matrix
-GET  /research/ideas/{idea_id}/related-work-matrices
-GET  /research/ideas/{idea_id}/related-work-matrices/{matrix_id}
-GET  /research/ideas/{idea_id}/related-work-matrices/{matrix_id}/export/markdown
-POST /research/ideas/{idea_id}/sota-review-package
-GET  /research/ideas/{idea_id}/sota-review-packages
-GET  /research/ideas/{idea_id}/sota-review-packages/{brief_id}
-GET  /research/ideas/{idea_id}/sota-review-packages/{brief_id}/export/markdown
-POST /research/ideas/{idea_id}/proposal-draft
-GET  /research/ideas/{idea_id}/proposal-drafts
-GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}
-GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/export/markdown
-POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/review
-GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews
-GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}
-GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/reviews/{review_id}/export/markdown
-GET  /research/ideas/{idea_id}/lineage
-POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revise
-GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions
-GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}
-GET  /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}/export/markdown
-POST /research/ideas/{idea_id}/proposal-drafts/{draft_id}/revisions/{revision_id}/tasks
-GET  /research/tasks
-GET  /research/tasks/{task_id}
-PATCH /research/tasks/{task_id}
-POST /research/tasks/{task_id}/events
-GET  /research/tasks/{task_id}/events
-POST /research/tasks/snapshots
-GET  /research/tasks/snapshots
-GET  /research/tasks/snapshots/{snapshot_id}
-GET  /research/tasks/snapshots/{snapshot_id}/export/markdown
-POST /research/ideas/rank
-POST /research/ideas/rank/export/markdown
-POST /research/ideas/portfolios
-GET  /research/ideas/portfolios
-POST /research/ideas/portfolios/compare
-POST /research/ideas/portfolios/compare/export/markdown
-GET  /research/ideas/portfolios/{portfolio_id}
-GET  /research/ideas/portfolios/{portfolio_id}/export/markdown
-GET  /research/ideas/portfolios/{portfolio_id}/agenda/markdown
-POST /research/ideas/{idea_id}/feedback
-GET  /research/ideas/{idea_id}/feedback
-GET  /research/ideas/{idea_id}/export/markdown
-
-POST /research/search/context
-GET  /research/graph/stats
-GET  /research/graph/nodes
-GET  /research/graph/edges
-POST /research/workflows/literature-to-ideas
-POST /research/workflows/literature-to-ideas/async
-GET  /research/jobs/{job_id}
-POST /research/jobs/{job_id}/cancel
-POST /research/jobs/{job_id}/retry
-GET  /research/jobs/{job_id}/artifacts
-GET  /workbench
-```
-
-## MCP Bridge
-
-Run the backend first, then start the stdio bridge for MCP-capable clients:
-
-```bash
-uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000
-```
-
-The bridge loads `/research/tools/mcp-spec`, exposes `tools/list` and `tools/call`, and forwards tool calls to the FastAPI routes.
-For safer client onboarding, narrow the exposed tools before connecting a client:
-
-```bash
-uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000 --read-only
-uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000 --allow-tool get_project_progress --allow-tool get_idea_progress
-uv run python scripts/mcp_http_bridge.py --base-url http://127.0.0.1:8000 --health-check
-```
-
-When `/research/*` API-key protection is enabled, forward the same key with `--api-key`, `MCP_BRIDGE_API_KEY`, `RESEARCH_ASSISTANT_API_KEY`, or `API_KEY`. Forward the non-secret project scope with `--project-id`, `MCP_BRIDGE_PROJECT_ID`, or `RESEARCH_ASSISTANT_PROJECT_ID`; the default header is `X-Research-Assistant-Project`.
-The same policy can be configured with `MCP_BRIDGE_READ_ONLY`, `MCP_BRIDGE_ALLOW_TOOLS`, and `MCP_BRIDGE_DENY_TOOLS`.
-
-## Local Deployment
-
-For the normal local personal-agent path:
-
-```bash
-cp .env.example .env
-# fill model provider keys in .env, then:
-./scripts/setup-local.sh
-source scripts/env.sh
-./scripts/run-local.sh
-```
-
-For long literature-to-ideas jobs that should run outside the API process, set `WORKFLOW_BACKGROUND_TASKS_ENABLED=false` in `.env`, start the API normally, and run a separate local worker only when you want it to consume queued jobs:
-
-```bash
-.venv/bin/python scripts/run_workflow_worker.py --poll-interval-seconds 2
-```
-
-Use `--once` for a one-job diagnostic run. The worker claims `pending` jobs from SQLite, writes lease/heartbeat metadata into the job output, can requeue stale leases through `--stale-lease-seconds`, can queue bounded failed-job retries through `--max-auto-retries`, and preserves the existing `GET /research/jobs/{job_id}` polling and artifact endpoints.
-
-For optional single-user Docker use, set a local `API_KEY` in `.env` and run Docker only after explicit operator approval:
-
-```bash
-docker compose up --build
-```
-
-See `docs/deployment.md` for the runtime contract, local deployment checklist, `/app/data` backup/restore operator notes, database/upload/audit ready checks, API key calls, Workbench key storage, MCP bridge auth forwarding, and backup notes. Write-operation audit logging has a configurable JSONL prototype plus default-off local-owner summary and bounded export endpoints described in `docs/write_operation_audit_design.md`. Admin-only audit access rules are documented in `docs/admin_authorization_policy.md`, and retention/export workflow is documented in `docs/write_audit_retention_policy.md`. Database migration policy is documented in `docs/database_migration_strategy.md` before migration tooling is introduced. Long-running workflow queue migration is documented in `docs/workflow_queue_design.md` before adding worker dependencies or deployment services.
-
-## Near-Term Roadmap
-
-- Polish the clone-to-run local setup path, local preflight, and `.env.example` guidance.
-- Add batch/page-image embedding experiments, page-image retrieval, and larger retrieval-mode evaluation fixtures.
-- Extend real geolocalization benchmark datasets and prediction-generation recipes beyond the current JSONL pipeline.
-- Add fully automated current-SOTA closure on top of manual SOTA review packages and external novelty search adapters.
-- Add resumable workflow checkpoints for long runs.
-- Expand the research Workbench into a full single-researcher review/edit loop.
-- Harden optional local auth, backup/export, and richer binary artifact handling around the lightweight MCP bridge.
-
-## Handoff And Operations
-
-- `AGENTS.md` records local-development agent rules, safety boundaries, and verification expectations.
-- `TODO.md` summarizes the active local-development priority queue.
-- `codex_handoff/03_TODO.md` keeps the detailed historical handoff queue.
-- `docs/progress_log.md` keeps the chronological implementation and verification log.
-
-## Design Documents
-
-- `docs/research_assistant_requirements.md`
-- `docs/research_assistant_technical_design.md`
-- `docs/local_agent_distribution.md`
-- `docs/admin_authorization_policy.md`
-- `docs/database_migration_strategy.md`
-- `docs/write_operation_audit_design.md`
-- `docs/write_audit_retention_policy.md`
-- `docs/user_project_scoping_design.md`
-- `docs/workflow_queue_design.md`
-- `docs/graphrag_langgraph_deerflow_evaluation.md`
-- `docs/context_search_evaluation_plan.md`
-- `docs/representative_paper_review.md`
+请在正式公开前补充合适的开源许可证，例如 MIT、Apache-2.0 或其他你希望采用的协议。

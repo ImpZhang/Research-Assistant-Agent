@@ -2,6 +2,27 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-06-30 - Parent-Child Retrieval And Open-Source README Polish
+
+Implementation completed:
+
+- Upgraded paper ingestion from placeholder parent fields to true parent-child chunk organization: each parsed section now writes a section-level parent chunk plus child chunks for fine-grained retrieval.
+- Changed chunk embedding indexing and lexical chunk scoring to target child chunks only, so recall stays precise while retrieval can merge parent context after a child hit.
+- Added parent chunk hydration in context search, with fallback to neighbor expansion for older chunks that do not have parent links.
+- Updated retrieval diagnostics to identify the parent-child retrieval method version.
+- Added focused regression coverage for ingestion-created parent-child chunks and child-hit parent-context retrieval.
+- Reworked the root README into a Chinese open-source overview focused on project positioning, solved problems, architecture, RAG/Agent techniques, local deployment, security, and project boundaries without embedding concrete evaluation metrics.
+
+Verification completed:
+
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check backend/research/routes.py backend/research/services/document_ingestion.py backend/research/services/embedding_service.py backend/research/services/retrieval_service.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check backend/research/routes.py backend/research/services/document_ingestion.py backend/research/services/embedding_service.py backend/research/services/retrieval_service.py tests/test_app.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -q tests/test_app.py::test_context_search_no_match_fixture tests/test_app.py::test_context_search_returns_evidence_and_graph_context tests/test_app.py::test_context_search_child_chunk_returns_parent_context tests/test_app.py::test_paper_ingestion_creates_parent_child_chunks` passed.
+- `PYTHONDONTWRITEBYTECODE=1 bash scripts/check_context_search_evaluations.sh` passed with the parent-child retrieval regressions included.
+- `PYTHONDONTWRITEBYTECODE=1 bash scripts/check_project_skills.sh` passed.
+- `PYTHONDONTWRITEBYTECODE=1 bash scripts/check_local_safe_suite.sh` passed. The only pre-commit warning was expected dirty git status for this change set.
+- `git diff --check` passed.
+
 ## 2026-06-29 - Depth Completion Pass: RAG Misses, Profiles, Lineage, And Text Embedding
 
 Implementation completed:
