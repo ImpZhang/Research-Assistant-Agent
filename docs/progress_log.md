@@ -2,6 +2,21 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-07-01 - Resume Alignment Closure Documentation
+
+Implementation completed:
+
+- Added `docs/resume_alignment_closure.md` as the source of truth for keeping the resume description, code capabilities, evaluation reports, and demo story aligned.
+- Scoped the project closure to six layers only: document/evidence, retrieval/evaluation, workflow orchestration, observability, artifact lineage, and quality gates.
+- Documented that paper counts, hard-question counts, Hit@8, MRR, and related metrics must be filled only after the expanded paper set is ingested and evaluated.
+- Added the new alignment document to `docs/documentation_index.md`.
+
+Verification completed:
+
+- `bash scripts/check_handoff_docs.sh` passed.
+- `bash scripts/check_local_agent_readiness.sh` passed.
+- `git diff --check` passed.
+
 ## 2026-06-30 - Parent-Child Retrieval And Open-Source README Polish
 
 Implementation completed:
