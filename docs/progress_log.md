@@ -2,6 +2,26 @@
 
 This log records local-first maintenance and implementation progress for Research Assistant Agent. It intentionally excludes passwords, API keys, real `.env` values, cookies, private keys, and other secret material.
 
+## 2026-07-01 - Resume-Facing Retrieval Eval Runner
+
+Implementation completed:
+
+- Added `scripts/run_retrieval_eval.py --profile realistic` as the single command that combines realistic retrieval evaluation, failure replay export, miss taxonomy, and resume-ready summary metrics.
+- Added focused unit coverage for retrieval-eval summary generation and missing-artifact failure behavior.
+- Wired the new runner into `scripts/check_context_search_evaluations.sh`.
+- Updated `docs/resume_alignment_closure.md` and `docs/documentation_index.md` so future paper expansion uses the unified retrieval-eval entrypoint before filling resume metrics.
+- Hardened automatic workflow retry ordering so recent eligible failures are retried before historical failed jobs, keeping local worker diagnostics deterministic on reused SQLite state.
+
+Verification completed:
+
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff check scripts/run_retrieval_eval.py tests/test_retrieval_eval_runner.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/ruff format --check scripts/run_retrieval_eval.py tests/test_retrieval_eval_runner.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/pytest -q tests/test_retrieval_eval_runner.py` passed.
+- `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/run_retrieval_eval.py --profile realistic --json` passed and produced the current resume summary: `12` papers, `20` questions, primary Hit@8 `0.65`, primary MRR `0.378`, replay pass rate `0.65`, `7` misses, and `5` failure-taxonomy categories.
+- `PYTHONDONTWRITEBYTECODE=1 bash scripts/check_context_search_evaluations.sh` passed with `61` tests.
+- `PYTHONDONTWRITEBYTECODE=1 bash scripts/check_workflow_job_controls.sh` passed with `13` tests.
+- `PYTHONDONTWRITEBYTECODE=1 bash scripts/check_local_safe_suite.sh` passed. The only pre-commit warning was expected dirty git status for this change set.
+
 ## 2026-07-01 - Resume Alignment Closure Documentation
 
 Implementation completed:

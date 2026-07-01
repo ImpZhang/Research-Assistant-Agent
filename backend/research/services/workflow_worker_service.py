@@ -192,7 +192,7 @@ class WorkflowWorkerService:
         candidates = (
             self.session.query(Job)
             .filter(Job.status == "failed", Job.job_type.in_(job_types))
-            .order_by(Job.finished_at.asc().nullsfirst(), Job.updated_at.asc())
+            .order_by(Job.finished_at.desc().nullslast(), Job.updated_at.desc())
             .limit(20)
             .all()
         )

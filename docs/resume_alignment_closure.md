@@ -108,7 +108,15 @@ child chunk 负责召回，因为小粒度更容易匹配具体问题；parent c
 - 失败样例可以转成 replay cases。
 - 论文数量和指标数值只在评测报告生成后写入简历。
 
-现有相关入口：
+统一评测入口：
+
+```bash
+python3 scripts/run_retrieval_eval.py --profile realistic
+```
+
+该命令会串联 realistic retrieval eval、failure replay export 和 miss taxonomy，并输出面向简历填写的 `resume_summary` 字段。补论文后，优先使用这一条命令生成可复现指标。
+
+底层相关入口：
 
 ```bash
 bash scripts/check_context_search_evaluations.sh
@@ -344,6 +352,14 @@ bash scripts/check_research_proposal_contracts.sh
 5. 跑 miss taxonomy。
 6. 更新报告。
 7. 只把报告中可复现的数字写入简历。
+
+统一命令：
+
+```bash
+python3 scripts/run_retrieval_eval.py --profile realistic \
+  --write-json outputs/retrieval-evals/realistic_summary.json \
+  --write-markdown outputs/retrieval-evals/realistic_summary.md
+```
 
 推荐保留的最终指标：
 

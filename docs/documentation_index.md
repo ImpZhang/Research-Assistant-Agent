@@ -81,6 +81,7 @@ This document is the starting point for future development. Use it to find the r
 | `scripts/build_geoloc_realistic_eval.py` | Resolves realistic gold-label specs to local evidence ids and writes ignored gold review/replay artifacts. |
 | `scripts/check_geoloc_realistic_eval.py` | Runs corpus-level no-per-query-filter retrieval metrics, MRR, partial/miss reporting, and failure replay export. |
 | `scripts/analyze_geoloc_retrieval_misses.py` | Classifies realistic primary retrieval misses into query-gap, paper-recall, section-granularity, supporting-over-primary, same-paper, and candidate-competition categories. |
+| `scripts/run_retrieval_eval.py` | Resume-facing retrieval eval runner that combines realistic metrics, replay export, miss taxonomy, and summary artifacts. |
 | `docs/depth_completion_plan.md` | Current deepening pass status for RAG miss taxonomy, pipeline profiles, lineage coverage, and strict text-embedding readiness. |
 | `scripts/check_local_geoloc_benchmark_smoke.sh` | One-command local smoke for the geolocalization JSONL benchmark path. |
 | `/research/ideas/{idea_id}/sota-review-package` | Runtime API that turns an idea into a persisted manual SOTA review checklist and collision package. |

@@ -7,6 +7,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py \
   tests/test_evaluation_reports.py \
   tests/test_geoloc_eval_dataset_tools.py \
+  tests/test_retrieval_eval_runner.py \
   tests/test_retrieval_provider_adapter.py \
   tests/test_sota_review_package.py \
   tests/test_sota_signoff_and_benchmark.py \
@@ -34,6 +35,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   scripts/check_geoloc_hard_questions.py \
   scripts/check_geoloc_realistic_eval.py \
   scripts/analyze_geoloc_retrieval_misses.py \
+  scripts/run_retrieval_eval.py \
   scripts/run_local_pipeline_profile.py \
   scripts/benchmark_geoloc_predictions.py \
   scripts/prepare_local_geoloc_benchmark.py
@@ -41,6 +43,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   tests/test_app.py \
   tests/test_evaluation_reports.py \
   tests/test_geoloc_eval_dataset_tools.py \
+  tests/test_retrieval_eval_runner.py \
   tests/test_retrieval_provider_adapter.py \
   tests/test_sota_review_package.py \
   tests/test_sota_signoff_and_benchmark.py \
@@ -68,6 +71,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
   scripts/check_geoloc_hard_questions.py \
   scripts/check_geoloc_realistic_eval.py \
   scripts/analyze_geoloc_retrieval_misses.py \
+  scripts/run_retrieval_eval.py \
   scripts/run_local_pipeline_profile.py \
   scripts/benchmark_geoloc_predictions.py \
   scripts/prepare_local_geoloc_benchmark.py
@@ -75,6 +79,7 @@ bash scripts/check_local_geoloc_benchmark_smoke.sh
 .venv/bin/pytest -q \
   tests/test_evaluation_reports.py \
   tests/test_geoloc_eval_dataset_tools.py \
+  tests/test_retrieval_eval_runner.py \
   tests/test_retrieval_provider_adapter.py \
   tests/test_sota_review_package.py \
   tests/test_sota_signoff_and_benchmark.py \
@@ -102,3 +107,4 @@ bash scripts/check_local_geoloc_benchmark_smoke.sh
   tests/test_app.py::test_benchmark_profiles_report_builtin_readiness
 
 .venv/bin/python scripts/run_local_pipeline_profile.py --profile rag_miss_analysis
+.venv/bin/python scripts/run_retrieval_eval.py --profile realistic --skip-run --json
